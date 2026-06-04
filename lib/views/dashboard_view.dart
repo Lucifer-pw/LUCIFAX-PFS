@@ -167,7 +167,7 @@ class _DashboardViewState extends State<DashboardView> with SingleTickerProvider
         _classData = rawClass;
       });
     } catch (e) {
-      print("Error calculating dashboard metrics: $e");
+      debugPrint("Error calculating dashboard metrics: $e");
     } finally {
       setState(() {
         _loading = false;

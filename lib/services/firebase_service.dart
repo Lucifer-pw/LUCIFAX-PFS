@@ -101,7 +101,6 @@ class FirebaseService {
       case "BOYOLALI":
       case "COLOMADU":
       case "BANJARSARI":
-      case "KLATEN":
         return "AD";
 
       // ===== AB (DIY) =====

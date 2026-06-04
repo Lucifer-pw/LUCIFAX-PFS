@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/user_profile.dart';
 
 class AuthService {
@@ -111,7 +112,7 @@ class AuthService {
           });
         }
       } catch (e) {
-        print("Error seeding user ${u['user']}: $e");
+        debugPrint("Error seeding user ${u['user']}: $e");
       }
     }
   }

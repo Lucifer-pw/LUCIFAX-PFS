@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -203,7 +204,7 @@ class PrintService {
     final File file = File("$path/$filename");
     
     await file.writeAsBytes(await pdf.save());
-    print("PDF saved successfully to: ${file.path}");
+    debugPrint("PDF saved successfully to: ${file.path}");
     return file;
   }
 
@@ -258,14 +259,13 @@ class PrintService {
     const escBoldOff = '\x1bF';   // Bold off
     const ff = '\x0c';            // Form Feed (Page Eject)
 
-    final dateStr = DateFormat('dd-MM-yyyy').format(transaction.date);
     final delivStr = DateFormat('dd-MM-yyyy').format(transaction.deliveryDate);
 
     buffer.write(escInit);
     buffer.write(escSI); // Set to condensed font so we can fit more characters (up to 137 cols on half-page width)
 
     // Invoice Header
-    buffer.writeln("$escBoldOn" + "FIVA SOLO FOOD & MEAT SUPPLY" + "$escBoldOff");
+    buffer.writeln('${escBoldOn}FIVA SOLO FOOD & MEAT SUPPLY$escBoldOff');
     buffer.writeln("JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412");
     buffer.writeln("Tel: 021-8484308   Fax: 021-84972237");
     buffer.writeln("=" * 80);
@@ -275,13 +275,12 @@ class PrintService {
 
     // Table Header
     // Column widths: Nama Barang (35), Qty (6), Harga (12), Diskon (10), Subtotal (15) = 78 chars
-    buffer.writeln(
-      "NAMA BARANG".padRight(35) + 
-      "QTY".padLeft(6) + 
-      "HARGA".padLeft(12) + 
-      "DISKON".padLeft(10) + 
-      "SUB TOTAL".padLeft(15)
-    );
+    final String thName = "NAMA BARANG".padRight(35);
+    final String thQty = "QTY".padLeft(6);
+    final String thPrice = "HARGA".padLeft(12);
+    final String thDisc = "DISKON".padLeft(10);
+    final String thSub = "SUB TOTAL".padLeft(15);
+    buffer.writeln("$thName$thQty$thPrice$thDisc$thSub");
     buffer.writeln("-" * 80);
 
     // Write Items (Up to 10 rows)
@@ -294,13 +293,12 @@ class PrintService {
       final disc = item.discountPercent > 0 ? "${item.discountPercent.toStringAsFixed(1)}%" : "0.00%";
       final sub = _rupiahFormatter.format(item.subtotal);
 
-      buffer.writeln(
-        name.padRight(35) + 
-        qty.padLeft(6) + 
-        price.padLeft(12) + 
-        disc.padLeft(10) + 
-        sub.padLeft(15)
-      );
+      final String colName = name.padRight(35);
+      final String colQty = qty.padLeft(6);
+      final String colPrice = price.padLeft(12);
+      final String colDisc = disc.padLeft(10);
+      final String colSub = sub.padLeft(15);
+      buffer.writeln("$colName$colQty$colPrice$colDisc$colSub");
     }
 
     // Fill remaining table lines with empty spaces so layout is uniform
@@ -317,11 +315,9 @@ class PrintService {
         : transaction.note;
     final total = _rupiahFormatter.format(transaction.grandTotal);
     
-    buffer.writeln(
-      "Catatan: ${note.padRight(35)}" + 
-      "GRAND TOTAL:".padLeft(17) + 
-      total.padLeft(15)
-    );
+    final String padTotalLabel = "GRAND TOTAL:".padLeft(17);
+    final String padTotalVal = total.padLeft(15);
+    buffer.writeln("Catatan: ${note.padRight(35)}$padTotalLabel$padTotalVal");
     buffer.writeln("=" * 80);
 
     buffer.write(escNormal); // Restore normal font

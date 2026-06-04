@@ -274,9 +274,10 @@ class _LoginViewState extends State<LoginView> {
               // Seed Option (For local testing ease if DB empty)
               TextButton(
                 onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
                   await authProvider.seedDefaultUsers();
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text("Pengguna default berhasil dimasukkan! (admin/cabangjateng, setiawan/jateng, manager/pfs2025)"),
                         backgroundColor: Colors.teal,

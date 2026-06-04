@@ -146,10 +146,10 @@ class _ShellViewState extends State<ShellView> {
             Padding(
               padding: const EdgeInsets.only(right: 4.0),
               child: IconButton(
-                icon: Badge(
+                icon: const Badge(
                   backgroundColor: Colors.redAccent,
                   smallSize: 10,
-                  child: const Icon(Icons.system_update_rounded, color: Color(0xFF38BDF8)),
+                  child: Icon(Icons.system_update_rounded, color: Color(0xFF38BDF8)),
                 ),
                 tooltip: 'Update Tersedia!',
                 onPressed: () {
@@ -177,11 +177,12 @@ class _ShellViewState extends State<ShellView> {
                 onPressed: updateProvider.isChecking
                     ? null
                     : () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         await updateProvider.checkForUpdate();
                         if (mounted && updateProvider.hasUpdate && updateProvider.updateInfo != null) {
                           _showUpdateDialog(updateProvider.updateInfo!);
                         } else if (mounted && !updateProvider.hasUpdate) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             SnackBar(
                               content: const Text('✅ Aplikasi sudah versi terbaru!'),
                               backgroundColor: const Color(0xFF1E293B),

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../models/customer.dart';
-import '../models/product.dart';
 import '../providers/customer_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -40,7 +38,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         _erpRecords = data;
       });
     } catch (e) {
-      print("Error loading ERP summary: $e");
+      debugPrint("Error loading ERP summary: $e");
     } finally {
       setState(() {
         _loadingErp = false;
@@ -192,7 +190,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                         style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
                                       ),
                                     );
-                                  }).toList(),
+                                  }),
                                   const DataColumn(
                                     label: Text(
                                       'TOTAL KELUAR',
