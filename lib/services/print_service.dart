@@ -190,7 +190,7 @@ class PrintService {
     // Save locally on the user's device (e.g. Downloads directory)
     final Directory outputDirectory = await _getOutputDirectory();
 
-    final String path = outputDirectory!.path;
+    final String path = outputDirectory.path;
     final String cleanCustomer = transaction.customerName.replaceAll(' ', '_');
     final String cleanCity = transaction.city.replaceAll(' ', '_');
     final String dateStr = DateFormat('yyyyMMdd').format(transaction.date);

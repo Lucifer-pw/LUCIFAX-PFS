@@ -1023,7 +1023,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                                   return DataRow(
                                     cells: [
-                                      DataCell(Text('#${tr.invoiceNo}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                      DataCell(
+                                        Text('#${tr.invoiceNo}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+                                        onTap: () => _showDetailDialog(tr),
+                                      ),
                                       DataCell(
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1032,7 +1035,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                             Text(DateFormat('dd-MM-yyyy').format(tr.deliveryDate), style: const TextStyle(color: Colors.white)),
                                             const Text('Tanggal Kirim', style: TextStyle(color: Color(0xFF64748B), fontSize: 9)),
                                           ],
-                                        )
+                                        ),
+                                        onTap: () => _showDetailDialog(tr),
                                       ),
                                       DataCell(
                                         Column(
@@ -1043,6 +1047,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                             Text(tr.customerName, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
                                           ],
                                         ),
+                                        onTap: () => _showDetailDialog(tr),
                                       ),
                                       DataCell(Text(tr.city, style: const TextStyle(color: Colors.white))),
                                       DataCell(Text('${totalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.white))),
