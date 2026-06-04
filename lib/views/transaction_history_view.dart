@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -42,9 +43,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
+        withData: true,
       );
 
-      if (result == null || result.files.single.path == null) return;
+      if (result == null) return;
+      final bytes = result.files.single.bytes ??
+          (result.files.single.path != null ? await File(result.files.single.path!).readAsBytes() : null);
+      if (bytes == null) return;
 
       if (!mounted) return;
       showDialog(
@@ -55,8 +60,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         ),
       );
 
-      final file = File(result.files.single.path!);
-      final importResult = await ImportService().importTransactions(file, createdBy);
+      final importResult = await ImportService().importTransactions(bytes, createdBy);
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
@@ -854,7 +858,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text("PDF Invoice #${toPrint.invoiceNo} disimpan di: ${pdfFile.path}"),
+                            content: Text(
+                              kIsWeb
+                                  ? "PDF Invoice #${toPrint.invoiceNo} berhasil diunduh!"
+                                  : "PDF Invoice #${toPrint.invoiceNo} disimpan di: ${pdfFile?.path ?? ''}"
+                            ),
                             backgroundColor: Colors.teal,
                             behavior: SnackBarBehavior.floating,
                           ),

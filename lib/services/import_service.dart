@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
@@ -76,8 +75,7 @@ class ImportService {
   // IMPORT PRODUCTS
   // Kolom VBA: KODE_INDUK, NAMA_BARANG, Harga, Stok, ISI/KARTON
   // ============================================
-  Future<ImportResult> importProducts(File file) async {
-    final bytes = file.readAsBytesSync();
+  Future<ImportResult> importProducts(Uint8List bytes) async {
     final excel = Excel.decodeBytes(bytes);
     final sheet = excel.tables[excel.tables.keys.first]!;
 
@@ -142,8 +140,7 @@ class ImportService {
   // IMPORT CUSTOMERS
   // Kolom VBA: No, ID CUST, CUSTOMER, NAMA PELANGGAN, ALAMAT, Provinsi, NEGARA, PHONE, No KTP, Detail
   // ============================================
-  Future<ImportResult> importCustomers(File file) async {
-    final bytes = file.readAsBytesSync();
+  Future<ImportResult> importCustomers(Uint8List bytes) async {
     final excel = Excel.decodeBytes(bytes);
     final sheet = excel.tables[excel.tables.keys.first]!;
 
@@ -227,8 +224,7 @@ class ImportService {
   // ============================================
   // IMPORT TRANSACTIONS (bulk from VBA export)
   // ============================================
-  Future<ImportResult> importTransactions(File file, String createdBy) async {
-    final bytes = file.readAsBytesSync();
+  Future<ImportResult> importTransactions(Uint8List bytes, String createdBy) async {
     final excel = Excel.decodeBytes(bytes);
     final sheet = excel.tables[excel.tables.keys.first]!;
 

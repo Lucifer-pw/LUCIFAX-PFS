@@ -160,9 +160,13 @@ class _ProductListViewState extends State<ProductListView> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
+        withData: true,
       );
 
-      if (result == null || result.files.single.path == null) return;
+      if (result == null) return;
+      final bytes = result.files.single.bytes ??
+          (result.files.single.path != null ? await File(result.files.single.path!).readAsBytes() : null);
+      if (bytes == null) return;
 
       if (!mounted) return;
       showDialog(
@@ -173,8 +177,7 @@ class _ProductListViewState extends State<ProductListView> {
         ),
       );
 
-      final file = File(result.files.single.path!);
-      final importResult = await ImportService().importProducts(file);
+      final importResult = await ImportService().importProducts(bytes);
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog

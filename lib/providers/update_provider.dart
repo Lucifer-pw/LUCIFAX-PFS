@@ -19,6 +19,7 @@ class UpdateProvider extends ChangeNotifier {
 
   /// Checks the GitHub repository for a newer release.
   Future<void> checkForUpdate() async {
+    if (kIsWeb) return;
     _isChecking = true;
     _error = null;
     notifyListeners();

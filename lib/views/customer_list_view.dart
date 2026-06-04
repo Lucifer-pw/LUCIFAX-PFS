@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -109,7 +110,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(isEdit ? 'Edit Pelanggan' : 'Tambah Pelanggan', style: const TextStyle(color: Colors.white)),
-                  if (!isEdit)
+                  if (!isEdit && !kIsWeb)
                     ElevatedButton.icon(
                       onPressed: isScanning ? null : scanKtp,
                       icon: isScanning
@@ -277,9 +278,13 @@ class _CustomerListViewState extends State<CustomerListView> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
+        withData: true,
       );
 
-      if (result == null || result.files.single.path == null) return;
+      if (result == null) return;
+      final bytes = result.files.single.bytes ??
+          (result.files.single.path != null ? await File(result.files.single.path!).readAsBytes() : null);
+      if (bytes == null) return;
 
       if (!mounted) return;
       showDialog(
@@ -290,8 +295,7 @@ class _CustomerListViewState extends State<CustomerListView> {
         ),
       );
 
-      final file = File(result.files.single.path!);
-      final importResult = await ImportService().importCustomers(file);
+      final importResult = await ImportService().importCustomers(bytes);
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog

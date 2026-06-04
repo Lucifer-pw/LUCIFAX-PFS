@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -126,7 +127,12 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               children: [
                 Text('Invoice #${savedTransaction.invoiceNo} berhasil disimpan!', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Text('PDF berhasil dibuat dan diunduh di: \n${pdfFile.path}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                Text(
+                  kIsWeb 
+                      ? 'PDF berhasil dibuat dan diunduh otomatis.'
+                      : 'PDF berhasil dibuat dan disimpan di: \n${pdfFile?.path ?? ""}', 
+                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)
+                ),
               ],
             ),
             actions: [
@@ -137,7 +143,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text("File raw ESC/P disimpan di: ${rawFile.path}"),
+                        content: Text(
+                          kIsWeb
+                              ? "File raw ESC/P berhasil diunduh!"
+                              : "File raw ESC/P disimpan di: ${rawFile?.path ?? ''}"
+                        ),
                         backgroundColor: Colors.teal,
                         behavior: SnackBarBehavior.floating,
                       ),

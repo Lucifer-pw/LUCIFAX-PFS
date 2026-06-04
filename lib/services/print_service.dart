@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
@@ -15,7 +16,7 @@ class PrintService {
   );
 
   // Generate PDF tailored for 9.5" x 5.5" Continuous Form (684 x 396 points)
-  static Future<File> generateInvoicePdf(model_tr.Transaction transaction) async {
+  static Future<File?> generateInvoicePdf(model_tr.Transaction transaction) async {
     final pdf = pw.Document();
 
     // 9.5 x 5.5 inches in points
@@ -188,14 +189,19 @@ class PrintService {
     );
 
     // Save locally on the user's device (e.g. Downloads directory)
-    final Directory outputDirectory = await _getOutputDirectory();
-
-    final String path = outputDirectory.path;
     final String cleanCustomer = transaction.customerName.replaceAll(' ', '_');
     final String cleanCity = transaction.city.replaceAll(' ', '_');
     final String dateStr = DateFormat('yyyyMMdd').format(transaction.date);
-    
     final String filename = "${transaction.invoiceNo}_${cleanCustomer}_${cleanCity}_$dateStr.pdf";
+
+    if (kIsWeb) {
+      await Printing.sharePdf(bytes: await pdf.save(), filename: filename);
+      return null;
+    }
+
+    // Save locally on the user's device (e.g. Downloads directory)
+    final Directory outputDirectory = await _getOutputDirectory();
+    final String path = outputDirectory.path;
     final File file = File("$path/$filename");
     
     await file.writeAsBytes(await pdf.save());
@@ -322,10 +328,18 @@ class PrintService {
   }
 
   // Save the raw text to document directory for local printing utility
-  static Future<File> saveEscPRawFile(model_tr.Transaction transaction) async {
+  // Save the raw text to document directory for local printing utility
+  static Future<File?> saveEscPRawFile(model_tr.Transaction transaction) async {
     final text = generateEscPRawText(transaction);
-    final Directory outputDirectory = await _getOutputDirectory();
     final filename = "raw_invoice_${transaction.invoiceNo}.txt";
+
+    if (kIsWeb) {
+      final bytes = Uint8List.fromList(text.codeUnits);
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+      return null;
+    }
+
+    final Directory outputDirectory = await _getOutputDirectory();
     final file = File("${outputDirectory.path}/$filename");
     await file.writeAsString(text);
     return file;
@@ -333,6 +347,9 @@ class PrintService {
 
   // Helper method to resolve target directory based on platform
   static Future<Directory> _getOutputDirectory() async {
+    if (kIsWeb) {
+      throw UnsupportedError('Output directory is not supported on web.');
+    }
     if (Platform.isAndroid) {
       final dir = Directory('/storage/emulated/0/Download');
       if (await dir.exists()) {
