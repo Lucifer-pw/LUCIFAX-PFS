@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file_plus/open_file_plus.dart';
 
 class UpdateInfo {
   final String latestVersion;
@@ -21,7 +23,7 @@ class UpdateInfo {
 class UpdateService {
   static const String _githubOwner = 'Lucifer-pw';
   static const String _githubRepo = 'LUCIFAX-PFS';
-  static const String currentVersion = '1.2.6';
+  static const String currentVersion = '1.2.7';
 
   /// Checks the latest GitHub release and returns [UpdateInfo] if a newer
   /// version is available, or `null` if the app is already up-to-date.
@@ -99,7 +101,7 @@ class UpdateService {
   }
 
   /// Opens the download URL in the system browser so the user can download
-  /// and install the APK.
+  /// and install the APK as a fallback.
   static Future<bool> launchDownloadUrl(String downloadUrl) async {
     try {
       final uri = Uri.parse(downloadUrl);
@@ -107,6 +109,55 @@ class UpdateService {
         return await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
       return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Downloads the APK file to temporary directory and calls onProgress callback.
+  static Future<File?> downloadApk(String url, Function(double progress) onProgress) async {
+    try {
+      final httpClient = HttpClient();
+      httpClient.connectionTimeout = const Duration(seconds: 30);
+      final request = await httpClient.getUrl(Uri.parse(url));
+      final response = await request.close();
+      
+      if (response.statusCode != 200) {
+        httpClient.close();
+        return null;
+      }
+      
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/lucifax_update.apk');
+      if (await file.exists()) {
+        await file.delete();
+      }
+      
+      final fileSink = file.openWrite();
+      final totalBytes = response.contentLength;
+      int downloadedBytes = 0;
+      
+      await response.forEach((chunk) {
+        fileSink.add(chunk);
+        downloadedBytes += chunk.length;
+        if (totalBytes > 0) {
+          onProgress(downloadedBytes / totalBytes);
+        }
+      });
+      
+      await fileSink.close();
+      httpClient.close();
+      return file;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Triggers the Android package installer using open_file_plus
+  static Future<bool> installApk(String filePath) async {
+    try {
+      final result = await OpenFilePlus.open(filePath);
+      return result.type == ResultType.done;
     } catch (e) {
       return false;
     }
