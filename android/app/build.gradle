@@ -42,7 +42,7 @@ android {
 
     defaultConfig {
         applicationId "com.lucifax.Lucifax_PFS"
-        minSdkVersion flutter.minSdkVersion
+        minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
