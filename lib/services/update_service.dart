@@ -21,7 +21,7 @@ class UpdateInfo {
 class UpdateService {
   static const String _githubOwner = 'Lucifer-pw';
   static const String _githubRepo = 'LUCIFAX-PFS';
-  static const String currentVersion = '1.0.0';
+  static const String currentVersion = '1.2.2';
 
   /// Checks the latest GitHub release and returns [UpdateInfo] if a newer
   /// version is available, or `null` if the app is already up-to-date.

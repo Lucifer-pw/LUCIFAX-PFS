@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/product.dart';
 import '../providers/product_provider.dart';
+import '../services/import_service.dart';
 
 class ProductListView extends StatefulWidget {
   const ProductListView({super.key});
@@ -152,6 +155,84 @@ class _ProductListViewState extends State<ProductListView> {
     );
   }
 
+  Future<void> _importProductsFromExcel() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+      );
+
+      if (result == null || result.files.single.path == null) return;
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFF38BDF8)),
+        ),
+      );
+
+      final file = File(result.files.single.path!);
+      final importResult = await ImportService().importProducts(file);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Show result dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: const Text('Hasil Import Excel', style: TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Total Baris data: ${importResult.totalRows}', style: const TextStyle(color: Colors.white)),
+                Text('Sukses: ${importResult.successCount}', style: const TextStyle(color: Colors.greenAccent)),
+                Text('Gagal: ${importResult.errorCount}', style: const TextStyle(color: Colors.redAccent)),
+                if (importResult.errors.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Rincian Error:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 150),
+                    width: double.maxFinite,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        importResult.errors.join('\n'),
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup', style: TextStyle(color: Color(0xFF38BDF8))),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengimport: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
@@ -174,26 +255,43 @@ class _ProductListViewState extends State<ProductListView> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Search Input Header
-            TextField(
-              controller: _searchController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Cari barang berdasarkan nama atau kode induk...',
-                hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12.0),
-                  borderSide: BorderSide.none,
+            // Search Input and Import Button
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Cari barang berdasarkan nama atau kode induk...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+                      filled: true,
+                      fillColor: const Color(0xFF1E293B),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _searchQuery = val;
+                      });
+                    },
+                  ),
                 ),
-              ),
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                });
-              },
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: _importProductsFromExcel,
+                  icon: const Icon(Icons.file_upload_rounded, color: Colors.white),
+                  label: const Text('Import Excel', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal[700],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
 

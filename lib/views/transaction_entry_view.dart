@@ -97,12 +97,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     try {
       trProvider.setNote(_noteController.text);
       
-      // Save to Firebase and get new invoice number
-      final invoiceNo = await trProvider.submitTransaction(createdBy);
-
-      // Fetch the transaction details from the newly local or generated model to generate PDF
-      // We can create a mock transaction object from the current state before it gets cleared
-      final savedTransaction = trProvider.transactions.firstWhere((t) => t.invoiceNo == invoiceNo);
+      // Save to Firebase and get transaction object directly
+      final savedTransaction = await trProvider.submitTransaction(createdBy);
 
       // Generate local PDF and download
       final pdfFile = await PrintService.generateInvoicePdf(savedTransaction);
@@ -128,7 +124,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Invoice #$invoiceNo berhasil disimpan!', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text('Invoice #${savedTransaction.invoiceNo} berhasil disimpan!', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text('PDF berhasil dibuat dan diunduh di: \n${pdfFile.path}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
               ],
@@ -152,6 +148,49 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 label: const Text('Simpan Raw ESC/P (LX300)', style: TextStyle(fontSize: 12)),
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0369A1)),
               ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup', style: TextStyle(color: Color(0xFF38BDF8))),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitOnly(TransactionProvider trProvider, String createdBy) async {
+    try {
+      trProvider.setNote(_noteController.text);
+      
+      // Save to Firebase only
+      final savedTransaction = await trProvider.submitTransaction(createdBy);
+ 
+      _noteController.clear();
+      setState(() {
+        _selectedCustomer = null;
+      });
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent),
+                SizedBox(width: 12),
+                Text('Transaksi Disimpan', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+            content: Text('Invoice #${savedTransaction.invoiceNo} berhasil disimpan ke database (PO disimpan).', style: const TextStyle(color: Colors.white)),
+            actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Tutup', style: TextStyle(color: Color(0xFF38BDF8))),
@@ -502,20 +541,38 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-
-                      // Save and print Button
-                      ElevatedButton.icon(
-                        onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
-                            ? null
-                            : () => _submitAndPrint(trProvider, user.uid),
-                        icon: const Icon(Icons.save_alt_rounded),
-                        label: const Text('Simpan & Cetak Invoice'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          backgroundColor: const Color(0xFF0284C7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
+                                  ? null
+                                  : () => _submitOnly(trProvider, user.uid),
+                              icon: const Icon(Icons.save_rounded, color: Colors.white),
+                              label: const Text('Simpan Saja', style: TextStyle(color: Colors.white, fontSize: 13)),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                backgroundColor: Colors.teal[600],
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
+                                  ? null
+                                  : () => _submitAndPrint(trProvider, user.uid),
+                              icon: const Icon(Icons.print_rounded, color: Colors.white),
+                              label: const Text('Simpan & Cetak', style: TextStyle(color: Colors.white, fontSize: 13)),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                backgroundColor: const Color(0xFF0284C7),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

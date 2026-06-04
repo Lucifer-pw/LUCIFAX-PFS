@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
 import '../models/transaction.dart' as model_tr;
 import '../services/firebase_service.dart';
 
 class TransactionProvider extends ChangeNotifier {
   final FirebaseService _dbService = FirebaseService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   List<model_tr.Transaction> _transactions = [];
   bool _isLoading = true;
   StreamSubscription? _subscription;
+  StreamSubscription? _authSubscription;
 
   // Active cashier cart state
   final List<model_tr.TransactionItem> _cartItems = [];
@@ -39,10 +42,23 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   TransactionProvider() {
-    _subscription = _dbService.streamTransactions().listen((trList) {
-      _transactions = trList;
-      _isLoading = false;
-      notifyListeners();
+    _authSubscription = _auth.authStateChanges().listen((user) {
+      _subscription?.cancel();
+      if (user != null) {
+        _isLoading = true;
+        notifyListeners();
+        _subscription = _dbService.streamTransactions().listen((trList) {
+          _transactions = trList;
+          _isLoading = false;
+          notifyListeners();
+        }, onError: (error) {
+          debugPrint("Transaction stream error: $error");
+        });
+      } else {
+        _transactions = [];
+        _isLoading = false;
+        notifyListeners();
+      }
     });
   }
 
@@ -133,8 +149,8 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Save current cart transaction
-  Future<int> submitTransaction(String createdBy) async {
+  // Save current cart transaction and return the Transaction object
+  Future<model_tr.Transaction> submitTransaction(String createdBy) async {
     if (_selectedCustomerId == null) {
       throw Exception("Silakan pilih Nama Pelanggan terlebih dahulu!");
     }
@@ -142,7 +158,7 @@ class TransactionProvider extends ChangeNotifier {
       throw Exception("Tabel transaksi masih kosong!");
     }
 
-    final invoiceNo = await _dbService.createTransaction(
+    final savedTr = await _dbService.createTransaction(
       customerId: _selectedCustomerId!,
       customerName: _selectedCustomerName!,
       aliasName: _selectedAliasName!,
@@ -157,11 +173,25 @@ class TransactionProvider extends ChangeNotifier {
     );
 
     clearCart();
-    return invoiceNo;
+    return savedTr;
   }
 
   Future<void> updatePaymentStatus(int invoiceNo, String status, DateTime? transferDate) async {
     await _dbService.updateTransactionTransferStatus(invoiceNo, status, transferDate);
+  }
+
+  Future<void> updateDeliveryDate(int invoiceNo, DateTime deliveryDate) async {
+    await _dbService.updateTransactionDeliveryDate(invoiceNo, deliveryDate);
+  }
+
+  Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
+    await _dbService.updateTransaction(updatedTr);
+    notifyListeners();
+  }
+
+  Future<void> deleteTransaction(int invoiceNo) async {
+    await _dbService.deleteTransaction(invoiceNo);
+    notifyListeners();
   }
 
   // Fetch ERP Summaries for reports
@@ -172,6 +202,7 @@ class TransactionProvider extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

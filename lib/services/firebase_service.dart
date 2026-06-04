@@ -160,7 +160,7 @@ class FirebaseService {
   }
 
   // Save transaction with Auto-Increment Invoice Number & ERP update inside a Firestore Transaction
-  Future<int> createTransaction({
+  Future<model_tr.Transaction> createTransaction({
     required String customerId,
     required String customerName,
     required String aliasName,
@@ -260,13 +260,19 @@ class FirebaseService {
     await erpRef.set(erpData);
     await batch.commit();
 
-    return newInvoiceNo;
+    return trDoc;
   }
 
   Future<void> updateTransactionTransferStatus(int invoiceNo, String status, DateTime? transferDate) async {
     await _db.collection('transactions').doc(invoiceNo.toString()).update({
       'statusTransfer': status,
       'transferDate': transferDate != null ? Timestamp.fromDate(transferDate) : null,
+    });
+  }
+
+  Future<void> updateTransactionDeliveryDate(int invoiceNo, DateTime deliveryDate) async {
+    await _db.collection('transactions').doc(invoiceNo.toString()).update({
+      'deliveryDate': Timestamp.fromDate(deliveryDate),
     });
   }
 
@@ -277,5 +283,259 @@ class FirebaseService {
         .where('monthYear', isEqualTo: monthYear)
         .get();
     return snap.docs.map((doc) => doc.data()).toList();
+  }
+
+  // Import transaction (with specific invoice number)
+  Future<void> importTransaction({
+    required int invoiceNo,
+    required String customerId,
+    required String customerName,
+    required String aliasName,
+    required DateTime deliveryDate,
+    required String city,
+    required String province,
+    required String country,
+    required List<Map<String, dynamic>> items,
+    required double grandTotal,
+    required String note,
+    required String createdBy,
+  }) async {
+    final now = DateTime.now();
+    final listItems = items.map((e) => model_tr.TransactionItem.fromMap(e)).toList();
+
+    final trDoc = model_tr.Transaction(
+      invoiceNo: invoiceNo,
+      customerId: customerId,
+      customerName: customerName,
+      aliasName: aliasName,
+      date: now,
+      deliveryDate: deliveryDate,
+      city: city,
+      province: province,
+      country: country,
+      items: listItems,
+      grandTotal: grandTotal,
+      note: note,
+      status: 'DIKIRIM',
+      statusTransfer: 'UNPAID',
+      createdBy: createdBy,
+      createdAt: now,
+    );
+
+    // Update lastInvoiceNo counter if imported invoice number is larger
+    final counterRef = _db.collection('counters').doc('transactions');
+    await _db.runTransaction((transaction) async {
+      final counterSnapshot = await transaction.get(counterRef);
+      int currentNo = 180;
+      if (counterSnapshot.exists) {
+        currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
+      }
+      if (invoiceNo > currentNo) {
+        transaction.set(counterRef, {'lastInvoiceNo': invoiceNo});
+      }
+    });
+
+    await _db.collection('transactions').doc(invoiceNo.toString()).set(trDoc.toMap());
+
+    // Update stocks and ERP
+    final batch = _db.batch();
+    for (var item in listItems) {
+      final productRef = _db.collection('products').doc(item.productId);
+      batch.update(productRef, {
+        'stock': FieldValue.increment(-item.qty),
+      });
+    }
+
+    final monthYear = DateFormat('MM-yyyy').format(deliveryDate);
+    final erpRef = _db.collection('erp_summary').doc("${monthYear}_$customerId");
+
+    final erpSnap = await erpRef.get();
+    Map<String, dynamic> erpData = erpSnap.exists
+        ? erpSnap.data()!
+        : {
+            'monthYear': monthYear,
+            'customerId': customerId,
+            'customerName': aliasName,
+            'products': {},
+            'totalIncome': 0.0,
+          };
+
+    double currentIncome = (erpData['totalIncome'] ?? 0.0).toDouble();
+    erpData['totalIncome'] = currentIncome + grandTotal;
+
+    Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
+
+    for (var item in listItems) {
+      Map<String, dynamic> prodRecord = productsMap[item.productId] != null
+          ? Map<String, dynamic>.from(productsMap[item.productId])
+          : {'pcs': 0.0, 'kg': 0.0};
+
+      double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
+      double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
+
+      prodRecord['pcs'] = currentPcs + item.qty;
+      prodRecord['kg'] = currentKg + item.weightKg;
+
+      productsMap[item.productId] = prodRecord;
+    }
+
+    erpData['products'] = productsMap;
+    await erpRef.set(erpData);
+    await batch.commit();
+  }
+
+  // Update existing transaction with stock and ERP summary updates
+  Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
+    final docRef = _db.collection('transactions').doc(updatedTr.invoiceNo.toString());
+
+    await _db.runTransaction((transaction) async {
+      // 1. Get old transaction
+      final oldSnap = await transaction.get(docRef);
+      if (!oldSnap.exists) {
+        throw Exception("Transaksi tidak ditemukan!");
+      }
+      final oldTr = model_tr.Transaction.fromMap(oldSnap.data()!, oldSnap.id);
+
+      // 2. Revert old stocks (increment product stocks by old qty)
+      for (var item in oldTr.items) {
+        final prodRef = _db.collection('products').doc(item.productId);
+        final prodSnap = await transaction.get(prodRef);
+        if (prodSnap.exists) {
+          final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
+          transaction.update(prodRef, {'stock': currentStock + item.qty});
+        }
+      }
+
+      // 3. Revert from old ERP summary
+      final oldMonthYear = DateFormat('MM-yyyy').format(oldTr.deliveryDate);
+      final oldErpRef = _db.collection('erp_summary').doc("${oldMonthYear}_${oldTr.customerId}");
+      final oldErpSnap = await transaction.get(oldErpRef);
+      if (oldErpSnap.exists) {
+        Map<String, dynamic> erpData = Map<String, dynamic>.from(oldErpSnap.data()!);
+        double income = (erpData['totalIncome'] ?? 0.0).toDouble();
+        erpData['totalIncome'] = income - oldTr.grandTotal;
+
+        Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
+        for (var item in oldTr.items) {
+          if (productsMap.containsKey(item.productId)) {
+            Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
+            double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
+            double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
+            prodRecord['pcs'] = currentPcs - item.qty;
+            prodRecord['kg'] = currentKg - item.weightKg;
+            if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
+              productsMap.remove(item.productId);
+            } else {
+              productsMap[item.productId] = prodRecord;
+            }
+          }
+        }
+        erpData['products'] = productsMap;
+        transaction.set(oldErpRef, erpData);
+      }
+
+      // 4. Apply new stocks (decrement product stocks by new qty)
+      for (var item in updatedTr.items) {
+        final prodRef = _db.collection('products').doc(item.productId);
+        final prodSnap = await transaction.get(prodRef);
+        if (prodSnap.exists) {
+          final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
+          transaction.update(prodRef, {'stock': currentStock - item.qty});
+        }
+      }
+
+      // 5. Apply to new ERP summary
+      final newMonthYear = DateFormat('MM-yyyy').format(updatedTr.deliveryDate);
+      final newErpRef = _db.collection('erp_summary').doc("${newMonthYear}_${updatedTr.customerId}");
+      final newErpSnap = await transaction.get(newErpRef);
+
+      Map<String, dynamic> newErpData = newErpSnap.exists
+          ? Map<String, dynamic>.from(newErpSnap.data()!)
+          : {
+              'monthYear': newMonthYear,
+              'customerId': updatedTr.customerId,
+              'customerName': updatedTr.aliasName,
+              'products': {},
+              'totalIncome': 0.0,
+            };
+
+      double newIncome = (newErpData['totalIncome'] ?? 0.0).toDouble();
+      newErpData['totalIncome'] = newIncome + updatedTr.grandTotal;
+
+      Map<String, dynamic> newProductsMap = Map<String, dynamic>.from(newErpData['products'] ?? {});
+      for (var item in updatedTr.items) {
+        Map<String, dynamic> prodRecord = newProductsMap[item.productId] != null
+            ? Map<String, dynamic>.from(newProductsMap[item.productId])
+            : {'pcs': 0.0, 'kg': 0.0};
+
+        double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
+        double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
+
+        prodRecord['pcs'] = currentPcs + item.qty;
+        prodRecord['kg'] = currentKg + item.weightKg;
+
+        newProductsMap[item.productId] = prodRecord;
+      }
+      newErpData['products'] = newProductsMap;
+      transaction.set(newErpRef, newErpData);
+
+      // 6. Write updated transaction doc
+      transaction.set(docRef, updatedTr.toMap());
+    });
+  }
+
+  // Delete transaction with stock and ERP summary reversion
+  Future<void> deleteTransaction(int invoiceNo) async {
+    final docRef = _db.collection('transactions').doc(invoiceNo.toString());
+
+    await _db.runTransaction((transaction) async {
+      // 1. Get old transaction
+      final snap = await transaction.get(docRef);
+      if (!snap.exists) {
+        throw Exception("Transaksi tidak ditemukan!");
+      }
+      final oldTr = model_tr.Transaction.fromMap(snap.data()!, snap.id);
+
+      // 2. Revert stocks
+      for (var item in oldTr.items) {
+        final prodRef = _db.collection('products').doc(item.productId);
+        final prodSnap = await transaction.get(prodRef);
+        if (prodSnap.exists) {
+          final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
+          transaction.update(prodRef, {'stock': currentStock + item.qty});
+        }
+      }
+
+      // 3. Revert from ERP summary
+      final monthYear = DateFormat('MM-yyyy').format(oldTr.deliveryDate);
+      final erpRef = _db.collection('erp_summary').doc("${monthYear}_${oldTr.customerId}");
+      final erpSnap = await transaction.get(erpRef);
+      if (erpSnap.exists) {
+        Map<String, dynamic> erpData = Map<String, dynamic>.from(erpSnap.data()!);
+        double income = (erpData['totalIncome'] ?? 0.0).toDouble();
+        erpData['totalIncome'] = income - oldTr.grandTotal;
+
+        Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
+        for (var item in oldTr.items) {
+          if (productsMap.containsKey(item.productId)) {
+            Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
+            double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
+            double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
+            prodRecord['pcs'] = currentPcs - item.qty;
+            prodRecord['kg'] = currentKg - item.weightKg;
+            if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
+              productsMap.remove(item.productId);
+            } else {
+              productsMap[item.productId] = prodRecord;
+            }
+          }
+        }
+        erpData['products'] = productsMap;
+        transaction.set(erpRef, erpData);
+      }
+
+      // 4. Delete the transaction document
+      transaction.delete(docRef);
+    });
   }
 }

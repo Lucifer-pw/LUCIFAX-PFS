@@ -10,6 +10,7 @@ import 'customer_list_view.dart';
 import 'erp_matrix_view.dart';
 import 'dashboard_view.dart';
 import 'update_dialog.dart';
+import 'transaction_history_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -71,6 +72,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Transaksi Kasir',
         'icon': Icons.point_of_sale_rounded,
         'widget': const TransactionEntryView(),
+      },
+      {
+        'title': 'Histori Transaksi',
+        'icon': Icons.history_rounded,
+        'widget': const TransactionHistoryView(),
       },
     ];
 

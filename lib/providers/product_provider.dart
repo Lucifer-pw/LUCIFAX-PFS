@@ -1,22 +1,38 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
 import '../services/firebase_service.dart';
 
 class ProductProvider extends ChangeNotifier {
   final FirebaseService _dbService = FirebaseService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   List<Product> _products = [];
   bool _isLoading = true;
   StreamSubscription? _subscription;
+  StreamSubscription? _authSubscription;
 
   List<Product> get products => _products;
   bool get isLoading => _isLoading;
 
   ProductProvider() {
-    _subscription = _dbService.streamProducts().listen((productList) {
-      _products = productList;
-      _isLoading = false;
-      notifyListeners();
+    _authSubscription = _auth.authStateChanges().listen((user) {
+      _subscription?.cancel();
+      if (user != null) {
+        _isLoading = true;
+        notifyListeners();
+        _subscription = _dbService.streamProducts().listen((productList) {
+          _products = productList;
+          _isLoading = false;
+          notifyListeners();
+        }, onError: (error) {
+          debugPrint("Product stream error: $error");
+        });
+      } else {
+        _products = [];
+        _isLoading = false;
+        notifyListeners();
+      }
     });
   }
 
@@ -31,6 +47,7 @@ class ProductProvider extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }
