@@ -188,12 +188,7 @@ class PrintService {
     );
 
     // Save locally on the user's device (e.g. Downloads directory)
-    Directory? outputDirectory;
-    if (Platform.isWindows) {
-      outputDirectory = await getDownloadsDirectory();
-    } else {
-      outputDirectory = await getApplicationDocumentsDirectory();
-    }
+    final Directory outputDirectory = await _getOutputDirectory();
 
     final String path = outputDirectory!.path;
     final String cleanCustomer = transaction.customerName.replaceAll(' ', '_');
@@ -329,10 +324,26 @@ class PrintService {
   // Save the raw text to document directory for local printing utility
   static Future<File> saveEscPRawFile(model_tr.Transaction transaction) async {
     final text = generateEscPRawText(transaction);
-    final outputDirectory = await getDownloadsDirectory();
+    final Directory outputDirectory = await _getOutputDirectory();
     final filename = "raw_invoice_${transaction.invoiceNo}.txt";
-    final file = File("${outputDirectory!.path}/$filename");
+    final file = File("${outputDirectory.path}/$filename");
     await file.writeAsString(text);
     return file;
+  }
+
+  // Helper method to resolve target directory based on platform
+  static Future<Directory> _getOutputDirectory() async {
+    if (Platform.isAndroid) {
+      final dir = Directory('/storage/emulated/0/Download');
+      if (await dir.exists()) {
+        return dir;
+      }
+      return await getApplicationDocumentsDirectory();
+    } else if (Platform.isWindows) {
+      final dir = await getDownloadsDirectory();
+      return dir ?? await getApplicationDocumentsDirectory();
+    } else {
+      return await getApplicationDocumentsDirectory();
+    }
   }
 }
