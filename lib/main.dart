@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/customer_provider.dart';
@@ -12,13 +13,13 @@ import 'views/shell_view.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Note: Firebase.initializeApp() is run with options or standard defaults depending on target platform.
-  // When running locally, it is standard to initialize with current platform options.
+  // Initialize Firebase with generated platform options
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     } catch (e) {
-      debugPrint("Firebase initialization warning (running in developer/local environment): $e");
-      // In local desktop development, standard options are populated through flutterfire configuration.
+      debugPrint("Firebase initialization warning: $e");
     }
 
     runApp(

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "388227024926",
+    "firebase_url": "https://aplikasi-transaksi-fiva-frozen-default-rtdb.firebaseio.com",
+    "project_id": "aplikasi-transaksi-fiva-frozen",
+    "storage_bucket": "aplikasi-transaksi-fiva-frozen.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388227024926:android:d9595a3ec0882e1814860f",
+        "android_client_info": {
+          "package_name": "com.lucifax.Lucifax_PFS"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLz_JIz7I7inIziST57QSkOoBjp42Tv40"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
