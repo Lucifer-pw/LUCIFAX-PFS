@@ -23,7 +23,7 @@ class UpdateInfo {
 class UpdateService {
   static const String _githubOwner = 'Lucifer-pw';
   static const String _githubRepo = 'LUCIFAX-PFS';
-  static const String currentVersion = '1.2.7';
+  static const String currentVersion = '1.2.8';
 
   /// Checks the latest GitHub release and returns [UpdateInfo] if a newer
   /// version is available, or `null` if the app is already up-to-date.
@@ -156,7 +156,7 @@ class UpdateService {
   /// Triggers the Android package installer using open_file_plus
   static Future<bool> installApk(String filePath) async {
     try {
-      final result = await OpenFilePlus.open(filePath);
+      final result = await OpenFile.open(filePath);
       return result.type == ResultType.done;
     } catch (e) {
       return false;
