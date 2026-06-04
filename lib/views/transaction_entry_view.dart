@@ -217,372 +217,383 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
 
     final isDesktop = MediaQuery.of(context).size.width > 1000;
 
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Flex(
-        direction: isDesktop ? Axis.horizontal : Axis.vertical,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left Panel: Form Input
-          Expanded(
-            flex: isDesktop ? 2 : 0,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Customer Card Info
-                  _buildFormSection(
-                    title: 'Data Pelanggan',
-                    icon: Icons.person_search_rounded,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Customer Search Combobox
-                        DropdownButtonFormField<Customer>(
-                          value: _selectedCustomer,
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Colors.white),
-                          decoration: _buildInputDecoration(hint: 'Pilih Pelanggan'),
-                          items: customerProvider.customers.map((c) {
-                            return DropdownMenuItem<Customer>(
-                              value: c,
-                              child: Text('${c.aliasName} (${c.customerName})'),
-                            );
-                          }).toList(),
-                          onChanged: (customer) {
-                            setState(() {
-                              _selectedCustomer = customer;
-                            });
-                            if (customer != null) {
-                              trProvider.setCustomer(
-                                customer.id,
-                                customer.customerName,
-                                customer.aliasName,
-                                customer.city,
-                                customer.province,
-                                customer.country,
-                              );
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        
-                        // Auto-filled client info
-                        if (_selectedCustomer != null) ...[
-                          _buildDetailRow('ID Customer', _selectedCustomer!.id),
-                          _buildDetailRow('Alamat', _selectedCustomer!.address),
-                          _buildDetailRow('Kota/Provinsi', '${_selectedCustomer!.city}, ${_selectedCustomer!.province}'),
-                          const SizedBox(height: 12),
-                        ],
-                        
-                        // Date Picker Input
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                          subtitle: Text(
-                            DateFormat('dd MMMM yyyy').format(trProvider.deliveryDate),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+    final leftPanel = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Customer Card Info
+        _buildFormSection(
+          title: 'Data Pelanggan',
+          icon: Icons.person_search_rounded,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Customer Search Combobox
+              DropdownButtonFormField<Customer>(
+                value: _selectedCustomer,
+                dropdownColor: const Color(0xFF1E293B),
+                style: const TextStyle(color: Colors.white),
+                decoration: _buildInputDecoration(hint: 'Pilih Pelanggan'),
+                items: customerProvider.customers.map((c) {
+                  return DropdownMenuItem<Customer>(
+                    value: c,
+                    child: Text('${c.aliasName} (${c.customerName})'),
+                  );
+                }).toList(),
+                onChanged: (customer) {
+                  setState(() {
+                    _selectedCustomer = customer;
+                  });
+                  if (customer != null) {
+                    trProvider.setCustomer(
+                      customer.id,
+                      customer.customerName,
+                      customer.aliasName,
+                      customer.city,
+                      customer.province,
+                      customer.country,
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              // Auto-filled client info
+              if (_selectedCustomer != null) ...[
+                _buildDetailRow('ID Customer', _selectedCustomer!.id),
+                _buildDetailRow('Alamat', _selectedCustomer!.address),
+                _buildDetailRow('Kota/Provinsi', '${_selectedCustomer!.city}, ${_selectedCustomer!.province}'),
+                const SizedBox(height: 12),
+              ],
+              
+              // Date Picker Input
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                subtitle: Text(
+                  DateFormat('dd MMMM yyyy').format(trProvider.deliveryDate),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: trProvider.deliveryDate,
+                    firstDate: DateTime(2025),
+                    lastDate: DateTime(2030),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: const ColorScheme.dark(
+                            primary: Color(0xFF38BDF8),
+                            onPrimary: Colors.white,
+                            surface: Color(0xFF1E293B),
+                            onSurface: Colors.white,
                           ),
-                          trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: trProvider.deliveryDate,
-                              firstDate: DateTime(2025),
-                              lastDate: DateTime(2030),
-                              builder: (context, child) {
-                                return Theme(
-                                  data: Theme.of(context).copyWith(
-                                    colorScheme: const ColorScheme.dark(
-                                      primary: Color(0xFF38BDF8),
-                                      onPrimary: Colors.white,
-                                      surface: Color(0xFF1E293B),
-                                      onSurface: Colors.white,
-                                    ),
-                                  ),
-                                  child: child!,
-                                );
-                              },
-                            );
-                            if (picked != null) {
-                              trProvider.setDeliveryDate(picked);
-                            }
-                          },
                         ),
-                      ],
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null) {
+                    trProvider.setDeliveryDate(picked);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Product Adder Form
+        _buildFormSection(
+          title: 'Pilih & Tambah Barang',
+          icon: Icons.add_shopping_cart_rounded,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Search Combobox
+              DropdownButtonFormField<Product>(
+                value: _selectedProduct,
+                dropdownColor: const Color(0xFF1E293B),
+                style: const TextStyle(color: Colors.white),
+                decoration: _buildInputDecoration(hint: 'Cari Produk'),
+                items: productProvider.products.map((p) {
+                  return DropdownMenuItem<Product>(
+                    value: p,
+                    child: Text(p.name),
+                  );
+                }).toList(),
+                onChanged: (product) {
+                  setState(() {
+                    _selectedProduct = product;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              if (_selectedProduct != null) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Harga: ${_rupiahFormatter.format(_selectedProduct!.price)}',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Stok: ${_selectedProduct!.stock.toStringAsFixed(0)} pcs',
+                      style: TextStyle(
+                        color: _selectedProduct!.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Qty and Discount Inputs
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _qtyController,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
                     ),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Product Adder Form
-                  _buildFormSection(
-                    title: 'Pilih & Tambah Barang',
-                    icon: Icons.add_shopping_cart_rounded,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Product Search Combobox
-                        DropdownButtonFormField<Product>(
-                          value: _selectedProduct,
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Colors.white),
-                          decoration: _buildInputDecoration(hint: 'Cari Produk'),
-                          items: productProvider.products.map((p) {
-                            return DropdownMenuItem<Product>(
-                              value: p,
-                              child: Text(p.name),
-                            );
-                          }).toList(),
-                          onChanged: (product) {
-                            setState(() {
-                              _selectedProduct = product;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        
-                        if (_selectedProduct != null) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Harga: ${_rupiahFormatter.format(_selectedProduct!.price)}',
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                'Stok: ${_selectedProduct!.stock.toStringAsFixed(0)} pcs',
-                                style: TextStyle(
-                                  color: _selectedProduct!.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // Qty and Discount Inputs
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _qtyController,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _discountController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                style: const TextStyle(color: Colors.white),
-                                decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Add to Cart Button
-                        ElevatedButton.icon(
-                          onPressed: () => _addItemToCart(trProvider),
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('Tambah ke Invoice'),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            backgroundColor: const Color(0xFF0284C7),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                      ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _discountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 20),
+
+              // Add to Cart Button
+              ElevatedButton.icon(
+                onPressed: () => _addItemToCart(trProvider),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Tambah ke Invoice'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: const Color(0xFF0284C7),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
           ),
-          
-          if (isDesktop) const SizedBox(width: 24),
-          if (!isDesktop) const SizedBox(height: 24),
-
-          // Right Panel: Invoice Cart View
-          Expanded(
-            flex: isDesktop ? 3 : 0,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Cart Title / Constraints Banner
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Rincian Cetak Invoice',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                      ),
-                      // Continuous form limit badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: trProvider.cartItems.length >= 10 
-                              ? Colors.redAccent.withOpacity(0.2) 
-                              : const Color(0xFF0369A1).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: trProvider.cartItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
-                          ),
-                        ),
-                        child: Text(
-                          'Kertas: ${trProvider.cartItems.length} / 10 Item',
-                          style: TextStyle(
-                            color: trProvider.cartItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-
-                // Table of items
-                Container(
-                  color: const Color(0xFF1E293B),
-                  constraints: const BoxConstraints(minHeight: 250, maxHeight: 400),
-                  child: trProvider.cartItems.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Transaksi kosong. Tambah barang terlebih dahulu.',
-                            style: TextStyle(color: Color(0xFF64748B)),
-                          ),
-                        )
-                      : SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: DataTable(
-                            horizontalMargin: 12,
-                            columnSpacing: 10,
-                            headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                            columns: const [
-                              DataColumn(label: Text('Produk')),
-                              DataColumn(label: Text('Qty'), numeric: true),
-                              DataColumn(label: Text('Harga'), numeric: true),
-                              DataColumn(label: Text('Disc'), numeric: true),
-                              DataColumn(label: Text('Subtotal'), numeric: true),
-                              DataColumn(label: Text('')),
-                            ],
-                            rows: trProvider.cartItems.map((item) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                                        Text('${item.weightKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
-                                      ],
-                                    ),
-                                  ),
-                                  DataCell(Text(item.qty.toStringAsFixed(0), style: const TextStyle(color: Colors.white))),
-                                  DataCell(Text(_rupiahFormatter.format(item.price), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                                  DataCell(Text(item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-', style: const TextStyle(color: Colors.white))),
-                                  DataCell(Text(_rupiahFormatter.format(item.subtotal), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
-                                  DataCell(
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                      onPressed: () => trProvider.removeFromCart(item.productId),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                ),
-
-                // Note & Submit Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Notes Input field
-                      TextFormField(
-                        controller: _noteController,
-                        maxLines: 2,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _buildInputDecoration(hint: 'Masukkan Catatan / Keterangan...', icon: Icons.notes_rounded),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Grand total display
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'GRAND TOTAL:',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          Text(
-                            _rupiahFormatter.format(trProvider.grandTotal),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22, letterSpacing: 0.5),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
-                                  ? null
-                                  : () => _submitOnly(trProvider, user.uid),
-                              icon: const Icon(Icons.save_rounded, color: Colors.white),
-                              label: const Text('Simpan Saja', style: TextStyle(color: Colors.white, fontSize: 13)),
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(50),
-                                backgroundColor: Colors.teal[600],
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
-                                  ? null
-                                  : () => _submitAndPrint(trProvider, user.uid),
-                              icon: const Icon(Icons.print_rounded, color: Colors.white),
-                              label: const Text('Simpan & Cetak', style: TextStyle(color: Colors.white, fontSize: 13)),
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(50),
-                                backgroundColor: const Color(0xFF0284C7),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          )
-        ],
-      ),
+        ),
+      ],
     );
+
+    final rightPanel = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Cart Title / Constraints Banner
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Rincian Cetak Invoice',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              // Continuous form limit badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: trProvider.cartItems.length >= 10 
+                      ? Colors.redAccent.withOpacity(0.2) 
+                      : const Color(0xFF0369A1).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: trProvider.cartItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
+                  ),
+                ),
+                child: Text(
+                  'Kertas: ${trProvider.cartItems.length} / 10 Item',
+                  style: TextStyle(
+                    color: trProvider.cartItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            ],
+          ),
+        ),
+
+        // Table of items
+        Container(
+          color: const Color(0xFF1E293B),
+          constraints: const BoxConstraints(minHeight: 250, maxHeight: 400),
+          child: trProvider.cartItems.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Transaksi kosong. Tambah barang terlebih dahulu.',
+                    style: TextStyle(color: Color(0xFF64748B)),
+                  ),
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: DataTable(
+                    horizontalMargin: 12,
+                    columnSpacing: 10,
+                    headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                    columns: const [
+                      DataColumn(label: Text('Produk')),
+                      DataColumn(label: Text('Qty'), numeric: true),
+                      DataColumn(label: Text('Harga'), numeric: true),
+                      DataColumn(label: Text('Disc'), numeric: true),
+                      DataColumn(label: Text('Subtotal'), numeric: true),
+                      DataColumn(label: Text('')),
+                    ],
+                    rows: trProvider.cartItems.map((item) {
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                Text('${item.weightKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                          DataCell(Text(item.qty.toStringAsFixed(0), style: const TextStyle(color: Colors.white))),
+                          DataCell(Text(_rupiahFormatter.format(item.price), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                          DataCell(Text(item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-', style: const TextStyle(color: Colors.white))),
+                          DataCell(Text(_rupiahFormatter.format(item.subtotal), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataCell(
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                              onPressed: () => trProvider.removeFromCart(item.productId),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+        ),
+
+        // Note & Submit Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Notes Input field
+              TextFormField(
+                controller: _noteController,
+                maxLines: 2,
+                style: const TextStyle(color: Colors.white),
+                decoration: _buildInputDecoration(hint: 'Masukkan Catatan / Keterangan...', icon: Icons.notes_rounded),
+              ),
+              const SizedBox(height: 20),
+
+              // Grand total display
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'GRAND TOTAL:',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    _rupiahFormatter.format(trProvider.grandTotal),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
+                          ? null
+                          : () => _submitOnly(trProvider, user.uid),
+                      icon: const Icon(Icons.save_rounded, color: Colors.white),
+                      label: const Text('Simpan Saja', style: TextStyle(color: Colors.white, fontSize: 13)),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        backgroundColor: Colors.teal[600],
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
+                          ? null
+                          : () => _submitAndPrint(trProvider, user.uid),
+                      icon: const Icon(Icons.print_rounded, color: Colors.white),
+                      label: const Text('Simpan & Cetak', style: TextStyle(color: Colors.white, fontSize: 13)),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        backgroundColor: const Color(0xFF0284C7),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (isDesktop) {
+      return Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: SingleChildScrollView(child: leftPanel),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              flex: 3,
+              child: SingleChildScrollView(child: rightPanel),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            leftPanel,
+            const SizedBox(height: 24),
+            rightPanel,
+          ],
+        ),
+      );
+    }
   }
 
   // Builder for form input cards
