@@ -275,15 +275,28 @@ class _LoginViewState extends State<LoginView> {
               TextButton(
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
-                  await authProvider.seedDefaultUsers();
-                  if (mounted) {
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text("Pengguna default berhasil dimasukkan! (admin/cabangjateng, setiawan/jateng, manager/pfs2025)"),
-                        backgroundColor: Colors.teal,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                  try {
+                    await authProvider.seedDefaultUsers();
+                    if (mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text("Pengguna default berhasil dimasukkan! (admin/cabangjateng, setiawan/jateng, manager/pfs2025)"),
+                          backgroundColor: Colors.teal,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text("Error: ${e.toString()}"),
+                          backgroundColor: Colors.redAccent,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 10),
+                        ),
+                      );
+                    }
                   }
                 },
                 child: const Text(

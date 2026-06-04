@@ -84,6 +84,7 @@ class AuthService {
       {'user': 'manager', 'pass': 'pfs2025', 'role': 'manager', 'name': 'Manager'},
     ];
 
+    List<String> errors = [];
     for (var u in defaultUsers) {
       try {
         final email = _mapUsernameToEmail(u['user']!);
@@ -113,7 +114,11 @@ class AuthService {
         }
       } catch (e) {
         debugPrint("Error seeding user ${u['user']}: $e");
+        errors.add("${u['user']}: $e");
       }
+    }
+    if (errors.isNotEmpty) {
+      throw Exception("Gagal membuat beberapa akun default: ${errors.join('; ')}");
     }
   }
 
