@@ -221,43 +221,41 @@ class UpdateDialog extends StatelessWidget {
         ),
 
         // "Download & Update" button
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [gradientStart, gradientEnd],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryCyan.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [gradientStart, gradientEnd],
             ),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Provider.of<UpdateProvider>(context, listen: false)
-                    .launchUpdate();
-                Navigator.of(context).pop();
-              },
-              icon: const Icon(Icons.download_rounded, size: 20),
-              label: const Text(
-                'Download & Update',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: primaryCyan.withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                shadowColor: Colors.transparent,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+            ],
+          ),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Provider.of<UpdateProvider>(context, listen: false)
+                  .launchUpdate();
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.download_rounded, size: 20),
+            label: const Text(
+              'Download & Update',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              shadowColor: Colors.transparent,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 14,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
           ),
