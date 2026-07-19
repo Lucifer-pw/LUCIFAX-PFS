@@ -402,10 +402,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           ),
                                           ...editedItems.map((item) => TableRow(
                                                 children: [
-                                                  _buildTableCell('${item.productName}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                                  _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                                   _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                                  _buildTableCell(_rupiahFormatter.format(item.price), align: TextAlign.right),
-                                                  _buildTableCell(_rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                                  _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                                  _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
                                                   Padding(
                                                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                                                     child: IconButton(
@@ -599,17 +599,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             ],
                           ),
                           ...tr.items.map((item) {
-                            final totalBeforeDisc = item.qty * item.price;
-                            final discRp = totalBeforeDisc * (item.discountPercent / 100);
+                            final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
+                            final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
                             return TableRow(
                               children: [
-                                _buildTableCell('${item.productName}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                 _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                _buildTableCell(_rupiahFormatter.format(item.price), align: TextAlign.right),
-                                _buildTableCell(_rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
-                                _buildTableCell(item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-', align: TextAlign.center),
-                                _buildTableCell(discRp > 0 ? _rupiahFormatter.format(discRp) : '-', align: TextAlign.right),
-                                _buildTableCell(_rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
+                                _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
+                                _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
+                                _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
                               ],
                             );
                           }),

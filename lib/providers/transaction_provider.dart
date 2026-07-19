@@ -90,50 +90,73 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   // Active Cart Methods with 10-Item Constraint!
-  void addToCart(Product product, double qty, double discountPercent, {double? customPrice}) {
-    // Check if product already exists in cart to update qty
-    final existingIndex = _cartItems.indexWhere((item) => item.productId == product.id);
-    final finalPrice = customPrice ?? product.price;
-
-    if (existingIndex != -1) {
-      // Update existing item
-      final currentQty = _cartItems[existingIndex].qty;
-      final newQty = currentQty + qty;
-      final subtotal = newQty * finalPrice * (1 - discountPercent / 100);
-
-      _cartItems[existingIndex] = model_tr.TransactionItem(
-        productId: product.id,
-        productName: product.name,
-        price: finalPrice,
-        qty: newQty,
-        discountPercent: discountPercent,
-        subtotal: subtotal,
-        sizeGrams: product.sizeGrams,
-      );
-    } else {
-      // Enforce the 10-item limit constraint
+  void addToCart(Product product, double qty, double discountPercent, {double? customPrice, bool isBonus = false}) {
+    if (isBonus) {
+      // Bonus items always add as a new separate line with price = 0
       if (_cartItems.length >= 10) {
         throw Exception("Batas Maksimal 10 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
       }
-
-      final subtotal = qty * finalPrice * (1 - discountPercent / 100);
       _cartItems.add(
         model_tr.TransactionItem(
           productId: product.id,
           productName: product.name,
-          price: finalPrice,
+          price: 0,
           qty: qty,
+          discountPercent: 0,
+          subtotal: 0,
+          sizeGrams: product.sizeGrams,
+          isBonus: true,
+        ),
+      );
+    } else {
+      // Check if product already exists in cart (non-bonus) to update qty
+      final existingIndex = _cartItems.indexWhere((item) => item.productId == product.id && !item.isBonus);
+      final finalPrice = customPrice ?? product.price;
+
+      if (existingIndex != -1) {
+        // Update existing item
+        final currentQty = _cartItems[existingIndex].qty;
+        final newQty = currentQty + qty;
+        final subtotal = newQty * finalPrice * (1 - discountPercent / 100);
+
+        _cartItems[existingIndex] = model_tr.TransactionItem(
+          productId: product.id,
+          productName: product.name,
+          price: finalPrice,
+          qty: newQty,
           discountPercent: discountPercent,
           subtotal: subtotal,
           sizeGrams: product.sizeGrams,
-        ),
-      );
+        );
+      } else {
+        // Enforce the 10-item limit constraint
+        if (_cartItems.length >= 10) {
+          throw Exception("Batas Maksimal 10 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
+        }
+
+        final subtotal = qty * finalPrice * (1 - discountPercent / 100);
+        _cartItems.add(
+          model_tr.TransactionItem(
+            productId: product.id,
+            productName: product.name,
+            price: finalPrice,
+            qty: qty,
+            discountPercent: discountPercent,
+            subtotal: subtotal,
+            sizeGrams: product.sizeGrams,
+          ),
+        );
+      }
     }
     notifyListeners();
   }
 
-  void removeFromCart(String productId) {
-    _cartItems.removeWhere((item) => item.productId == productId);
+  void removeFromCart(String productId, {int? index}) {
+    if (index != null && index >= 0 && index < _cartItems.length) {
+      _cartItems.removeAt(index);
+    } else {
+      _cartItems.removeWhere((item) => item.productId == productId);
+    }
     notifyListeners();
   }
 

@@ -151,16 +151,19 @@ class PrintService {
 
                   // Data Rows
                   ...transaction.items.map((item) {
+                    final displayName = item.isBonus 
+                        ? '${item.productName} (BONUS)' 
+                        : item.productName;
                     return pw.TableRow(
                       children: [
-                        _buildCell(item.productName),
+                        _buildCell(displayName),
                         _buildCell(item.qty.toStringAsFixed(0), align: pw.TextAlign.center),
-                        _buildCell(_rupiahFormatter.format(item.price), align: pw.TextAlign.right),
+                        _buildCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: pw.TextAlign.right),
                         _buildCell(
-                          item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(2)}%' : '0,00%',
+                          item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(2)}%' : '0,00%'),
                           align: pw.TextAlign.center,
                         ),
-                        _buildCell(_rupiahFormatter.format(item.subtotal), align: pw.TextAlign.right),
+                        _buildCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: pw.TextAlign.right),
                       ],
                     );
                   }),
@@ -423,13 +426,16 @@ class PrintService {
     buffer.writeln("-" * 80);
 
     for (var item in transaction.items) {
-      final name = item.productName.length > 33 
-          ? item.productName.substring(0, 33) 
+      final rawName = item.isBonus 
+          ? '${item.productName} (BONUS)' 
           : item.productName;
+      final name = rawName.length > 33 
+          ? rawName.substring(0, 33) 
+          : rawName;
       final qty = item.qty.toStringAsFixed(0);
-      final price = _rupiahFormatter.format(item.price);
-      final disc = item.discountPercent > 0 ? "${item.discountPercent.toStringAsFixed(1)}%" : "0.00%";
-      final sub = _rupiahFormatter.format(item.subtotal);
+      final price = item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price);
+      final disc = item.isBonus ? '-' : (item.discountPercent > 0 ? "${item.discountPercent.toStringAsFixed(1)}%" : "0.00%");
+      final sub = item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal);
 
       final String colName = name.padRight(35);
       final String colQty = qty.padLeft(6);

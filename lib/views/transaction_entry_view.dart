@@ -26,6 +26,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   final _noteController = TextEditingController();
   final _customerTextController = TextEditingController();
   final _productTextController = TextEditingController();
+  bool _isBonus = false;
 
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -75,7 +76,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final customPrice = double.tryParse(_priceController.text);
 
     try {
-      trProvider.addToCart(_selectedProduct!, qty, disc, customPrice: customPrice);
+      trProvider.addToCart(_selectedProduct!, qty, disc, customPrice: _isBonus ? 0 : customPrice, isBonus: _isBonus);
       // Reset inputs
       setState(() {
         _selectedProduct = null;
@@ -83,6 +84,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
         _qtyController.text = '1';
         _discountController.text = '0';
         _priceController.clear();
+        _isBonus = false;
       });
     } catch (e) {
       // 10-item limit exceeded!
@@ -395,16 +397,75 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+
+              // Bonus Checkbox
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isBonus = !_isBonus;
+                    if (_isBonus) {
+                      _priceController.text = '0';
+                      _discountController.text = '0';
+                    } else if (_selectedProduct != null) {
+                      _priceController.text = _selectedProduct!.price.toStringAsFixed(0);
+                      _discountController.text = '0';
+                    }
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _isBonus ? Colors.green.withOpacity(0.15) : const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _isBonus ? Colors.greenAccent : const Color(0xFF334155),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isBonus ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                        color: _isBonus ? Colors.greenAccent : const Color(0xFF64748B),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'BONUS (Gratis / Harga Rp 0)',
+                        style: TextStyle(
+                          color: _isBonus ? Colors.greenAccent : const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (_isBonus) ...[
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.greenAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'AKTIF',
+                            style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
 
               // Add to Cart Button
               ElevatedButton.icon(
                 onPressed: () => _addItemToCart(trProvider),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Tambah ke Invoice'),
+                label: Text(_isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice'),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
-                  backgroundColor: const Color(0xFF0284C7),
+                  backgroundColor: _isBonus ? Colors.green[700] : const Color(0xFF0284C7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
@@ -482,7 +543,9 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       DataColumn(label: Text('Subtotal'), numeric: true),
                       DataColumn(label: Text('')),
                     ],
-                    rows: trProvider.cartItems.map((item) {
+                    rows: trProvider.cartItems.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final item = entry.value;
                       return DataRow(
                         cells: [
                           DataCell(
@@ -490,19 +553,44 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12), overflow: TextOverflow.ellipsis),
+                                    ),
+                                    if (item.isBonus) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.greenAccent.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
+                                        ),
+                                        child: const Text('BONUS', style: TextStyle(color: Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                                 Text('${item.weightKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
                               ],
                             ),
                           ),
                           DataCell(Text(item.qty.toStringAsFixed(0), style: const TextStyle(color: Colors.white))),
-                          DataCell(Text(_rupiahFormatter.format(item.price), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                          DataCell(Text(item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-', style: const TextStyle(color: Colors.white))),
-                          DataCell(Text(_rupiahFormatter.format(item.subtotal), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataCell(Text(
+                            item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price),
+                            style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12),
+                          )),
+                          DataCell(Text(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), style: const TextStyle(color: Colors.white))),
+                          DataCell(Text(
+                            item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal),
+                            style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          )),
                           DataCell(
                             IconButton(
                               icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                              onPressed: () => trProvider.removeFromCart(item.productId),
+                              onPressed: () => trProvider.removeFromCart(item.productId, index: idx),
                             ),
                           ),
                         ],

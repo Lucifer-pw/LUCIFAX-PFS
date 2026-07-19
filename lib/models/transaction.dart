@@ -9,6 +9,7 @@ class TransactionItem {
   final double subtotal;
   final double sizeGrams;
   final double weightKg; // Calculated as qty * sizeGrams / 1000
+  final bool isBonus; // true if this item is a free bonus (price = 0)
 
   TransactionItem({
     required this.productId,
@@ -18,6 +19,7 @@ class TransactionItem {
     required this.discountPercent,
     required this.subtotal,
     required this.sizeGrams,
+    this.isBonus = false,
   }) : weightKg = (qty * sizeGrams) / 1000.0;
 
   factory TransactionItem.fromMap(Map<String, dynamic> map) {
@@ -29,6 +31,7 @@ class TransactionItem {
       discountPercent: (map['discountPercent'] ?? 0.0).toDouble(),
       subtotal: (map['subtotal'] ?? 0.0).toDouble(),
       sizeGrams: (map['sizeGrams'] ?? 0.0).toDouble(),
+      isBonus: map['isBonus'] ?? false,
     );
   }
 
@@ -42,6 +45,7 @@ class TransactionItem {
       'subtotal': subtotal,
       'sizeGrams': sizeGrams,
       'weightKg': weightKg,
+      'isBonus': isBonus,
     };
   }
 }
