@@ -72,6 +72,77 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     return options.toSet().toList();
   }
 
+  Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap) {
+    final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
+    final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
+    final stockBefore = initialStockVal * factor;
+
+    double totalPenjualan = 0.0;
+    double sampleBonus = 0.0;
+
+    for (var r in _erpRecords) {
+      if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
+        continue;
+      }
+      final invoices = r['invoices'] as List<dynamic>?;
+      if (invoices != null && invoices.isNotEmpty) {
+        for (var inv in invoices) {
+          final invNoStr = (inv['invoiceNo'] ?? '').toString().toUpperCase();
+          final isSampleInvoice = invNoStr.startsWith('SA');
+
+          final items = inv['items'] as List<dynamic>?;
+          if (items != null) {
+            for (var item in items) {
+              final itemMap = Map<String, dynamic>.from(item as Map);
+              if (itemMap['productId'] == prod.id) {
+                final qty = (itemMap['qty'] ?? 0.0).toDouble();
+                final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
+                final isBonusItem = itemMap['isBonus'] == true;
+                final val = _showPcs ? qty : weightKg;
+
+                if (isSampleInvoice || isBonusItem) {
+                  sampleBonus += val;
+                } else {
+                  totalPenjualan += val;
+                }
+              }
+            }
+          }
+        }
+      } else {
+        final prodSales = r['products'] as Map<String, dynamic>?;
+        if (prodSales != null) {
+          totalPenjualan += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
+        }
+      }
+    }
+
+    final totalKeluar = totalPenjualan + sampleBonus;
+
+    final m1 = (wMap[1] ?? 0.0) * factor;
+    final m2 = (wMap[2] ?? 0.0) * factor;
+    final m3 = (wMap[3] ?? 0.0) * factor;
+    final m4 = (wMap[4] ?? 0.0) * factor;
+    final m5 = (wMap[5] ?? 0.0) * factor;
+    final totalMasuk = m1 + m2 + m3 + m4 + m5;
+
+    final stockAkhir = stockBefore + totalMasuk - totalKeluar;
+
+    return {
+      'totalPenjualan': totalPenjualan,
+      'stockBefore': stockBefore,
+      'sampleBonus': sampleBonus,
+      'totalKeluar': totalKeluar,
+      'm1': m1,
+      'm2': m2,
+      'm3': m3,
+      'm4': m4,
+      'm5': m5,
+      'totalMasuk': totalMasuk,
+      'stockAkhir': stockAkhir,
+    };
+  }
+
   Future<void> _printPdfErp() async {
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final stockProvider = Provider.of<StockProvider>(context, listen: false);
@@ -92,45 +163,40 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               ),
               pw.SizedBox(height: 12),
               pw.TableHelper.fromTextArray(
-                headers: ['Produk', 'Stock Before', 'Sample BONUS', 'Total Keluar', 'M1', 'M2', 'M3', 'M4', 'M5', 'Total Masuk', 'Stock Akhir'],
+                headers: [
+                  'Produk',
+                  'Total Penjualan',
+                  'Stock Before',
+                  'Sample Bonus',
+                  'Total Keluar',
+                  'M1',
+                  'M2',
+                  'M3',
+                  'M4',
+                  'M5',
+                  'Total Masuk',
+                  'Total Stock Akhir',
+                ],
                 data: List.generate(products.length, (idx) {
                   final prod = products[idx];
                   final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
-                  final m1 = wMap[1] ?? 0.0;
-                  final m2 = wMap[2] ?? 0.0;
-                  final m3 = wMap[3] ?? 0.0;
-                  final m4 = wMap[4] ?? 0.0;
-                  final m5 = wMap[5] ?? 0.0;
-                  final totalMasuk = m1 + m2 + m3 + m4 + m5;
-                  final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
-                  final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
-                  final stockBefore = initialStockVal * factor;
-
-                  double totalKeluar = 0.0;
-                  for (var r in _erpRecords) {
-                    final prodSales = r['products'] as Map<String, dynamic>?;
-                    if (prodSales != null) {
-                      totalKeluar += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
-                    }
-                  }
-
-                  final sampleBonus = 0.0;
-                  final stockAkhir = stockBefore + (totalMasuk * factor) - totalKeluar - sampleBonus;
+                  final stats = _calculateProductStats(prod, wMap);
 
                   final fmt = _showPcs ? 0 : 2;
 
                   return [
                     prod.name,
-                    stockBefore.toStringAsFixed(fmt),
-                    sampleBonus.toStringAsFixed(fmt),
-                    totalKeluar.toStringAsFixed(fmt),
-                    (m1 * factor).toStringAsFixed(fmt),
-                    (m2 * factor).toStringAsFixed(fmt),
-                    (m3 * factor).toStringAsFixed(fmt),
-                    (m4 * factor).toStringAsFixed(fmt),
-                    (m5 * factor).toStringAsFixed(fmt),
-                    (totalMasuk * factor).toStringAsFixed(fmt),
-                    stockAkhir.toStringAsFixed(fmt),
+                    stats['totalPenjualan']!.toStringAsFixed(fmt),
+                    stats['stockBefore']!.toStringAsFixed(fmt),
+                    stats['sampleBonus']!.toStringAsFixed(fmt),
+                    stats['totalKeluar']!.toStringAsFixed(fmt),
+                    stats['m1']!.toStringAsFixed(fmt),
+                    stats['m2']!.toStringAsFixed(fmt),
+                    stats['m3']!.toStringAsFixed(fmt),
+                    stats['m4']!.toStringAsFixed(fmt),
+                    stats['m5']!.toStringAsFixed(fmt),
+                    stats['totalMasuk']!.toStringAsFixed(fmt),
+                    stats['stockAkhir']!.toStringAsFixed(fmt),
                   ];
                 }),
               ),
@@ -692,58 +758,50 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     columnSpacing: 20,
                     columns: const [
                       DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('TOTAL PENJUALAN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('STOCK BEFORE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('SAMPLE BONUS', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('TOTAL KELUAR', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('SAMPLE BONUS', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('TOTAL BARANG KELUAR', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('MINGGU 1', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('MINGGU 2', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('MINGGU 3', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('MINGGU 4', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('MINGGU 5', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('TOTAL MASUK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('STOCK AKHIR', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('TOTAL BARANG MASUK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('TOTAL STOCK AKHIR', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
                     ],
                     rows: List.generate(products.length, (idx) {
                       final prod = products[idx];
                       final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
-                      final m1 = wMap[1] ?? 0.0;
-                      final m2 = wMap[2] ?? 0.0;
-                      final m3 = wMap[3] ?? 0.0;
-                      final m4 = wMap[4] ?? 0.0;
-                      final m5 = wMap[5] ?? 0.0;
-                      final totalMasuk = m1 + m2 + m3 + m4 + m5;
-                      final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
-                      final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
-                      final stockBefore = initialStockVal * factor;
-
-                      double totalKeluar = 0.0;
-                      for (var r in _erpRecords) {
-                        if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
-                          continue;
-                        }
-                        final prodSales = r['products'] as Map<String, dynamic>?;
-                        if (prodSales != null) {
-                          totalKeluar += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
-                        }
-                      }
-
-                      final sampleBonus = 0.0;
-                      final stockAkhir = stockBefore + (totalMasuk * factor) - totalKeluar - sampleBonus;
+                      final stats = _calculateProductStats(prod, wMap);
 
                       final fmt = _showPcs ? 0 : 2;
+
+                      final totalPenjualan = stats['totalPenjualan']!;
+                      final stockBefore = stats['stockBefore']!;
+                      final sampleBonus = stats['sampleBonus']!;
+                      final totalKeluar = stats['totalKeluar']!;
+                      final m1 = stats['m1']!;
+                      final m2 = stats['m2']!;
+                      final m3 = stats['m3']!;
+                      final m4 = stats['m4']!;
+                      final m5 = stats['m5']!;
+                      final totalMasuk = stats['totalMasuk']!;
+                      final stockAkhir = stats['stockAkhir']!;
 
                       return DataRow(
                         cells: [
                           DataCell(Text(prod.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                          DataCell(Text(totalPenjualan.toStringAsFixed(fmt), style: TextStyle(color: totalPenjualan > 0 ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: totalPenjualan > 0 ? FontWeight.bold : FontWeight.normal))),
                           DataCell(Text(stockBefore.toStringAsFixed(fmt), style: const TextStyle(color: Colors.white70))),
-                          DataCell(Text(sampleBonus.toStringAsFixed(fmt), style: const TextStyle(color: Colors.white70))),
-                          DataCell(Text(totalKeluar.toStringAsFixed(fmt), style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
-                          DataCell(Text((m1 * factor).toStringAsFixed(fmt), style: TextStyle(color: m1 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m1 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text((m2 * factor).toStringAsFixed(fmt), style: TextStyle(color: m2 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m2 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text((m3 * factor).toStringAsFixed(fmt), style: TextStyle(color: m3 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m3 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text((m4 * factor).toStringAsFixed(fmt), style: TextStyle(color: m4 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m4 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text((m5 * factor).toStringAsFixed(fmt), style: TextStyle(color: m5 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m5 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text((totalMasuk * factor).toStringAsFixed(fmt), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
+                          DataCell(Text(sampleBonus.toStringAsFixed(fmt), style: TextStyle(color: sampleBonus > 0 ? Colors.purpleAccent : Colors.white70, fontWeight: sampleBonus > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(totalKeluar.toStringAsFixed(fmt), style: TextStyle(color: totalKeluar > 0 ? Colors.redAccent : Colors.white70, fontWeight: totalKeluar > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(m1.toStringAsFixed(fmt), style: TextStyle(color: m1 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m1 > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(m2.toStringAsFixed(fmt), style: TextStyle(color: m2 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m2 > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(m3.toStringAsFixed(fmt), style: TextStyle(color: m3 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m3 > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(m4.toStringAsFixed(fmt), style: TextStyle(color: m4 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m4 > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(m5.toStringAsFixed(fmt), style: TextStyle(color: m5 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m5 > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(totalMasuk.toStringAsFixed(fmt), style: TextStyle(color: totalMasuk > 0 ? Colors.amberAccent : Colors.white70, fontWeight: totalMasuk > 0 ? FontWeight.bold : FontWeight.normal))),
                           DataCell(
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
