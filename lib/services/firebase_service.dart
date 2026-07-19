@@ -401,40 +401,50 @@ class FirebaseService {
         }
       }
 
-      // 2. EXECUTE ALL WRITES (Physical Stock Deduction / Restoration)
+      // 2. Aggregate qty per productId (handles duplicate productIds like normal + bonus items)
+      final Map<String, double> totalQtyPerProduct = {};
+      for (var item in oldTr.items) {
+        totalQtyPerProduct[item.productId] = (totalQtyPerProduct[item.productId] ?? 0.0) + item.qty;
+      }
+
+      // 3. EXECUTE ALL WRITES (Physical Stock Deduction / Restoration)
       if (stockShouldDecrease) {
-        for (var item in oldTr.items) {
-          final vars = variantSnaps[item.productId];
+        for (var entry in totalQtyPerProduct.entries) {
+          final productId = entry.key;
+          final totalQty = entry.value;
+          final vars = variantSnaps[productId];
           if (vars != null) {
             for (var vSnap in vars) {
               if (vSnap.exists) {
                 final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock - item.qty});
+                transaction.update(vSnap.reference, {'stock': currentStock - totalQty});
               }
             }
           } else {
-            final prodSnap = productSnaps[item.productId];
+            final prodSnap = productSnaps[productId];
             if (prodSnap != null && prodSnap.exists) {
               final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock - item.qty});
+              transaction.update(prodSnap.reference, {'stock': currentStock - totalQty});
             }
           }
         }
       } else if (stockShouldIncrease) {
-        for (var item in oldTr.items) {
-          final vars = variantSnaps[item.productId];
+        for (var entry in totalQtyPerProduct.entries) {
+          final productId = entry.key;
+          final totalQty = entry.value;
+          final vars = variantSnaps[productId];
           if (vars != null) {
             for (var vSnap in vars) {
               if (vSnap.exists) {
                 final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock + item.qty});
+                transaction.update(vSnap.reference, {'stock': currentStock + totalQty});
               }
             }
           } else {
-            final prodSnap = productSnaps[item.productId];
+            final prodSnap = productSnaps[productId];
             if (prodSnap != null && prodSnap.exists) {
               final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock + item.qty});
+              transaction.update(prodSnap.reference, {'stock': currentStock + totalQty});
             }
           }
         }
@@ -588,21 +598,28 @@ class FirebaseService {
       }
 
       // 2. NOW PERFORM ALL WRITES
+      // Aggregate qty per productId for old items (handles duplicate productIds like normal + bonus)
       if (oldWasDelivered) {
+        final Map<String, double> oldTotalQty = {};
         for (var item in oldTr.items) {
-          final vars = oldVariantSnaps[item.productId];
+          oldTotalQty[item.productId] = (oldTotalQty[item.productId] ?? 0.0) + item.qty;
+        }
+        for (var entry in oldTotalQty.entries) {
+          final productId = entry.key;
+          final totalQty = entry.value;
+          final vars = oldVariantSnaps[productId];
           if (vars != null) {
             for (var vSnap in vars) {
               if (vSnap.exists) {
                 final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock + item.qty});
+                transaction.update(vSnap.reference, {'stock': currentStock + totalQty});
               }
             }
           } else {
-            final prodSnap = oldProductSnaps[item.productId];
+            final prodSnap = oldProductSnaps[productId];
             if (prodSnap != null && prodSnap.exists) {
               final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock + item.qty});
+              transaction.update(prodSnap.reference, {'stock': currentStock + totalQty});
             }
           }
         }
@@ -612,21 +629,28 @@ class FirebaseService {
         _removeFromErpSummary(transaction, oldErpRef, oldErpSnap, oldTr);
       }
 
+      // Aggregate qty per productId for new items (handles duplicate productIds like normal + bonus)
       if (newIsDelivered) {
+        final Map<String, double> newTotalQty = {};
         for (var item in updatedTr.items) {
-          final vars = newVariantSnaps[item.productId];
+          newTotalQty[item.productId] = (newTotalQty[item.productId] ?? 0.0) + item.qty;
+        }
+        for (var entry in newTotalQty.entries) {
+          final productId = entry.key;
+          final totalQty = entry.value;
+          final vars = newVariantSnaps[productId];
           if (vars != null) {
             for (var vSnap in vars) {
               if (vSnap.exists) {
                 final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock - item.qty});
+                transaction.update(vSnap.reference, {'stock': currentStock - totalQty});
               }
             }
           } else {
-            final prodSnap = newProductSnaps[item.productId];
+            final prodSnap = newProductSnaps[productId];
             if (prodSnap != null && prodSnap.exists) {
               final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock - item.qty});
+              transaction.update(prodSnap.reference, {'stock': currentStock - totalQty});
             }
           }
         }
