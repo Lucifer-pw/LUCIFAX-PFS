@@ -871,6 +871,109 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  // Update ERP sync date dialog
+  void _showUpdateErpStatusDialog(model_tr.Transaction tr) {
+    bool hasSync = tr.erpSyncDate != null;
+    DateTime? currentSyncDate = tr.erpSyncDate ?? DateTime.now();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              title: Text('Update Status ERP #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<bool>(
+                    value: hasSync,
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _buildInputDecoration(hint: 'Status Sync ERP'),
+                    items: const [
+                      DropdownMenuItem(value: false, child: Text('BELUM ERP (Kosong)')),
+                      DropdownMenuItem(value: true, child: Text('SUDAH ERP (Masuk ERP)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() {
+                          hasSync = val;
+                        });
+                      }
+                    },
+                  ),
+                  if (hasSync) ...[
+                    const SizedBox(height: 16),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Tanggal Masuk ERP:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                      subtitle: Text(
+                        DateFormat('dd MMMM yyyy HH:mm').format(currentSyncDate!),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                      onTap: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: currentSyncDate ?? DateTime.now(),
+                          firstDate: DateTime(2025),
+                          lastDate: DateTime(2030),
+                        );
+                        if (pickedDate != null) {
+                          if (context.mounted) {
+                            final pickedTime = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(currentSyncDate!),
+                            );
+                            if (pickedTime != null) {
+                              setDialogState(() {
+                                currentSyncDate = DateTime(
+                                  pickedDate.year,
+                                  pickedDate.month,
+                                  pickedDate.day,
+                                  pickedTime.hour,
+                                  pickedTime.minute,
+                                );
+                              });
+                            }
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                  onPressed: () async {
+                    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+                    final dateVal = hasSync ? currentSyncDate : null;
+                    
+                    await trProvider.updateErpStatus(tr.invoiceNo, dateVal);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Status ERP berhasil diperbarui.'), backgroundColor: Colors.teal),
+                      );
+                    }
+                  },
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   // Print invoice with date options dialog
   void _showPrintDialog(model_tr.Transaction tr) {
     int selectedOption = 1; // 1 = Tanggal di Awal, 2 = Input Tanggal Kirim Baru
@@ -1170,7 +1273,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 dataRowMinHeight: 56,
                                 dataRowMaxHeight: 56,
                                 headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                columns: const [
+                                 columns: const [
                                   DataColumn(label: Text('INVOICE')),
                                   DataColumn(label: Text('TANGGAL')),
                                   DataColumn(label: Text('PELANGGAN')),
@@ -1179,6 +1282,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   DataColumn(label: Text('GRAND TOTAL'), numeric: true),
                                   DataColumn(label: Text('STATUS BARANG')),
                                   DataColumn(label: Text('STATUS BAYAR')),
+                                  DataColumn(label: Text('STATUS ERP')),
                                   DataColumn(label: Text('AKSI')),
                                 ],
                                 rows: filteredTransactions.map((tr) {
@@ -1234,21 +1338,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                     Text(
                                                       'Paid: ${DateFormat('dd-MM-yyyy').format(tr.transferDate!)}',
                                                       style: const TextStyle(color: Colors.greenAccent, fontSize: 9),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                              if (tr.erpSyncDate != null) ...[
-                                                const SizedBox(height: 2),
-                                                // Tanggal ERP
-                                                Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 10),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      'ERP: ${DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)}',
-                                                      style: const TextStyle(color: Colors.amberAccent, fontSize: 9),
                                                     ),
                                                   ],
                                                 ),
@@ -1331,6 +1420,37 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         ),
                                       ),
 
+                                      // Status ERP Badge
+                                      DataCell(
+                                        InkWell(
+                                          onTap: () => _showUpdateErpStatusDialog(tr),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: tr.erpSyncDate != null 
+                                                  ? Colors.amberAccent.withOpacity(0.15) 
+                                                  : Colors.grey.withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              tr.erpSyncDate != null 
+                                                  ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!) 
+                                                  : 'BELUM ERP',
+                                              style: TextStyle(
+                                                color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+
                                       // Actions Buttons
                                       DataCell(
                                         Row(
@@ -1349,6 +1469,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               icon: const Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 20),
                                               tooltip: 'Update Status Pembayaran (PAID/UNPAID)',
                                               onPressed: () => _showUpdateStatusDialog(tr),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 20),
+                                              tooltip: 'Update Status ERP (Masuk ERP / Tanggal ERP)',
+                                              onPressed: () => _showUpdateErpStatusDialog(tr),
                                             ),
                                             IconButton(
                                               icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 20),

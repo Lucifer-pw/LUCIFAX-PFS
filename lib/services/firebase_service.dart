@@ -243,6 +243,12 @@ class FirebaseService {
     });
   }
 
+  Future<void> updateTransactionErpStatus(int invoiceNo, DateTime? erpSyncDate) async {
+    await _db.collection('transactions').doc(invoiceNo.toString()).update({
+      'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate) : null,
+    });
+  }
+
   // Update delivery status (DIKIRIM / PENDING) and deliveryDate with automatic stock deduction/restoration
   Future<void> updateTransactionDeliveryStatus(
     int invoiceNo,
@@ -453,7 +459,6 @@ class FirebaseService {
       transaction.update(docRef, {
         'status': newStatus,
         'deliveryDate': Timestamp.fromDate(newDeliveryDate),
-        'erpSyncDate': newStatus == 'DIKIRIM' ? Timestamp.fromDate(DateTime.now()) : null,
       });
     });
   }
@@ -687,13 +692,9 @@ class FirebaseService {
 
       // Write updated transaction doc
       final Map<String, dynamic> data = updatedTr.toMap();
-      if (newIsDelivered) {
-        data['erpSyncDate'] = updatedTr.erpSyncDate != null 
-            ? Timestamp.fromDate(updatedTr.erpSyncDate!) 
-            : Timestamp.fromDate(DateTime.now());
-      } else {
-        data['erpSyncDate'] = null;
-      }
+      data['erpSyncDate'] = updatedTr.erpSyncDate != null 
+          ? Timestamp.fromDate(updatedTr.erpSyncDate!) 
+          : null;
       transaction.set(docRef, data);
     });
   }

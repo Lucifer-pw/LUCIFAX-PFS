@@ -213,6 +213,11 @@ class TransactionProvider extends ChangeNotifier {
     await _dbService.updateTransactionDeliveryDate(invoiceNo, deliveryDate);
   }
 
+  Future<void> updateErpStatus(int invoiceNo, DateTime? erpSyncDate) async {
+    await _dbService.updateTransactionErpStatus(invoiceNo, erpSyncDate);
+    notifyListeners();
+  }
+
   Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
     await _dbService.updateTransaction(updatedTr);
     notifyListeners();
