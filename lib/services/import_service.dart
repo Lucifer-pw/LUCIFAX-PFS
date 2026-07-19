@@ -114,6 +114,28 @@ class ImportService {
     }
   }
 
+  // Find sheet tab containing specific header keywords across multi-sheet workbooks
+  Sheet? _findSheetWithHeaders(Excel excel, List<String> requiredHeaders) {
+    for (var tableName in excel.tables.keys) {
+      final sheet = excel.tables[tableName];
+      if (sheet == null || sheet.maxRows == 0) continue;
+
+      int searchLimit = sheet.maxRows < 20 ? sheet.maxRows : 20;
+      for (int r = 0; r < searchLimit; r++) {
+        for (int c = 0; c < sheet.maxColumns; c++) {
+          final val = _cellStr(sheet, r, c).toUpperCase();
+          for (final req in requiredHeaders) {
+            if (val.contains(req.toUpperCase())) {
+              return sheet; // Found the matching sheet tab!
+            }
+          }
+        }
+      }
+    }
+    // Fallback to first sheet if no sheet tab matched
+    return excel.tables.isNotEmpty ? excel.tables[excel.tables.keys.first] : null;
+  }
+
   // Find header row by searching the first 20 rows
   int _findHeaderRow(Sheet sheet, List<String> possibleNames) {
     if (sheet.maxRows == 0) return 0;
@@ -145,7 +167,7 @@ class ImportService {
     return -1;
   }
 
-  // Find column index by header name (legacy wrapper searching row 0 or dynamic)
+  // Legacy wrapper for single search
   int _findColumn(Sheet sheet, List<String> possibleNames) {
     final headerRow = _findHeaderRow(sheet, possibleNames);
     return _findColumnInRow(sheet, headerRow, possibleNames);
@@ -157,7 +179,11 @@ class ImportService {
   // ============================================
   Future<ImportResult> importProducts(Uint8List bytes) async {
     final excel = _decodeExcelSafely(bytes);
-    final sheet = excel.tables[excel.tables.keys.first]!;
+    final sheet = _findSheetWithHeaders(excel, ['KODE_INDUK', 'KODE INDUK', 'KODE', 'ID', 'NAMA_BARANG', 'NAMA BARANG', 'PRODUK']);
+
+    if (sheet == null) {
+      return ImportResult(totalRows: 0, successCount: 0, errorCount: 1, errors: ['File Excel kosong atau tidak valid.']);
+    }
 
     final headerRow = _findHeaderRow(sheet, ['KODE_INDUK', 'KODE INDUK', 'KODE', 'ID', 'NAMA_BARANG', 'NAMA BARANG', 'PRODUK']);
 
@@ -221,7 +247,11 @@ class ImportService {
   // ============================================
   Future<ImportResult> importCustomers(Uint8List bytes) async {
     final excel = _decodeExcelSafely(bytes);
-    final sheet = excel.tables[excel.tables.keys.first]!;
+    final sheet = _findSheetWithHeaders(excel, ['ID CUST', 'ID_CUST', 'ID CUSTOMER', 'IDCUST', 'ID PELANGGAN', 'NAMA PELANGGAN', 'PELANGGAN', 'CUSTOMER']);
+
+    if (sheet == null) {
+      return ImportResult(totalRows: 0, successCount: 0, errorCount: 1, errors: ['File Excel kosong atau tidak valid.']);
+    }
 
     final headerRow = _findHeaderRow(sheet, ['ID CUST', 'ID_CUST', 'ID CUSTOMER', 'IDCUST', 'ID PELANGGAN', 'NAMA PELANGGAN', 'PELANGGAN', 'CUSTOMER']);
 
@@ -286,10 +316,16 @@ class ImportService {
   // ============================================
   Future<ImportResult> importTransactions(Uint8List bytes, String createdBy) async {
     final excel = _decodeExcelSafely(bytes);
-    final sheet = excel.tables[excel.tables.keys.first]!;
+    final sheet = _findSheetWithHeaders(excel, [
+      'NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI'
+    ]);
+
+    if (sheet == null) {
+      return ImportResult(totalRows: 0, successCount: 0, errorCount: 1, errors: ['File Excel kosong atau tidak memiliki lembar transaksi.']);
+    }
 
     final headerRow = _findHeaderRow(sheet, [
-      'NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI', 'PELANGGAN'
+      'NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI'
     ]);
 
     final colInvoice = _findColumnInRow(sheet, headerRow, ['NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI']);
@@ -302,11 +338,11 @@ class ImportService {
     final colProductId = _findColumnInRow(sheet, headerRow, ['KODE_INDUK', 'KODE INDUK', 'KODE BARANG']);
     final colQty = _findColumnInRow(sheet, headerRow, ['QTY', 'JUMLAH']);
     final colHarga = _findColumnInRow(sheet, headerRow, ['HARGA', 'PRICE']);
-    final colDiscount = _findColumnInRow(sheet, headerRow, ['DISKON', 'DISCOUNT', 'DISC', '%']);
+    final colDiscount = _findColumnInRow(sheet, headerRow, ['DISKON RP', 'DISKON', 'DISCOUNT', 'DISC']);
     final colSubtotal = _findColumnInRow(sheet, headerRow, ['SUBTOTAL', 'SUB TOTAL', 'TOTAL']);
     final colTotal = _findColumnInRow(sheet, headerRow, ['GRAND TOTAL', 'TOTAL']);
     final colDate = _findColumnInRow(sheet, headerRow, ['TANGGAL', 'DATE', 'TGL KIRIM', 'TANGGAL KIRIM']);
-    final colNote = _findColumnInRow(sheet, headerRow, ['CATATAN', 'NOTE', 'KETERANGAN']);
+    final colNote = _findColumnInRow(sheet, headerRow, ['CATATAN NOTA', 'CATATAN', 'NOTE', 'KETERANGAN']);
 
     if (colInvoice == -1) {
       return ImportResult(
