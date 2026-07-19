@@ -100,19 +100,18 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                   final m4 = wMap[4] ?? 0.0;
                   final m5 = wMap[5] ?? 0.0;
                   final totalMasuk = m1 + m2 + m3 + m4 + m5;
-
-                  int totalSoldPcs = 0;
-                  for (var r in _erpRecords) {
-                    final prodSales = r['products'] as Map<String, dynamic>?;
-                    if (prodSales != null && prodSales.containsKey(prod.id)) {
-                      totalSoldPcs += (prodSales[prod.id] as num).toInt();
-                    }
-                  }
-
                   final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
                   final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
                   final stockBefore = initialStockVal * factor;
-                  final totalKeluar = totalSoldPcs * factor;
+
+                  double totalKeluar = 0.0;
+                  for (var r in _erpRecords) {
+                    final prodSales = r['products'] as Map<String, dynamic>?;
+                    if (prodSales != null) {
+                      totalKeluar += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
+                    }
+                  }
+
                   final sampleBonus = 0.0;
                   final stockAkhir = stockBefore + (totalMasuk * factor) - totalKeluar - sampleBonus;
 
@@ -143,6 +142,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: 'laporan_erp_stok_$_selectedMonthYear.pdf',
     );
+  }
+
+  double _getProductSoldQty(Map<String, dynamic> prodSales, String productId, bool showPcs, double sizeGrams) {
+    final record = prodSales[productId];
+    if (record == null) return 0.0;
+    if (record is Map) {
+      if (showPcs) {
+        return (record['pcs'] ?? 0.0).toDouble();
+      } else {
+        return (record['kg'] ?? 0.0).toDouble();
+      }
+    } else if (record is num) {
+      // Fallback for older flat num format
+      final double pcs = record.toDouble();
+      if (showPcs) {
+        return pcs;
+      } else {
+        return pcs * (sizeGrams / 1000.0);
+      }
+    }
+    return 0.0;
   }
 
   void _showSetInitialStockDialog() {
@@ -597,22 +617,21 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                               final m4 = wMap[4] ?? 0.0;
                               final m5 = wMap[5] ?? 0.0;
                               final totalMasuk = m1 + m2 + m3 + m4 + m5;
+                              final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
+                              final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
+                              final stockBefore = initialStockVal * factor;
 
-                              int totalSoldPcs = 0;
+                              double totalKeluar = 0.0;
                               for (var r in _erpRecords) {
                                 if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
                                   continue;
                                 }
                                 final prodSales = r['products'] as Map<String, dynamic>?;
-                                if (prodSales != null && prodSales.containsKey(prod.id)) {
-                                  totalSoldPcs += (prodSales[prod.id] as num).toInt();
+                                if (prodSales != null) {
+                                  totalKeluar += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
                                 }
                               }
 
-                              final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
-                              final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
-                              final stockBefore = initialStockVal * factor;
-                              final totalKeluar = totalSoldPcs * factor;
                               final sampleBonus = 0.0;
                               final stockAkhir = stockBefore + (totalMasuk * factor) - totalKeluar - sampleBonus;
 
