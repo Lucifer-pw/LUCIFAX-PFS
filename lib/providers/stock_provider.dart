@@ -138,4 +138,42 @@ class StockProvider with ChangeNotifier {
       return false;
     }
   }
+
+  // Fetch initial stock for a month
+  Future<Map<String, double>> fetchInitialStocks(String monthYear) async {
+    final Map<String, double> result = {};
+    try {
+      final snap = await _db
+          .collection('monthly_stock_initial')
+          .where('monthYear', isEqualTo: monthYear)
+          .get();
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final String prodId = data['productId'] ?? '';
+        final double initialStock = (data['initialStock'] ?? 0.0).toDouble();
+        if (prodId.isNotEmpty) {
+          result[prodId] = initialStock;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching initial stocks: $e");
+    }
+    return result;
+  }
+
+  // Save initial stocks for a month
+  Future<void> saveInitialStocks(String monthYear, Map<String, double> stocks) async {
+    final batch = _db.batch();
+    for (var entry in stocks.entries) {
+      final docRef = _db.collection('monthly_stock_initial').doc("${monthYear}_${entry.key}");
+      batch.set(docRef, {
+        'monthYear': monthYear,
+        'productId': entry.key,
+        'initialStock': entry.value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
+    notifyListeners();
+  }
 }

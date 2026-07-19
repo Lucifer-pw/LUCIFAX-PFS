@@ -25,6 +25,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   Customer? _selectedCustomer;
   bool _showPcs = true; // true = Pcs, false = Kg
   List<Map<String, dynamic>> _erpRecords = [];
+  Map<String, double> _initialStocks = {};
   bool _loadingErp = false;
 
   @override
@@ -43,9 +44,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
       await stockProvider.fetchStockEntries();
       final data = await trProvider.getMonthlyErpSummary(_selectedMonthYear);
+      final initialStocks = await stockProvider.fetchInitialStocks(_selectedMonthYear);
 
       setState(() {
         _erpRecords = data;
+        _initialStocks = initialStocks;
       });
     } catch (e) {
       debugPrint("Error loading ERP summary: $e");
@@ -106,23 +109,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     }
                   }
 
-                  final stockBefore = prod.stock;
-                  final totalKeluar = totalSoldPcs.toDouble();
+                  final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
+                  final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
+                  final stockBefore = initialStockVal * factor;
+                  final totalKeluar = totalSoldPcs * factor;
                   final sampleBonus = 0.0;
-                  final stockAkhir = stockBefore + totalMasuk - totalKeluar - sampleBonus;
+                  final stockAkhir = stockBefore + (totalMasuk * factor) - totalKeluar - sampleBonus;
+
+                  final fmt = _showPcs ? 0 : 2;
 
                   return [
                     prod.name,
-                    '${stockBefore.toInt()}',
-                    '${sampleBonus.toInt()}',
-                    '${totalKeluar.toInt()}',
-                    '${m1.toInt()}',
-                    '${m2.toInt()}',
-                    '${m3.toInt()}',
-                    '${m4.toInt()}',
-                    '${m5.toInt()}',
-                    '${totalMasuk.toInt()}',
-                    '${stockAkhir.toInt()}',
+                    stockBefore.toStringAsFixed(fmt),
+                    sampleBonus.toStringAsFixed(fmt),
+                    totalKeluar.toStringAsFixed(fmt),
+                    (m1 * factor).toStringAsFixed(fmt),
+                    (m2 * factor).toStringAsFixed(fmt),
+                    (m3 * factor).toStringAsFixed(fmt),
+                    (m4 * factor).toStringAsFixed(fmt),
+                    (m5 * factor).toStringAsFixed(fmt),
+                    (totalMasuk * factor).toStringAsFixed(fmt),
+                    stockAkhir.toStringAsFixed(fmt),
                   ];
                 }),
               ),
@@ -135,6 +142,225 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: 'laporan_erp_stok_$_selectedMonthYear.pdf',
+    );
+  }
+
+  void _showSetInitialStockDialog() {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final stockProvider = Provider.of<StockProvider>(context, listen: false);
+    final products = productProvider.products;
+
+    // Build controllers map pre-filled with current initial stock values
+    final Map<String, TextEditingController> controllers = {};
+    for (var prod in products) {
+      final currentVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
+      controllers[prod.id] = TextEditingController(text: currentVal.toStringAsFixed(0));
+    }
+
+    String searchQuery = '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final filteredProducts = products.where((p) {
+              if (searchQuery.isEmpty) return true;
+              return p.name.toLowerCase().contains(searchQuery.toLowerCase());
+            }).toList();
+
+            return Dialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                width: 600,
+                height: 600,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Dialog Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Set Stok Awal Bulan',
+                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Periode: $_selectedMonthYear',
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white54),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Search Bar
+                    TextField(
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Cari produk...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      onChanged: (val) => setDialogState(() => searchQuery = val),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Auto-fill from master stock button
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            for (var prod in products) {
+                              controllers[prod.id]!.text = prod.stock.toStringAsFixed(0);
+                            }
+                            setDialogState(() {});
+                          },
+                          icon: const Icon(Icons.auto_fix_high, size: 16),
+                          label: const Text('Isi dari Stok Master', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            for (var prod in products) {
+                              controllers[prod.id]!.text = '0';
+                            }
+                            setDialogState(() {});
+                          },
+                          icon: const Icon(Icons.restart_alt, size: 16),
+                          label: const Text('Reset Semua ke 0', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orangeAccent,
+                            side: const BorderSide(color: Colors.orangeAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Product list with editable stock
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: filteredProducts.length,
+                          separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.05), height: 1),
+                          itemBuilder: (ctx, i) {
+                            final prod = filteredProducts[i];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(prod.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                                        Text('Master: ${prod.stock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: 120,
+                                    child: TextField(
+                                      controller: controllers[prod.id],
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                      decoration: InputDecoration(
+                                        filled: true,
+                                        fillColor: const Color(0xFF1E293B),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 2)),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                        suffixText: 'pcs',
+                                        suffixStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Action buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Batal', style: TextStyle(color: Colors.white54)),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () async {
+                            final Map<String, double> stocksToSave = {};
+                            for (var prod in products) {
+                              final val = double.tryParse(controllers[prod.id]!.text) ?? 0.0;
+                              stocksToSave[prod.id] = val;
+                            }
+                            await stockProvider.saveInitialStocks(_selectedMonthYear, stocksToSave);
+                            Navigator.pop(ctx);
+                            _loadErpData();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Stok awal bulan $_selectedMonthYear berhasil disimpan!'),
+                                backgroundColor: Colors.teal,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.save_rounded, size: 18),
+                          label: const Text('Simpan Stok Awal', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -180,15 +406,28 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
+                    onPressed: _showSetInitialStockDialog,
+                    icon: const Icon(Icons.edit_note_rounded, size: 18),
+                    label: const Text('Set Stok Awal Bulan', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E293B),
+                      foregroundColor: Colors.amberAccent,
+                      side: const BorderSide(color: Colors.amberAccent),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: () {
                       productProvider.fetchProducts();
                       _loadErpData();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Stok awal berhasil diperbarui!'), backgroundColor: Colors.teal),
+                        const SnackBar(content: Text('Data berhasil di-refresh!'), backgroundColor: Colors.teal),
                       );
                     },
                     icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Update Stok Awal', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('Refresh Data', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
@@ -368,7 +607,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                               }
 
                               final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
-                              final stockBefore = prod.stock * factor;
+                              final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
+                              final stockBefore = initialStockVal * factor;
                               final totalKeluar = totalSoldPcs * factor;
                               final sampleBonus = 0.0;
                               final stockAkhir = stockBefore + (totalMasuk * factor) - totalKeluar - sampleBonus;
