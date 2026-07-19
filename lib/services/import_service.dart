@@ -428,20 +428,15 @@ class ImportService {
           double discRp = colDiscRp != -1 ? _cellDouble(sheet, row, colDiscRp) : 0.0;
           double discPct = colDiscPct != -1 ? _cellDouble(sheet, row, colDiscPct) : 0.0;
 
-          // Convert between Rp and % if only one is provided
-          if (discPct == 0 && discRp > 0 && grossTotal > 0) {
-            discPct = (discRp / grossTotal) * 100.0;
-          } else if (discPct > 0 && discRp == 0 && grossTotal > 0) {
+          // Convert/recalculate between Rp and % for exact consistency
+          if (discPct > 0) {
             discRp = grossTotal * (discPct / 100.0);
+          } else if (discRp > 0 && grossTotal > 0) {
+            discPct = (discRp / grossTotal) * 100.0;
           }
 
-          double subtotal = 0.0;
-          if (colSubtotal != -1) {
-            subtotal = _cellDouble(sheet, row, colSubtotal);
-          }
-          if (subtotal <= 0) {
-            subtotal = grossTotal - discRp;
-          }
+          // Subtotal = Gross Total - Discount Amount
+          double subtotal = grossTotal - discRp;
           if (subtotal < 0) subtotal = 0.0;
 
           if (productName.isNotEmpty && qty > 0) {
@@ -465,12 +460,8 @@ class ImportService {
           continue;
         }
 
-        // Calculate Grand Total as sum of subtotals if colTotal is not present/valid
-        double grandTotal = items.fold(0.0, (sum, item) => sum + (item['subtotal'] as double));
-        if (colTotal != -1) {
-          final totalFromSheet = _cellDouble(sheet, firstRow, colTotal);
-          if (totalFromSheet > 0) grandTotal = totalFromSheet;
-        }
+        // Grand Total is ALWAYS the exact sum of all item subtotals in this invoice
+        final grandTotal = items.fold(0.0, (sum, item) => sum + (item['subtotal'] as double));
 
         // Parse dates
         final trDate = _parseDateCell(sheet, firstRow, colDate) ?? DateTime.now();
