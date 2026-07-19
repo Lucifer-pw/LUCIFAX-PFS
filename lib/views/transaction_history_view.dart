@@ -128,7 +128,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       selectedCustomer = customers.firstWhere((c) => c.id == tr.customerId);
     } catch (_) {}
 
-    DateTime deliveryDate = tr.deliveryDate;
+    DateTime deliveryDate = tr.deliveryDate ?? tr.date;
     final noteController = TextEditingController(text: tr.note);
     List<model_tr.TransactionItem> editedItems = List.from(tr.items);
 
@@ -542,7 +542,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 Row(
                   children: [
                     Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date))),
-                    Expanded(child: _buildDetailRow('Tgl Kirim:', DateFormat('dd-MM-yyyy').format(tr.deliveryDate))),
+                    Expanded(child: _buildDetailRow('Tgl Kirim:', tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
                   ],
                 ),
                 if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
@@ -649,7 +649,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   // Update delivery status (DIKIRIM / PENDING) & delivery date dialog
   void _showUpdateDeliveryStatusDialog(model_tr.Transaction tr) {
     String currentDeliveryStatus = tr.status; // 'DIKIRIM', 'PENDING'
-    DateTime currentDeliveryDate = tr.deliveryDate;
+    DateTime currentDeliveryDate = tr.deliveryDate ?? DateTime.now();
 
     showDialog(
       context: context,
@@ -977,7 +977,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   // Print invoice with date options dialog
   void _showPrintDialog(model_tr.Transaction tr) {
     int selectedOption = 1; // 1 = Tanggal di Awal, 2 = Input Tanggal Kirim Baru
-    DateTime chosenDate = tr.deliveryDate;
+    DateTime chosenDate = tr.deliveryDate ?? tr.date;
 
     showDialog(
       context: context,
@@ -998,7 +998,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   const SizedBox(height: 12),
                   RadioListTile<int>(
                     title: Text(
-                      'Gunakan Tanggal Awal (${DateFormat('dd-MM-yyyy').format(tr.deliveryDate)})',
+                      'Gunakan Tanggal Awal (${tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'})',
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                     ),
                     value: 1,
@@ -1015,7 +1015,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   RadioListTile<int>(
                     title: const Text(
                       'Input Tanggal Kirim Baru',
-                      style: TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
                     ),
                     value: 2,
                     groupValue: selectedOption,
@@ -1161,7 +1161,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         final matchCust = tr.customerName.toLowerCase().contains(query);
         final matchNote = tr.note.toLowerCase().contains(query);
         final matchDate = DateFormat('dd-MM-yyyy').format(tr.date).contains(query) ||
-            DateFormat('dd-MM-yyyy').format(tr.deliveryDate).contains(query) ||
+            (tr.deliveryDate != null && DateFormat('dd-MM-yyyy').format(tr.deliveryDate!).contains(query)) ||
             (tr.transferDate != null && DateFormat('dd-MM-yyyy').format(tr.transferDate!).contains(query)) ||
             (tr.erpSyncDate != null && DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!).contains(query));
 
@@ -1322,7 +1322,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 10),
                                                   const SizedBox(width: 4),
                                                   Text(
-                                                    'Kirim: ${DateFormat('dd-MM-yyyy').format(tr.deliveryDate)}',
+                                                    'Kirim: ${tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}',
                                                     style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
                                                   ),
                                                 ],

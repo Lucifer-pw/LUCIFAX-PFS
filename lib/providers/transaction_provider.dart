@@ -204,7 +204,7 @@ class TransactionProvider extends ChangeNotifier {
     await _dbService.updateTransactionTransferStatus(invoiceNo, status, transferDate);
   }
 
-  Future<void> updateDeliveryStatus(int invoiceNo, String status, DateTime deliveryDate) async {
+  Future<void> updateDeliveryStatus(int invoiceNo, String status, DateTime? deliveryDate) async {
     await _dbService.updateTransactionDeliveryStatus(invoiceNo, status, deliveryDate);
     notifyListeners();
   }

@@ -360,7 +360,7 @@ class FirebaseService {
   Future<void> updateTransactionDeliveryStatus(
     int invoiceNo,
     String newStatus,
-    DateTime newDeliveryDate,
+    DateTime? newDeliveryDate,
   ) async {
     final docRef = _db.collection('transactions').doc(invoiceNo.toString());
 
@@ -442,7 +442,7 @@ class FirebaseService {
 
       transaction.update(docRef, {
         'status': newStatus,
-        'deliveryDate': Timestamp.fromDate(newDeliveryDate),
+        'deliveryDate': newStatus == 'PENDING' ? null : (newDeliveryDate != null ? Timestamp.fromDate(newDeliveryDate) : null),
       });
     });
   }

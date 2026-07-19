@@ -56,7 +56,7 @@ class Transaction {
   final String customerName;
   final String aliasName;
   final DateTime date;
-  final DateTime deliveryDate;
+  final DateTime? deliveryDate;
   final String city;
   final String province;
   final String country;
@@ -76,7 +76,7 @@ class Transaction {
     required this.customerName,
     required this.aliasName,
     required this.date,
-    required this.deliveryDate,
+    this.deliveryDate,
     required this.city,
     required this.province,
     required this.country,
@@ -98,7 +98,7 @@ class Transaction {
       customerName: map['customerName'] ?? '',
       aliasName: map['aliasName'] ?? '',
       date: (map['date'] as Timestamp).toDate(),
-      deliveryDate: (map['deliveryDate'] as Timestamp).toDate(),
+      deliveryDate: map['deliveryDate'] != null ? (map['deliveryDate'] as Timestamp).toDate() : null,
       city: map['city'] ?? '',
       province: map['province'] ?? '',
       country: map['country'] ?? 'INDONESIA',
@@ -123,7 +123,7 @@ class Transaction {
       'customerName': customerName,
       'aliasName': aliasName,
       'date': Timestamp.fromDate(date),
-      'deliveryDate': Timestamp.fromDate(deliveryDate),
+      'deliveryDate': deliveryDate != null ? Timestamp.fromDate(deliveryDate!) : null,
       'city': city,
       'province': province,
       'country': country,

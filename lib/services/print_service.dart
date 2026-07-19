@@ -28,7 +28,7 @@ class PrintService {
     final logoBytes = base64Decode(fivaLogoBase64);
     final logoImage = pw.MemoryImage(logoBytes);
 
-    final String delivDateStr = DateFormat('dd-MM-yyyy').format(transaction.deliveryDate);
+    final String delivDateStr = transaction.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(transaction.deliveryDate!) : '-';
 
     pdf.addPage(
       pw.Page(
@@ -404,7 +404,7 @@ class PrintService {
     const escBoldOff = '\x1bF';
     const ff = '\x0c';
 
-    final delivStr = DateFormat('dd-MM-yyyy').format(transaction.deliveryDate);
+    final delivStr = transaction.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(transaction.deliveryDate!) : '-';
 
     buffer.write(escInit);
     buffer.write(escSI);
