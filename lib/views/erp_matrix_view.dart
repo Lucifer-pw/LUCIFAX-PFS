@@ -31,11 +31,19 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   bool _loadingErp = false;
   int _activeTab = 0; // 0 = Stok Matrix, 1 = Detail Invoice ERP
 
+  final ScrollController _horizontalScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _selectedMonthYear = DateFormat('MM-yyyy').format(DateTime.now());
     _loadErpData();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadErpData() async {
@@ -774,27 +782,56 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       child: _loadingErp || stockProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : Scrollbar(
+              controller: _horizontalScrollController,
+              thumbVisibility: true,
+              trackVisibility: true,
               child: SingleChildScrollView(
                 scrollDirection: Axis.vertical,
                 child: SingleChildScrollView(
+                  controller: _horizontalScrollController,
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    headingRowHeight: 48,
-                    dataRowMaxHeight: 52,
-                    columnSpacing: 12,
+                    headingRowHeight: 44,
+                    dataRowMaxHeight: 48,
+                    columnSpacing: 10,
+                    horizontalMargin: 12,
                     columns: const [
-                      DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('TOTAL PENJUALAN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('STOCK BEFORE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('SAMPLE BONUS', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('TOTAL BARANG KELUAR', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('MINGGU 1', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('MINGGU 2', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('MINGGU 3', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('MINGGU 4', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('MINGGU 5', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('TOTAL BARANG MASUK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('TOTAL STOCK AKHIR', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
+                      DataColumn(
+                        label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Total Penjualan', child: Text('TOT. JUAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Stok Awal Bulan', child: Text('STOK BEFORE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Sample Bonus', child: Text('SAMPLE', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Total Barang Keluar (Jual + Sample)', child: Text('TOT. KELUAR', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Minggu 1', child: Text('M1', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Minggu 2', child: Text('M2', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Minggu 3', child: Text('M3', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Minggu 4', child: Text('M4', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Minggu 5', child: Text('M5', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Total Barang Masuk (M1-M5)', child: Text('TOT. MASUK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
+                      DataColumn(
+                        label: Tooltip(message: 'Total Stok Akhir', child: Text('STOK AKHIR', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                      ),
                     ],
                     rows: List.generate(filteredProducts.length, (idx) {
                       final prod = filteredProducts[idx];
@@ -817,20 +854,20 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
                       return DataRow(
                         cells: [
-                          DataCell(Text(prod.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                          DataCell(Text(totalPenjualan.toStringAsFixed(fmt), style: TextStyle(color: totalPenjualan > 0 ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: totalPenjualan > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(stockBefore.toStringAsFixed(fmt), style: const TextStyle(color: Colors.white70))),
-                          DataCell(Text(sampleBonus.toStringAsFixed(fmt), style: TextStyle(color: sampleBonus > 0 ? Colors.purpleAccent : Colors.white70, fontWeight: sampleBonus > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(totalKeluar.toStringAsFixed(fmt), style: TextStyle(color: totalKeluar > 0 ? Colors.redAccent : Colors.white70, fontWeight: totalKeluar > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(m1.toStringAsFixed(fmt), style: TextStyle(color: m1 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m1 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(m2.toStringAsFixed(fmt), style: TextStyle(color: m2 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m2 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(m3.toStringAsFixed(fmt), style: TextStyle(color: m3 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m3 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(m4.toStringAsFixed(fmt), style: TextStyle(color: m4 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m4 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(m5.toStringAsFixed(fmt), style: TextStyle(color: m5 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m5 > 0 ? FontWeight.bold : FontWeight.normal))),
-                          DataCell(Text(totalMasuk.toStringAsFixed(fmt), style: TextStyle(color: totalMasuk > 0 ? Colors.amberAccent : Colors.white70, fontWeight: totalMasuk > 0 ? FontWeight.bold : FontWeight.normal))),
+                          DataCell(Text(prod.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                          DataCell(Text(totalPenjualan.toStringAsFixed(fmt), style: TextStyle(color: totalPenjualan > 0 ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: totalPenjualan > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(stockBefore.toStringAsFixed(fmt), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                          DataCell(Text(sampleBonus.toStringAsFixed(fmt), style: TextStyle(color: sampleBonus > 0 ? Colors.purpleAccent : Colors.white70, fontWeight: sampleBonus > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(totalKeluar.toStringAsFixed(fmt), style: TextStyle(color: totalKeluar > 0 ? Colors.redAccent : Colors.white70, fontWeight: totalKeluar > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(m1.toStringAsFixed(fmt), style: TextStyle(color: m1 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m1 > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(m2.toStringAsFixed(fmt), style: TextStyle(color: m2 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m2 > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(m3.toStringAsFixed(fmt), style: TextStyle(color: m3 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m3 > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(m4.toStringAsFixed(fmt), style: TextStyle(color: m4 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m4 > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(m5.toStringAsFixed(fmt), style: TextStyle(color: m5 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m5 > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
+                          DataCell(Text(totalMasuk.toStringAsFixed(fmt), style: TextStyle(color: totalMasuk > 0 ? Colors.amberAccent : Colors.white70, fontWeight: totalMasuk > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: Colors.green.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(6),
@@ -838,7 +875,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                               ),
                               child: Text(
                                 stockAkhir.toStringAsFixed(fmt),
-                                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
+                                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
                               ),
                             ),
                           ),
