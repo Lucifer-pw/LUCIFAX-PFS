@@ -379,8 +379,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header Section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,7 +399,9 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                   ),
                 ],
               ),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -410,7 +415,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     icon: const Icon(Icons.edit_note_rounded, size: 18),
                     label: const Text('Set Stok Awal Bulan', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(width: 12),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1E293B),
@@ -429,7 +433,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Refresh Data', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(width: 12),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF38BDF8),
