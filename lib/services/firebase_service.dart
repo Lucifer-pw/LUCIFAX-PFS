@@ -585,6 +585,7 @@ class FirebaseService {
     required String customerId,
     required String customerName,
     required String aliasName,
+    DateTime? date,
     required DateTime deliveryDate,
     required String city,
     required String province,
@@ -593,6 +594,10 @@ class FirebaseService {
     required double grandTotal,
     required String note,
     required String createdBy,
+    String status = 'PENDING',
+    String statusTransfer = 'UNPAID',
+    DateTime? transferDate,
+    DateTime? erpSyncDate,
   }) async {
     final now = DateTime.now();
     final listItems = items.map((e) => model_tr.TransactionItem.fromMap(e)).toList();
@@ -602,7 +607,7 @@ class FirebaseService {
       customerId: customerId,
       customerName: customerName,
       aliasName: aliasName,
-      date: now,
+      date: date ?? now,
       deliveryDate: deliveryDate,
       city: city,
       province: province,
@@ -610,8 +615,10 @@ class FirebaseService {
       items: listItems,
       grandTotal: grandTotal,
       note: note,
-      status: 'PENDING',
-      statusTransfer: 'UNPAID',
+      status: status,
+      statusTransfer: statusTransfer,
+      transferDate: transferDate,
+      erpSyncDate: erpSyncDate,
       createdBy: createdBy,
       createdAt: now,
     );

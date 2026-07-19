@@ -329,7 +329,7 @@ class ImportService {
     ]);
 
     final colInvoice = _findColumnInRow(sheet, headerRow, ['NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI']);
-    final colCustId = _findColumnInRow(sheet, headerRow, ['ID CUST', 'ID_CUST', 'CUSTOMER ID', 'ID PELANGGAN', 'ID_PELANGGAN']);
+    final colCustId = _findColumnInRow(sheet, headerRow, ['ID PELANGGAN', 'ID CUST', 'ID_CUST', 'CUSTOMER ID', 'ID_PELANGGAN']);
     final colCustName = _findColumnInRow(sheet, headerRow, ['CUSTOMER', 'NAMA CUSTOMER']);
     final colAlias = _findColumnInRow(sheet, headerRow, ['NAMA PELANGGAN', 'ALIAS', 'PELANGGAN']);
     final colCity = _findColumnInRow(sheet, headerRow, ['KOTA', 'CITY']);
@@ -338,11 +338,23 @@ class ImportService {
     final colProductId = _findColumnInRow(sheet, headerRow, ['KODE_INDUK', 'KODE INDUK', 'KODE BARANG']);
     final colQty = _findColumnInRow(sheet, headerRow, ['QTY', 'JUMLAH']);
     final colHarga = _findColumnInRow(sheet, headerRow, ['HARGA', 'PRICE']);
-    final colDiscount = _findColumnInRow(sheet, headerRow, ['DISKON RP', 'DISKON', 'DISCOUNT', 'DISC']);
-    final colSubtotal = _findColumnInRow(sheet, headerRow, ['SUBTOTAL', 'SUB TOTAL', 'TOTAL']);
-    final colTotal = _findColumnInRow(sheet, headerRow, ['GRAND TOTAL', 'TOTAL']);
-    final colDate = _findColumnInRow(sheet, headerRow, ['TANGGAL', 'DATE', 'TGL KIRIM', 'TANGGAL KIRIM']);
+
+    // Separate Diskon Rp vs Dalam %
+    final colDiscRp = _findColumnInRow(sheet, headerRow, ['DISKON RP', 'DISCOUNT RP', 'DISC RP']);
+    final colDiscPct = _findColumnInRow(sheet, headerRow, ['DALAM %', 'DISKON %', 'DISCOUNT %', 'DISC %', '%']);
+
+    // Separate SubTotal vs Grand Total
+    final colSubtotal = _findColumnInRow(sheet, headerRow, ['SUBTOTAL', 'SUB TOTAL']);
+    final colTotal = _findColumnInRow(sheet, headerRow, ['GRAND TOTAL', 'TOTAL PENJUALAN']);
+
+    // Dates & Statuses
+    final colDate = _findColumnInRow(sheet, headerRow, ['TANGGAL', 'DATE']);
+    final colDeliveryDate = _findColumnInRow(sheet, headerRow, ['TANGGAL DIKIRIM', 'TGL DIKIRIM', 'TGL KIRIM', 'TANGGAL KIRIM']);
     final colNote = _findColumnInRow(sheet, headerRow, ['CATATAN NOTA', 'CATATAN', 'NOTE', 'KETERANGAN']);
+    final colStatusBarang = _findColumnInRow(sheet, headerRow, ['STATUS BARANG', 'STATUS KIRIM', 'STATUS PENGIRIMAN', 'STATUS']);
+    final colStatusTransfer = _findColumnInRow(sheet, headerRow, ['STATUS TRANSFER BAYAR', 'STATUS TRANSFER', 'STATUS BAYAR', 'STATUS BAYAR/TRANSFER']);
+    final colTransferDate = _findColumnInRow(sheet, headerRow, ['TANGGAL TRANSFER', 'TGL TRANSFER']);
+    final colErpDate = _findColumnInRow(sheet, headerRow, ['TANGGAL ERP', 'TGL ERP']);
 
     if (colInvoice == -1) {
       return ImportResult(
@@ -378,15 +390,32 @@ class ImportService {
 
         // Build items from all rows with same invoice
         List<Map<String, dynamic>> items = [];
-        double grandTotal = 0;
 
         for (final row in rows) {
           final productName = colProduct != -1 ? _cellStr(sheet, row, colProduct) : '';
           final productId = colProductId != -1 ? _cellStr(sheet, row, colProductId) : productName;
-          final qty = colQty != -1 ? _cellDouble(sheet, row, colQty) : 0;
-          final harga = colHarga != -1 ? _cellDouble(sheet, row, colHarga) : 0;
-          final disc = colDiscount != -1 ? _cellDouble(sheet, row, colDiscount) : 0;
-          final subtotal = colSubtotal != -1 ? _cellDouble(sheet, row, colSubtotal) : (qty * harga * (1 - disc / 100));
+          final qty = colQty != -1 ? _cellDouble(sheet, row, colQty) : 0.0;
+          final harga = colHarga != -1 ? _cellDouble(sheet, row, colHarga) : 0.0;
+          final grossTotal = qty * harga;
+
+          double discRp = colDiscRp != -1 ? _cellDouble(sheet, row, colDiscRp) : 0.0;
+          double discPct = colDiscPct != -1 ? _cellDouble(sheet, row, colDiscPct) : 0.0;
+
+          // Convert between Rp and % if only one is provided
+          if (discPct == 0 && discRp > 0 && grossTotal > 0) {
+            discPct = (discRp / grossTotal) * 100.0;
+          } else if (discPct > 0 && discRp == 0 && grossTotal > 0) {
+            discRp = grossTotal * (discPct / 100.0);
+          }
+
+          double subtotal = 0.0;
+          if (colSubtotal != -1) {
+            subtotal = _cellDouble(sheet, row, colSubtotal);
+          }
+          if (subtotal <= 0) {
+            subtotal = grossTotal - discRp;
+          }
+          if (subtotal < 0) subtotal = 0.0;
 
           if (productName.isNotEmpty && qty > 0) {
             final sizeGrams = Product.parseSizeFromName(productName);
@@ -395,12 +424,11 @@ class ImportService {
               'productName': productName,
               'price': harga,
               'qty': qty,
-              'discountPercent': disc,
+              'discountPercent': discPct,
               'subtotal': subtotal,
               'sizeGrams': sizeGrams,
               'weightKg': (qty * sizeGrams) / 1000.0,
             });
-            grandTotal += subtotal;
           }
         }
 
@@ -410,34 +438,34 @@ class ImportService {
           continue;
         }
 
-        // Get total from column if available
+        // Calculate Grand Total as sum of subtotals if colTotal is not present/valid
+        double grandTotal = items.fold(0.0, (sum, item) => sum + (item['subtotal'] as double));
         if (colTotal != -1) {
           final totalFromSheet = _cellDouble(sheet, firstRow, colTotal);
           if (totalFromSheet > 0) grandTotal = totalFromSheet;
         }
 
-        // Parse delivery date
-        DateTime deliveryDate = DateTime.now();
-        if (colDate != -1) {
-          final dateStr = _cellStr(sheet, firstRow, colDate);
-          if (dateStr.isNotEmpty) {
-            try {
-              final numDate = double.tryParse(dateStr);
-              if (numDate != null && numDate > 30000 && numDate < 60000) {
-                deliveryDate = DateTime(1899, 12, 30).add(Duration(days: numDate.toInt()));
-              } else {
-                deliveryDate = DateTime.parse(dateStr);
-              }
-            } catch (_) {
-              // Try dd-MM-yyyy or dd/MM/yyyy
-              final parts = dateStr.split(RegExp(r'[-/]'));
-              if (parts.length == 3) {
-                final day = int.tryParse(parts[0]) ?? 1;
-                final month = int.tryParse(parts[1]) ?? 1;
-                final year = int.tryParse(parts[2]) ?? DateTime.now().year;
-                deliveryDate = DateTime(year < 100 ? 2000 + year : year, month, day);
-              }
-            }
+        // Parse dates
+        final trDate = _parseDateCell(sheet, firstRow, colDate) ?? DateTime.now();
+        final deliveryDate = _parseDateCell(sheet, firstRow, colDeliveryDate) ?? trDate;
+        final transferDate = _parseDateCell(sheet, firstRow, colTransferDate);
+        final erpSyncDate = _parseDateCell(sheet, firstRow, colErpDate);
+
+        // Status Kirim / Status Barang
+        String status = 'PENDING';
+        if (colStatusBarang != -1) {
+          final rawStatus = _cellStr(sheet, firstRow, colStatusBarang).toUpperCase();
+          if (rawStatus.contains('KIRIM') || rawStatus.contains('DIKIRIM') || rawStatus.contains('SELESAI') || rawStatus.contains('SENT') || rawStatus.contains('DONE')) {
+            status = 'DIKIRIM';
+          }
+        }
+
+        // Status Bayar / Transfer
+        String statusTransfer = 'UNPAID';
+        if (colStatusTransfer != -1) {
+          final rawStatusTransfer = _cellStr(sheet, firstRow, colStatusTransfer).toUpperCase();
+          if (rawStatusTransfer.contains('PAID') || rawStatusTransfer.contains('LUNAS') || rawStatusTransfer.contains('TRANSFER') || rawStatusTransfer.contains('SUDAH')) {
+            statusTransfer = 'PAID';
           }
         }
 
@@ -446,6 +474,7 @@ class ImportService {
           customerId: colCustId != -1 ? _cellStr(sheet, firstRow, colCustId) : '',
           customerName: colCustName != -1 ? _cellStr(sheet, firstRow, colCustName) : '',
           aliasName: colAlias != -1 ? _cellStr(sheet, firstRow, colAlias) : '',
+          date: trDate,
           deliveryDate: deliveryDate,
           city: colCity != -1 ? _cellStr(sheet, firstRow, colCity) : '',
           province: colProvince != -1 ? _cellStr(sheet, firstRow, colProvince) : '',
@@ -453,6 +482,10 @@ class ImportService {
           items: items,
           grandTotal: grandTotal,
           note: colNote != -1 ? _cellStr(sheet, firstRow, colNote) : '',
+          status: status,
+          statusTransfer: statusTransfer,
+          transferDate: transferDate,
+          erpSyncDate: erpSyncDate,
           createdBy: createdBy,
         );
         success++;
