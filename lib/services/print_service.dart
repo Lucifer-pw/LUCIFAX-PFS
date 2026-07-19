@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
@@ -6,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart' as model_tr;
+import 'logo_base64.dart';
 
 class PrintService {
   // Format currency to Rupiah
@@ -15,128 +17,163 @@ class PrintService {
     decimalDigits: 0,
   );
 
-  // Generate PDF tailored for 9.5" x 5.5" Continuous Form (684 x 396 points)
-  static Future<File?> generateInvoicePdf(model_tr.Transaction transaction) async {
+  // Generate PDF tailored for Letter Portrait (8.5 x 11 inches) matching exact user screenshot & layout
+  static Future<pw.Document> buildInvoiceDocument(model_tr.Transaction transaction) async {
     final pdf = pw.Document();
 
-    // 9.5 x 5.5 inches in points
-    const customWidth = 9.5 * PdfPageFormat.inch;
-    const customHeight = 5.5 * PdfPageFormat.inch;
-    const pageFormat = PdfPageFormat(customWidth, customHeight,
-        marginLeft: 20, marginRight: 20, marginTop: 15, marginBottom: 15);
+    // Letter Portrait page format (8.5" x 11" / 21.59 cm x 27.94 cm)
+    const pageFormat = PdfPageFormat.letter;
+
+    // Decode base64 Fiva circular logo image
+    final logoBytes = base64Decode(fivaLogoBase64);
+    final logoImage = pw.MemoryImage(logoBytes);
+
+    final String delivDateStr = DateFormat('dd-MM-yyyy').format(transaction.deliveryDate);
 
     pdf.addPage(
       pw.Page(
         pageFormat: pageFormat,
+        margin: const pw.EdgeInsets.all(20),
         build: (pw.Context context) {
           return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              // Company Header
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'FIVA SOLO FOOD & MEAT SUPPLY',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+              // 1. TOP HEADER BOX (Solid 1px Black Border Box)
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.black, width: 1),
+                ),
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Left Column: Original Fiva Logo Image & Company Address
+                    pw.Expanded(
+                      flex: 6,
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          // Real Circular Fiva Logo Image (Transparent background)
+                          pw.Image(
+                            logoImage,
+                            width: 54,
+                            height: 54,
+                          ),
+                          pw.SizedBox(width: 8),
+                          pw.Expanded(
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(
+                                  'FIVA SOLO FOOD & MEAT SUPPLY',
+                                  style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                pw.SizedBox(height: 2),
+                                pw.Text(
+                                  'JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412, Tel: 021-8484308',
+                                  style: const pw.TextStyle(fontSize: 8.5),
+                                ),
+                                pw.Text(
+                                  'Fax: 021-84972237',
+                                  style: const pw.TextStyle(fontSize: 8.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      pw.Text(
-                        'JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412',
-                        style: const pw.TextStyle(fontSize: 7),
-                      ),
-                      pw.Text(
-                        'Tel: 021-8484308   Fax: 021-84972237',
-                        style: const pw.TextStyle(fontSize: 7),
-                      ),
-                    ],
-                  ),
-                  pw.Text(
-                    'INVOICE',
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
-                      decoration: pw.TextDecoration.underline,
                     ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 8),
-              
-              // Invoice metadata
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        _buildHeaderRow('No Invoice:', transaction.invoiceNo.toString()),
-                        _buildHeaderRow('Kepada:', transaction.customerName),
-                      ],
-                    ),
-                  ),
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        _buildHeaderRow('Tgl Kirim:', DateFormat('dd-MM-yyyy').format(transaction.deliveryDate)),
-                        _buildHeaderRow('Alamat:', transaction.city),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 8),
+                    pw.SizedBox(width: 10),
 
-              // Items Table
+                    // Right Column: Invoice Metadata Fields
+                    pw.Expanded(
+                      flex: 4,
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _buildHeaderField('No Invoice:', transaction.invoiceNo.toString()),
+                          _buildHeaderField('Kepada:', transaction.aliasName),
+                          _buildHeaderField('Tanggal Pengiriman:', delivDateStr),
+                          _buildHeaderField('Alamat:', '${transaction.city}, ${transaction.province}'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. SECTION TITLE BAR: INVOICE (Solid 1px Black Border Box)
+              pw.Container(
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(
+                    left: pw.BorderSide(color: PdfColors.black, width: 1),
+                    right: pw.BorderSide(color: PdfColors.black, width: 1),
+                    bottom: pw.BorderSide(color: PdfColors.black, width: 1),
+                  ),
+                ),
+                padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                alignment: pw.Alignment.center,
+                child: pw.Text(
+                  'INVOICE',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+
+              // 3. TABLE GRID (FULL SOLID 1px BLACK BORDER MATCHING TEMPLATE WITH STATIC COLUMN WIDTHS)
               pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey, width: 0.5),
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(3.5), // Nama Barang
-                  1: const pw.FlexColumnWidth(0.8), // Qty
-                  2: const pw.FlexColumnWidth(1.2), // Harga
-                  3: const pw.FlexColumnWidth(0.8), // Diskon
-                  4: const pw.FlexColumnWidth(1.5), // Subtotal
+                border: pw.TableBorder.all(color: PdfColors.black, width: 1),
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(255), // NAMA BARANG
+                  1: pw.FixedColumnWidth(55),  // QTY
+                  2: pw.FixedColumnWidth(85),  // HARGA
+                  3: pw.FixedColumnWidth(75),  // DISKON
+                  4: pw.FixedColumnWidth(102), // SUB TOTAL
                 },
                 children: [
-                  // Table Header
+                  // Table Header Row
                   pw.TableRow(
                     decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                     children: [
-                      _buildTableCell('NAMA BARANG', isHeader: true),
-                      _buildTableCell('QTY', isHeader: true, align: pw.TextAlign.center),
-                      _buildTableCell('HARGA', isHeader: true, align: pw.TextAlign.right),
-                      _buildTableCell('DISKON', isHeader: true, align: pw.TextAlign.center),
-                      _buildTableCell('SUB TOTAL', isHeader: true, align: pw.TextAlign.right),
+                      _buildCell('NAMA BARANG', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('QTY', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('HARGA', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('DISKON', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('SUB TOTAL', isHeader: true, align: pw.TextAlign.center),
                     ],
                   ),
-                  // Table rows
+
+                  // Data Rows
                   ...transaction.items.map((item) {
                     return pw.TableRow(
                       children: [
-                        _buildTableCell(item.productName),
-                        _buildTableCell(item.qty.toStringAsFixed(0), align: pw.TextAlign.center),
-                        _buildTableCell(_rupiahFormatter.format(item.price), align: pw.TextAlign.right),
-                        _buildTableCell(
+                        _buildCell(item.productName),
+                        _buildCell(item.qty.toStringAsFixed(0), align: pw.TextAlign.center),
+                        _buildCell(_rupiahFormatter.format(item.price), align: pw.TextAlign.right),
+                        _buildCell(
                           item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(2)}%' : '0,00%',
                           align: pw.TextAlign.center,
                         ),
-                        _buildTableCell(_rupiahFormatter.format(item.subtotal), align: pw.TextAlign.right),
+                        _buildCell(_rupiahFormatter.format(item.subtotal), align: pw.TextAlign.right),
                       ],
                     );
                   }),
-                  // Padding empty rows to maintain fixed height layout if items < 10
+
+                  // Padding Empty Rows to ensure uniform 10-row grid layout
                   ...List.generate(10 - transaction.items.length, (_) {
                     return pw.TableRow(
                       children: [
-                        _buildTableCell(''),
-                        _buildTableCell('', align: pw.TextAlign.center),
-                        _buildTableCell('', align: pw.TextAlign.right),
-                        _buildTableCell('', align: pw.TextAlign.center),
-                        _buildTableCell('', align: pw.TextAlign.right),
+                        _buildCell(' '),
+                        _buildCell(' '),
+                        _buildCell(' '),
+                        _buildCell(' '),
+                        _buildCell(' '),
                       ],
                     );
                   }),
@@ -144,41 +181,112 @@ class PrintService {
               ),
               pw.SizedBox(height: 6),
 
-              // Bottom Section (Note and Grand Total)
+              // 4. BOTTOM SECTION: GRAND TOTAL BOX & SIGNATURES
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
+                  // Signature Left: Diterima Oleh (with Note above it if present)
                   pw.Expanded(
-                    flex: 3,
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(4),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey, width: 0.5),
-                        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text('Keterangan / Catatan:', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
-                          pw.SizedBox(height: 2),
-                          pw.Text(transaction.note.isNotEmpty ? transaction.note : '-', style: const pw.TextStyle(fontSize: 7)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  pw.SizedBox(width: 20),
-                  pw.Expanded(
-                    flex: 2,
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('GRAND TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                        if (transaction.note.isNotEmpty) ...[
+                          pw.Text(
+                            transaction.note,
+                            style: pw.TextStyle(
+                              color: PdfColors.red,
+                              fontWeight: pw.FontWeight.bold,
+                              fontStyle: pw.FontStyle.italic,
+                              fontSize: 10,
+                            ),
+                          ),
+                          pw.SizedBox(height: 6),
+                        ],
                         pw.Text(
-                          _rupiahFormatter.format(transaction.grandTotal),
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+                          'Diterima Oleh,',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
                         ),
+                        pw.SizedBox(height: 35),
                       ],
                     ),
+                  ),
+
+                  // Right Block: Grand Total Box & Signatures (Pengirim & Hormat Kami)
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      // GRAND TOTAL BOX
+                      pw.Container(
+                        width: 220,
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: PdfColors.black, width: 1),
+                        ),
+                        child: pw.Row(
+                          children: [
+                            pw.Expanded(
+                              flex: 4,
+                              child: pw.Container(
+                                padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                                decoration: const pw.BoxDecoration(
+                                  border: pw.Border(right: pw.BorderSide(color: PdfColors.black, width: 1)),
+                                ),
+                                child: pw.Text(
+                                  'GRAND TOTAL',
+                                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                            ),
+                            pw.Expanded(
+                              flex: 5,
+                              child: pw.Container(
+                                padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                                child: pw.Text(
+                                  _rupiahFormatter.format(transaction.grandTotal),
+                                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                                  textAlign: pw.TextAlign.right,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      pw.SizedBox(height: 8),
+
+                      // Signatures Row: Pengirim & Hormat Kami
+                      pw.Row(
+                        children: [
+                          pw.Column(
+                            children: [
+                              pw.Text(
+                                'Pengirim',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                              ),
+                              pw.SizedBox(height: 25),
+                              pw.Text(
+                                'Setiawan',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                          pw.SizedBox(width: 40),
+                          pw.Column(
+                            children: [
+                              pw.Text(
+                                'Hormat Kami,',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                              ),
+                              pw.SizedBox(height: 25),
+                              pw.Text(
+                                'Setiawan',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -188,44 +296,57 @@ class PrintService {
       ),
     );
 
-    // Save locally on the user's device (e.g. Downloads directory)
+    return pdf;
+  }
+
+  // Opens direct browser/system print dialog with "Microsoft Print to PDF" target
+  static Future<void> printInvoice(model_tr.Transaction transaction) async {
+    final pdf = await buildInvoiceDocument(transaction);
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Invoice_${transaction.invoiceNo}.pdf',
+    );
+  }
+
+  // Save PDF file locally for device file system or layout
+  static Future<File?> generateInvoicePdf(model_tr.Transaction transaction) async {
+    final pdf = await buildInvoiceDocument(transaction);
+
     final String cleanCustomer = transaction.customerName.replaceAll(' ', '_');
-    final String cleanCity = transaction.city.replaceAll(' ', '_');
     final String dateStr = DateFormat('yyyyMMdd').format(transaction.date);
-    final String filename = "${transaction.invoiceNo}_${cleanCustomer}_${cleanCity}_$dateStr.pdf";
+    final String filename = "Invoice_${transaction.invoiceNo}_${cleanCustomer}_$dateStr.pdf";
 
     if (kIsWeb) {
-      await Printing.sharePdf(bytes: await pdf.save(), filename: filename);
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name: filename,
+      );
       return null;
     }
 
-    // Save locally on the user's device (e.g. Downloads directory)
     final Directory outputDirectory = await _getOutputDirectory();
-    final String path = outputDirectory.path;
-    final File file = File("$path/$filename");
-    
+    final File file = File("${outputDirectory.path}/$filename");
     await file.writeAsBytes(await pdf.save());
-    debugPrint("PDF saved successfully to: ${file.path}");
     return file;
   }
 
-  // Helper builder for PDF headers
-  static pw.Widget _buildHeaderRow(String label, String value) {
+  // Helper builder for header metadata fields
+  static pw.Widget _buildHeaderField(String label, String value) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
         children: [
           pw.SizedBox(
-            width: 70,
+            width: 115,
             child: pw.Text(
               label,
-              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Expanded(
             child: pw.Text(
               value,
-              style: const pw.TextStyle(fontSize: 8),
+              style: const pw.TextStyle(fontSize: 11),
             ),
           ),
         ],
@@ -233,39 +354,58 @@ class PrintService {
     );
   }
 
-  // Helper builder for PDF table cells
-  static pw.Widget _buildTableCell(String text, {bool isHeader = false, pw.TextAlign align = pw.TextAlign.left}) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(3),
+  // Helper builder for PDF table grid cells
+  static pw.Widget _buildCell(String text, {bool isHeader = false, pw.TextAlign align = pw.TextAlign.left}) {
+    return pw.Container(
+      height: 15.6,
+      alignment: align == pw.TextAlign.left
+          ? pw.Alignment.centerLeft
+          : (align == pw.TextAlign.right ? pw.Alignment.centerRight : pw.Alignment.center),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 0),
       child: pw.Text(
         text,
         textAlign: align,
         style: pw.TextStyle(
-          fontSize: isHeader ? 7.5 : 7,
+          fontSize: 12,
           fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
         ),
       ),
     );
   }
 
-  // Generate plain text with ESC/P control characters for Epson dot-matrix printers
+  // Save the raw text to document directory for local ESC/P printing utility
+  static Future<File?> saveEscPRawFile(model_tr.Transaction transaction) async {
+    final text = generateEscPRawText(transaction);
+    final filename = "raw_invoice_${transaction.invoiceNo}.txt";
+
+    if (kIsWeb) {
+      final bytes = Uint8List.fromList(text.codeUnits);
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+      return null;
+    }
+
+    final Directory outputDirectory = await _getOutputDirectory();
+    final file = File("${outputDirectory.path}/$filename");
+    await file.writeAsString(text);
+    return file;
+  }
+
+  // Generate plain text with ESC/P control characters
   static String generateEscPRawText(model_tr.Transaction transaction) {
     final buffer = StringBuffer();
     
-    // ESC/P Commands
-    const escInit = '\x1b@';      // Initialize printer
-    const escSI = '\x0f';        // Select condensed font (17 CPI)
-    const escNormal = '\x12';    // Select normal font (10 CPI)
-    const escBoldOn = '\x1bE';    // Bold on
-    const escBoldOff = '\x1bF';   // Bold off
-    const ff = '\x0c';            // Form Feed (Page Eject)
+    const escInit = '\x1b@';
+    const escSI = '\x0f';
+    const escNormal = '\x12';
+    const escBoldOn = '\x1bE';
+    const escBoldOff = '\x1bF';
+    const ff = '\x0c';
 
     final delivStr = DateFormat('dd-MM-yyyy').format(transaction.deliveryDate);
 
     buffer.write(escInit);
-    buffer.write(escSI); // Set to condensed font so we can fit more characters (up to 137 cols on half-page width)
+    buffer.write(escSI);
 
-    // Invoice Header
     buffer.writeln('${escBoldOn}FIVA SOLO FOOD & MEAT SUPPLY$escBoldOff');
     buffer.writeln("JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412");
     buffer.writeln("Tel: 021-8484308   Fax: 021-84972237");
@@ -274,8 +414,6 @@ class PrintService {
     buffer.writeln("Kepada     : ${transaction.customerName.padRight(25)} Alamat        : ${transaction.city}");
     buffer.writeln("-" * 80);
 
-    // Table Header
-    // Column widths: Nama Barang (35), Qty (6), Harga (12), Diskon (10), Subtotal (15) = 78 chars
     final String thName = "NAMA BARANG".padRight(35);
     final String thQty = "QTY".padLeft(6);
     final String thPrice = "HARGA".padLeft(12);
@@ -284,7 +422,6 @@ class PrintService {
     buffer.writeln("$thName$thQty$thPrice$thDisc$thSub");
     buffer.writeln("-" * 80);
 
-    // Write Items (Up to 10 rows)
     for (var item in transaction.items) {
       final name = item.productName.length > 33 
           ? item.productName.substring(0, 33) 
@@ -302,7 +439,6 @@ class PrintService {
       buffer.writeln("$colName$colQty$colPrice$colDisc$colSub");
     }
 
-    // Fill remaining table lines with empty spaces so layout is uniform
     final remainingRows = 10 - transaction.items.length;
     for (var i = 0; i < remainingRows; i++) {
       buffer.writeln("");
@@ -310,7 +446,6 @@ class PrintService {
 
     buffer.writeln("-" * 80);
 
-    // Notes and Grand Total Row
     final note = transaction.note.length > 35 
         ? transaction.note.substring(0, 35) 
         : transaction.note;
@@ -321,28 +456,10 @@ class PrintService {
     buffer.writeln("Catatan: ${note.padRight(35)}$padTotalLabel$padTotalVal");
     buffer.writeln("=" * 80);
 
-    buffer.write(escNormal); // Restore normal font
-    buffer.write(ff);        // Form feed to align paper to next tear sheet automatically
+    buffer.write(escNormal);
+    buffer.write(ff);
     
     return buffer.toString();
-  }
-
-  // Save the raw text to document directory for local printing utility
-  // Save the raw text to document directory for local printing utility
-  static Future<File?> saveEscPRawFile(model_tr.Transaction transaction) async {
-    final text = generateEscPRawText(transaction);
-    final filename = "raw_invoice_${transaction.invoiceNo}.txt";
-
-    if (kIsWeb) {
-      final bytes = Uint8List.fromList(text.codeUnits);
-      await Printing.sharePdf(bytes: bytes, filename: filename);
-      return null;
-    }
-
-    final Directory outputDirectory = await _getOutputDirectory();
-    final file = File("${outputDirectory.path}/$filename");
-    await file.writeAsString(text);
-    return file;
   }
 
   // Helper method to resolve target directory based on platform

@@ -24,20 +24,43 @@ class _ProductListViewState extends State<ProductListView> {
     decimalDigits: 0,
   );
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  double _parseCleanDouble(String text) {
+    if (text.trim().isEmpty) return 0.0;
+    String clean = text.replaceAll('Rp', '').replaceAll(' ', '').trim();
+    if (clean.isEmpty) return 0.0;
+
+    // Handle Indonesian number formats
+    if (clean.contains('.') && clean.contains(',')) {
+      clean = clean.replaceAll('.', '').replaceAll(',', '.');
+    } else if (clean.contains('.')) {
+      // If dot is thousand separator e.g. 69.002 or 1.000.000
+      if (RegExp(r'\.\d{3}$').hasMatch(clean) || RegExp(r'\.\d{3}\.').hasMatch(clean)) {
+        clean = clean.replaceAll('.', '');
+      }
+    } else if (clean.contains(',')) {
+      if (RegExp(r',\d{3}$').hasMatch(clean)) {
+        clean = clean.replaceAll(',', '');
+      } else {
+        clean = clean.replaceAll(',', '.');
+      }
+    }
+    return double.tryParse(clean) ?? 0.0;
+  }
+
+  int _parseCleanInt(String text) {
+    if (text.trim().isEmpty) return 0;
+    final clean = text.replaceAll('.', '').replaceAll(',', '').replaceAll(RegExp(r'[^\d]'), '').trim();
+    return int.tryParse(clean) ?? 0;
   }
 
   void _showProductDialog([Product? product]) {
     final isEdit = product != null;
     final idController = TextEditingController(text: product?.id ?? '');
     final nameController = TextEditingController(text: product?.name ?? '');
-    final priceController = TextEditingController(text: product?.price.toStringAsFixed(0) ?? '');
-    final stockController = TextEditingController(text: product?.stock.toStringAsFixed(0) ?? '0');
+    final priceController = TextEditingController(text: product != null ? product.price.toStringAsFixed(0) : '');
+    final stockController = TextEditingController(text: product != null ? product.stock.toStringAsFixed(0) : '0');
     final cartonController = TextEditingController(text: product?.isiKarton.toString() ?? '');
-    final sizeController = TextEditingController(text: product?.sizeGrams.toStringAsFixed(0) ?? '');
+    final sizeController = TextEditingController(text: product != null ? product.sizeGrams.toStringAsFixed(0) : '');
 
     // Auto-parse size from name on change
     nameController.addListener(() {
@@ -51,13 +74,20 @@ class _ProductListViewState extends State<ProductListView> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
-          title: Text(isEdit ? 'Edit Produk' : 'Tambah Produk Baru', style: const TextStyle(color: Colors.white)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(isEdit ? Icons.edit_note_rounded : Icons.add_box_rounded, color: const Color(0xFF38BDF8)),
+              const SizedBox(width: 10),
+              Text(isEdit ? 'Edit Data Barang' : 'Tambah Barang Baru', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
           content: SingleChildScrollView(
             child: SizedBox(
-              width: 400,
+              width: 440,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -65,7 +95,7 @@ class _ProductListViewState extends State<ProductListView> {
                     controller: idController,
                     enabled: !isEdit, // Cannot edit ID after creation (primary key)
                     style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Kode Induk (e.g. BA-250)'),
+                    decoration: _buildInputDecoration(hint: 'Kode Induk / SKU (e.g. BA-250)'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -78,14 +108,14 @@ class _ProductListViewState extends State<ProductListView> {
                     controller: priceController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Harga (Rupiah)'),
+                    decoration: _buildInputDecoration(hint: 'Harga Unit (Rupiah)'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: stockController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Stok Awal'),
+                    decoration: _buildInputDecoration(hint: 'Jumlah Stok Saat Ini'),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -95,7 +125,7 @@ class _ProductListViewState extends State<ProductListView> {
                           controller: cartonController,
                           keyboardType: TextInputType.number,
                           style: const TextStyle(color: Colors.white),
-                          decoration: _buildInputDecoration(hint: 'Isi per Karton'),
+                          decoration: _buildInputDecoration(hint: 'Isi per Karton (Pcs)'),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -115,39 +145,95 @@ class _ProductListViewState extends State<ProductListView> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
               onPressed: () async {
-                final id = idController.text.trim();
-                final name = nameController.text.trim();
-                final price = double.tryParse(priceController.text) ?? 0.0;
-                final stock = double.tryParse(stockController.text) ?? 0.0;
-                final carton = int.tryParse(cartonController.text) ?? 0;
-                final size = double.tryParse(sizeController.text) ?? 0.0;
+                final id = idController.text.trim().toUpperCase();
+                final name = nameController.text.trim().toUpperCase();
+                final price = _parseCleanDouble(priceController.text);
+                final stock = _parseCleanDouble(stockController.text);
+                final carton = _parseCleanInt(cartonController.text);
+                final size = _parseCleanDouble(sizeController.text);
 
-                if (id.isEmpty || name.isEmpty || price <= 0) {
+                if (id.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Harap lengkapi semua kolom dengan benar!'), backgroundColor: Colors.orange),
+                    const SnackBar(content: Text('Harap isi Kode Induk / SKU barang!'), backgroundColor: Colors.orange),
                   );
                   return;
                 }
 
-                final newProd = Product(
-                  id: id,
-                  name: name,
-                  price: price,
-                  stock: stock,
-                  isiKarton: carton,
-                  sizeGrams: size,
-                );
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Harap isi Nama Barang!'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
 
-                await Provider.of<ProductProvider>(context, listen: false).saveProduct(newProd);
-                if (context.mounted) Navigator.pop(context);
+                try {
+                  final localProduct = product;
+                  String docId = (isEdit && localProduct != null) ? localProduct.id : id;
+                  String parentKodeInduk = (isEdit && localProduct != null) ? localProduct.kodeInduk : id;
+                  double finalStock = stock;
+
+                  if (!isEdit) {
+                    final allProducts = Provider.of<ProductProvider>(context, listen: false).products;
+                    final existingVariants = allProducts.where((p) => p.kodeInduk.toUpperCase() == id || p.id.toUpperCase() == id).toList();
+
+                    if (existingVariants.isNotEmpty) {
+                      // Generate unique doc ID e.g. BRSM-500-2 while keeping parent Kode Induk BRSM-500
+                      docId = '$id-${existingVariants.length + 1}';
+                      parentKodeInduk = id;
+                      // Inherit shared stock from existing variant
+                      finalStock = existingVariants.first.stock;
+                    }
+                  }
+
+                  final newProd = Product(
+                    id: docId,
+                    kodeInduk: parentKodeInduk,
+                    name: name,
+                    price: price,
+                    stock: finalStock,
+                    isiKarton: carton,
+                    sizeGrams: size,
+                  );
+
+                  await Provider.of<ProductProvider>(context, listen: false).saveProduct(newProd);
+
+                  if (mounted) {
+                    // Reset search filter so newly added product is visible immediately
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+
+                    Navigator.pop(dialogContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isEdit 
+                            ? 'Barang "$name" berhasil diperbarui.' 
+                            : 'Varian Barang "$name" ($parentKodeInduk) berhasil ditambahkan dengan stok terpusat!'),
+                        backgroundColor: Colors.teal[600],
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Gagal menyimpan barang: $e'), backgroundColor: Colors.redAccent),
+                    );
+                  }
+                }
               },
-              child: const Text('Simpan'),
+              child: const Text('Simpan Data', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -187,14 +273,15 @@ class _ProductListViewState extends State<ProductListView> {
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
-          title: const Text('Hasil Import Excel', style: TextStyle(color: Colors.white)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Hasil Import Excel Barang', style: TextStyle(color: Colors.white)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Total Baris data: ${importResult.totalRows}', style: const TextStyle(color: Colors.white)),
-                Text('Sukses: ${importResult.successCount}', style: const TextStyle(color: Colors.greenAccent)),
+                Text('Total Baris Data: ${importResult.totalRows}', style: const TextStyle(color: Colors.white)),
+                Text('Sukses Dimuat: ${importResult.successCount}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                 Text('Gagal: ${importResult.errorCount}', style: const TextStyle(color: Colors.redAccent)),
                 if (importResult.errors.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -242,25 +329,27 @@ class _ProductListViewState extends State<ProductListView> {
 
     // Apply local search filter
     final filteredProducts = productProvider.products.where((p) {
-      final nameMatches = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      final idMatches = p.id.toLowerCase().contains(_searchQuery.toLowerCase());
+      final query = _searchQuery.trim().toLowerCase();
+      if (query.isEmpty) return true;
+      final nameMatches = p.name.toLowerCase().contains(query);
+      final idMatches = p.id.toLowerCase().contains(query);
       return nameMatches || idMatches;
     }).toList();
 
+    final totalItems = productProvider.products.length;
+    final inStockItems = productProvider.products.where((p) => p.stock > 0).length;
+    final outOfStockItems = productProvider.products.where((p) => p.stock <= 0).length;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF38BDF8),
-        onPressed: () => _showProductDialog(),
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Search Input and Import Button
+            // Top Toolbar: Search Bar + Summary Badges + Action Buttons
             Row(
               children: [
+                // Search Input Field
                 Expanded(
                   child: TextField(
                     controller: _searchController,
@@ -269,6 +358,17 @@ class _ProductListViewState extends State<ProductListView> {
                       hintText: 'Cari barang berdasarkan nama atau kode induk...',
                       hintStyle: const TextStyle(color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, color: Color(0xFF94A3B8), size: 20),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                });
+                              },
+                            )
+                          : null,
                       filled: true,
                       fillColor: const Color(0xFF1E293B),
                       border: OutlineInputBorder(
@@ -284,10 +384,25 @@ class _ProductListViewState extends State<ProductListView> {
                   ),
                 ),
                 const SizedBox(width: 16),
+                
+                // Add New Product Button
+                ElevatedButton.icon(
+                  onPressed: () => _showProductDialog(),
+                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                  label: const Text('Tambah Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Import Excel Button
                 ElevatedButton.icon(
                   onPressed: _importProductsFromExcel,
                   icon: const Icon(Icons.file_upload_rounded, color: Colors.white),
-                  label: const Text('Import Excel', style: TextStyle(color: Colors.white)),
+                  label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal[700],
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -296,9 +411,21 @@ class _ProductListViewState extends State<ProductListView> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
 
-            // Products Grid/Table View
+            // Summary Badges Banner
+            Row(
+              children: [
+                _buildSummaryBadge('Total Master Barang', '$totalItems Produk', const Color(0xFF38BDF8), Icons.inventory_2_rounded),
+                const SizedBox(width: 12),
+                _buildSummaryBadge('Stok Tersedia', '$inStockItems Produk', Colors.greenAccent, Icons.check_circle_outline_rounded),
+                const SizedBox(width: 12),
+                _buildSummaryBadge('Stok Habis (0)', '$outOfStockItems Produk', outOfStockItems > 0 ? Colors.redAccent : const Color(0xFF64748B), Icons.warning_amber_rounded),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Products Table View with Horizontal & Vertical Scrolling
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -307,7 +434,7 @@ class _ProductListViewState extends State<ProductListView> {
                   border: Border.all(color: Colors.white.withOpacity(0.05)),
                 ),
                 child: productProvider.isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)))
                     : filteredProducts.isEmpty
                         ? const Center(
                             child: Text(
@@ -317,73 +444,98 @@ class _ProductListViewState extends State<ProductListView> {
                           )
                         : SingleChildScrollView(
                             scrollDirection: Axis.vertical,
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: DataTable(
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                dataRowMinHeight: 52,
-                                dataRowMaxHeight: 52,
-                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                columns: const [
-                                  DataColumn(label: Text('KODE INDUK')),
-                                  DataColumn(label: Text('NAMA BARANG')),
-                                  DataColumn(label: Text('HARGA UNIT'), numeric: true),
-                                  DataColumn(label: Text('STOK'), numeric: true),
-                                  DataColumn(label: Text('ISI KARTON'), numeric: true),
-                                  DataColumn(label: Text('BERAT'), numeric: true),
-                                  DataColumn(label: Text('')),
-                                ],
-                                rows: filteredProducts.map((p) {
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(Text(p.id, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                      DataCell(Text(p.name, style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text(p.stock.toStringAsFixed(0), style: TextStyle(color: p.stock <= 0 ? Colors.redAccent : Colors.greenAccent))),
-                                      DataCell(Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text('${p.sizeGrams.toStringAsFixed(0)} G', style: const TextStyle(color: Colors.white))),
-                                      DataCell(
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 20),
-                                              onPressed: () => _showProductDialog(p),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(minWidth: 900),
+                                child: DataTable(
+                                  headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                  dataRowMinHeight: 52,
+                                  dataRowMaxHeight: 52,
+                                  headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 13),
+                                  columns: const [
+                                    DataColumn(label: Text('KODE INDUK')),
+                                    DataColumn(label: Text('NAMA BARANG')),
+                                    DataColumn(label: Text('HARGA UNIT'), numeric: true),
+                                    DataColumn(label: Text('STOK'), numeric: true),
+                                    DataColumn(label: Text('ISI KARTON'), numeric: true),
+                                    DataColumn(label: Text('BERAT'), numeric: true),
+                                    DataColumn(label: Text('AKSI')),
+                                  ],
+                                  rows: filteredProducts.map((p) {
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(Text(p.kodeInduk, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                        DataCell(Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
+                                        DataCell(Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white))),
+                                        DataCell(
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: (p.stock <= 0 ? Colors.redAccent : Colors.greenAccent).withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(6),
                                             ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                              onPressed: () {
-                                                // Confirm delete
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    backgroundColor: const Color(0xFF1E293B),
-                                                    title: const Text('Hapus Produk', style: TextStyle(color: Colors.white)),
-                                                    content: Text('Apakah Anda yakin ingin menghapus "${p.name}"?', style: const TextStyle(color: Color(0xFF94A3B8))),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () => Navigator.pop(context),
-                                                        child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-                                                      ),
-                                                      ElevatedButton(
-                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                                        onPressed: () async {
-                                                          await productProvider.deleteProduct(p.id);
-                                                          if (context.mounted) Navigator.pop(context);
-                                                        },
-                                                        child: const Text('Hapus'),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              },
+                                            child: Text(
+                                              p.stock.toStringAsFixed(0),
+                                              style: TextStyle(
+                                                color: p.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
+                                        DataCell(Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white))),
+                                        DataCell(Text('${p.sizeGrams.toStringAsFixed(0)} G', style: const TextStyle(color: Colors.white))),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 20),
+                                                tooltip: 'Edit Barang',
+                                                onPressed: () => _showProductDialog(p),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                                tooltip: 'Hapus Barang',
+                                                onPressed: () {
+                                                  showDialog(
+                                                    context: context,
+                                                    builder: (context) => AlertDialog(
+                                                      backgroundColor: const Color(0xFF1E293B),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                      title: const Text('Hapus Produk', style: TextStyle(color: Colors.white)),
+                                                      content: Text('Apakah Anda yakin ingin menghapus "${p.name}" (${p.id})?', style: const TextStyle(color: Color(0xFF94A3B8))),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context),
+                                                          child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                                                        ),
+                                                        ElevatedButton(
+                                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                          onPressed: () async {
+                                                            await productProvider.deleteProduct(p.id);
+                                                            if (context.mounted) {
+                                                              Navigator.pop(context);
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                SnackBar(content: Text('Barang "${p.name}" telah dihapus.'), backgroundColor: Colors.redAccent),
+                                                              );
+                                                            }
+                                                          },
+                                                          child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
                           ),
@@ -391,6 +543,26 @@ class _ProductListViewState extends State<ProductListView> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryBadge(String title, String value, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Text('$title: ', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+        ],
       ),
     );
   }
@@ -405,6 +577,10 @@ class _ProductListViewState extends State<ProductListView> {
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
         borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10.0),
+        borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
       ),
     );
   }

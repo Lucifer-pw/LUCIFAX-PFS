@@ -517,28 +517,48 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ],
           ),
           content: SizedBox(
-            width: 600,
+            width: 800,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Info row
+                // Info rows
                 Row(
                   children: [
                     Expanded(child: _buildDetailRow('Pelanggan:', '${tr.aliasName} (${tr.customerName})')),
-                    Expanded(child: _buildDetailRow('Tgl Kirim:', DateFormat('dd-MM-yyyy').format(tr.deliveryDate))),
+                    Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
+                    Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
                     Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
                   ],
                 ),
-                if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
+                const SizedBox(height: 12),
+                const Text('Rincian Tanggal:', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date))),
+                    Expanded(child: _buildDetailRow('Tgl Kirim:', DateFormat('dd-MM-yyyy').format(tr.deliveryDate))),
+                  ],
+                ),
+                if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
                   const SizedBox(height: 6),
-                  _buildDetailRow('Tgl Transfer:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)),
+                  Row(
+                    children: [
+                      if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
+                        Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)))
+                      else
+                        const Spacer(),
+                      if (tr.erpSyncDate != null)
+                        Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy HH:mm').format(tr.erpSyncDate!)))
+                      else
+                        const Spacer(),
+                    ],
+                  ),
                 ],
                 const SizedBox(height: 16),
                 const Divider(color: Color(0xFF334155)),
@@ -557,11 +577,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     child: SingleChildScrollView(
                       child: Table(
                         columnWidths: const {
-                          0: FlexColumnWidth(2.5),
-                          1: FlexColumnWidth(0.8),
+                          0: FlexColumnWidth(2.2),
+                          1: FlexColumnWidth(0.6),
                           2: FlexColumnWidth(1.2),
-                          3: FlexColumnWidth(0.8),
-                          4: FlexColumnWidth(1.2),
+                          3: FlexColumnWidth(1.2),
+                          4: FlexColumnWidth(0.8),
+                          5: FlexColumnWidth(1.2),
+                          6: FlexColumnWidth(1.3),
                         },
                         children: [
                           TableRow(
@@ -570,19 +592,27 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               _buildTableCell('Nama Barang', isHeader: true),
                               _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                               _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
-                              _buildTableCell('Disc', isHeader: true, align: TextAlign.center),
+                              _buildTableCell('Total', isHeader: true, align: TextAlign.right),
+                              _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
+                              _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
                               _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
                             ],
                           ),
-                          ...tr.items.map((item) => TableRow(
-                            children: [
-                              _buildTableCell('${item.productName}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
-                              _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                              _buildTableCell(_rupiahFormatter.format(item.price), align: TextAlign.right),
-                              _buildTableCell(item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-', align: TextAlign.center),
-                              _buildTableCell(_rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
-                            ],
-                          )),
+                          ...tr.items.map((item) {
+                            final totalBeforeDisc = item.qty * item.price;
+                            final discRp = totalBeforeDisc * (item.discountPercent / 100);
+                            return TableRow(
+                              children: [
+                                _buildTableCell('${item.productName}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                _buildTableCell(_rupiahFormatter.format(item.price), align: TextAlign.right),
+                                _buildTableCell(_rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
+                                _buildTableCell(item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-', align: TextAlign.center),
+                                _buildTableCell(discRp > 0 ? _rupiahFormatter.format(discRp) : '-', align: TextAlign.right),
+                                _buildTableCell(_rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                              ],
+                            );
+                          }),
                         ],
                       ),
                     ),
@@ -611,6 +641,128 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               child: const Text('Tutup', style: TextStyle(color: Color(0xFF38BDF8))),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  // Update delivery status (DIKIRIM / PENDING) & delivery date dialog
+  void _showUpdateDeliveryStatusDialog(model_tr.Transaction tr) {
+    String currentDeliveryStatus = tr.status; // 'DIKIRIM', 'PENDING'
+    DateTime currentDeliveryDate = tr.deliveryDate;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              title: Text('Update Status Pengiriman #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Pilih Status Barang Delivered & Tanggal Dikirim:',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: currentDeliveryStatus,
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _buildInputDecoration(hint: 'Status Pengiriman'),
+                    items: const [
+                      DropdownMenuItem(value: 'DIKIRIM', child: Text('DIKIRIM (Stok Berkurang)')),
+                      DropdownMenuItem(value: 'PENDING', child: Text('PENDING (Belum Dikirim)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() {
+                          currentDeliveryStatus = val;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Tanggal Dikirim:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                    subtitle: Text(
+                      DateFormat('dd MMMM yyyy').format(currentDeliveryDate),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: currentDeliveryDate,
+                        firstDate: DateTime(2025),
+                        lastDate: DateTime(2030),
+                      );
+                      if (pickedDate != null) {
+                        setDialogState(() {
+                          currentDeliveryDate = pickedDate;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            currentDeliveryStatus == 'DIKIRIM'
+                                ? 'Status DIKIRIM akan otomatis mengurangi stok barang pada database produk.'
+                                : 'Status PENDING mengembalikan stok barang ke database produk.',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                  onPressed: () async {
+                    try {
+                      final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+                      await trProvider.updateDeliveryStatus(tr.invoiceNo, currentDeliveryStatus, currentDeliveryDate);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Status pengiriman & stok berhasil diperbarui.'), backgroundColor: Colors.teal),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -653,7 +805,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     const SizedBox(height: 16),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Tanggal Transfer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                      title: const Text('Tanggal Transfer / Dibayar:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
                       subtitle: Text(
                         DateFormat('dd MMMM yyyy HH:mm').format(currentTransferDate!),
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
@@ -852,17 +1004,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         );
                       }
 
-                      // Generate local PDF and download
-                      final pdfFile = await PrintService.generateInvoicePdf(toPrint);
+                      // Trigger system print dialog (Microsoft Print to PDF)
+                      await PrintService.printInvoice(toPrint);
                       
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(
-                              kIsWeb
-                                  ? "PDF Invoice #${toPrint.invoiceNo} berhasil diunduh!"
-                                  : "PDF Invoice #${toPrint.invoiceNo} disimpan di: ${pdfFile?.path ?? ''}"
-                            ),
+                            content: Text("PDF Invoice #${toPrint.invoiceNo} siap dicetak / disimpan!"),
                             backgroundColor: Colors.teal,
                             behavior: SnackBarBehavior.floating,
                           ),
@@ -895,8 +1043,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final filteredTransactions = trProvider.transactions.where((tr) {
       // 1. Status Filter
       if (_statusFilter != "SEMUA") {
-        if (tr.statusTransfer != _statusFilter) {
-          return false;
+        if (_statusFilter == "DIKIRIM" || _statusFilter == "PENDING") {
+          if (tr.status != _statusFilter) return false;
+        } else {
+          if (tr.statusTransfer != _statusFilter) return false;
         }
       }
 
@@ -907,7 +1057,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         final matchAlias = tr.aliasName.toLowerCase().contains(query);
         final matchCust = tr.customerName.toLowerCase().contains(query);
         final matchNote = tr.note.toLowerCase().contains(query);
-        final matchDate = DateFormat('dd-MM-yyyy').format(tr.deliveryDate).contains(query);
+        final matchDate = DateFormat('dd-MM-yyyy').format(tr.date).contains(query) ||
+            DateFormat('dd-MM-yyyy').format(tr.deliveryDate).contains(query) ||
+            (tr.transferDate != null && DateFormat('dd-MM-yyyy').format(tr.transferDate!).contains(query)) ||
+            (tr.erpSyncDate != null && DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!).contains(query));
 
         return matchInvoice || matchAlias || matchCust || matchNote || matchDate;
       }
@@ -948,7 +1101,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ),
                 const SizedBox(width: 16),
                 Container(
-                  width: 200,
+                  width: 220,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
@@ -960,9 +1113,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       dropdownColor: const Color(0xFF1E293B),
                       style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                       items: const [
-                        DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS BAYAR")),
-                        DropdownMenuItem(value: "UNPAID", child: Text("UNPAID (BELUM BAYAR)")),
-                        DropdownMenuItem(value: "PAID", child: Text("PAID (LUNAS)")),
+                        DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS")),
+                        DropdownMenuItem(value: "DIKIRIM", child: Text("STATUS BARANG: DIKIRIM")),
+                        DropdownMenuItem(value: "PENDING", child: Text("STATUS BARANG: PENDING")),
+                        DropdownMenuItem(value: "UNPAID", child: Text("STATUS BAYAR: UNPAID")),
+                        DropdownMenuItem(value: "PAID", child: Text("STATUS BAYAR: PAID")),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -1022,7 +1177,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   DataColumn(label: Text('KOTA')),
                                   DataColumn(label: Text('TOTAL BERAT'), numeric: true),
                                   DataColumn(label: Text('GRAND TOTAL'), numeric: true),
-                                  DataColumn(label: Text('BAYAR')),
+                                  DataColumn(label: Text('STATUS BARANG')),
+                                  DataColumn(label: Text('STATUS BAYAR')),
                                   DataColumn(label: Text('AKSI')),
                                 ],
                                 rows: filteredTransactions.map((tr) {
@@ -1036,13 +1192,69 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         onTap: () => _showDetailDialog(tr),
                                       ),
                                       DataCell(
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(DateFormat('dd-MM-yyyy').format(tr.deliveryDate), style: const TextStyle(color: Colors.white)),
-                                            const Text('Tanggal Kirim', style: TextStyle(color: Color(0xFF64748B), fontSize: 9)),
-                                          ],
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 4),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              // Tanggal Invoice (Received)
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.receipt_long_rounded, color: Color(0xFF94A3B8), size: 10),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    DateFormat('dd-MM-yyyy').format(tr.date),
+                                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              // Tanggal Kirim
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 10),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Kirim: ${DateFormat('dd-MM-yyyy').format(tr.deliveryDate)}',
+                                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                                                  ),
+                                                ],
+                                              ),
+                                              if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
+                                                const SizedBox(height: 2),
+                                                // Tanggal PAID
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 10),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Paid: ${DateFormat('dd-MM-yyyy').format(tr.transferDate!)}',
+                                                      style: const TextStyle(color: Colors.greenAccent, fontSize: 9),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                              if (tr.erpSyncDate != null) ...[
+                                                const SizedBox(height: 2),
+                                                // Tanggal ERP
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 10),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'ERP: ${DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)}',
+                                                      style: const TextStyle(color: Colors.amberAccent, fontSize: 9),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
+                                          ),
                                         ),
                                         onTap: () => _showDetailDialog(tr),
                                       ),
@@ -1061,26 +1273,59 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       DataCell(Text('${totalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.white))),
                                       DataCell(Text(_rupiahFormatter.format(tr.grandTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                       
-                                      // Status Badge
+                                      // Status Kirim Badge
                                       DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: tr.statusTransfer == 'PAID' 
-                                                ? Colors.greenAccent.withOpacity(0.15) 
-                                                : Colors.redAccent.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                              width: 0.8,
+                                        InkWell(
+                                          onTap: () => _showUpdateDeliveryStatusDialog(tr),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: tr.status == 'DIKIRIM' 
+                                                  ? Colors.greenAccent.withOpacity(0.15) 
+                                                  : Colors.orangeAccent.withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              tr.status,
+                                              style: TextStyle(
+                                                color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ),
-                                          child: Text(
-                                            tr.statusTransfer,
-                                            style: TextStyle(
-                                              color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+
+                                      // Status Bayar Badge
+                                      DataCell(
+                                        InkWell(
+                                          onTap: () => _showUpdateStatusDialog(tr),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: tr.statusTransfer == 'PAID' 
+                                                  ? Colors.greenAccent.withOpacity(0.15) 
+                                                  : Colors.redAccent.withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              tr.statusTransfer,
+                                              style: TextStyle(
+                                                color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -1096,8 +1341,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               onPressed: () => _showDetailDialog(tr),
                                             ),
                                             IconButton(
+                                              icon: const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 20),
+                                              tooltip: 'Update Status Pengiriman (DIKIRIM/PENDING)',
+                                              onPressed: () => _showUpdateDeliveryStatusDialog(tr),
+                                            ),
+                                            IconButton(
                                               icon: const Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 20),
-                                              tooltip: 'Update Status Pembayaran',
+                                              tooltip: 'Update Status Pembayaran (PAID/UNPAID)',
                                               onPressed: () => _showUpdateStatusDialog(tr),
                                             ),
                                             IconButton(
@@ -1114,7 +1364,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   builder: (context) => AlertDialog(
                                                     backgroundColor: const Color(0xFF1E293B),
                                                     title: const Text('Hapus Transaksi', style: TextStyle(color: Colors.white)),
-                                                    content: Text('Apakah Anda yakin ingin menghapus Transaksi #${tr.invoiceNo} untuk ${tr.aliasName}? Tindakan ini akan mengembalikan stok produk.', style: const TextStyle(color: Color(0xFF94A3B8))),
+                                                    content: Text('Apakah Anda yakin ingin menghapus Transaksi #${tr.invoiceNo} untuk ${tr.aliasName}? Data transaksi ini akan dihapus dari histori.', style: const TextStyle(color: Color(0xFF94A3B8))),
                                                     actions: [
                                                       TextButton(
                                                         onPressed: () => Navigator.pop(context),
@@ -1171,6 +1421,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Visual helper builders
   Widget _buildDetailRow(String label, String value, {bool isBadge = false}) {
+    Color badgeColor = Colors.white;
+    if (value == 'PAID' || value == 'DIKIRIM') {
+      badgeColor = Colors.greenAccent;
+    } else if (value == 'PENDING') {
+      badgeColor = Colors.orangeAccent;
+    } else {
+      badgeColor = Colors.redAccent;
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1183,13 +1442,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: value == 'PAID' ? Colors.greenAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
+                      color: badgeColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: value == 'PAID' ? Colors.greenAccent : Colors.redAccent, width: 0.5),
+                      border: Border.all(color: badgeColor, width: 0.5),
                     ),
                     child: Text(
                       value,
-                      style: TextStyle(color: value == 'PAID' ? Colors.greenAccent : Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: badgeColor, fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ),
                 )

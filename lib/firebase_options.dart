@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -57,6 +54,16 @@ class DefaultFirebaseOptions {
     appId: '1:388227024926:android:d9595a3ec0882e1814860f',
     messagingSenderId: '388227024926',
     projectId: 'aplikasi-transaksi-fiva-frozen',
+    databaseURL: 'https://aplikasi-transaksi-fiva-frozen-default-rtdb.firebaseio.com',
+    storageBucket: 'aplikasi-transaksi-fiva-frozen.firebasestorage.app',
+  );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDLz_JIz7I7inIziST57QSkOoBjp42Tv40',
+    appId: '1:388227024926:web:d9595a3ec0882e1814860f',
+    messagingSenderId: '388227024926',
+    projectId: 'aplikasi-transaksi-fiva-frozen',
+    authDomain: 'aplikasi-transaksi-fiva-frozen.firebaseapp.com',
     databaseURL: 'https://aplikasi-transaksi-fiva-frozen-default-rtdb.firebaseio.com',
     storageBucket: 'aplikasi-transaksi-fiva-frozen.firebasestorage.app',
   );

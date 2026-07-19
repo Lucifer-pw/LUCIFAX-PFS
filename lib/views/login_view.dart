@@ -12,27 +12,38 @@ class LoginView extends StatefulWidget {
 
 class _LoginViewState extends State<LoginView> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscureText = true;
+  bool _isRegister = false;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       try {
-        await authProvider.signIn(
-          _usernameController.text,
-          _passwordController.text,
-        );
+        if (_isRegister) {
+          await authProvider.signUp(
+            _usernameController.text,
+            _passwordController.text,
+            name: _nameController.text,
+          );
+        } else {
+          await authProvider.signIn(
+            _usernameController.text,
+            _passwordController.text,
+          );
+        }
+
         if (mounted) {
-          // Redirect to main shell layout
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const ShellView()),
@@ -109,7 +120,7 @@ class _LoginViewState extends State<LoginView> {
               ),
               const SizedBox(height: 36.0),
 
-              // Login Card with subtle glassmorphic styling
+              // Login/Register Card with subtle glassmorphic styling
               Container(
                 width: 420.0,
                 padding: const EdgeInsets.all(32.0),
@@ -133,10 +144,10 @@ class _LoginViewState extends State<LoginView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'MASUK AKUN',
+                      Text(
+                        _isRegister ? 'DAFTAR AKUN BARU' : 'MASUK AKUN',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18.0,
                           fontWeight: FontWeight.bold,
@@ -144,6 +155,30 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ),
                       const SizedBox(height: 24.0),
+
+                      // Nama Lengkap (Only for Register)
+                      if (_isRegister) ...[
+                        TextFormField(
+                          controller: _nameController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Nama Lengkap (Opsional)',
+                            hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                            prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF64748B)),
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                              borderSide: const BorderSide(color: Color(0xFF00F2FE), width: 1.5),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16.0),
+                      ],
 
                       // Username field
                       TextFormField(
@@ -208,6 +243,9 @@ class _LoginViewState extends State<LoginView> {
                           if (value == null || value.isEmpty) {
                             return 'Password tidak boleh kosong';
                           }
+                          if (_isRegister && value.length < 6) {
+                            return 'Password minimal 6 karakter';
+                          }
                           return null;
                         },
                       ),
@@ -215,7 +253,7 @@ class _LoginViewState extends State<LoginView> {
 
                       // Submit Button
                       ElevatedButton(
-                        onPressed: authProvider.isLoading ? null : _handleLogin,
+                        onPressed: authProvider.isLoading ? null : _handleSubmit,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16.0),
                           backgroundColor: Colors.transparent,
@@ -228,7 +266,7 @@ class _LoginViewState extends State<LoginView> {
                             if (states.contains(MaterialState.disabled)) {
                               return const Color(0xFF334155);
                             }
-                            return const Color(0xFF4FACFE); // Electric Blue
+                            return const Color(0xFF4FACFE);
                           }),
                         ),
                         child: Ink(
@@ -253,9 +291,9 @@ class _LoginViewState extends State<LoginView> {
                                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
                                   )
-                                : const Text(
-                                    'MASUK',
-                                    style: TextStyle(
+                                : Text(
+                                    _isRegister ? 'DAFTAR' : 'MASUK',
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 16.0,
                                       fontWeight: FontWeight.bold,
@@ -265,43 +303,22 @@ class _LoginViewState extends State<LoginView> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16.0),
+
+                      // Toggle Register / Login mode
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isRegister = !_isRegister;
+                          });
+                        },
+                        child: Text(
+                          _isRegister ? 'Sudah punya akun? MASUK DI SINI' : 'Belum punya akun? DAFTAR AKUN BARU',
+                          style: const TextStyle(color: Color(0xFF00F2FE), fontSize: 13.0, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 20.0),
-              
-              // Seed Option (For local testing ease if DB empty)
-              TextButton(
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    await authProvider.seedDefaultUsers();
-                    if (mounted) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text("Pengguna default berhasil dimasukkan! (admin/cabangjateng, setiawan/jateng, manager/pfs2025)"),
-                          backgroundColor: Colors.teal,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text("Error: ${e.toString()}"),
-                          backgroundColor: Colors.redAccent,
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 10),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: const Text(
-                  'Instal Data Akun Bawaan',
-                  style: TextStyle(color: Color(0xFF4FACFE), fontSize: 13.0),
                 ),
               ),
             ],

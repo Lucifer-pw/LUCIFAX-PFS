@@ -11,6 +11,9 @@ import 'erp_matrix_view.dart';
 import 'dashboard_view.dart';
 import 'update_dialog.dart';
 import 'transaction_history_view.dart';
+import 'receivable_list_view.dart';
+import 'ranking_kacab_view.dart';
+import 'stock_input_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -21,7 +24,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '...';
+  String _appVersion = '1.6.1';
 
   @override
   void initState() {
@@ -33,13 +36,21 @@ class _ShellViewState extends State<ShellView> {
     // Load current app version
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      if (mounted) {
+      if (mounted && packageInfo.version.isNotEmpty && packageInfo.version != '1.0.0') {
         setState(() {
           _appVersion = packageInfo.version;
         });
+      } else if (mounted) {
+        setState(() {
+          _appVersion = '1.6.1';
+        });
       }
     } catch (_) {
-      _appVersion = '1.0.0';
+      if (mounted) {
+        setState(() {
+          _appVersion = '1.6.1';
+        });
+      }
     }
 
     // Auto-check for updates after a short delay
@@ -99,9 +110,24 @@ class _ShellViewState extends State<ShellView> {
     // ERP and Dashboard views (everyone, but CRUD inside restricted)
     items.addAll([
       {
-        'title': 'Stok ERP Bulanan',
+        'title': 'Input Stok',
+        'icon': Icons.add_box_outlined,
+        'widget': const StockInputView(),
+      },
+      {
+        'title': 'Stok ERP & Opname',
         'icon': Icons.table_chart_outlined,
         'widget': const ErpMatrixView(),
+      },
+      {
+        'title': 'Kartu Piutang Toko',
+        'icon': Icons.account_balance_wallet_outlined,
+        'widget': const ReceivableListView(),
+      },
+      {
+        'title': 'Ranking Kacab',
+        'icon': Icons.leaderboard_outlined,
+        'widget': const RankingKacabView(),
       },
       {
         'title': 'Analitik & Klasifikasi',

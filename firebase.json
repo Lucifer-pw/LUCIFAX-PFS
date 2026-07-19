@@ -1,1 +1,57 @@
-{"firestore":{"rules":"firestore.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"aplikasi-transaksi-fiva-frozen","appId":"1:388227024926:android:d9595a3ec0882e1814860f","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"aplikasi-transaksi-fiva-frozen","configurations":{"android":"1:388227024926:android:d9595a3ec0882e1814860f"}}}}}}
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate, max-age=0"
+          },
+          {
+            "key": "Pragma",
+            "value": "no-cache"
+          },
+          {
+            "key": "Expires",
+            "value": "0"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "aplikasi-transaksi-fiva-frozen",
+          "appId": "1:388227024926:android:d9595a3ec0882e1814860f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "aplikasi-transaksi-fiva-frozen",
+          "configurations": {
+            "android": "1:388227024926:android:d9595a3ec0882e1814860f"
+          }
+        }
+      }
+    }
+  }
+}

@@ -76,6 +76,33 @@ class AuthService {
     }
   }
 
+  // Sign Up / Register new account using username and password
+  Future<UserProfile> signUp(String username, String password, {String name = '', String role = 'developer'}) async {
+    final email = _mapUsernameToEmail(username);
+    final credentials = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    final user = credentials.user;
+    if (user == null) {
+      throw Exception("Gagal mendaftar akun baru.");
+    }
+
+    final cleanUsername = username.trim().toLowerCase();
+    final displayName = name.trim().isNotEmpty ? name.trim() : cleanUsername;
+
+    final profile = UserProfile(
+      uid: user.uid,
+      username: cleanUsername,
+      name: displayName,
+      role: role,
+    );
+
+    await _db.collection('users').doc(user.uid).set(profile.toMap());
+    return profile;
+  }
+
   // Seed default users in Firebase (useful for initial run/deployment)
   Future<void> seedDefaultUsers() async {
     final defaultUsers = [

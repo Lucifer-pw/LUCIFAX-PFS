@@ -90,20 +90,21 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   // Active Cart Methods with 10-Item Constraint!
-  void addToCart(Product product, double qty, double discountPercent) {
+  void addToCart(Product product, double qty, double discountPercent, {double? customPrice}) {
     // Check if product already exists in cart to update qty
     final existingIndex = _cartItems.indexWhere((item) => item.productId == product.id);
+    final finalPrice = customPrice ?? product.price;
 
     if (existingIndex != -1) {
       // Update existing item
       final currentQty = _cartItems[existingIndex].qty;
       final newQty = currentQty + qty;
-      final subtotal = newQty * product.price * (1 - discountPercent / 100);
+      final subtotal = newQty * finalPrice * (1 - discountPercent / 100);
 
       _cartItems[existingIndex] = model_tr.TransactionItem(
         productId: product.id,
         productName: product.name,
-        price: product.price,
+        price: finalPrice,
         qty: newQty,
         discountPercent: discountPercent,
         subtotal: subtotal,
@@ -115,12 +116,12 @@ class TransactionProvider extends ChangeNotifier {
         throw Exception("Batas Maksimal 10 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
       }
 
-      final subtotal = qty * product.price * (1 - discountPercent / 100);
+      final subtotal = qty * finalPrice * (1 - discountPercent / 100);
       _cartItems.add(
         model_tr.TransactionItem(
           productId: product.id,
           productName: product.name,
-          price: product.price,
+          price: finalPrice,
           qty: qty,
           discountPercent: discountPercent,
           subtotal: subtotal,
@@ -178,6 +179,11 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> updatePaymentStatus(int invoiceNo, String status, DateTime? transferDate) async {
     await _dbService.updateTransactionTransferStatus(invoiceNo, status, transferDate);
+  }
+
+  Future<void> updateDeliveryStatus(int invoiceNo, String status, DateTime deliveryDate) async {
+    await _dbService.updateTransactionDeliveryStatus(invoiceNo, status, deliveryDate);
+    notifyListeners();
   }
 
   Future<void> updateDeliveryDate(int invoiceNo, DateTime deliveryDate) async {

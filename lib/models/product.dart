@@ -1,5 +1,6 @@
 class Product {
-  final String id; // maps to KODE_INDUK
+  final String id; // unique doc ID
+  final String kodeInduk; // parent group code (e.g. BRSM-500)
   final String name; // maps to NAMA_BARANG
   final double price;
   final double stock;
@@ -8,16 +9,19 @@ class Product {
 
   Product({
     required this.id,
+    String? kodeInduk,
     required this.name,
     required this.price,
     required this.stock,
     required this.isiKarton,
     required this.sizeGrams,
-  });
+  }) : kodeInduk = (kodeInduk != null && kodeInduk.isNotEmpty) ? kodeInduk : id;
 
   factory Product.fromMap(Map<String, dynamic> map, String docId) {
+    final rawKodeInduk = map['kodeInduk']?.toString();
     return Product(
       id: docId,
+      kodeInduk: (rawKodeInduk != null && rawKodeInduk.isNotEmpty) ? rawKodeInduk : docId,
       name: map['name'] ?? '',
       price: (map['price'] ?? 0.0).toDouble(),
       stock: (map['stock'] ?? 0.0).toDouble(),
@@ -28,6 +32,7 @@ class Product {
 
   Map<String, dynamic> toMap() {
     return {
+      'kodeInduk': kodeInduk,
       'name': name,
       'price': price,
       'stock': stock,

@@ -50,6 +50,22 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> signUp(String username, String password, {String name = '', String role = 'developer'}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _currentUser = await _authService.signUp(username, password, name: name, role: role);
+    } catch (e) {
+      _errorMessage = "Pendaftaran gagal: Username sudah terpakai atau password kurang kuat.";
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> signOut() async {
     _isLoading = true;
     notifyListeners();

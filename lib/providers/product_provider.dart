@@ -36,6 +36,10 @@ class ProductProvider extends ChangeNotifier {
     });
   }
 
+  Future<void> fetchProducts() async {
+    notifyListeners();
+  }
+
   Future<void> saveProduct(Product product) async {
     await _dbService.saveProduct(product);
   }

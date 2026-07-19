@@ -32,7 +32,8 @@ class _CustomerListViewState extends State<CustomerListView> {
     final aliasController = TextEditingController(text: customer?.aliasName ?? '');
     final addressController = TextEditingController(text: customer?.address ?? '');
     final cityController = TextEditingController(text: customer?.city ?? '');
-    final provinceController = TextEditingController(text: customer?.province ?? 'JAWA TENGAH');
+    final provinceController = TextEditingController(text: customer?.province.isNotEmpty == true ? customer!.province : 'JAWA TENGAH');
+    final countryController = TextEditingController(text: customer?.country.isNotEmpty == true ? customer!.country : 'INDONESIA');
     final phoneController = TextEditingController(text: customer?.phone ?? '');
     final ktpController = TextEditingController(text: customer?.ktpNumber ?? '');
 
@@ -126,7 +127,7 @@ class _CustomerListViewState extends State<CustomerListView> {
               ),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 400,
+                  width: 440,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -164,7 +165,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                             child: TextFormField(
                               controller: cityController,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _buildInputDecoration(hint: 'Kota (e.g. JEPARA)'),
+                              decoration: _buildInputDecoration(hint: 'Kota (e.g. BLORA)'),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -172,17 +173,31 @@ class _CustomerListViewState extends State<CustomerListView> {
                             child: TextFormField(
                               controller: provinceController,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _buildInputDecoration(hint: 'Provinsi'),
+                              decoration: _buildInputDecoration(hint: 'Provinsi (e.g. JAWA TENGAH)'),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: phoneController,
-                        keyboardType: TextInputType.phone,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _buildInputDecoration(hint: 'Nomor Telepon'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: countryController,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Negara (e.g. INDONESIA)'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: phoneController,
+                              keyboardType: TextInputType.phone,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Nomor Telepon'),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -208,6 +223,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                     final address = addressController.text.trim();
                     final city = cityController.text.trim();
                     final province = provinceController.text.trim();
+                    final country = countryController.text.trim();
                     final phone = phoneController.text.trim();
                     final ktp = ktpController.text.trim();
 
@@ -225,7 +241,6 @@ class _CustomerListViewState extends State<CustomerListView> {
                       if (isEdit) {
                         finalId = customer.id;
                       } else {
-                        // Automatically generate customer ID based on city and plate code logic
                         finalId = await custProvider.getNextCustomerID(city);
                       }
 
@@ -235,8 +250,8 @@ class _CustomerListViewState extends State<CustomerListView> {
                         aliasName: alias,
                         address: address,
                         city: city,
-                        province: province,
-                        country: 'INDONESIA',
+                        province: province.isNotEmpty ? province : 'JAWA TENGAH',
+                        country: country.isNotEmpty ? country : 'INDONESIA',
                         phone: phone,
                         ktpNumber: ktp,
                       );
@@ -364,7 +379,9 @@ class _CustomerListViewState extends State<CustomerListView> {
       final aliasMatches = c.aliasName.toLowerCase().contains(_searchQuery.toLowerCase());
       final idMatches = c.id.toLowerCase().contains(_searchQuery.toLowerCase());
       final cityMatches = c.city.toLowerCase().contains(_searchQuery.toLowerCase());
-      return nameMatches || aliasMatches || idMatches || cityMatches;
+      final provinceMatches = c.province.toLowerCase().contains(_searchQuery.toLowerCase());
+      final countryMatches = c.country.toLowerCase().contains(_searchQuery.toLowerCase());
+      return nameMatches || aliasMatches || idMatches || cityMatches || provinceMatches || countryMatches;
     }).toList();
 
     return Scaffold(
@@ -386,7 +403,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                     controller: _searchController,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: 'Cari pelanggan berdasarkan ID, nama toko, pemilik, atau kota...',
+                      hintText: 'Cari pelanggan berdasarkan ID, nama toko, pemilik, kota, atau negara...',
                       hintStyle: const TextStyle(color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
                       filled: true,
@@ -435,44 +452,57 @@ class _CustomerListViewState extends State<CustomerListView> {
                               style: TextStyle(color: Color(0xFF64748B)),
                             ),
                           )
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: DataTable(
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                dataRowMinHeight: 56,
-                                dataRowMaxHeight: 56,
-                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                columns: const [
-                                  DataColumn(label: Text('ID CUST')),
-                                  DataColumn(label: Text('NAMA TOKO (ALIAS)')),
-                                  DataColumn(label: Text('PEMILIK')),
-                                  DataColumn(label: Text('ALAMAT')),
-                                  DataColumn(label: Text('KOTA')),
-                                  DataColumn(label: Text('TELEPON')),
-                                  DataColumn(label: Text('')),
-                                ],
-                                rows: filteredCustomers.map((c) {
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(Text(c.id, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                      DataCell(Text(c.aliasName, style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text(c.customerName, style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text(c.address, style: const TextStyle(color: Colors.white, fontSize: 13))),
-                                      DataCell(Text(c.city, style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white))),
-                                      DataCell(
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 20),
-                                              onPressed: () => _showCustomerDialog(c),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                              onPressed: () {
+                        : Scrollbar(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columnSpacing: 10,
+                                  horizontalMargin: 10,
+                                  headingRowHeight: 42,
+                                  dataRowMinHeight: 44,
+                                  dataRowMaxHeight: 44,
+                                  headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                  headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
+                                  columns: const [
+                                    DataColumn(label: Text('ID CUST')),
+                                    DataColumn(label: Text('NAMA TOKO (ALIAS)')),
+                                    DataColumn(label: Text('PEMILIK')),
+                                    DataColumn(label: Text('ALAMAT')),
+                                    DataColumn(label: Text('KOTA')),
+                                    DataColumn(label: Text('PROVINSI')),
+                                    DataColumn(label: Text('NEGARA')),
+                                    DataColumn(label: Text('TELEPON')),
+                                    DataColumn(label: Text('AKSI')),
+                                  ],
+                                  rows: filteredCustomers.map((c) {
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(Text(c.id, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                        DataCell(Text(c.aliasName, style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(Text(c.customerName, style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(Text(c.address, style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(Text(c.city, style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(Text(c.province.isNotEmpty ? c.province : 'JAWA TENGAH', style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(Text(c.country.isNotEmpty ? c.country : 'INDONESIA', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                        DataCell(Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                icon: const Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 16),
+                                                onPressed: () => _showCustomerDialog(c),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                                onPressed: () {
                                                 // Confirm delete
                                                 showDialog(
                                                   context: context,
@@ -507,6 +537,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                               ),
                             ),
                           ),
+                        ),
               ),
             ),
           ],

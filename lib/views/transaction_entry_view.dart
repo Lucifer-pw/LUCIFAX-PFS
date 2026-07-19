@@ -22,7 +22,10 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   Product? _selectedProduct;
   final _qtyController = TextEditingController(text: '1');
   final _discountController = TextEditingController(text: '0');
+  final _priceController = TextEditingController();
   final _noteController = TextEditingController();
+  final _customerTextController = TextEditingController();
+  final _productTextController = TextEditingController();
 
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -34,7 +37,10 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   void dispose() {
     _qtyController.dispose();
     _discountController.dispose();
+    _priceController.dispose();
     _noteController.dispose();
+    _customerTextController.dispose();
+    _productTextController.dispose();
     super.dispose();
   }
 
@@ -66,14 +72,17 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     }
 
     final disc = double.tryParse(_discountController.text) ?? 0.0;
+    final customPrice = double.tryParse(_priceController.text);
 
     try {
-      trProvider.addToCart(_selectedProduct!, qty, disc);
+      trProvider.addToCart(_selectedProduct!, qty, disc, customPrice: customPrice);
       // Reset inputs
       setState(() {
         _selectedProduct = null;
+        _productTextController.clear();
         _qtyController.text = '1';
         _discountController.text = '0';
+        _priceController.clear();
       });
     } catch (e) {
       // 10-item limit exceeded!
@@ -105,8 +114,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       final pdfFile = await PrintService.generateInvoicePdf(savedTransaction);
       
       _noteController.clear();
+      _customerTextController.clear();
+      _productTextController.clear();
       setState(() {
         _selectedCustomer = null;
+        _selectedProduct = null;
       });
 
       if (mounted) {
@@ -183,8 +195,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       final savedTransaction = await trProvider.submitTransaction(createdBy);
  
       _noteController.clear();
+      _customerTextController.clear();
+      _productTextController.clear();
       setState(() {
         _selectedCustomer = null;
+        _selectedProduct = null;
       });
 
       if (mounted) {
@@ -237,19 +252,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Customer Search Combobox
-              DropdownButtonFormField<Customer>(
-                value: _selectedCustomer,
-                dropdownColor: const Color(0xFF1E293B),
-                style: const TextStyle(color: Colors.white),
-                decoration: _buildInputDecoration(hint: 'Pilih Pelanggan'),
-                items: customerProvider.customers.map((c) {
-                  return DropdownMenuItem<Customer>(
-                    value: c,
-                    child: Text('${c.aliasName} (${c.customerName})'),
-                  );
-                }).toList(),
-                onChanged: (customer) {
+              // Searchable & Typeable Customer Combobox
+              SearchableCustomerField(
+                selectedCustomer: _selectedCustomer,
+                customers: customerProvider.customers,
+                onSelected: (customer) {
                   setState(() {
                     _selectedCustomer = customer;
                   });
@@ -321,21 +328,18 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product Search Combobox
-              DropdownButtonFormField<Product>(
-                value: _selectedProduct,
-                dropdownColor: const Color(0xFF1E293B),
-                style: const TextStyle(color: Colors.white),
-                decoration: _buildInputDecoration(hint: 'Cari Produk'),
-                items: productProvider.products.map((p) {
-                  return DropdownMenuItem<Product>(
-                    value: p,
-                    child: Text(p.name),
-                  );
-                }).toList(),
-                onChanged: (product) {
+              // Searchable & Typeable Product Combobox
+              SearchableProductField(
+                selectedProduct: _selectedProduct,
+                products: productProvider.products,
+                onSelected: (product) {
                   setState(() {
                     _selectedProduct = product;
+                    if (product != null) {
+                      _priceController.text = product.price.toStringAsFixed(0);
+                    } else {
+                      _priceController.clear();
+                    }
                   });
                 },
               ),
@@ -346,17 +350,25 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Harga: ${_rupiahFormatter.format(_selectedProduct!.price)}',
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                      'Harga Master: ${_rupiahFormatter.format(_selectedProduct!.price)}',
+                      style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     Text(
                       'Stok: ${_selectedProduct!.stock.toStringAsFixed(0)} pcs',
                       style: TextStyle(
                         color: _selectedProduct!.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
                         fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _priceController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -670,6 +682,401 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
         borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
+      ),
+    );
+  }
+}
+
+class SearchableCustomerField extends StatefulWidget {
+  final Customer? selectedCustomer;
+  final List<Customer> customers;
+  final ValueChanged<Customer?> onSelected;
+
+  const SearchableCustomerField({
+    super.key,
+    required this.selectedCustomer,
+    required this.customers,
+    required this.onSelected,
+  });
+
+  @override
+  State<SearchableCustomerField> createState() => _SearchableCustomerFieldState();
+}
+
+class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  List<Customer> _filteredCustomers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCustomers = widget.customers;
+    if (widget.selectedCustomer != null) {
+      _controller.text = '${widget.selectedCustomer!.aliasName} (${widget.selectedCustomer!.customerName})';
+    }
+
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        _showOverlay();
+      } else {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && !_focusNode.hasFocus) {
+            _hideOverlay();
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(SearchableCustomerField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedCustomer == null && oldWidget.selectedCustomer != null) {
+      _controller.clear();
+      _filteredCustomers = widget.customers;
+    } else if (widget.selectedCustomer != null && widget.selectedCustomer != oldWidget.selectedCustomer) {
+      _controller.text = '${widget.selectedCustomer!.aliasName} (${widget.selectedCustomer!.customerName})';
+    }
+  }
+
+  @override
+  void dispose() {
+    _hideOverlay();
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final cleanQuery = query.trim().toLowerCase();
+    setState(() {
+      if (cleanQuery.isEmpty) {
+        _filteredCustomers = widget.customers;
+      } else {
+        _filteredCustomers = widget.customers.where((c) {
+          final alias = c.aliasName.toLowerCase();
+          final name = c.customerName.toLowerCase();
+          final city = c.city.toLowerCase();
+          final id = c.id.toLowerCase();
+          return alias.contains(cleanQuery) ||
+                 name.contains(cleanQuery) ||
+                 city.contains(cleanQuery) ||
+                 id.contains(cleanQuery);
+        }).toList();
+      }
+    });
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _showOverlay() {
+    _hideOverlay();
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0.0, size.height + 6.0),
+          child: Material(
+            elevation: 8.0,
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 250),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+              ),
+              child: _filteredCustomers.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text('Pelanggan tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      shrinkWrap: true,
+                      itemCount: _filteredCustomers.length,
+                      itemBuilder: (context, index) {
+                        final c = _filteredCustomers[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            '${c.aliasName} (${c.customerName})',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          subtitle: Text(
+                            'ID: ${c.id} • ${c.city}, ${c.province}',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                          onTap: () {
+                            _controller.text = '${c.aliasName} (${c.customerName})';
+                            widget.onSelected(c);
+                            _focusNode.unfocus();
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextFormField(
+        controller: _controller,
+        focusNode: _focusNode,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Pilih / Ketik Nama Pelanggan...',
+          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          filled: true,
+          fillColor: const Color(0xFF0F172A),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _focusNode.hasFocus ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+              color: const Color(0xFF38BDF8),
+              size: 28,
+            ),
+            onPressed: () {
+              if (_focusNode.hasFocus) {
+                _focusNode.unfocus();
+              } else {
+                _focusNode.requestFocus();
+              }
+            },
+          ),
+        ),
+        onChanged: (val) {
+          widget.onSelected(null);
+          _filter(val);
+        },
+      ),
+    );
+  }
+}
+
+class SearchableProductField extends StatefulWidget {
+  final Product? selectedProduct;
+  final List<Product> products;
+  final ValueChanged<Product?> onSelected;
+
+  const SearchableProductField({
+    super.key,
+    required this.selectedProduct,
+    required this.products,
+    required this.onSelected,
+  });
+
+  @override
+  State<SearchableProductField> createState() => _SearchableProductFieldState();
+}
+
+class _SearchableProductFieldState extends State<SearchableProductField> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  List<Product> _filteredProducts = [];
+
+  final _rupiahFormatter = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredProducts = widget.products;
+    if (widget.selectedProduct != null) {
+      _controller.text = widget.selectedProduct!.name;
+    }
+
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        _showOverlay();
+      } else {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && !_focusNode.hasFocus) {
+            _hideOverlay();
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(SearchableProductField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedProduct == null && oldWidget.selectedProduct != null) {
+      _controller.clear();
+      _filteredProducts = widget.products;
+    } else if (widget.selectedProduct != null && widget.selectedProduct != oldWidget.selectedProduct) {
+      _controller.text = widget.selectedProduct!.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hideOverlay();
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final cleanQuery = query.trim().toLowerCase();
+    setState(() {
+      if (cleanQuery.isEmpty) {
+        _filteredProducts = widget.products;
+      } else {
+        _filteredProducts = widget.products.where((p) {
+          final name = p.name.toLowerCase();
+          final id = p.id.toLowerCase();
+          return name.contains(cleanQuery) || id.contains(cleanQuery);
+        }).toList();
+      }
+    });
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _showOverlay() {
+    _hideOverlay();
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0.0, size.height + 6.0),
+          child: Material(
+            elevation: 8.0,
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 250),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+              ),
+              child: _filteredProducts.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text('Produk tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      shrinkWrap: true,
+                      itemCount: _filteredProducts.length,
+                      itemBuilder: (context, index) {
+                        final p = _filteredProducts[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            p.name,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          subtitle: Text(
+                            'Harga: ${_rupiahFormatter.format(p.price)} • Stok: ${p.stock.toStringAsFixed(0)} pcs',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                          onTap: () {
+                            _controller.text = p.name;
+                            widget.onSelected(p);
+                            _focusNode.unfocus();
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextFormField(
+        controller: _controller,
+        focusNode: _focusNode,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Cari Produk...',
+          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          filled: true,
+          fillColor: const Color(0xFF0F172A),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _focusNode.hasFocus ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+              color: const Color(0xFF38BDF8),
+              size: 28,
+            ),
+            onPressed: () {
+              if (_focusNode.hasFocus) {
+                _focusNode.unfocus();
+              } else {
+                _focusNode.requestFocus();
+              }
+            },
+          ),
+        ),
+        onChanged: (val) {
+          widget.onSelected(null);
+          _filter(val);
+        },
       ),
     );
   }
