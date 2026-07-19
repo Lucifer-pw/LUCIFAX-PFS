@@ -22,6 +22,22 @@ class ImportResult {
 class ImportService {
   final FirebaseService _dbService = FirebaseService();
 
+  List<int> _extractFileBytes(ArchiveFile file) {
+    final content = file.content;
+    if (content is List<int>) {
+      return content;
+    } else if (content is InputStream) {
+      return content.toUint8List();
+    } else if (content is Uint8List) {
+      return content;
+    } else if (content != null) {
+      try {
+        return List<int>.from(content as dynamic);
+      } catch (_) {}
+    }
+    return [];
+  }
+
   // Clean custom numFmtId < 164 in styles.xml to avoid Excel package decode exceptions
   Uint8List _cleanExcelBytes(Uint8List bytes) {
     try {
@@ -29,20 +45,14 @@ class ImportService {
       final newArchive = Archive();
 
       for (var file in archive) {
-        if (file.name.endsWith('styles.xml')) {
-          final String content = String.fromCharCodes(file.content as List<int>);
-          final regex = RegExp(r'numFmtId="([0-9]+)"');
-          final String cleanedContent = content.replaceAllMapped(regex, (match) {
-            final int id = int.tryParse(match.group(1) ?? '') ?? 0;
-            if (id > 0 && id < 164) {
-              return 'numFmtId="0"';
-            }
-            return match.group(0)!;
-          });
+        final rawBytes = _extractFileBytes(file);
+        if (file.name.endsWith('styles.xml') && rawBytes.isNotEmpty) {
+          final String content = String.fromCharCodes(rawBytes);
+          final String cleanedContent = content.replaceAll(RegExp(r'<numFmts[^>]*>[\s\S]*?<\/numFmts>'), '');
           final bytesData = cleanedContent.codeUnits;
           newArchive.addFile(ArchiveFile(file.name, bytesData.length, bytesData));
-        } else {
-          newArchive.addFile(file);
+        } else if (rawBytes.isNotEmpty) {
+          newArchive.addFile(ArchiveFile(file.name, rawBytes.length, rawBytes));
         }
       }
 

@@ -24,7 +24,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '1.6.7';
+  String _appVersion = '1.6.8';
 
   @override
   void initState() {
