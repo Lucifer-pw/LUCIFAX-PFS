@@ -259,6 +259,7 @@ class FirebaseService {
             'customerName': tr.aliasName,
             'products': {},
             'totalIncome': 0.0,
+            'invoices': [],
           };
 
     double currentIncome = (erpData['totalIncome'] ?? 0.0).toDouble();
@@ -276,6 +277,27 @@ class FirebaseService {
       productsMap[item.productId] = prodRecord;
     }
     erpData['products'] = productsMap;
+
+    // Track invoices list
+    List<dynamic> invoices = List<dynamic>.from(erpData['invoices'] ?? []);
+    // Remove existing entry for this invoice (if re-adding)
+    invoices.removeWhere((inv) => inv['invoiceNo'] == tr.invoiceNo);
+    // Add invoice with items breakdown
+    invoices.add({
+      'invoiceNo': tr.invoiceNo,
+      'grandTotal': tr.grandTotal,
+      'date': Timestamp.fromDate(tr.date),
+      'items': tr.items.map((item) => {
+        'productId': item.productId,
+        'productName': item.productName,
+        'qty': item.qty,
+        'weightKg': item.weightKg,
+        'subtotal': item.subtotal,
+        'isBonus': item.isBonus,
+      }).toList(),
+    });
+    erpData['invoices'] = invoices;
+
     transaction.set(erpRef, erpData);
   }
 
@@ -307,6 +329,12 @@ class FirebaseService {
       }
     }
     erpData['products'] = productsMap;
+
+    // Remove invoice from invoices list
+    List<dynamic> invoices = List<dynamic>.from(erpData['invoices'] ?? []);
+    invoices.removeWhere((inv) => inv['invoiceNo'] == tr.invoiceNo);
+    erpData['invoices'] = invoices;
+
     transaction.set(erpRef, erpData);
   }
 
