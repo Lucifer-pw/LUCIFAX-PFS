@@ -945,7 +945,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           itemBuilder: (context, index) {
             final record = filteredRecords[index];
             final customerName = record['customerName'] ?? 'Unknown';
-            final customerId = record['customerId'] ?? '';
             final totalIncome = (record['totalIncome'] ?? 0.0).toDouble();
             final invoices = List<dynamic>.from(record['invoices'] ?? []);
             final productsMap = Map<String, dynamic>.from(record['products'] ?? {});

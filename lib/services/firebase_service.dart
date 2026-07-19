@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../models/customer.dart';
 import '../models/transaction.dart' as model_tr;
@@ -485,19 +486,97 @@ class FirebaseService {
     });
   }
 
-  // Get ERP summaries for a specific month
+  // Get ERP summaries for a specific month - reads directly from transactions for 100% accuracy
   Future<List<Map<String, dynamic>>> getErpSummaries(String monthYear) async {
-    final snap = await _db.collection('erp_summary').get();
-    final List<Map<String, dynamic>> results = [];
-    for (var doc in snap.docs) {
-      final data = doc.data();
-      final docId = doc.id;
-      final docMonthYear = data['monthYear']?.toString() ?? '';
-      if (docMonthYear == monthYear || docId.startsWith('${monthYear}_')) {
-        results.add(data);
+    final trSnap = await _db.collection('transactions').get();
+    
+    final Map<String, Map<String, dynamic>> customerErpMap = {};
+
+    for (var doc in trSnap.docs) {
+      final trData = doc.data();
+      final Timestamp? erpTs = trData['erpSyncDate'] as Timestamp?;
+      if (erpTs == null) continue;
+
+      final erpDate = erpTs.toDate();
+      final trMonthYear = DateFormat('MM-yyyy').format(erpDate);
+      if (trMonthYear != monthYear) continue;
+
+      final customerId = (trData['customerId'] ?? '').toString();
+      final customerName = (trData['aliasName'] ?? trData['customerName'] ?? '').toString();
+      final invoiceNo = int.tryParse(doc.id) ?? (trData['invoiceNo'] ?? 0);
+      final grandTotal = (trData['grandTotal'] ?? 0.0).toDouble();
+      final trDate = (trData['date'] as Timestamp?)?.toDate() ?? erpDate;
+
+      final items = (trData['items'] as List<dynamic>?) ?? [];
+
+      if (!customerErpMap.containsKey(customerId)) {
+        customerErpMap[customerId] = {
+          'monthYear': monthYear,
+          'customerId': customerId,
+          'customerName': customerName,
+          'totalIncome': 0.0,
+          'products': <String, Map<String, double>>{},
+          'invoices': <Map<String, dynamic>>[],
+        };
       }
+
+      final cRecord = customerErpMap[customerId]!;
+      cRecord['totalIncome'] = (cRecord['totalIncome'] as double) + grandTotal;
+
+      final productsMap = cRecord['products'] as Map<String, Map<String, double>>;
+      final invoicesList = cRecord['invoices'] as List<Map<String, dynamic>>;
+
+      final List<Map<String, dynamic>> formattedItems = [];
+      for (var item in items) {
+        final itemMap = Map<String, dynamic>.from(item as Map);
+        final productId = (itemMap['productId'] ?? '').toString();
+        final productName = (itemMap['productName'] ?? '').toString();
+        final qty = (itemMap['qty'] ?? 0.0).toDouble();
+        final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
+        final subtotal = (itemMap['subtotal'] ?? 0.0).toDouble();
+        final isBonus = itemMap['isBonus'] == true;
+
+        if (!productsMap.containsKey(productId)) {
+          productsMap[productId] = {'pcs': 0.0, 'kg': 0.0};
+        }
+        productsMap[productId]!['pcs'] = productsMap[productId]!['pcs']! + qty;
+        productsMap[productId]!['kg'] = productsMap[productId]!['kg']! + weightKg;
+
+        formattedItems.add({
+          'productId': productId,
+          'productName': productName,
+          'qty': qty,
+          'weightKg': weightKg,
+          'subtotal': subtotal,
+          'isBonus': isBonus,
+        });
+      }
+
+      invoicesList.add({
+        'invoiceNo': invoiceNo,
+        'grandTotal': grandTotal,
+        'date': Timestamp.fromDate(trDate),
+        'items': formattedItems,
+      });
     }
-    return results;
+
+    try {
+      final erpSnap = await _db.collection('erp_summary').get();
+      for (var doc in erpSnap.docs) {
+        final data = doc.data();
+        final docMonthYear = data['monthYear']?.toString() ?? '';
+        if (docMonthYear == monthYear || doc.id.startsWith('${monthYear}_')) {
+          final cId = (data['customerId'] ?? '').toString();
+          if (cId.isNotEmpty && !customerErpMap.containsKey(cId)) {
+            customerErpMap[cId] = data;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching erp_summary: $e");
+    }
+
+    return customerErpMap.values.toList();
   }
 
   // Import transaction (with specific invoice number)
