@@ -1266,24 +1266,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           )
                         : SingleChildScrollView(
                             scrollDirection: Axis.vertical,
-                            child: SizedBox(
-                              width: double.infinity,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
                               child: DataTable(
+                                columnSpacing: 20,
+                                horizontalMargin: 16,
                                 headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                 dataRowMinHeight: 56,
                                 dataRowMaxHeight: 56,
-                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                 columns: const [
+                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                                columns: const [
                                   DataColumn(label: Text('INVOICE')),
                                   DataColumn(label: Text('TANGGAL')),
                                   DataColumn(label: Text('PELANGGAN')),
                                   DataColumn(label: Text('KOTA')),
                                   DataColumn(label: Text('TOTAL BERAT'), numeric: true),
                                   DataColumn(label: Text('GRAND TOTAL'), numeric: true),
-                                  DataColumn(label: Text('STATUS BARANG')),
-                                  DataColumn(label: Text('STATUS BAYAR')),
-                                  DataColumn(label: Text('STATUS ERP')),
-                                  DataColumn(label: Text('AKSI')),
+                                  DataColumn(label: Center(child: Text('STATUS BARANG'))),
+                                  DataColumn(label: Center(child: Text('STATUS BAYAR'))),
+                                  DataColumn(label: Center(child: Text('STATUS ERP'))),
+                                  DataColumn(label: Center(child: Text('AKSI'))),
                                 ],
                                 rows: filteredTransactions.map((tr) {
                                   // Calculate total weight in kg across items
@@ -1364,27 +1366,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       
                                       // Status Kirim Badge
                                       DataCell(
-                                        InkWell(
-                                          onTap: () => _showUpdateDeliveryStatusDialog(tr),
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: tr.status == 'DIKIRIM' 
-                                                  ? Colors.greenAccent.withOpacity(0.15) 
-                                                  : Colors.orangeAccent.withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
-                                                width: 0.8,
+                                        Center(
+                                          child: InkWell(
+                                            onTap: () => _showUpdateDeliveryStatusDialog(tr),
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: tr.status == 'DIKIRIM' 
+                                                    ? Colors.greenAccent.withOpacity(0.15) 
+                                                    : Colors.orangeAccent.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                  width: 0.8,
+                                                ),
                                               ),
-                                            ),
-                                            child: Text(
-                                              tr.status,
-                                              style: TextStyle(
-                                                color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
+                                              child: Text(
+                                                tr.status,
+                                                style: TextStyle(
+                                                  color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1393,27 +1397,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                                       // Status Bayar Badge
                                       DataCell(
-                                        InkWell(
-                                          onTap: () => _showUpdateStatusDialog(tr),
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: tr.statusTransfer == 'PAID' 
-                                                  ? Colors.greenAccent.withOpacity(0.15) 
-                                                  : Colors.redAccent.withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                                width: 0.8,
+                                        Center(
+                                          child: InkWell(
+                                            onTap: () => _showUpdateStatusDialog(tr),
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: tr.statusTransfer == 'PAID' 
+                                                    ? Colors.greenAccent.withOpacity(0.15) 
+                                                    : Colors.redAccent.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
+                                                  width: 0.8,
+                                                ),
                                               ),
-                                            ),
-                                            child: Text(
-                                              tr.statusTransfer,
-                                              style: TextStyle(
-                                                color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
+                                              child: Text(
+                                                tr.statusTransfer,
+                                                style: TextStyle(
+                                                  color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1422,29 +1428,31 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                                       // Status ERP Badge
                                       DataCell(
-                                        InkWell(
-                                          onTap: () => _showUpdateErpStatusDialog(tr),
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: tr.erpSyncDate != null 
-                                                  ? Colors.amberAccent.withOpacity(0.15) 
-                                                  : Colors.grey.withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
-                                                width: 0.8,
+                                        Center(
+                                          child: InkWell(
+                                            onTap: () => _showUpdateErpStatusDialog(tr),
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: tr.erpSyncDate != null 
+                                                    ? Colors.amberAccent.withOpacity(0.15) 
+                                                    : Colors.grey.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
+                                                  width: 0.8,
+                                                ),
                                               ),
-                                            ),
-                                            child: Text(
-                                              tr.erpSyncDate != null 
-                                                  ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!) 
-                                                  : 'BELUM ERP',
-                                              style: TextStyle(
-                                                color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
+                                              child: Text(
+                                                tr.erpSyncDate != null 
+                                                    ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!) 
+                                                    : 'BELUM ERP',
+                                                style: TextStyle(
+                                                  color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1454,6 +1462,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       // Actions Buttons
                                       DataCell(
                                         Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             IconButton(
                                               icon: const Icon(Icons.list_alt_rounded, color: Colors.amberAccent, size: 20),
