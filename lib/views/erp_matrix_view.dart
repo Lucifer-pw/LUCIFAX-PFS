@@ -24,6 +24,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
   String _selectedMonthYear = "";
   Customer? _selectedCustomer;
+  String _searchQuery = "";
   bool _showPcs = true; // true = Pcs, false = Kg
   List<Map<String, dynamic>> _erpRecords = [];
   Map<String, double> _initialStocks = {};
@@ -603,6 +604,26 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     onPressed: () => setState(() => _selectedCustomer = null),
                     tooltip: 'Reset Filter Customer',
                   ),
+                const SizedBox(width: 20),
+
+                // Product Search
+                SizedBox(
+                  width: 180,
+                  child: TextField(
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Cari barang...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    ),
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                  ),
+                ),
                 const Spacer(),
 
                 // Toggle Pcs vs Kg
@@ -739,6 +760,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   }
 
   Widget _buildStockMatrixTab(List products, Map weeklyMap, dynamic stockProvider) {
+    final filteredProducts = products.where((p) {
+      if (_searchQuery.isEmpty) return true;
+      return p.name.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
@@ -755,7 +781,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                   child: DataTable(
                     headingRowHeight: 48,
                     dataRowMaxHeight: 52,
-                    columnSpacing: 20,
+                    columnSpacing: 12,
                     columns: const [
                       DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('TOTAL PENJUALAN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
@@ -770,8 +796,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                       DataColumn(label: Text('TOTAL BARANG MASUK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
                       DataColumn(label: Text('TOTAL STOCK AKHIR', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
                     ],
-                    rows: List.generate(products.length, (idx) {
-                      final prod = products[idx];
+                    rows: List.generate(filteredProducts.length, (idx) {
+                      final prod = filteredProducts[idx];
                       final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
                       final stats = _calculateProductStats(prod, wMap);
 

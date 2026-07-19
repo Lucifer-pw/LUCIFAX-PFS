@@ -487,11 +487,17 @@ class FirebaseService {
 
   // Get ERP summaries for a specific month
   Future<List<Map<String, dynamic>>> getErpSummaries(String monthYear) async {
-    final snap = await _db
-        .collection('erp_summary')
-        .where('monthYear', isEqualTo: monthYear)
-        .get();
-    return snap.docs.map((doc) => doc.data()).toList();
+    final snap = await _db.collection('erp_summary').get();
+    final List<Map<String, dynamic>> results = [];
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final docId = doc.id;
+      final docMonthYear = data['monthYear']?.toString() ?? '';
+      if (docMonthYear == monthYear || docId.startsWith('${monthYear}_')) {
+        results.add(data);
+      }
+    }
+    return results;
   }
 
   // Import transaction (with specific invoice number)
