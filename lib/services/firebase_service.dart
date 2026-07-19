@@ -243,9 +243,116 @@ class FirebaseService {
     });
   }
 
-  Future<void> updateTransactionErpStatus(int invoiceNo, DateTime? erpSyncDate) async {
-    await _db.collection('transactions').doc(invoiceNo.toString()).update({
-      'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate) : null,
+  // Helper to apply items to ERP summary in a transaction
+  void _addToErpSummary(
+    Transaction transaction,
+    DocumentReference<Map<String, dynamic>> erpRef,
+    DocumentSnapshot<Map<String, dynamic>>? erpSnap,
+    model_tr.Transaction tr,
+    String monthYear,
+  ) {
+    Map<String, dynamic> erpData = (erpSnap != null && erpSnap.exists)
+        ? Map<String, dynamic>.from(erpSnap.data()!)
+        : {
+            'monthYear': monthYear,
+            'customerId': tr.customerId,
+            'customerName': tr.aliasName,
+            'products': {},
+            'totalIncome': 0.0,
+          };
+
+    double currentIncome = (erpData['totalIncome'] ?? 0.0).toDouble();
+    erpData['totalIncome'] = currentIncome + tr.grandTotal;
+
+    Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
+    for (var item in tr.items) {
+      Map<String, dynamic> prodRecord = productsMap[item.productId] != null
+          ? Map<String, dynamic>.from(productsMap[item.productId])
+          : {'pcs': 0.0, 'kg': 0.0};
+      double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
+      double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
+      prodRecord['pcs'] = currentPcs + item.qty;
+      prodRecord['kg'] = currentKg + item.weightKg;
+      productsMap[item.productId] = prodRecord;
+    }
+    erpData['products'] = productsMap;
+    transaction.set(erpRef, erpData);
+  }
+
+  // Helper to remove items from ERP summary in a transaction
+  void _removeFromErpSummary(
+    Transaction transaction,
+    DocumentReference<Map<String, dynamic>> erpRef,
+    DocumentSnapshot<Map<String, dynamic>> erpSnap,
+    model_tr.Transaction tr,
+  ) {
+    if (!erpSnap.exists) return;
+    Map<String, dynamic> erpData = Map<String, dynamic>.from(erpSnap.data()!);
+    double income = (erpData['totalIncome'] ?? 0.0).toDouble();
+    erpData['totalIncome'] = (income - tr.grandTotal).clamp(0.0, double.infinity);
+
+    Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
+    for (var item in tr.items) {
+      if (productsMap.containsKey(item.productId)) {
+        Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
+        double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
+        double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
+        prodRecord['pcs'] = currentPcs - item.qty;
+        prodRecord['kg'] = currentKg - item.weightKg;
+        if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
+          productsMap.remove(item.productId);
+        } else {
+          productsMap[item.productId] = prodRecord;
+        }
+      }
+    }
+    erpData['products'] = productsMap;
+    transaction.set(erpRef, erpData);
+  }
+
+  Future<void> updateTransactionErpStatus(int invoiceNo, DateTime? newErpSyncDate) async {
+    final docRef = _db.collection('transactions').doc(invoiceNo.toString());
+
+    await _db.runTransaction((transaction) async {
+      final snap = await transaction.get(docRef);
+      if (!snap.exists) {
+        throw Exception("Transaksi tidak ditemukan!");
+      }
+      final oldTr = model_tr.Transaction.fromMap(snap.data()!, snap.id);
+      final oldSyncDate = oldTr.erpSyncDate;
+
+      final String? oldMonthYear = oldSyncDate != null ? DateFormat('MM-yyyy').format(oldSyncDate) : null;
+      final String? newMonthYear = newErpSyncDate != null ? DateFormat('MM-yyyy').format(newErpSyncDate) : null;
+
+      DocumentReference<Map<String, dynamic>>? oldErpRef;
+      DocumentSnapshot<Map<String, dynamic>>? oldErpSnap;
+      if (oldSyncDate != null && oldMonthYear != null) {
+        oldErpRef = _db.collection('erp_summary').doc("${oldMonthYear}_${oldTr.customerId}");
+        oldErpSnap = await transaction.get(oldErpRef);
+      }
+
+      DocumentReference<Map<String, dynamic>>? newErpRef;
+      DocumentSnapshot<Map<String, dynamic>>? newErpSnap;
+      if (newErpSyncDate != null && newMonthYear != null) {
+        newErpRef = _db.collection('erp_summary').doc("${newMonthYear}_${oldTr.customerId}");
+        if (oldErpRef != null && oldErpRef.path == newErpRef.path) {
+          newErpSnap = oldErpSnap;
+        } else {
+          newErpSnap = await transaction.get(newErpRef);
+        }
+      }
+
+      if (oldErpRef != null && oldErpSnap != null && (newErpRef == null || oldErpRef.path != newErpRef.path)) {
+        _removeFromErpSummary(transaction, oldErpRef, oldErpSnap, oldTr);
+      }
+
+      if (newErpRef != null && (oldErpRef == null || oldErpRef.path != newErpRef.path)) {
+        _addToErpSummary(transaction, newErpRef, newErpSnap, oldTr, newMonthYear!);
+      }
+
+      transaction.update(docRef, {
+        'erpSyncDate': newErpSyncDate != null ? Timestamp.fromDate(newErpSyncDate) : null,
+      });
     });
   }
 
@@ -265,7 +372,6 @@ class FirebaseService {
       }
       final oldTr = model_tr.Transaction.fromMap(snap.data()!, snap.id);
       final String oldStatus = oldTr.status;
-      final DateTime oldDeliveryDate = oldTr.deliveryDate;
 
       bool stockShouldDecrease = (oldStatus != 'DIKIRIM' && newStatus == 'DIKIRIM');
       bool stockShouldIncrease = (oldStatus == 'DIKIRIM' && newStatus != 'DIKIRIM');
@@ -295,23 +401,8 @@ class FirebaseService {
         }
       }
 
-      // Read old ERP snap
-      final oldMonthYear = DateFormat('MM-yyyy').format(oldDeliveryDate);
-      final oldErpRef = _db.collection('erp_summary').doc("${oldMonthYear}_${oldTr.customerId}");
-      final oldErpSnap = (stockShouldIncrease || (oldStatus == 'DIKIRIM' && newStatus == 'DIKIRIM' && oldDeliveryDate != newDeliveryDate))
-          ? await transaction.get(oldErpRef)
-          : null;
-
-      // Read new ERP snap
-      final newMonthYear = DateFormat('MM-yyyy').format(newDeliveryDate);
-      final newErpRef = _db.collection('erp_summary').doc("${newMonthYear}_${oldTr.customerId}");
-      final newErpSnap = (stockShouldDecrease || (oldStatus == 'DIKIRIM' && newStatus == 'DIKIRIM' && oldDeliveryDate != newDeliveryDate))
-          ? await transaction.get(newErpRef)
-          : null;
-
-      // 2. EXECUTE ALL WRITES (NO READS AFTER THIS LINE)
+      // 2. EXECUTE ALL WRITES (Physical Stock Deduction / Restoration)
       if (stockShouldDecrease) {
-        // Deduct product stocks
         for (var item in oldTr.items) {
           final vars = variantSnaps[item.productId];
           if (vars != null) {
@@ -329,36 +420,7 @@ class FirebaseService {
             }
           }
         }
-
-        // Apply to new ERP summary
-        Map<String, dynamic> erpData = (newErpSnap != null && newErpSnap.exists)
-            ? Map<String, dynamic>.from(newErpSnap.data()!)
-            : {
-                'monthYear': newMonthYear,
-                'customerId': oldTr.customerId,
-                'customerName': oldTr.aliasName,
-                'products': {},
-                'totalIncome': 0.0,
-              };
-
-        double currentIncome = (erpData['totalIncome'] ?? 0.0).toDouble();
-        erpData['totalIncome'] = currentIncome + oldTr.grandTotal;
-
-        Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
-        for (var item in oldTr.items) {
-          Map<String, dynamic> prodRecord = productsMap[item.productId] != null
-              ? Map<String, dynamic>.from(productsMap[item.productId])
-              : {'pcs': 0.0, 'kg': 0.0};
-          double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-          double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-          prodRecord['pcs'] = currentPcs + item.qty;
-          prodRecord['kg'] = currentKg + item.weightKg;
-          productsMap[item.productId] = prodRecord;
-        }
-        erpData['products'] = productsMap;
-        transaction.set(newErpRef, erpData);
       } else if (stockShouldIncrease) {
-        // Revert product stocks (add back)
         for (var item in oldTr.items) {
           final vars = variantSnaps[item.productId];
           if (vars != null) {
@@ -375,84 +437,6 @@ class FirebaseService {
               transaction.update(prodSnap.reference, {'stock': currentStock + item.qty});
             }
           }
-        }
-
-        // Revert from old ERP summary
-        if (oldErpSnap != null && oldErpSnap.exists) {
-          Map<String, dynamic> erpData = Map<String, dynamic>.from(oldErpSnap.data()!);
-          double income = (erpData['totalIncome'] ?? 0.0).toDouble();
-          erpData['totalIncome'] = income - oldTr.grandTotal;
-
-          Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
-          for (var item in oldTr.items) {
-            if (productsMap.containsKey(item.productId)) {
-              Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
-              double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-              double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-              prodRecord['pcs'] = currentPcs - item.qty;
-              prodRecord['kg'] = currentKg - item.weightKg;
-              if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
-                productsMap.remove(item.productId);
-              } else {
-                productsMap[item.productId] = prodRecord;
-              }
-            }
-          }
-          erpData['products'] = productsMap;
-          transaction.set(oldErpRef, erpData);
-        }
-      } else if (oldStatus == 'DIKIRIM' && newStatus == 'DIKIRIM' && oldDeliveryDate != newDeliveryDate) {
-        if (oldMonthYear != newMonthYear) {
-          if (oldErpSnap != null && oldErpSnap.exists) {
-            Map<String, dynamic> erpData = Map<String, dynamic>.from(oldErpSnap.data()!);
-            double income = (erpData['totalIncome'] ?? 0.0).toDouble();
-            erpData['totalIncome'] = income - oldTr.grandTotal;
-
-            Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
-            for (var item in oldTr.items) {
-              if (productsMap.containsKey(item.productId)) {
-                Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
-                double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-                double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-                prodRecord['pcs'] = currentPcs - item.qty;
-                prodRecord['kg'] = currentKg - item.weightKg;
-                if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
-                  productsMap.remove(item.productId);
-                } else {
-                  productsMap[item.productId] = prodRecord;
-                }
-              }
-            }
-            erpData['products'] = productsMap;
-            transaction.set(oldErpRef, erpData);
-          }
-
-          Map<String, dynamic> newErpData = (newErpSnap != null && newErpSnap.exists)
-              ? Map<String, dynamic>.from(newErpSnap.data()!)
-              : {
-                  'monthYear': newMonthYear,
-                  'customerId': oldTr.customerId,
-                  'customerName': oldTr.aliasName,
-                  'products': {},
-                  'totalIncome': 0.0,
-                };
-
-          double newIncome = (newErpData['totalIncome'] ?? 0.0).toDouble();
-          newErpData['totalIncome'] = newIncome + oldTr.grandTotal;
-
-          Map<String, dynamic> newProductsMap = Map<String, dynamic>.from(newErpData['products'] ?? {});
-          for (var item in oldTr.items) {
-            Map<String, dynamic> prodRecord = newProductsMap[item.productId] != null
-                ? Map<String, dynamic>.from(newProductsMap[item.productId])
-                : {'pcs': 0.0, 'kg': 0.0};
-            double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-            double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-            prodRecord['pcs'] = currentPcs + item.qty;
-            prodRecord['kg'] = currentKg + item.weightKg;
-            newProductsMap[item.productId] = prodRecord;
-          }
-          newErpData['products'] = newProductsMap;
-          transaction.set(newErpRef, newErpData);
         }
       }
 
@@ -581,18 +565,29 @@ class FirebaseService {
         }
       }
 
-      // Read old ERP snap if old status was DIKIRIM
-      final oldMonthYear = DateFormat('MM-yyyy').format(oldTr.deliveryDate);
-      final oldErpRef = _db.collection('erp_summary').doc("${oldMonthYear}_${oldTr.customerId}");
-      final oldErpSnap = oldWasDelivered ? await transaction.get(oldErpRef) : null;
+      // Read old ERP snap if erpSyncDate was set
+      final String? oldMonthYear = oldTr.erpSyncDate != null ? DateFormat('MM-yyyy').format(oldTr.erpSyncDate!) : null;
+      DocumentReference<Map<String, dynamic>>? oldErpRef;
+      DocumentSnapshot<Map<String, dynamic>>? oldErpSnap;
+      if (oldTr.erpSyncDate != null && oldMonthYear != null) {
+        oldErpRef = _db.collection('erp_summary').doc("${oldMonthYear}_${oldTr.customerId}");
+        oldErpSnap = await transaction.get(oldErpRef);
+      }
 
-      // Read new ERP snap if new status is DIKIRIM
-      final newMonthYear = DateFormat('MM-yyyy').format(updatedTr.deliveryDate);
-      final newErpRef = _db.collection('erp_summary').doc("${newMonthYear}_${updatedTr.customerId}");
-      final newErpSnap = newIsDelivered ? await transaction.get(newErpRef) : null;
+      // Read new ERP snap if updated erpSyncDate is set
+      final String? newMonthYear = updatedTr.erpSyncDate != null ? DateFormat('MM-yyyy').format(updatedTr.erpSyncDate!) : null;
+      DocumentReference<Map<String, dynamic>>? newErpRef;
+      DocumentSnapshot<Map<String, dynamic>>? newErpSnap;
+      if (updatedTr.erpSyncDate != null && newMonthYear != null) {
+        newErpRef = _db.collection('erp_summary').doc("${newMonthYear}_${updatedTr.customerId}");
+        if (oldErpRef != null && oldErpRef.path == newErpRef.path) {
+          newErpSnap = oldErpSnap;
+        } else {
+          newErpSnap = await transaction.get(newErpRef);
+        }
+      }
 
-      // 2. NOW PERFORM ALL WRITES (NO READS AFTER THIS LINE)
-      // Revert old stocks if old status was DIKIRIM
+      // 2. NOW PERFORM ALL WRITES
       if (oldWasDelivered) {
         for (var item in oldTr.items) {
           final vars = oldVariantSnaps[item.productId];
@@ -611,34 +606,12 @@ class FirebaseService {
             }
           }
         }
-
-        // Revert old ERP summary
-        if (oldErpSnap != null && oldErpSnap.exists) {
-          Map<String, dynamic> erpData = Map<String, dynamic>.from(oldErpSnap.data()!);
-          double income = (erpData['totalIncome'] ?? 0.0).toDouble();
-          erpData['totalIncome'] = income - oldTr.grandTotal;
-
-          Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
-          for (var item in oldTr.items) {
-            if (productsMap.containsKey(item.productId)) {
-              Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
-              double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-              double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-              prodRecord['pcs'] = currentPcs - item.qty;
-              prodRecord['kg'] = currentKg - item.weightKg;
-              if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
-                productsMap.remove(item.productId);
-              } else {
-                productsMap[item.productId] = prodRecord;
-              }
-            }
-          }
-          erpData['products'] = productsMap;
-          transaction.set(oldErpRef, erpData);
-        }
       }
 
-      // Apply new stocks if new status is DIKIRIM
+      if (oldErpRef != null && oldErpSnap != null && (newErpRef == null || oldErpRef.path != newErpRef.path)) {
+        _removeFromErpSummary(transaction, oldErpRef, oldErpSnap, oldTr);
+      }
+
       if (newIsDelivered) {
         for (var item in updatedTr.items) {
           final vars = newVariantSnaps[item.productId];
@@ -657,37 +630,10 @@ class FirebaseService {
             }
           }
         }
+      }
 
-        // Apply to new ERP summary
-        Map<String, dynamic> newErpData = (newErpSnap != null && newErpSnap.exists)
-            ? Map<String, dynamic>.from(newErpSnap.data()!)
-            : {
-                'monthYear': newMonthYear,
-                'customerId': updatedTr.customerId,
-                'customerName': updatedTr.aliasName,
-                'products': {},
-                'totalIncome': 0.0,
-              };
-
-        double newIncome = (newErpData['totalIncome'] ?? 0.0).toDouble();
-        newErpData['totalIncome'] = newIncome + updatedTr.grandTotal;
-
-        Map<String, dynamic> newProductsMap = Map<String, dynamic>.from(newErpData['products'] ?? {});
-        for (var item in updatedTr.items) {
-          Map<String, dynamic> prodRecord = newProductsMap[item.productId] != null
-              ? Map<String, dynamic>.from(newProductsMap[item.productId])
-              : {'pcs': 0.0, 'kg': 0.0};
-
-          double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-          double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-
-          prodRecord['pcs'] = currentPcs + item.qty;
-          prodRecord['kg'] = currentKg + item.weightKg;
-
-          newProductsMap[item.productId] = prodRecord;
-        }
-        newErpData['products'] = newProductsMap;
-        transaction.set(newErpRef, newErpData);
+      if (newErpRef != null && (oldErpRef == null || oldErpRef.path != newErpRef.path)) {
+        _addToErpSummary(transaction, newErpRef, newErpSnap, updatedTr, newMonthYear!);
       }
 
       // Write updated transaction doc
@@ -699,7 +645,7 @@ class FirebaseService {
     });
   }
 
-  // Delete transaction without reverting stock (as explicitly requested)
+  // Delete transaction
   Future<void> deleteTransaction(int invoiceNo) async {
     final docRef = _db.collection('transactions').doc(invoiceNo.toString());
 
@@ -710,37 +656,19 @@ class FirebaseService {
         throw Exception("Transaksi tidak ditemukan!");
       }
       final oldTr = model_tr.Transaction.fromMap(snap.data()!, snap.id);
-      final bool wasDelivered = (oldTr.status == 'DIKIRIM');
 
-      // Read ERP snap only if wasDelivered
-      final monthYear = DateFormat('MM-yyyy').format(oldTr.deliveryDate);
-      final erpRef = _db.collection('erp_summary').doc("${monthYear}_${oldTr.customerId}");
-      final erpSnap = wasDelivered ? await transaction.get(erpRef) : null;
+      // Read ERP snap if erpSyncDate was set
+      final String? monthYear = oldTr.erpSyncDate != null ? DateFormat('MM-yyyy').format(oldTr.erpSyncDate!) : null;
+      DocumentReference<Map<String, dynamic>>? erpRef;
+      DocumentSnapshot<Map<String, dynamic>>? erpSnap;
+      if (oldTr.erpSyncDate != null && monthYear != null) {
+        erpRef = _db.collection('erp_summary').doc("${monthYear}_${oldTr.customerId}");
+        erpSnap = await transaction.get(erpRef);
+      }
 
-      // 2. EXECUTE WRITES (NO STOCK REVERSION)
-      // Revert from ERP summary if it was delivered
-      if (wasDelivered && erpSnap != null && erpSnap.exists) {
-        Map<String, dynamic> erpData = Map<String, dynamic>.from(erpSnap.data()!);
-        double income = (erpData['totalIncome'] ?? 0.0).toDouble();
-        erpData['totalIncome'] = income - oldTr.grandTotal;
-
-        Map<String, dynamic> productsMap = Map<String, dynamic>.from(erpData['products'] ?? {});
-        for (var item in oldTr.items) {
-          if (productsMap.containsKey(item.productId)) {
-            Map<String, dynamic> prodRecord = Map<String, dynamic>.from(productsMap[item.productId]);
-            double currentPcs = (prodRecord['pcs'] ?? 0.0).toDouble();
-            double currentKg = (prodRecord['kg'] ?? 0.0).toDouble();
-            prodRecord['pcs'] = currentPcs - item.qty;
-            prodRecord['kg'] = currentKg - item.weightKg;
-            if (prodRecord['pcs'] <= 0 && prodRecord['kg'] <= 0) {
-              productsMap.remove(item.productId);
-            } else {
-              productsMap[item.productId] = prodRecord;
-            }
-          }
-        }
-        erpData['products'] = productsMap;
-        transaction.set(erpRef, erpData);
+      // 2. EXECUTE WRITES
+      if (erpRef != null && erpSnap != null && erpSnap.exists) {
+        _removeFromErpSummary(transaction, erpRef, erpSnap, oldTr);
       }
 
       // Delete the transaction document
