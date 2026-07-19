@@ -114,11 +114,28 @@ class ImportService {
     }
   }
 
-  // Find column index by header name (case-insensitive, partial match)
-  int _findColumn(Sheet sheet, List<String> possibleNames) {
-    if (sheet.maxRows == 0) return -1;
+  // Find header row by searching the first 20 rows
+  int _findHeaderRow(Sheet sheet, List<String> possibleNames) {
+    if (sheet.maxRows == 0) return 0;
+    int searchLimit = sheet.maxRows < 20 ? sheet.maxRows : 20;
+    for (int r = 0; r < searchLimit; r++) {
+      for (int c = 0; c < sheet.maxColumns; c++) {
+        final val = _cellStr(sheet, r, c).toUpperCase();
+        for (final name in possibleNames) {
+          if (val.contains(name.toUpperCase())) {
+            return r;
+          }
+        }
+      }
+    }
+    return 0;
+  }
+
+  // Find column index by header name in specific header row
+  int _findColumnInRow(Sheet sheet, int headerRow, List<String> possibleNames) {
+    if (sheet.maxRows <= headerRow) return -1;
     for (int col = 0; col < sheet.maxColumns; col++) {
-      final headerVal = _cellStr(sheet, 0, col).toUpperCase();
+      final headerVal = _cellStr(sheet, headerRow, col).toUpperCase();
       for (final name in possibleNames) {
         if (headerVal.contains(name.toUpperCase())) {
           return col;
@@ -126,6 +143,12 @@ class ImportService {
       }
     }
     return -1;
+  }
+
+  // Find column index by header name (legacy wrapper searching row 0 or dynamic)
+  int _findColumn(Sheet sheet, List<String> possibleNames) {
+    final headerRow = _findHeaderRow(sheet, possibleNames);
+    return _findColumnInRow(sheet, headerRow, possibleNames);
   }
 
   // ============================================
@@ -136,12 +159,14 @@ class ImportService {
     final excel = _decodeExcelSafely(bytes);
     final sheet = excel.tables[excel.tables.keys.first]!;
 
+    final headerRow = _findHeaderRow(sheet, ['KODE_INDUK', 'KODE INDUK', 'KODE', 'ID', 'NAMA_BARANG', 'NAMA BARANG', 'PRODUK']);
+
     // Find columns
-    final colKode = _findColumn(sheet, ['KODE_INDUK', 'KODE INDUK', 'KODE', 'ID']);
-    final colNama = _findColumn(sheet, ['NAMA_BARANG', 'NAMA BARANG', 'NAMA', 'PRODUK']);
-    final colHarga = _findColumn(sheet, ['HARGA', 'PRICE']);
-    final colStok = _findColumn(sheet, ['STOK', 'STOCK', 'QTY']);
-    final colIsi = _findColumn(sheet, ['ISI/KARTON', 'ISI KARTON', 'ISI', 'KARTON', 'PCS/CTN']);
+    final colKode = _findColumnInRow(sheet, headerRow, ['KODE_INDUK', 'KODE INDUK', 'KODE', 'ID']);
+    final colNama = _findColumnInRow(sheet, headerRow, ['NAMA_BARANG', 'NAMA BARANG', 'NAMA', 'PRODUK']);
+    final colHarga = _findColumnInRow(sheet, headerRow, ['HARGA', 'PRICE']);
+    final colStok = _findColumnInRow(sheet, headerRow, ['STOK', 'STOCK', 'QTY']);
+    final colIsi = _findColumnInRow(sheet, headerRow, ['ISI/KARTON', 'ISI KARTON', 'ISI', 'KARTON', 'PCS/CTN']);
 
     if (colKode == -1 || colNama == -1) {
       return ImportResult(
@@ -155,9 +180,9 @@ class ImportService {
     int success = 0;
     int errors = 0;
     List<String> errorList = [];
-    final totalRows = sheet.maxRows - 1; // Exclude header
+    final totalRows = sheet.maxRows - headerRow - 1;
 
-    for (int row = 1; row < sheet.maxRows; row++) {
+    for (int row = headerRow + 1; row < sheet.maxRows; row++) {
       try {
         final id = _cellStr(sheet, row, colKode);
         final name = _cellStr(sheet, row, colNama);
@@ -198,15 +223,17 @@ class ImportService {
     final excel = _decodeExcelSafely(bytes);
     final sheet = excel.tables[excel.tables.keys.first]!;
 
+    final headerRow = _findHeaderRow(sheet, ['ID CUST', 'ID_CUST', 'ID CUSTOMER', 'IDCUST', 'ID PELANGGAN', 'NAMA PELANGGAN', 'PELANGGAN', 'CUSTOMER']);
+
     // Find columns
-    final colIdCust = _findColumn(sheet, ['ID CUST', 'ID_CUST', 'ID CUSTOMER', 'IDCUST', 'ID PELANGGAN']);
-    final colCustomer = _findColumn(sheet, ['CUSTOMER']);
-    final colNamaPelanggan = _findColumn(sheet, ['NAMA PELANGGAN', 'NAMA_PELANGGAN', 'PELANGGAN']);
-    final colAlamat = _findColumn(sheet, ['ALAMAT', 'CITY', 'KOTA']);
-    final colProvinsi = _findColumn(sheet, ['PROVINSI', 'PROVINCE']);
-    final colNegara = _findColumn(sheet, ['NEGARA', 'COUNTRY']);
-    final colPhone = _findColumn(sheet, ['PHONE', 'TELP', 'HP', 'NO HP']);
-    final colKtp = _findColumn(sheet, ['NO KTP', 'KTP', 'NIK']);
+    final colIdCust = _findColumnInRow(sheet, headerRow, ['ID CUST', 'ID_CUST', 'ID CUSTOMER', 'IDCUST', 'ID PELANGGAN']);
+    final colCustomer = _findColumnInRow(sheet, headerRow, ['CUSTOMER']);
+    final colNamaPelanggan = _findColumnInRow(sheet, headerRow, ['NAMA PELANGGAN', 'NAMA_PELANGGAN', 'PELANGGAN']);
+    final colAlamat = _findColumnInRow(sheet, headerRow, ['ALAMAT', 'CITY', 'KOTA']);
+    final colProvinsi = _findColumnInRow(sheet, headerRow, ['PROVINSI', 'PROVINCE']);
+    final colNegara = _findColumnInRow(sheet, headerRow, ['NEGARA', 'COUNTRY']);
+    final colPhone = _findColumnInRow(sheet, headerRow, ['PHONE', 'TELP', 'HP', 'NO HP']);
+    final colKtp = _findColumnInRow(sheet, headerRow, ['NO KTP', 'KTP', 'NIK']);
 
     if (colIdCust == -1 && colNamaPelanggan == -1 && colCustomer == -1) {
       return ImportResult(
@@ -220,9 +247,9 @@ class ImportService {
     int success = 0;
     int errors = 0;
     List<String> errorList = [];
-    final totalRows = sheet.maxRows - 1;
+    final totalRows = sheet.maxRows - headerRow - 1;
 
-    for (int row = 1; row < sheet.maxRows; row++) {
+    for (int row = headerRow + 1; row < sheet.maxRows; row++) {
       try {
         final idCust = colIdCust != -1 ? _cellStr(sheet, row, colIdCust) : '';
         final customerName = colCustomer != -1 ? _cellStr(sheet, row, colCustomer) : '';
@@ -261,21 +288,25 @@ class ImportService {
     final excel = _decodeExcelSafely(bytes);
     final sheet = excel.tables[excel.tables.keys.first]!;
 
-    final colInvoice = _findColumn(sheet, ['NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI']);
-    final colCustId = _findColumn(sheet, ['ID CUST', 'ID_CUST', 'CUSTOMER ID', 'ID PELANGGAN', 'ID_PELANGGAN']);
-    final colCustName = _findColumn(sheet, ['CUSTOMER', 'NAMA CUSTOMER']);
-    final colAlias = _findColumn(sheet, ['NAMA PELANGGAN', 'ALIAS', 'PELANGGAN']);
-    final colCity = _findColumn(sheet, ['KOTA', 'CITY']);
-    final colProvince = _findColumn(sheet, ['PROVINSI', 'PROVINCE']);
-    final colProduct = _findColumn(sheet, ['NAMA BARANG', 'PRODUK', 'PRODUCT', 'BARANG']);
-    final colProductId = _findColumn(sheet, ['KODE_INDUK', 'KODE INDUK', 'KODE BARANG']);
-    final colQty = _findColumn(sheet, ['QTY', 'JUMLAH']);
-    final colHarga = _findColumn(sheet, ['HARGA', 'PRICE']);
-    final colDiscount = _findColumn(sheet, ['DISKON', 'DISCOUNT', 'DISC', '%']);
-    final colSubtotal = _findColumn(sheet, ['SUBTOTAL', 'SUB TOTAL', 'TOTAL']);
-    final colTotal = _findColumn(sheet, ['GRAND TOTAL', 'TOTAL']);
-    final colDate = _findColumn(sheet, ['TANGGAL', 'DATE', 'TGL KIRIM', 'TANGGAL KIRIM']);
-    final colNote = _findColumn(sheet, ['CATATAN', 'NOTE', 'KETERANGAN']);
+    final headerRow = _findHeaderRow(sheet, [
+      'NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI', 'PELANGGAN'
+    ]);
+
+    final colInvoice = _findColumnInRow(sheet, headerRow, ['NO INVOICE', 'INVOICE', 'NO_INVOICE', 'NOINVOICE', 'NO TRANSAKSI', 'NO_TRANSAKSI', 'NO. TRANSAKSI']);
+    final colCustId = _findColumnInRow(sheet, headerRow, ['ID CUST', 'ID_CUST', 'CUSTOMER ID', 'ID PELANGGAN', 'ID_PELANGGAN']);
+    final colCustName = _findColumnInRow(sheet, headerRow, ['CUSTOMER', 'NAMA CUSTOMER']);
+    final colAlias = _findColumnInRow(sheet, headerRow, ['NAMA PELANGGAN', 'ALIAS', 'PELANGGAN']);
+    final colCity = _findColumnInRow(sheet, headerRow, ['KOTA', 'CITY']);
+    final colProvince = _findColumnInRow(sheet, headerRow, ['PROVINSI', 'PROVINCE']);
+    final colProduct = _findColumnInRow(sheet, headerRow, ['NAMA BARANG', 'PRODUK', 'PRODUCT', 'BARANG']);
+    final colProductId = _findColumnInRow(sheet, headerRow, ['KODE_INDUK', 'KODE INDUK', 'KODE BARANG']);
+    final colQty = _findColumnInRow(sheet, headerRow, ['QTY', 'JUMLAH']);
+    final colHarga = _findColumnInRow(sheet, headerRow, ['HARGA', 'PRICE']);
+    final colDiscount = _findColumnInRow(sheet, headerRow, ['DISKON', 'DISCOUNT', 'DISC', '%']);
+    final colSubtotal = _findColumnInRow(sheet, headerRow, ['SUBTOTAL', 'SUB TOTAL', 'TOTAL']);
+    final colTotal = _findColumnInRow(sheet, headerRow, ['GRAND TOTAL', 'TOTAL']);
+    final colDate = _findColumnInRow(sheet, headerRow, ['TANGGAL', 'DATE', 'TGL KIRIM', 'TANGGAL KIRIM']);
+    final colNote = _findColumnInRow(sheet, headerRow, ['CATATAN', 'NOTE', 'KETERANGAN']);
 
     if (colInvoice == -1) {
       return ImportResult(
@@ -287,11 +318,11 @@ class ImportService {
     int success = 0;
     int errors = 0;
     List<String> errorList = [];
-    final totalRows = sheet.maxRows - 1;
+    final totalRows = sheet.maxRows - headerRow - 1;
 
     // Group rows by invoice number (one invoice may have multiple item rows)
     Map<String, List<int>> invoiceRows = {};
-    for (int row = 1; row < sheet.maxRows; row++) {
+    for (int row = headerRow + 1; row < sheet.maxRows; row++) {
       final invNo = _cellStr(sheet, row, colInvoice);
       if (invNo.isEmpty) continue;
       invoiceRows.putIfAbsent(invNo, () => []).add(row);
@@ -354,18 +385,21 @@ class ImportService {
         if (colDate != -1) {
           final dateStr = _cellStr(sheet, firstRow, colDate);
           if (dateStr.isNotEmpty) {
-            // Try multiple date formats
             try {
-              deliveryDate = DateTime.parse(dateStr);
+              final numDate = double.tryParse(dateStr);
+              if (numDate != null && numDate > 30000 && numDate < 60000) {
+                deliveryDate = DateTime(1899, 12, 30).add(Duration(days: numDate.toInt()));
+              } else {
+                deliveryDate = DateTime.parse(dateStr);
+              }
             } catch (_) {
               // Try dd-MM-yyyy or dd/MM/yyyy
               final parts = dateStr.split(RegExp(r'[-/]'));
               if (parts.length == 3) {
-                deliveryDate = DateTime(
-                  int.tryParse(parts[2]) ?? DateTime.now().year,
-                  int.tryParse(parts[1]) ?? 1,
-                  int.tryParse(parts[0]) ?? 1,
-                );
+                final day = int.tryParse(parts[0]) ?? 1;
+                final month = int.tryParse(parts[1]) ?? 1;
+                final year = int.tryParse(parts[2]) ?? DateTime.now().year;
+                deliveryDate = DateTime(year < 100 ? 2000 + year : year, month, day);
               }
             }
           }
