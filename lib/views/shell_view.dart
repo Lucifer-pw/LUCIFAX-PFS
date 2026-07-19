@@ -24,7 +24,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '1.6.1';
+  String _appVersion = '1.6.2';
 
   @override
   void initState() {
@@ -42,13 +42,13 @@ class _ShellViewState extends State<ShellView> {
         });
       } else if (mounted) {
         setState(() {
-          _appVersion = '1.6.1';
+          _appVersion = '1.6.2';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '1.6.1';
+          _appVersion = '1.6.2';
         });
       }
     }
