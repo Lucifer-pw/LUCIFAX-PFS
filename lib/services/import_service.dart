@@ -114,6 +114,33 @@ class ImportService {
     }
   }
 
+  // Helper to parse date cell with multiple formats (Excel serial, ISO, dd-MM-yyyy HH:mm)
+  DateTime? _parseDateCell(Sheet sheet, int row, int col) {
+    if (col == -1) return null;
+    final dateStr = _cellStr(sheet, row, col).trim();
+    if (dateStr.isEmpty || dateStr == '-') return null;
+
+    try {
+      final numDate = double.tryParse(dateStr);
+      if (numDate != null && numDate > 30000 && numDate < 60000) {
+        return DateTime(1899, 12, 30).add(Duration(days: numDate.toInt()));
+      }
+      return DateTime.parse(dateStr);
+    } catch (_) {
+      final parts = dateStr.split(RegExp(r'[\s-/:]+'));
+      if (parts.length >= 3) {
+        final day = int.tryParse(parts[0]) ?? 1;
+        final month = int.tryParse(parts[1]) ?? 1;
+        final year = int.tryParse(parts[2]) ?? DateTime.now().year;
+        final fullYear = year < 100 ? 2000 + year : year;
+        final hour = parts.length > 3 ? (int.tryParse(parts[3]) ?? 0) : 0;
+        final minute = parts.length > 4 ? (int.tryParse(parts[4]) ?? 0) : 0;
+        return DateTime(fullYear, month, day, hour, minute);
+      }
+    }
+    return null;
+  }
+
   // Find sheet tab containing specific header keywords across multi-sheet workbooks
   Sheet? _findSheetWithHeaders(Excel excel, List<String> requiredHeaders) {
     for (var tableName in excel.tables.keys) {
