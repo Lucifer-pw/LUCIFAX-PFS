@@ -494,8 +494,8 @@ class FirebaseService {
 
     for (var doc in trSnap.docs) {
       final trData = doc.data();
-      final Timestamp? erpTs = (trData['erpSyncDate'] ?? trData['date'] ?? trData['deliveryDate']) as Timestamp?;
-      if (erpTs == null) continue;
+      final Timestamp? erpTs = trData['erpSyncDate'] as Timestamp?;
+      if (erpTs == null) continue; // EXCLUDE any transaction where status is BELUM ERP!
 
       final erpDate = erpTs.toDate();
       final trMonthYear = DateFormat('MM-yyyy').format(erpDate);

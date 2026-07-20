@@ -962,17 +962,111 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     // Sort records by customerName
     filteredRecords.sort((a, b) => (a['customerName'] ?? '').toString().compareTo((b['customerName'] ?? '').toString()));
 
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Scrollbar(
-        child: ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: filteredRecords.length,
-          itemBuilder: (context, index) {
+    // Calculate Summary stats for Detail Invoice ERP tab
+    double grandTotalIncome = 0.0;
+    double grandTotalWeightKg = 0.0;
+
+    for (var record in filteredRecords) {
+      grandTotalIncome += (record['totalIncome'] ?? 0.0).toDouble();
+      final invoices = List<dynamic>.from(record['invoices'] ?? []);
+      for (var inv in invoices) {
+        final items = List<dynamic>.from(inv['items'] ?? []);
+        for (var item in items) {
+          final itemMap = Map<String, dynamic>.from(item as Map);
+          grandTotalWeightKg += (itemMap['weightKg'] ?? 0.0).toDouble();
+        }
+      }
+    }
+
+    return Column(
+      children: [
+        // Summary Cards for Total Income & Total Weight (Kg)
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: 26),
+                    ),
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Income ERP', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Text(
+                          currencyFormatter.format(grandTotalIncome),
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.scale_rounded, color: Color(0xFF38BDF8), size: 26),
+                    ),
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Berat ERP (Kg)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${grandTotalWeightKg.toStringAsFixed(2)} Kg',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.05)),
+            ),
+            child: Scrollbar(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: filteredRecords.length,
+                itemBuilder: (context, index) {
             final record = filteredRecords[index];
             final customerName = record['customerName'] ?? 'Unknown';
             final totalIncome = (record['totalIncome'] ?? 0.0).toDouble();
