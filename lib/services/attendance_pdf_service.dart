@@ -85,7 +85,7 @@ class AttendancePdfService {
 
               // Signature / Footer
               pw.Row(
-                main: pw.MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text('Lucifax PFS - Jawa Tengah', style: pw.TextStyle(font: fontRegular, fontSize: 9, color: PdfColors.grey700)),
                   pw.Text('Tanggal Cetak: ${DateTime.now().day}-${DateTime.now().month}-${DateTime.now().year}', style: pw.TextStyle(font: fontRegular, fontSize: 9, color: PdfColors.grey700)),
