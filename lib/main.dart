@@ -9,6 +9,7 @@ import 'providers/transaction_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/receivable_provider.dart';
 import 'providers/stock_provider.dart';
+import 'providers/attendance_provider.dart';
 import 'views/login_view.dart';
 import 'views/shell_view.dart';
 
@@ -34,6 +35,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => UpdateProvider()),
           ChangeNotifierProvider(create: (_) => ReceivableProvider()),
           ChangeNotifierProvider(create: (_) => StockProvider()),
+          ChangeNotifierProvider(create: (_) => AttendanceProvider()),
         ],
         child: const CashierApp(),
       ),

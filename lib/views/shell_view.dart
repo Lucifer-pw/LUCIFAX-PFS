@@ -14,6 +14,7 @@ import 'transaction_history_view.dart';
 import 'receivable_list_view.dart';
 import 'ranking_kacab_view.dart';
 import 'stock_input_view.dart';
+import 'attendance_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -128,6 +129,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Ranking Kacab',
         'icon': Icons.leaderboard_outlined,
         'widget': const RankingKacabView(),
+      },
+      {
+        'title': 'Absensi Pegawai',
+        'icon': Icons.assignment_ind_rounded,
+        'widget': const AttendanceView(),
       },
       {
         'title': 'Analitik & Klasifikasi',
@@ -316,7 +322,7 @@ class _ShellViewState extends State<ShellView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Lucifax PFS v1.7.9',
+                    'Lucifax PFS v1.8.0',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.0),
                   ),
                   Text(

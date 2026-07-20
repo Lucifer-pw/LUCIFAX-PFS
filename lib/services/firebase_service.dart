@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../models/customer.dart';
+import '../models/staff.dart';
+import '../models/attendance_record.dart';
 import '../models/transaction.dart' as model_tr;
 import 'package:intl/intl.dart';
 
@@ -823,5 +825,48 @@ class FirebaseService {
       // Delete the transaction document
       transaction.delete(docRef);
     });
+  }
+
+  // ==========================================
+  // STAFF & ATTENDANCE MANAGEMENT
+  // ==========================================
+
+  Stream<List<Staff>> streamStaff() {
+    return _db.collection('staff').snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Staff.fromMap(doc.data(), doc.id))
+          .toList();
+    });
+  }
+
+  Future<void> saveStaff(Staff staff) async {
+    final docRef = staff.id.isNotEmpty
+        ? _db.collection('staff').doc(staff.id)
+        : _db.collection('staff').doc();
+    await docRef.set(staff.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteStaff(String staffId) async {
+    await _db.collection('staff').doc(staffId).delete();
+  }
+
+  Stream<List<AttendanceRecord>> streamAttendanceByMonthYear(String monthYear) {
+    return _db
+        .collection('attendance')
+        .where('monthYear', isEqualTo: monthYear)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => AttendanceRecord.fromMap(doc.data(), doc.id))
+          .toList();
+    });
+  }
+
+  Future<void> saveAttendanceRecord(AttendanceRecord record) async {
+    await _db.collection('attendance').doc(record.id).set(record.toMap());
+  }
+
+  Future<void> deleteAttendanceRecord(String id) async {
+    await _db.collection('attendance').doc(id).delete();
   }
 }
