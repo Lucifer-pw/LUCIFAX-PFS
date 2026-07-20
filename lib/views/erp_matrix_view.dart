@@ -1182,6 +1182,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     ],
 
                     // Invoice list
+                    ...invoices.map((inv) {
+                      final invNo = inv['invoiceNo'] ?? 0;
                       final invItems = List<dynamic>.from(inv['items'] ?? []);
                       final calculatedInvTotal = invItems.fold(0.0, (sum, it) {
                         final itemMap = Map<String, dynamic>.from(it as Map);

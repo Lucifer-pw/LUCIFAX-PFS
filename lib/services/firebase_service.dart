@@ -520,6 +520,7 @@ class FirebaseService {
         };
       }
 
+      final cRecord = customerErpMap[customerId]!;
       final productsMap = cRecord['products'] as Map<String, Map<String, double>>;
       final invoicesList = cRecord['invoices'] as List<Map<String, dynamic>>;
 

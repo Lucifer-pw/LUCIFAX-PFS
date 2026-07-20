@@ -91,7 +91,14 @@ class Transaction {
     required this.createdAt,
   });
 
-  factory Transaction.fromMap(Map<String, dynamic> map, String docId) {
+    final itemsList = (map['items'] as List<dynamic>?)
+            ?.map((item) => TransactionItem.fromMap(item as Map<String, dynamic>))
+            .toList() ??
+        [];
+
+    final calculatedTotal = itemsList.fold(0.0, (sum, item) => sum + (item.isBonus ? 0.0 : item.subtotal)).roundToDouble();
+    final finalGrandTotal = calculatedTotal > 0 ? calculatedTotal : ((map['grandTotal'] ?? 0.0) as num).toDouble().roundToDouble();
+
     return Transaction(
       invoiceNo: int.tryParse(docId) ?? 0,
       customerId: map['customerId'] ?? '',
@@ -102,11 +109,8 @@ class Transaction {
       city: map['city'] ?? '',
       province: map['province'] ?? '',
       country: map['country'] ?? 'INDONESIA',
-      items: (map['items'] as List<dynamic>?)
-              ?.map((item) => TransactionItem.fromMap(item as Map<String, dynamic>))
-              .toList() ??
-          [],
-      grandTotal: (map['grandTotal'] ?? 0.0).toDouble(),
+      items: itemsList,
+      grandTotal: finalGrandTotal,
       note: map['note'] ?? '',
       status: map['status'] ?? 'PENDING',
       statusTransfer: map['statusTransfer'] ?? 'UNPAID',
