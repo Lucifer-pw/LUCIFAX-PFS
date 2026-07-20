@@ -113,7 +113,45 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // Import CSV / Excel File Importer
+  // Auto-detect Month and Year from filename or text content
+  String detectMonthYear(String fileName, String fileContent) {
+    final combined = '${fileName.toLowerCase()} ${fileContent.toLowerCase()}';
+
+    int detectedMonth = 0;
+    if (combined.contains('januari') || combined.contains('_jan')) detectedMonth = 1;
+    else if (combined.contains('februari') || combined.contains('_feb')) detectedMonth = 2;
+    else if (combined.contains('maret') || combined.contains('_mar')) detectedMonth = 3;
+    else if (combined.contains('april') || combined.contains('_apr')) detectedMonth = 4;
+    else if (combined.contains('mei') || combined.contains('_may')) detectedMonth = 5;
+    else if (combined.contains('juni') || combined.contains('_jun')) detectedMonth = 6;
+    else if (combined.contains('juli') || combined.contains('_jul')) detectedMonth = 7;
+    else if (combined.contains('agustus') || combined.contains('_agus') || combined.contains('_aug')) detectedMonth = 8;
+    else if (combined.contains('september') || combined.contains('_sep')) detectedMonth = 9;
+    else if (combined.contains('oktober') || combined.contains('_okt') || combined.contains('_oct')) detectedMonth = 10;
+    else if (combined.contains('november') || combined.contains('_nov')) detectedMonth = 11;
+    else if (combined.contains('desember') || combined.contains('_des') || combined.contains('_dec')) detectedMonth = 12;
+
+    int detectedYear = 0;
+    final yearMatch = RegExp(r'\b(202[0-9])\b').firstMatch(combined);
+    if (yearMatch != null) {
+      detectedYear = int.tryParse(yearMatch.group(1)!) ?? 0;
+    }
+
+    if (detectedMonth == 0 && detectedYear == 0) {
+      return _selectedMonthYear;
+    }
+
+    final currentParts = _selectedMonthYear.split('-');
+    final currentMonth = currentParts.length == 2 ? (int.tryParse(currentParts[0]) ?? DateTime.now().month) : DateTime.now().month;
+    final currentYear = currentParts.length == 2 ? (int.tryParse(currentParts[1]) ?? DateTime.now().year) : DateTime.now().year;
+
+    final m = detectedMonth > 0 ? detectedMonth : currentMonth;
+    final y = detectedYear > 0 ? detectedYear : currentYear;
+
+    return '${m.toString().padLeft(2, '0')}-$y';
+  }
+
+  // Import CSV / Excel File Importer with Auto-detection
   Future<int> importAttendanceFromFile(List<int> bytes, String fileName) async {
     _isLoading = true;
     notifyListeners();
@@ -121,9 +159,9 @@ class AttendanceProvider extends ChangeNotifier {
     int importedCount = 0;
     try {
       if (fileName.endsWith('.csv')) {
-        importedCount = await _importCsv(bytes);
+        importedCount = await _importCsv(bytes, fileName);
       } else {
-        importedCount = await _importExcel(bytes);
+        importedCount = await _importExcel(bytes, fileName);
       }
     } catch (e) {
       rethrow;
@@ -134,13 +172,14 @@ class AttendanceProvider extends ChangeNotifier {
     return importedCount;
   }
 
-  Future<int> _importCsv(List<int> bytes) async {
+  Future<int> _importCsv(List<int> bytes, String fileName) async {
     final content = String.fromCharCodes(bytes);
     final lines = content.split(RegExp(r'\r\n|\n|\r'));
     if (lines.isEmpty) return 0;
 
+    final targetMonthYear = detectMonthYear(fileName, content);
+
     int count = 0;
-    // Find header index
     int headerIndex = -1;
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].toLowerCase();
@@ -170,19 +209,26 @@ class AttendanceProvider extends ChangeNotifier {
       final estimasi = cols.length > 6 ? (_parseDouble(cols[6])) : 0.0;
       final totalHk = cols.length > 7 ? (_parseDouble(cols[7])) : (hk + estimasi);
 
-      await _processImportedRow(name, location, hk, off, sakit, ijin, estimasi, totalHk);
+      await _processImportedRow(name, location, hk, off, sakit, ijin, estimasi, totalHk, targetMonthYear);
       count++;
     }
+
+    // Switch view to imported monthYear
+    setMonthYear(targetMonthYear);
     return count;
   }
 
-  Future<int> _importExcel(List<int> bytes) async {
+  Future<int> _importExcel(List<int> bytes, String fileName) async {
     final excel = Excel.decodeBytes(bytes);
     int count = 0;
+    String targetMonthYear = _selectedMonthYear;
 
     for (var table in excel.tables.keys) {
       final sheet = excel.tables[table];
       if (sheet == null) continue;
+
+      final fullText = sheet.rows.map((r) => r.map((c) => c?.value?.toString() ?? '').join(' ')).join('\n');
+      targetMonthYear = detectMonthYear(fileName, fullText);
 
       int headerRowIndex = -1;
       for (int i = 0; i < sheet.maxRows; i++) {
@@ -211,10 +257,12 @@ class AttendanceProvider extends ChangeNotifier {
         final estimasi = row.length > 6 ? _parseExcelVal(row[6]?.value) : 0.0;
         final totalHk = row.length > 7 ? _parseExcelVal(row[7]?.value) : (hk + estimasi);
 
-        await _processImportedRow(name, location, hk, off, sakit, ijin, estimasi, totalHk);
+        await _processImportedRow(name, location, hk, off, sakit, ijin, estimasi, totalHk, targetMonthYear);
         count++;
       }
     }
+
+    setMonthYear(targetMonthYear);
     return count;
   }
 
@@ -227,6 +275,7 @@ class AttendanceProvider extends ChangeNotifier {
     double ijin,
     double estimasi,
     double totalHk,
+    String targetMonthYear,
   ) async {
     // Find or create Staff
     Staff? staff = _staffList.firstWhere(
@@ -246,10 +295,10 @@ class AttendanceProvider extends ChangeNotifier {
       await _firebaseService.saveStaff(staff);
     }
 
-    final recordId = '${_selectedMonthYear}_$staffId';
+    final recordId = '${targetMonthYear}_$staffId';
     final rec = AttendanceRecord(
       id: recordId,
-      monthYear: _selectedMonthYear,
+      monthYear: targetMonthYear,
       staffId: staffId,
       staffName: name,
       location: location,

@@ -716,20 +716,17 @@ class _AttendanceViewState extends State<AttendanceView> {
     );
   }
 
-  // Import CSV / Excel File Handler
+  // Import CSV / Excel File Handler (Supports Multi-File Import with Auto-Detected Month & Year)
   Future<void> _handleImportCsvExcel(BuildContext context, AttendanceProvider attProvider) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv', 'xlsx', 'xls'],
+        allowMultiple: true,
         withData: true,
       );
 
-      if (result == null) return;
-      final file = result.files.single;
-      final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
-
-      if (bytes == null) return;
+      if (result == null || result.files.isEmpty) return;
 
       if (!context.mounted) return;
       showDialog(
@@ -738,14 +735,25 @@ class _AttendanceViewState extends State<AttendanceView> {
         builder: (context) => const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
       );
 
-      final count = await attProvider.importAttendanceFromFile(bytes, file.name.toLowerCase());
+      int totalImportedRecords = 0;
+      int processedFiles = 0;
+
+      for (var file in result.files) {
+        final bytes = file.bytes ?? (file.path != null ? await File(file.path!).readAsBytes() : null);
+        if (bytes != null) {
+          final count = await attProvider.importAttendanceFromFile(bytes, file.name.toLowerCase());
+          totalImportedRecords += count;
+          processedFiles++;
+        }
+      }
 
       if (context.mounted) {
         Navigator.pop(context); // close spinner
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Berhasil mengimpor $count data absensi pegawai!'),
+            content: Text('Berhasil mengimpor $processedFiles file ($totalImportedRecords data absensi)! Bulan & Tahun terdeteksi otomatis.'),
             backgroundColor: Colors.teal,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
