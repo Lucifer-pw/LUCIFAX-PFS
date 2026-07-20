@@ -817,46 +817,80 @@ class _AttendanceViewState extends State<AttendanceView> {
             ],
           ),
           content: SizedBox(
-            width: 450,
+            width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Masukkan Nomor WhatsApp HRD (misal: Bu Lia):',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  'Nomor WhatsApp HRD (Tersimpan Otomatis):',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: phoneCtrl,
-                  style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    hintText: 'Contoh: 081234567890 / 6281234567890',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                    prefixIcon: const Icon(Icons.phone_android_rounded, color: Colors.greenAccent),
-                    filled: true,
-                    fillColor: const Color(0xFF0F172A),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: phoneCtrl,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          hintText: 'Contoh: 081234567890 / 6281234567890',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                          prefixIcon: const Icon(Icons.phone_android_rounded, color: Colors.greenAccent),
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                        onChanged: (val) {
+                          if (val.trim().isNotEmpty) {
+                            attProvider.setHrdPhone(val.trim());
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        if (phoneCtrl.text.trim().isNotEmpty) {
+                          attProvider.setHrdPhone(phoneCtrl.text.trim());
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Nomor WA HRD berhasil disimpan!'), backgroundColor: Colors.teal),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+                      label: const Text('Simpan', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
                   ),
-                  child: const Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline_rounded, color: Colors.greenAccent, size: 18),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Sistem akan otomatis mendownload PDF Rekap Absensi dan membuka WhatsApp dengan format pesan pengantar.',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                        ),
+                      const Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: Colors.greenAccent, size: 18),
+                          SizedBox(width: 8),
+                          Text('Petunjuk Pengiriman Lampiran PDF:', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '1. Klik "Buka WA & Kirim", file PDF Rekap Absensi akan otomatis di-download ke laptop/HP Anda.\n'
+                        '2. Setelah WhatsApp Web terbuka di chat Bu Lia, klik icon Lampiran (📎 Klip) dan pilih file PDF yang baru di-download tadi.',
+                        style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11, height: 1.4),
                       ),
                     ],
                   ),
@@ -886,7 +920,7 @@ class _AttendanceViewState extends State<AttendanceView> {
             ),
             ElevatedButton.icon(
               icon: const Icon(Icons.send_rounded, size: 16, color: Colors.white),
-              label: const Text('Buka WA & Kirim', style: TextStyle(color: Colors.white)),
+              label: const Text('Buka WA & Kirim', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
               onPressed: () async {
                 final inputPhone = phoneCtrl.text.trim();
@@ -894,7 +928,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                   attProvider.setHrdPhone(inputPhone);
                 }
 
-                // Download PDF
+                // Download PDF automatically
                 final pdfBytes = await AttendancePdfService.generateAttendancePdf(
                   monthYearName: titleMonthYearName,
                   records: records,
@@ -905,10 +939,11 @@ class _AttendanceViewState extends State<AttendanceView> {
                 );
 
                 // Open WhatsApp Link
+                final targetPhone = attProvider.hrdPhone.isNotEmpty ? attProvider.hrdPhone : inputPhone;
                 final message = Uri.encodeComponent(
                   "Permisi Bu Lia (HRD),\n\nBerikut Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai Tanggal $titleMonthYearName.\nFile PDF Rekap Absensi telah di-download & siap dilampirkan.\n\nTerima Kasih.\n(Lucifax PFS)",
                 );
-                final waUrl = Uri.parse("https://wa.me/${attProvider.hrdPhone}?text=$message");
+                final waUrl = Uri.parse("https://wa.me/$targetPhone?text=$message");
                 if (await canLaunchUrl(waUrl)) {
                   await launchUrl(waUrl, mode: LaunchMode.externalApplication);
                 }

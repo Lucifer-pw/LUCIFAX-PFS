@@ -869,4 +869,23 @@ class FirebaseService {
   Future<void> deleteAttendanceRecord(String id) async {
     await _db.collection('attendance').doc(id).delete();
   }
+
+  Future<String?> getHrdPhone() async {
+    try {
+      final doc = await _db.collection('settings').doc('attendance').get();
+      if (doc.exists && doc.data()?['hrdPhone'] != null) {
+        return doc.data()!['hrdPhone'] as String;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> saveHrdPhone(String phone) async {
+    try {
+      await _db.collection('settings').doc('attendance').set(
+        {'hrdPhone': phone},
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
+  }
 }

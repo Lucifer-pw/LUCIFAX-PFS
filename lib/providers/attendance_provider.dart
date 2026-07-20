@@ -12,7 +12,7 @@ class AttendanceProvider extends ChangeNotifier {
   List<AttendanceRecord> _attendanceList = [];
   bool _isLoading = false;
   String _selectedMonthYear = ''; // Format: MM-yyyy e.g. "05-2026"
-  String _hrdPhone = '6281234567890'; // Default HRD WA Number
+  String _hrdPhone = ''; // Saved HRD WA Number
 
   StreamSubscription? _staffSub;
   StreamSubscription? _attendanceSub;
@@ -28,6 +28,15 @@ class AttendanceProvider extends ChangeNotifier {
     final now = DateTime.now();
     _selectedMonthYear = '${now.month.toString().padLeft(2, '0')}-${now.year}';
     _initStreams();
+    _loadHrdPhone();
+  }
+
+  Future<void> _loadHrdPhone() async {
+    final saved = await _firebaseService.getHrdPhone();
+    if (saved != null && saved.isNotEmpty) {
+      _hrdPhone = saved;
+      notifyListeners();
+    }
   }
 
   void _initStreams() {
@@ -48,11 +57,13 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   void setHrdPhone(String phone) {
-    _hrdPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (!_hrdPhone.startsWith('62') && _hrdPhone.startsWith('0')) {
-      _hrdPhone = '62${_hrdPhone.substring(1)}';
+    String clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!clean.startsWith('62') && clean.startsWith('0')) {
+      clean = '62${clean.substring(1)}';
     }
+    _hrdPhone = clean;
     notifyListeners();
+    _firebaseService.saveHrdPhone(clean);
   }
 
   void _subscribeAttendance() {
