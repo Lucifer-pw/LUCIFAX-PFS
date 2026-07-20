@@ -549,7 +549,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 Row(
                   children: [
                     Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date))),
-                    Expanded(child: _buildDetailRow('Tgl Kirim:', tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
+                    Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
                   ],
                 ),
                 if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
@@ -1353,11 +1353,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                     Row(
                                                       mainAxisSize: MainAxisSize.min,
                                                       children: [
-                                                        const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 10),
+                                                        Icon(
+                                                          Icons.local_shipping_rounded,
+                                                          color: (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                                          size: 10,
+                                                        ),
                                                         const SizedBox(width: 4),
                                                         Text(
-                                                          'Kirim: ${tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}',
-                                                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                                                          'Kirim: ${(tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}',
+                                                          style: TextStyle(
+                                                            color: (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                                            fontSize: 9,
+                                                          ),
                                                         ),
                                                       ],
                                                     ),

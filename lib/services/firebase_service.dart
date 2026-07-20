@@ -212,7 +212,7 @@ class FirebaseService {
       customerName: customerName,
       aliasName: aliasName,
       date: now,
-      deliveryDate: deliveryDate,
+      deliveryDate: null,
       city: city,
       province: province,
       country: country,

@@ -100,20 +100,24 @@ class Transaction {
     final calculatedTotal = itemsList.fold(0.0, (sum, item) => sum + (item.isBonus ? 0.0 : item.subtotal)).roundToDouble();
     final finalGrandTotal = calculatedTotal > 0 ? calculatedTotal : ((map['grandTotal'] ?? 0.0) as num).toDouble().roundToDouble();
 
+    final status = map['status'] ?? 'PENDING';
+    final rawDeliveryDate = map['deliveryDate'] != null ? (map['deliveryDate'] as Timestamp).toDate() : null;
+    final deliveryDate = status == 'DIKIRIM' ? rawDeliveryDate : null;
+
     return Transaction(
       invoiceNo: int.tryParse(docId) ?? 0,
       customerId: map['customerId'] ?? '',
       customerName: map['customerName'] ?? '',
       aliasName: map['aliasName'] ?? '',
       date: (map['date'] as Timestamp).toDate(),
-      deliveryDate: map['deliveryDate'] != null ? (map['deliveryDate'] as Timestamp).toDate() : null,
+      deliveryDate: deliveryDate,
       city: map['city'] ?? '',
       province: map['province'] ?? '',
       country: map['country'] ?? 'INDONESIA',
       items: itemsList,
       grandTotal: finalGrandTotal,
       note: map['note'] ?? '',
-      status: map['status'] ?? 'PENDING',
+      status: status,
       statusTransfer: map['statusTransfer'] ?? 'UNPAID',
       transferDate: (map['transferDate'] as Timestamp?)?.toDate(),
       erpSyncDate: (map['erpSyncDate'] as Timestamp?)?.toDate(),
