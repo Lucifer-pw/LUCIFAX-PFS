@@ -520,12 +520,10 @@ class FirebaseService {
         };
       }
 
-      final cRecord = customerErpMap[customerId]!;
-      cRecord['totalIncome'] = (cRecord['totalIncome'] as double) + grandTotal;
-
       final productsMap = cRecord['products'] as Map<String, Map<String, double>>;
       final invoicesList = cRecord['invoices'] as List<Map<String, dynamic>>;
 
+      double calculatedGrandTotal = 0.0;
       final List<Map<String, dynamic>> formattedItems = [];
       for (var item in items) {
         final itemMap = Map<String, dynamic>.from(item as Map);
@@ -533,7 +531,7 @@ class FirebaseService {
         final productName = (itemMap['productName'] ?? '').toString();
         final qty = (itemMap['qty'] ?? 0.0).toDouble();
         final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
-        final subtotal = (itemMap['subtotal'] ?? 0.0).toDouble();
+        final subtotal = ((itemMap['subtotal'] ?? 0.0) as num).toDouble().roundToDouble();
         final isBonus = itemMap['isBonus'] == true;
 
         if (!productsMap.containsKey(productId)) {
@@ -541,6 +539,10 @@ class FirebaseService {
         }
         productsMap[productId]!['pcs'] = productsMap[productId]!['pcs']! + qty;
         productsMap[productId]!['kg'] = productsMap[productId]!['kg']! + weightKg;
+
+        if (!isBonus) {
+          calculatedGrandTotal += subtotal;
+        }
 
         formattedItems.add({
           'productId': productId,
@@ -552,9 +554,11 @@ class FirebaseService {
         });
       }
 
+      cRecord['totalIncome'] = (cRecord['totalIncome'] as double) + calculatedGrandTotal;
+
       invoicesList.add({
         'invoiceNo': invoiceNo,
-        'grandTotal': grandTotal,
+        'grandTotal': calculatedGrandTotal,
         'date': Timestamp.fromDate(trDate),
         'items': formattedItems,
       });

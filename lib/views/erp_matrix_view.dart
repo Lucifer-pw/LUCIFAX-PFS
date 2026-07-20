@@ -1182,10 +1182,14 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     ],
 
                     // Invoice list
-                    ...invoices.map((inv) {
-                      final invNo = inv['invoiceNo'] ?? 0;
-                      final invTotal = (inv['grandTotal'] ?? 0.0).toDouble();
                       final invItems = List<dynamic>.from(inv['items'] ?? []);
+                      final calculatedInvTotal = invItems.fold(0.0, (sum, it) {
+                        final itemMap = Map<String, dynamic>.from(it as Map);
+                        final isBonus = itemMap['isBonus'] == true;
+                        final sub = ((itemMap['subtotal'] ?? 0.0) as num).toDouble().roundToDouble();
+                        return sum + (isBonus ? 0.0 : sub);
+                      });
+                      final invTotal = calculatedInvTotal > 0 ? calculatedInvTotal : ((inv['grandTotal'] ?? 0.0) as num).toDouble().roundToDouble();
                       DateTime? invDate;
                       try {
                         if (inv['date'] != null) {
@@ -1342,7 +1346,9 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           },
         ),
       ),
-    );
-  }
+    ),
+  ),
+],
+);
 }
-
+}

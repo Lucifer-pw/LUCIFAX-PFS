@@ -435,8 +435,8 @@ class ImportService {
             discPct = (discRp / grossTotal) * 100.0;
           }
 
-          // Subtotal = Gross Total - Discount Amount
-          double subtotal = grossTotal - discRp;
+          // Subtotal = Gross Total - Discount Amount (rounded to nearest Rupiah integer)
+          double subtotal = (grossTotal - discRp).roundToDouble();
           if (subtotal < 0) subtotal = 0.0;
 
           if (productName.isNotEmpty && qty > 0) {
@@ -461,7 +461,7 @@ class ImportService {
         }
 
         // Grand Total is ALWAYS the exact sum of all item subtotals in this invoice
-        final grandTotal = items.fold(0.0, (sum, item) => sum + (item['subtotal'] as double));
+        final grandTotal = items.fold(0.0, (sum, item) => sum + (item['subtotal'] as double)).roundToDouble();
 
         // Parse dates
         final trDate = _parseDateCell(sheet, firstRow, colDate) ?? DateTime.now();
