@@ -91,6 +91,7 @@ class Transaction {
     required this.createdAt,
   });
 
+  factory Transaction.fromMap(Map<String, dynamic> map, String docId) {
     final itemsList = (map['items'] as List<dynamic>?)
             ?.map((item) => TransactionItem.fromMap(item as Map<String, dynamic>))
             .toList() ??

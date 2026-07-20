@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +27,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   String _searchQuery = "";
   String _statusFilter = "SEMUA"; // SEMUA, PAID, UNPAID
 
+  // Pagination & Debounce State
+  int _currentPage = 1;
+  int _rowsPerPage = 25;
+  Timer? _debounce;
+
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -34,6 +40,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -1171,6 +1178,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return true;
     }).toList();
 
+    // Sort by invoiceNo strictly descending (highest to lowest, e.g. #624, #623, #622...)
+    filteredTransactions.sort((a, b) => b.invoiceNo.compareTo(a.invoiceNo));
+
+    // Calculate Pagination Slice
+    final totalItems = filteredTransactions.length;
+    final totalPages = (totalItems / _rowsPerPage).ceil().clamp(1, 99999);
+    if (_currentPage > totalPages) {
+      _currentPage = totalPages;
+    }
+
+    final startIndex = (_currentPage - 1) * _rowsPerPage;
+    final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+    final paginatedTransactions = filteredTransactions.sublist(
+      startIndex.clamp(0, totalItems),
+      endIndex,
+    );
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Padding(
@@ -1196,8 +1220,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       ),
                     ),
                     onChanged: (val) {
-                      setState(() {
-                        _searchQuery = val;
+                      if (_debounce?.isActive ?? false) _debounce!.cancel();
+                      _debounce = Timer(const Duration(milliseconds: 300), () {
+                        setState(() {
+                          _searchQuery = val;
+                          _currentPage = 1;
+                        });
                       });
                     },
                   ),
@@ -1226,6 +1254,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         if (val != null) {
                           setState(() {
                             _statusFilter = val;
+                            _currentPage = 1;
                           });
                         }
                       },
@@ -1247,7 +1276,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ),
             const SizedBox(height: 20),
 
-            // History DataTable list
+            // History DataTable list with Pagination
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -1264,286 +1293,379 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               style: TextStyle(color: Color(0xFF64748B)),
                             ),
                           )
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                columnSpacing: 20,
-                                horizontalMargin: 16,
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                dataRowMinHeight: 56,
-                                dataRowMaxHeight: 56,
-                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
-                                columns: const [
-                                  DataColumn(label: Text('INVOICE')),
-                                  DataColumn(label: Text('TANGGAL')),
-                                  DataColumn(label: Text('PELANGGAN')),
-                                  DataColumn(label: Text('KOTA')),
-                                  DataColumn(label: Text('TOTAL BERAT'), numeric: true),
-                                  DataColumn(label: Text('GRAND TOTAL'), numeric: true),
-                                  DataColumn(label: Center(child: Text('STATUS BARANG'))),
-                                  DataColumn(label: Center(child: Text('STATUS BAYAR'))),
-                                  DataColumn(label: Center(child: Text('STATUS ERP'))),
-                                  DataColumn(label: Center(child: Text('AKSI'))),
-                                ],
-                                rows: filteredTransactions.map((tr) {
-                                  // Calculate total weight in kg across items
-                                  final totalKg = tr.items.fold(0.0, (sum, item) => sum + item.weightKg);
+                        : Column(
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.vertical,
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columnSpacing: 20,
+                                      horizontalMargin: 16,
+                                      headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                      dataRowMinHeight: 56,
+                                      dataRowMaxHeight: 56,
+                                      headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                                      columns: const [
+                                        DataColumn(label: Text('INVOICE')),
+                                        DataColumn(label: Text('TANGGAL')),
+                                        DataColumn(label: Text('PELANGGAN')),
+                                        DataColumn(label: Text('KOTA')),
+                                        DataColumn(label: Text('TOTAL BERAT'), numeric: true),
+                                        DataColumn(label: Text('GRAND TOTAL'), numeric: true),
+                                        DataColumn(label: Center(child: Text('STATUS BARANG'))),
+                                        DataColumn(label: Center(child: Text('STATUS BAYAR'))),
+                                        DataColumn(label: Center(child: Text('STATUS ERP'))),
+                                        DataColumn(label: Center(child: Text('AKSI'))),
+                                      ],
+                                      rows: paginatedTransactions.map((tr) {
+                                        // Calculate total weight in kg across items
+                                        final totalKg = tr.items.fold(0.0, (sum, item) => sum + item.weightKg);
 
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(
-                                        Text('#${tr.invoiceNo}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
-                                        onTap: () => _showDetailDialog(tr),
-                                      ),
-                                      DataCell(
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 4),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              // Tanggal Invoice (Received)
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.receipt_long_rounded, color: Color(0xFF94A3B8), size: 10),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    DateFormat('dd-MM-yyyy').format(tr.date),
-                                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 2),
-                                              // Tanggal Kirim
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 10),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    'Kirim: ${tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}',
-                                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
-                                                  ),
-                                                ],
-                                              ),
-                                              if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
-                                                const SizedBox(height: 2),
-                                                // Tanggal PAID
-                                                Row(
-                                                  mainAxisSize: MainAxisSize.min,
+                                        return DataRow(
+                                          cells: [
+                                            DataCell(
+                                              Text('#${tr.invoiceNo}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+                                              onTap: () => _showDetailDialog(tr),
+                                            ),
+                                            DataCell(
+                                              Padding(
+                                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
                                                   children: [
-                                                    const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 10),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      'Paid: ${DateFormat('dd-MM-yyyy').format(tr.transferDate!)}',
-                                                      style: const TextStyle(color: Colors.greenAccent, fontSize: 9),
+                                                    // Tanggal Invoice (Received)
+                                                    Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.receipt_long_rounded, color: Color(0xFF94A3B8), size: 10),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          DateFormat('dd-MM-yyyy').format(tr.date),
+                                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                        onTap: () => _showDetailDialog(tr),
-                                      ),
-                                      DataCell(
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(tr.aliasName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                            Text(tr.customerName, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                                          ],
-                                        ),
-                                        onTap: () => _showDetailDialog(tr),
-                                      ),
-                                      DataCell(Text(tr.city, style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text('${totalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.white))),
-                                      DataCell(Text(_rupiahFormatter.format(tr.grandTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                      
-                                      // Status Kirim Badge
-                                      DataCell(
-                                        Center(
-                                          child: InkWell(
-                                            onTap: () => _showUpdateDeliveryStatusDialog(tr),
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: tr.status == 'DIKIRIM' 
-                                                    ? Colors.greenAccent.withOpacity(0.15) 
-                                                    : Colors.orangeAccent.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
-                                                  width: 0.8,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                tr.status,
-                                                style: TextStyle(
-                                                  color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      // Status Bayar Badge
-                                      DataCell(
-                                        Center(
-                                          child: InkWell(
-                                            onTap: () => _showUpdateStatusDialog(tr),
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: tr.statusTransfer == 'PAID' 
-                                                    ? Colors.greenAccent.withOpacity(0.15) 
-                                                    : Colors.redAccent.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                                  width: 0.8,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                tr.statusTransfer,
-                                                style: TextStyle(
-                                                  color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      // Status ERP Badge
-                                      DataCell(
-                                        Center(
-                                          child: InkWell(
-                                            onTap: () => _showUpdateErpStatusDialog(tr),
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: tr.erpSyncDate != null 
-                                                    ? Colors.amberAccent.withOpacity(0.15) 
-                                                    : Colors.grey.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
-                                                  width: 0.8,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                tr.erpSyncDate != null 
-                                                    ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!) 
-                                                    : 'BELUM ERP',
-                                                style: TextStyle(
-                                                  color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      // Actions Buttons
-                                      DataCell(
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.list_alt_rounded, color: Colors.amberAccent, size: 20),
-                                              tooltip: 'Lihat Detail Rincian',
-                                              onPressed: () => _showDetailDialog(tr),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 20),
-                                              tooltip: 'Update Status Pengiriman (DIKIRIM/PENDING)',
-                                              onPressed: () => _showUpdateDeliveryStatusDialog(tr),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 20),
-                                              tooltip: 'Update Status Pembayaran (PAID/UNPAID)',
-                                              onPressed: () => _showUpdateStatusDialog(tr),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 20),
-                                              tooltip: 'Update Status ERP (Masuk ERP / Tanggal ERP)',
-                                              onPressed: () => _showUpdateErpStatusDialog(tr),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 20),
-                                              tooltip: 'Edit Transaksi',
-                                              onPressed: () => _showEditTransactionDialog(tr),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                              tooltip: 'Hapus Transaksi',
-                                              onPressed: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    backgroundColor: const Color(0xFF1E293B),
-                                                    title: const Text('Hapus Transaksi', style: TextStyle(color: Colors.white)),
-                                                    content: Text('Apakah Anda yakin ingin menghapus Transaksi #${tr.invoiceNo} untuk ${tr.aliasName}? Data transaksi ini akan dihapus dari histori.', style: const TextStyle(color: Color(0xFF94A3B8))),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () => Navigator.pop(context),
-                                                        child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-                                                      ),
-                                                      ElevatedButton(
-                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                                        onPressed: () async {
-                                                          try {
-                                                            await trProvider.deleteTransaction(tr.invoiceNo);
-                                                            if (context.mounted) {
-                                                              Navigator.pop(context);
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                const SnackBar(content: Text('Transaksi berhasil dihapus.'), backgroundColor: Colors.teal),
-                                                              );
-                                                            }
-                                                          } catch (e) {
-                                                            if (context.mounted) {
-                                                              Navigator.pop(context);
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.redAccent),
-                                                              );
-                                                            }
-                                                          }
-                                                        },
-                                                        child: const Text('Hapus'),
+                                                    const SizedBox(height: 2),
+                                                    // Tanggal Kirim
+                                                    Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 10),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          'Kirim: ${tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}',
+                                                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
+                                                      const SizedBox(height: 2),
+                                                      // Tanggal PAID
+                                                      Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 10),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            'Paid: ${DateFormat('dd-MM-yyyy').format(tr.transferDate!)}',
+                                                            style: const TextStyle(color: Colors.greenAccent, fontSize: 9),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ],
-                                                  ),
-                                                );
-                                              },
+                                                  ],
+                                                ),
+                                              ),
+                                              onTap: () => _showDetailDialog(tr),
                                             ),
-                                            IconButton(
-                                              icon: const Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 20),
-                                              tooltip: 'Cetak Invoice PDF',
-                                              onPressed: () => _showPrintDialog(tr),
+                                            DataCell(
+                                              Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Text(tr.aliasName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                  Text(tr.customerName, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                                                ],
+                                              ),
+                                              onTap: () => _showDetailDialog(tr),
+                                            ),
+                                            DataCell(Text(tr.city, style: const TextStyle(color: Colors.white))),
+                                            DataCell(Text('${totalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.white))),
+                                            DataCell(Text(_rupiahFormatter.format(tr.grandTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                            
+                                            // Status Kirim Badge
+                                            DataCell(
+                                              Center(
+                                                child: InkWell(
+                                                  onTap: () => _showUpdateDeliveryStatusDialog(tr),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: tr.status == 'DIKIRIM' 
+                                                          ? Colors.greenAccent.withOpacity(0.15) 
+                                                          : Colors.orangeAccent.withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(
+                                                        color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      tr.status,
+                                                      style: TextStyle(
+                                                        color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Status Bayar Badge
+                                            DataCell(
+                                              Center(
+                                                child: InkWell(
+                                                  onTap: () => _showUpdateStatusDialog(tr),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: tr.statusTransfer == 'PAID' 
+                                                          ? Colors.greenAccent.withOpacity(0.15) 
+                                                          : Colors.redAccent.withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(
+                                                        color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      tr.statusTransfer,
+                                                      style: TextStyle(
+                                                        color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Status ERP Badge
+                                            DataCell(
+                                              Center(
+                                                child: InkWell(
+                                                  onTap: () => _showUpdateErpStatusDialog(tr),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: tr.erpSyncDate != null 
+                                                          ? Colors.amberAccent.withOpacity(0.15) 
+                                                          : Colors.grey.withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(
+                                                        color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      tr.erpSyncDate != null 
+                                                          ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!) 
+                                                          : 'BELUM ERP',
+                                                      style: TextStyle(
+                                                        color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Actions Buttons
+                                            DataCell(
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(Icons.list_alt_rounded, color: Colors.amberAccent, size: 20),
+                                                    tooltip: 'Lihat Detail Rincian',
+                                                    onPressed: () => _showDetailDialog(tr),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 20),
+                                                    tooltip: 'Update Status Pengiriman (DIKIRIM/PENDING)',
+                                                    onPressed: () => _showUpdateDeliveryStatusDialog(tr),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 20),
+                                                    tooltip: 'Update Status Pembayaran (PAID/UNPAID)',
+                                                    onPressed: () => _showUpdateStatusDialog(tr),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 20),
+                                                    tooltip: 'Update Status ERP (Masuk ERP / Tanggal ERP)',
+                                                    onPressed: () => _showUpdateErpStatusDialog(tr),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 20),
+                                                    tooltip: 'Edit Transaksi',
+                                                    onPressed: () => _showEditTransactionDialog(tr),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                                    tooltip: 'Hapus Transaksi',
+                                                    onPressed: () {
+                                                      showDialog(
+                                                        context: context,
+                                                        builder: (context) => AlertDialog(
+                                                          backgroundColor: const Color(0xFF1E293B),
+                                                          title: const Text('Hapus Transaksi', style: TextStyle(color: Colors.white)),
+                                                          content: Text('Apakah Anda yakin ingin menghapus Transaksi #${tr.invoiceNo} untuk ${tr.aliasName}? Data transaksi ini akan dihapus dari histori.', style: const TextStyle(color: Color(0xFF94A3B8))),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () => Navigator.pop(context),
+                                                              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                                                            ),
+                                                            ElevatedButton(
+                                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                              onPressed: () async {
+                                                                try {
+                                                                  await trProvider.deleteTransaction(tr.invoiceNo);
+                                                                  if (context.mounted) {
+                                                                    Navigator.pop(context);
+                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                      const SnackBar(content: Text('Transaksi berhasil dihapus.'), backgroundColor: Colors.teal),
+                                                                    );
+                                                                  }
+                                                                } catch (e) {
+                                                                  if (context.mounted) {
+                                                                    Navigator.pop(context);
+                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                      SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.redAccent),
+                                                                    );
+                                                                  }
+                                                                }
+                                                              },
+                                                              child: const Text('Hapus'),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 20),
+                                                    tooltip: 'Cetak Invoice PDF',
+                                                    onPressed: () => _showPrintDialog(tr),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+
+                              // Bottom Pagination Control Bar
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(12),
+                                    bottomRight: Radius.circular(12),
+                                  ),
+                                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      totalItems == 0
+                                          ? '0 transaksi'
+                                          : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
+                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
+                                    ),
+                                    Row(
+                                      children: [
+                                        const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                        const SizedBox(width: 8),
+                                        DropdownButton<int>(
+                                          value: _rowsPerPage,
+                                          dropdownColor: const Color(0xFF1E293B),
+                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          underline: const SizedBox(),
+                                          items: const [10, 25, 50, 100].map((count) {
+                                            return DropdownMenuItem<int>(
+                                              value: count,
+                                              child: Text('$count / hal'),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) {
+                                            if (val != null) {
+                                              setState(() {
+                                                _rowsPerPage = val;
+                                                _currentPage = 1;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        const SizedBox(width: 24),
+                                        IconButton(
+                                          icon: const Icon(Icons.first_page_rounded, size: 20),
+                                          color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                          onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
+                                          tooltip: 'Halaman Pertama',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                                          color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                          onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                                          tooltip: 'Halaman Sebelumnya',
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF1E293B),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                          ),
+                                          child: Text(
+                                            'Hal $_currentPage dari $totalPages',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                                          color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                          onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                                          tooltip: 'Halaman Selanjutnya',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.last_page_rounded, size: 20),
+                                          color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                          onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
+                                          tooltip: 'Halaman Terakhir',
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
               ),
             ),
