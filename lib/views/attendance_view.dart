@@ -286,7 +286,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                         ),
                       ),
                       child: Text(
-                        'Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai tanggal 20 $titleMonthYearName',
+                        'Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai tanggal $titleMonthYearName',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,

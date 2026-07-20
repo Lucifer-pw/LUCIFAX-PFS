@@ -322,7 +322,7 @@ class _ShellViewState extends State<ShellView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Lucifax PFS v1.8.3',
+                    'Lucifax PFS v1.8.4',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.0),
                   ),
                   Text(

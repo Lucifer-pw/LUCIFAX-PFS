@@ -5,14 +5,36 @@ import 'package:printing/printing.dart';
 import '../models/attendance_record.dart';
 
 class AttendancePdfService {
+  static String formatFullTitleDate(String input) {
+    if (input.isEmpty) return '20';
+    if (input.startsWith('20 ')) return input;
+    try {
+      final parts = input.split('-');
+      if (parts.length == 2) {
+        final m = int.parse(parts[0]);
+        final y = int.parse(parts[1]);
+        final dt = DateTime(y, m, 1);
+        final monthNames = [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+        final monthName = (m >= 1 && m <= 12) ? monthNames[m - 1] : parts[0];
+        return '20 $monthName $y';
+      }
+    } catch (_) {}
+    return input;
+  }
+
   static Future<Uint8List> generateAttendancePdf({
-    required String monthYearName, // e.g. "Mei Tahun 2026"
+    required String monthYearName,
     required List<AttendanceRecord> records,
   }) async {
     final pdf = pw.Document();
 
     final fontRegular = await PdfGoogleFonts.robotoRegular();
     final fontBold = await PdfGoogleFonts.robotoBold();
+
+    final formattedTitleDate = formatFullTitleDate(monthYearName);
 
     pdf.addPage(
       pw.Page(
@@ -24,7 +46,7 @@ class AttendancePdfService {
             children: [
               // Title
               pw.Text(
-                'Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai tanggal $monthYearName',
+                'Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai tanggal $formattedTitleDate',
                 style: pw.TextStyle(
                   font: fontBold,
                   fontSize: 13,
