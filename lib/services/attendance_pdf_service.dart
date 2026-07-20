@@ -24,7 +24,7 @@ class AttendancePdfService {
             children: [
               // Title
               pw.Text(
-                'Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai tanggal 20 $monthYearName',
+                'Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai tanggal $monthYearName',
                 style: pw.TextStyle(
                   font: fontBold,
                   fontSize: 13,
@@ -88,7 +88,6 @@ class AttendancePdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text('Lucifax PFS - Jawa Tengah', style: pw.TextStyle(font: fontRegular, fontSize: 9, color: PdfColors.grey700)),
-                  pw.Text('Tanggal Cetak: ${DateTime.now().day}-${DateTime.now().month}-${DateTime.now().year}', style: pw.TextStyle(font: fontRegular, fontSize: 9, color: PdfColors.grey700)),
                 ],
               ),
             ],

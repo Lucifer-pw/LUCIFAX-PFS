@@ -77,7 +77,7 @@ class _AttendanceViewState extends State<AttendanceView> {
         final y = int.parse(parts[1]);
         final dt = DateTime(y, m, 1);
         final monthName = DateFormat('MMMM', 'id_ID').format(dt);
-        return '$monthName Tahun $y';
+        return '20 $monthName $y';
       }
     } catch (_) {}
     return monthYearStr;
@@ -906,7 +906,7 @@ class _AttendanceViewState extends State<AttendanceView> {
 
                 // Open WhatsApp Link
                 final message = Uri.encodeComponent(
-                  "Halo Bu Lia (HRD),\n\nBerikut Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai Tanggal 20 $titleMonthYearName.\nFile PDF Rekap Absensi telah di-download & siap dilampirkan.\n\nTerima Kasih.\n(Lucifax PFS)",
+                  "Permisi Bu Lia (HRD),\n\nBerikut Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai Tanggal $titleMonthYearName.\nFile PDF Rekap Absensi telah di-download & siap dilampirkan.\n\nTerima Kasih.\n(Lucifax PFS)",
                 );
                 final waUrl = Uri.parse("https://wa.me/${attProvider.hrdPhone}?text=$message");
                 if (await canLaunchUrl(waUrl)) {
