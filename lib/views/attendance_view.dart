@@ -28,15 +28,43 @@ class _AttendanceViewState extends State<AttendanceView> {
     super.dispose();
   }
 
-  // Generate Month-Year Options e.g. ["05-2026", "04-2026", ...]
-  List<String> _getMonthYearOptions() {
-    final List<String> list = [];
-    final now = DateTime.now();
-    for (int i = 0; i < 12; i++) {
-      final d = DateTime(now.year, now.month - i, 1);
-      final monthStr = d.month.toString().padLeft(2, '0');
-      list.add('$monthStr-${d.year}');
+  // Generate Month-Year Options from 04-2025 up to 12-2030
+  List<String> _getMonthYearOptions(AttendanceProvider attProvider) {
+    final Set<String> optionsSet = {};
+
+    // Range from 2030 down to April 2025
+    for (int year = 2030; year >= 2025; year--) {
+      final startMonth = (year == 2025) ? 4 : 1;
+      const endMonth = 12;
+      for (int month = endMonth; month >= startMonth; month--) {
+        optionsSet.add('${month.toString().padLeft(2, '0')}-$year');
+      }
     }
+
+    if (attProvider.selectedMonthYear.isNotEmpty) {
+      optionsSet.add(attProvider.selectedMonthYear);
+    }
+    for (var rec in attProvider.attendanceList) {
+      if (rec.monthYear.isNotEmpty) {
+        optionsSet.add(rec.monthYear);
+      }
+    }
+
+    final list = optionsSet.toList();
+    list.sort((a, b) {
+      final pA = a.split('-');
+      final pB = b.split('-');
+      if (pA.length == 2 && pB.length == 2) {
+        final yA = int.tryParse(pA[1]) ?? 0;
+        final yB = int.tryParse(pB[1]) ?? 0;
+        if (yA != yB) return yB.compareTo(yA);
+        final mA = int.tryParse(pA[0]) ?? 0;
+        final mB = int.tryParse(pB[0]) ?? 0;
+        return mB.compareTo(mA);
+      }
+      return b.compareTo(a);
+    });
+
     return list;
   }
 
@@ -58,7 +86,7 @@ class _AttendanceViewState extends State<AttendanceView> {
   @override
   Widget build(BuildContext context) {
     final attProvider = Provider.of<AttendanceProvider>(context);
-    final monthOptions = _getMonthYearOptions();
+    final monthOptions = _getMonthYearOptions(attProvider);
 
     // Ensure selected monthYear is valid
     if (!monthOptions.contains(attProvider.selectedMonthYear) && monthOptions.isNotEmpty) {
