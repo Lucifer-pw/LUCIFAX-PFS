@@ -1491,40 +1491,31 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               ),
                                             ),
 
-                                            // Actions Buttons
+                                            // Action PopupMenuButton (Titik 3)
                                             DataCell(
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(Icons.list_alt_rounded, color: Colors.amberAccent, size: 20),
-                                                    tooltip: 'Lihat Detail Rincian',
-                                                    onPressed: () => _showDetailDialog(tr),
+                                              Center(
+                                                child: PopupMenuButton<String>(
+                                                  color: const Color(0xFF1E293B),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    side: BorderSide(color: Colors.white.withOpacity(0.1)),
                                                   ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 20),
-                                                    tooltip: 'Update Status Pengiriman (DIKIRIM/PENDING)',
-                                                    onPressed: () => _showUpdateDeliveryStatusDialog(tr),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 20),
-                                                    tooltip: 'Update Status Pembayaran (PAID/UNPAID)',
-                                                    onPressed: () => _showUpdateStatusDialog(tr),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 20),
-                                                    tooltip: 'Update Status ERP (Masuk ERP / Tanggal ERP)',
-                                                    onPressed: () => _showUpdateErpStatusDialog(tr),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 20),
-                                                    tooltip: 'Edit Transaksi',
-                                                    onPressed: () => _showEditTransactionDialog(tr),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                                    tooltip: 'Hapus Transaksi',
-                                                    onPressed: () {
+                                                  icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8)),
+                                                  tooltip: 'Menu Aksi',
+                                                  onSelected: (action) {
+                                                    if (action == 'detail') {
+                                                      _showDetailDialog(tr);
+                                                    } else if (action == 'delivery') {
+                                                      _showUpdateDeliveryStatusDialog(tr);
+                                                    } else if (action == 'payment') {
+                                                      _showUpdateStatusDialog(tr);
+                                                    } else if (action == 'erp') {
+                                                      _showUpdateErpStatusDialog(tr);
+                                                    } else if (action == 'edit') {
+                                                      _showEditTransactionDialog(tr);
+                                                    } else if (action == 'print') {
+                                                      _showPrintDialog(tr);
+                                                    } else if (action == 'delete') {
                                                       showDialog(
                                                         context: context,
                                                         builder: (context) => AlertDialog(
@@ -1561,14 +1552,82 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                           ],
                                                         ),
                                                       );
-                                                    },
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 20),
-                                                    tooltip: 'Cetak Invoice PDF',
-                                                    onPressed: () => _showPrintDialog(tr),
-                                                  ),
-                                                ],
+                                                    }
+                                                  },
+                                                  itemBuilder: (context) => [
+                                                    const PopupMenuItem(
+                                                      value: 'detail',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.list_alt_rounded, color: Colors.amberAccent, size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Detail Rincian', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuItem(
+                                                      value: 'delivery',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Update Status Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuItem(
+                                                      value: 'payment',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuItem(
+                                                      value: 'erp',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Update Status ERP', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuItem(
+                                                      value: 'edit',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuItem(
+                                                      value: 'print',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Cetak Invoice PDF', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuDivider(height: 8),
+                                                    const PopupMenuItem(
+                                                      value: 'delete',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                          SizedBox(width: 10),
+                                                          Text('Hapus Transaksi', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ],
