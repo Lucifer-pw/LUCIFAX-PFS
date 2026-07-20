@@ -69,16 +69,38 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   }
 
   List<String> _getMonthOptions() {
-    final List<String> options = [];
+    final Set<String> optionsSet = {};
     final now = DateTime.now();
-    for (int i = 0; i < 12; i++) {
-      final date = DateTime(now.year, now.month - i, 1);
-      options.add(DateFormat('MM-yyyy').format(date));
+    final currentYear = now.year;
+
+    // Generate past 3 years to 1 year in future (e.g. 2023 to 2027)
+    for (int y = currentYear + 1; y >= currentYear - 3; y--) {
+      for (int m = 12; m >= 1; m--) {
+        final monthStr = m.toString().padLeft(2, '0');
+        optionsSet.add('$monthStr-$y');
+      }
     }
-    if (!options.contains('05-2026')) options.add('05-2026');
-    if (!options.contains('07-2026')) options.add('07-2026');
-    if (!options.contains('08-2026')) options.add('08-2026');
-    return options.toSet().toList();
+
+    if (_selectedMonthYear.isNotEmpty) {
+      optionsSet.add(_selectedMonthYear);
+    }
+
+    final List<String> list = optionsSet.toList();
+    list.sort((a, b) {
+      final partsA = a.split('-');
+      final partsB = b.split('-');
+      if (partsA.length == 2 && partsB.length == 2) {
+        final yearA = int.tryParse(partsA[1]) ?? 0;
+        final yearB = int.tryParse(partsB[1]) ?? 0;
+        if (yearA != yearB) return yearB.compareTo(yearA);
+        final monthA = int.tryParse(partsA[0]) ?? 0;
+        final monthB = int.tryParse(partsB[0]) ?? 0;
+        return monthB.compareTo(monthA);
+      }
+      return b.compareTo(a);
+    });
+
+    return list;
   }
 
   Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap) {
@@ -103,7 +125,15 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           if (items != null) {
             for (var item in items) {
               final itemMap = Map<String, dynamic>.from(item as Map);
-              if (itemMap['productId'] == prod.id) {
+              final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
+              final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
+              final targetId = prod.id.toString().trim().toLowerCase();
+              final targetName = prod.name.toString().trim().toLowerCase();
+
+              final isMatch = (itemPId.isNotEmpty && (itemPId == targetId || itemPId == targetName)) ||
+                              (itemPName.isNotEmpty && (itemPName == targetName || itemPName == targetId));
+
+              if (isMatch) {
                 final qty = (itemMap['qty'] ?? 0.0).toDouble();
                 final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
                 final isBonusItem = itemMap['isBonus'] == true;

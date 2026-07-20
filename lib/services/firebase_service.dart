@@ -494,7 +494,7 @@ class FirebaseService {
 
     for (var doc in trSnap.docs) {
       final trData = doc.data();
-      final Timestamp? erpTs = trData['erpSyncDate'] as Timestamp?;
+      final Timestamp? erpTs = (trData['erpSyncDate'] ?? trData['date'] ?? trData['deliveryDate']) as Timestamp?;
       if (erpTs == null) continue;
 
       final erpDate = erpTs.toDate();
