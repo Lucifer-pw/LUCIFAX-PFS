@@ -114,11 +114,11 @@ class ImportService {
     }
   }
 
-  // Helper to parse date cell with multiple formats (Excel serial, ISO, dd-MM-yyyy HH:mm)
+  // Helper to parse date cell with multiple formats (Excel serial, ISO, dd-MM-yyyy HH:mm, yyyy-MM-dd)
   DateTime? _parseDateCell(Sheet sheet, int row, int col) {
     if (col == -1) return null;
     final dateStr = _cellStr(sheet, row, col).trim();
-    if (dateStr.isEmpty || dateStr == '-') return null;
+    if (dateStr.isEmpty || dateStr == '-' || dateStr == '0') return null;
 
     try {
       final numDate = double.tryParse(dateStr);
@@ -129,13 +129,30 @@ class ImportService {
     } catch (_) {
       final parts = dateStr.split(RegExp(r'[\s-/:]+'));
       if (parts.length >= 3) {
-        final day = int.tryParse(parts[0]) ?? 1;
-        final month = int.tryParse(parts[1]) ?? 1;
-        final year = int.tryParse(parts[2]) ?? DateTime.now().year;
-        final fullYear = year < 100 ? 2000 + year : year;
+        int first = int.tryParse(parts[0]) ?? 1;
+        int second = int.tryParse(parts[1]) ?? 1;
+        int third = int.tryParse(parts[2]) ?? DateTime.now().year;
+
+        int year, month, day;
+        if (first > 1000) {
+          // Format YYYY-MM-DD
+          year = first;
+          month = second;
+          day = third;
+        } else if (third > 1000) {
+          // Format DD-MM-YYYY
+          day = first;
+          month = second;
+          year = third;
+        } else {
+          day = first;
+          month = second;
+          year = 2000 + third;
+        }
+
         final hour = parts.length > 3 ? (int.tryParse(parts[3]) ?? 0) : 0;
         final minute = parts.length > 4 ? (int.tryParse(parts[4]) ?? 0) : 0;
-        return DateTime(fullYear, month, day, hour, minute);
+        return DateTime(year, month.clamp(1, 12), day.clamp(1, 31), hour.clamp(0, 23), minute.clamp(0, 59));
       }
     }
     return null;
@@ -381,7 +398,9 @@ class ImportService {
     final colStatusBarang = _findColumnInRow(sheet, headerRow, ['STATUS BARANG', 'STATUS KIRIM', 'STATUS PENGIRIMAN', 'STATUS']);
     final colStatusTransfer = _findColumnInRow(sheet, headerRow, ['STATUS TRANSFER BAYAR', 'STATUS TRANSFER', 'STATUS BAYAR', 'STATUS BAYAR/TRANSFER']);
     final colTransferDate = _findColumnInRow(sheet, headerRow, ['TANGGAL TRANSFER', 'TGL TRANSFER']);
-    final colErpDate = _findColumnInRow(sheet, headerRow, ['TANGGAL ERP', 'TGL ERP']);
+    final colErpDate = _findColumnInRow(sheet, headerRow, [
+      'STATUS ERP', 'TANGGAL ERP', 'TGL ERP', 'STATUS_ERP', 'TGL_ERP', 'TANGGAL_ERP', 'ERP', 'PROSES ERP', 'SYNC ERP', 'TGL SYNC ERP', 'TANGGAL SYNC ERP', 'INPUT ERP'
+    ]);
 
     if (colInvoice == -1) {
       return ImportResult(
@@ -463,11 +482,26 @@ class ImportService {
         // Grand Total is ALWAYS the exact sum of all item subtotals in this invoice
         final grandTotal = items.fold(0.0, (sum, item) => sum + (item['subtotal'] as double)).roundToDouble();
 
-        // Parse dates
+        // Parse dates & ERP Status
         final trDate = _parseDateCell(sheet, firstRow, colDate) ?? DateTime.now();
         final deliveryDate = _parseDateCell(sheet, firstRow, colDeliveryDate) ?? trDate;
         final transferDate = _parseDateCell(sheet, firstRow, colTransferDate);
-        final erpSyncDate = _parseDateCell(sheet, firstRow, colErpDate);
+        
+        DateTime? erpSyncDate = _parseDateCell(sheet, firstRow, colErpDate);
+        if (erpSyncDate == null && colErpDate != -1) {
+          final rawErpText = _cellStr(sheet, firstRow, colErpDate).toUpperCase().trim();
+          if (rawErpText.isNotEmpty &&
+              (rawErpText.contains('SUDAH') ||
+               rawErpText.contains('ERP') ||
+               rawErpText.contains('YA') ||
+               rawErpText.contains('YES') ||
+               rawErpText.contains('DONE') ||
+               rawErpText.contains('SYNC') ||
+               rawErpText == 'S' ||
+               rawErpText == '1')) {
+            erpSyncDate = deliveryDate;
+          }
+        }
 
         // Status Kirim / Status Barang
         String status = 'PENDING';
