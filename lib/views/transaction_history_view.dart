@@ -1162,19 +1162,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
       // 2. Text Search Query
       if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchInvoice = tr.invoiceNo.toString().contains(query);
+        final query = _searchQuery.toLowerCase().trim();
+        final cleanQuery = query.replaceAll('#', '').trim();
+
+        final invStr = tr.invoiceNo.toString().toLowerCase();
+        final matchInvoice = invStr.contains(query) || (cleanQuery.isNotEmpty && invStr.contains(cleanQuery));
         final matchAlias = tr.aliasName.toLowerCase().contains(query);
         final matchCust = tr.customerName.toLowerCase().contains(query);
         final matchDisplay = '${tr.customerName} (${tr.aliasName})'.toLowerCase().contains(query) ||
                              '${tr.aliasName} (${tr.customerName})'.toLowerCase().contains(query);
         final matchNote = tr.note.toLowerCase().contains(query);
+        final matchItems = tr.items.any((item) => 
+          item.productName.toLowerCase().contains(query) || 
+          item.productId.toLowerCase().contains(query)
+        );
         final matchDate = DateFormat('dd-MM-yyyy').format(tr.date).contains(query) ||
             (tr.deliveryDate != null && DateFormat('dd-MM-yyyy').format(tr.deliveryDate!).contains(query)) ||
             (tr.transferDate != null && DateFormat('dd-MM-yyyy').format(tr.transferDate!).contains(query)) ||
             (tr.erpSyncDate != null && DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!).contains(query));
 
-        return matchInvoice || matchAlias || matchCust || matchDisplay || matchNote || matchDate;
+        return matchInvoice || matchAlias || matchCust || matchDisplay || matchNote || matchItems || matchDate;
       }
 
       return true;
