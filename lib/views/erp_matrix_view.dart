@@ -612,40 +612,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 const SizedBox(width: 8),
                 const Text('Outlet/Customer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14)),
                 const SizedBox(width: 8),
-                SizedBox(
-                  width: 280,
-                  child: DropdownButtonFormField<Customer>(
-                    value: _selectedCustomer,
-                    isExpanded: true,
-                    dropdownColor: const Color(0xFF1E293B),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    ),
-                    hint: const Text('-- Semua Customer --', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                    items: (customerProvider.customers..sort((a, b) => a.displayName.compareTo(b.displayName))).map((c) {
-                      return DropdownMenuItem<Customer>(
-                        value: c,
-                        child: Text(
-                          c.displayName,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) => setState(() => _selectedCustomer = val),
-                  ),
+                SearchableCustomerFilter(
+                  selectedCustomer: _selectedCustomer,
+                  customers: customerProvider.customers,
+                  onSelected: (val) => setState(() => _selectedCustomer = val),
                 ),
-                if (_selectedCustomer != null)
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 20),
-                    onPressed: () => setState(() => _selectedCustomer = null),
-                    tooltip: 'Reset Filter Customer',
-                  ),
                 const SizedBox(width: 20),
 
                 // Product Search
@@ -782,7 +753,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           const SizedBox(height: 16),
 
           // Main Content Area
-          Expanded(
+                  Expanded(
             child: _activeTab == 0
                 ? _buildStockMatrixTab(products, weeklyMap, stockProvider)
                 : _buildInvoiceDetailTab(),
@@ -791,6 +762,224 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       ),
     );
   }
+}
+
+class SearchableCustomerFilter extends StatefulWidget {
+  final Customer? selectedCustomer;
+  final List<Customer> customers;
+  final ValueChanged<Customer?> onSelected;
+
+  const SearchableCustomerFilter({
+    super.key,
+    required this.selectedCustomer,
+    required this.customers,
+    required this.onSelected,
+  });
+
+  @override
+  State<SearchableCustomerFilter> createState() => _SearchableCustomerFilterState();
+}
+
+class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  List<Customer> _filteredCustomers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCustomers = List.from(widget.customers)..sort((a, b) => a.displayName.compareTo(b.displayName));
+    if (widget.selectedCustomer != null) {
+      _controller.text = widget.selectedCustomer!.displayName;
+    }
+
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        _showOverlay();
+      } else {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && !_focusNode.hasFocus) {
+            _hideOverlay();
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(SearchableCustomerFilter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedCustomer == null && oldWidget.selectedCustomer != null) {
+      _controller.clear();
+      _filteredCustomers = List.from(widget.customers)..sort((a, b) => a.displayName.compareTo(b.displayName));
+    } else if (widget.selectedCustomer != null && widget.selectedCustomer != oldWidget.selectedCustomer) {
+      _controller.text = widget.selectedCustomer!.displayName;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hideOverlay();
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final cleanQuery = query.trim().toLowerCase();
+    setState(() {
+      if (cleanQuery.isEmpty) {
+        _filteredCustomers = List.from(widget.customers)..sort((a, b) => a.displayName.compareTo(b.displayName));
+      } else {
+        _filteredCustomers = widget.customers.where((c) {
+          final alias = c.aliasName.toLowerCase();
+          final name = c.customerName.toLowerCase();
+          final display = c.displayName.toLowerCase();
+          final city = c.city.toLowerCase();
+          return alias.contains(cleanQuery) ||
+                 name.contains(cleanQuery) ||
+                 display.contains(cleanQuery) ||
+                 city.contains(cleanQuery);
+        }).toList()
+          ..sort((a, b) => a.displayName.compareTo(b.displayName));
+      }
+    });
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _showOverlay() {
+    _hideOverlay();
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width.clamp(320.0, 500.0),
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0.0, size.height + 6.0),
+          child: Material(
+            elevation: 8.0,
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 280),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    dense: true,
+                    title: const Text('-- Semua Customer --', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
+                    onTap: () {
+                      _controller.clear();
+                      widget.onSelected(null);
+                      _focusNode.unfocus();
+                    },
+                  ),
+                  const Divider(height: 1, color: Color(0xFF334155)),
+                  Expanded(
+                    child: _filteredCustomers.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('Customer tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            shrinkWrap: true,
+                            itemCount: _filteredCustomers.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF334155)),
+                            itemBuilder: (context, index) {
+                              final c = _filteredCustomers[index];
+                              return ListTile(
+                                dense: true,
+                                title: Text(
+                                  c.displayName,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                subtitle: Text(
+                                  '${c.city}, ${c.province}',
+                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                ),
+                                onTap: () {
+                                  _controller.text = c.displayName;
+                                  widget.onSelected(c);
+                                  _focusNode.unfocus();
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: SizedBox(
+        width: 320,
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: '-- Semua Customer --',
+            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            filled: true,
+            fillColor: const Color(0xFF0F172A),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5)),
+            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+            suffixIcon: _controller.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 18),
+                    onPressed: () {
+                      _controller.clear();
+                      widget.onSelected(null);
+                      _filter('');
+                    },
+                  )
+                : Icon(
+                    _focusNode.hasFocus ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+                    color: const Color(0xFF38BDF8),
+                    size: 24,
+                  ),
+          ),
+          onChanged: (val) {
+            if (val.isEmpty) {
+              widget.onSelected(null);
+            }
+            _filter(val);
+          },
+        ),
+      ),
+    );
+  }
+}
 
   int _getTotalInvoiceCount() {
     int count = 0;
