@@ -61,12 +61,8 @@ class _ProductListViewState extends State<ProductListView> {
     final nameController = TextEditingController(text: product?.name ?? '');
     final priceController = TextEditingController(text: product != null ? product.price.toStringAsFixed(0) : '');
     final stockController = TextEditingController(text: product != null ? product.stock.toStringAsFixed(0) : '0');
-    final entryController = TextEditingController(text: '0');
     final cartonController = TextEditingController(text: product?.isiKarton.toString() ?? '');
     final sizeController = TextEditingController(text: product != null ? product.sizeGrams.toStringAsFixed(0) : '');
-
-    bool isUpdatingFromStock = false;
-    bool isUpdatingFromEntry = false;
 
     // Auto-parse size from name on change
     nameController.addListener(() {
@@ -87,20 +83,16 @@ class _ProductListViewState extends State<ProductListView> {
             final entryDiff = isEdit ? (targetStock - initialStock) : targetStock;
 
             Color entryColor;
-            String entryText;
             IconData entryIcon;
 
             if (entryDiff > 0) {
               entryColor = const Color(0xFF4ADE80); // Bright Green
-              entryText = '+${entryDiff.toStringAsFixed(0)} pcs (Bertambah)';
               entryIcon = Icons.trending_up_rounded;
             } else if (entryDiff < 0) {
               entryColor = const Color(0xFFF87171); // Bright Red
-              entryText = '${entryDiff.toStringAsFixed(0)} pcs (Berkurang)';
               entryIcon = Icons.trending_down_rounded;
             } else {
               entryColor = const Color(0xFF94A3B8); // Neutral Grey
-              entryText = '0 pcs (Tetap)';
               entryIcon = Icons.remove_rounded;
             }
 
@@ -153,79 +145,66 @@ class _ProductListViewState extends State<ProductListView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (isEdit) ...[
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Stok Awal: ${initialStock.toStringAsFixed(0)} pcs',
-                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: entryColor.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: entryColor.withOpacity(0.5)),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(entryIcon, color: entryColor, size: 14),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Entry: $entryText',
-                                          style: TextStyle(color: entryColor, fontSize: 11, fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                'Stok Awal Saat Ini: ${initialStock.toStringAsFixed(0)} pcs',
+                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 10),
                             ],
                             Row(
                               children: [
                                 Expanded(
+                                  flex: 5,
                                   child: TextFormField(
                                     controller: stockController,
                                     keyboardType: TextInputType.number,
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                    decoration: _buildInputDecoration(hint: isEdit ? 'Stok Baru' : 'Jumlah Stok Saat Ini'),
+                                    decoration: _buildInputDecoration(hint: isEdit ? 'Stok Baru' : 'Jumlah Stok Saat Ini').copyWith(
+                                      labelText: isEdit ? 'Input Stok Baru' : 'Jumlah Stok Saat Ini',
+                                      labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                                    ),
                                     onChanged: (val) {
-                                      setDialogState(() {
-                                        if (isEdit && !isUpdatingFromEntry) {
-                                          isUpdatingFromStock = true;
-                                          final target = _parseCleanDouble(val);
-                                          final diff = target - initialStock;
-                                          entryController.text = diff > 0 ? '+${diff.toStringAsFixed(0)}' : diff.toStringAsFixed(0);
-                                          isUpdatingFromStock = false;
-                                        }
-                                      });
+                                      setDialogState(() {});
                                     },
                                   ),
                                 ),
                                 if (isEdit) ...[
                                   const SizedBox(width: 10),
                                   Expanded(
-                                    child: TextFormField(
-                                      controller: entryController,
-                                      keyboardType: const TextInputType.numberWithOptions(signed: true),
-                                      style: TextStyle(color: entryColor, fontWeight: FontWeight.bold),
-                                      decoration: _buildInputDecoration(hint: 'Entry / Selisih (+/-)').copyWith(
-                                        prefixIcon: Icon(entryIcon, color: entryColor, size: 16),
+                                    flex: 5,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: entryColor.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: entryColor.withOpacity(0.5)),
                                       ),
-                                      onChanged: (val) {
-                                        setDialogState(() {
-                                          if (!isUpdatingFromStock) {
-                                            isUpdatingFromEntry = true;
-                                            final cleanVal = val.replaceAll('+', '').trim();
-                                            final diff = double.tryParse(cleanVal) ?? 0.0;
-                                            final newStock = initialStock + diff;
-                                            stockController.text = newStock.toStringAsFixed(0);
-                                            isUpdatingFromEntry = false;
-                                          }
-                                        });
-                                      },
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'Entry (Selisih):',
+                                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              Icon(entryIcon, color: entryColor, size: 16),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  entryDiff > 0
+                                                      ? '+${entryDiff.toStringAsFixed(0)} pcs'
+                                                      : '${entryDiff.toStringAsFixed(0)} pcs',
+                                                  style: TextStyle(color: entryColor, fontSize: 15, fontWeight: FontWeight.bold),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],
