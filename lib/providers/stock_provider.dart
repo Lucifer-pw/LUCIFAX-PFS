@@ -56,33 +56,6 @@ class StockProvider with ChangeNotifier {
       final newEntry = entry.copyWith(id: docRef.id);
       _stockEntries.insert(0, newEntry);
 
-      // Also update master product stock in 'products' collection if document exists
-      if (entry.productId.isNotEmpty) {
-        final prodDoc = await _db.collection('products').doc(entry.productId).get();
-        if (prodDoc.exists) {
-          final data = prodDoc.data();
-          final String parentKodeInduk = data?['kodeInduk'] ?? entry.productId;
-          final double qtyToAdd = entry.qty;
-
-          // Find all products sharing the same kodeInduk
-          final query = await _db
-              .collection('products')
-              .where('kodeInduk', isEqualTo: parentKodeInduk)
-              .get();
-
-          final batch = _db.batch();
-          for (var doc in query.docs) {
-            final currentStock = (doc.data()['stock'] ?? 0.0).toDouble();
-            batch.update(doc.reference, {'stock': currentStock + qtyToAdd});
-          }
-          if (!query.docs.any((doc) => doc.id == entry.productId)) {
-            final currentStock = (data?['stock'] ?? 0.0).toDouble();
-            batch.update(prodDoc.reference, {'stock': currentStock + qtyToAdd});
-          }
-          await batch.commit();
-        }
-      }
-
       notifyListeners();
       return true;
     } catch (e) {
@@ -95,38 +68,6 @@ class StockProvider with ChangeNotifier {
 
   Future<bool> deleteStockEntry(String id) async {
     try {
-      final entryDoc = await _db.collection('stock_entries').doc(id).get();
-      if (entryDoc.exists) {
-        final data = entryDoc.data();
-        final String productId = data?['productId'] ?? '';
-        final double qty = (data?['qty'] ?? 0.0).toDouble();
-
-        if (productId.isNotEmpty) {
-          final prodDoc = await _db.collection('products').doc(productId).get();
-          if (prodDoc.exists) {
-            final prodData = prodDoc.data();
-            final String parentKodeInduk = prodData?['kodeInduk'] ?? productId;
-
-            // Find all products sharing the same kodeInduk
-            final query = await _db
-                .collection('products')
-                .where('kodeInduk', isEqualTo: parentKodeInduk)
-                .get();
-
-            final batch = _db.batch();
-            for (var doc in query.docs) {
-              final currentStock = (doc.data()['stock'] ?? 0.0).toDouble();
-              batch.update(doc.reference, {'stock': currentStock - qty});
-            }
-            if (!query.docs.any((doc) => doc.id == productId)) {
-              final currentStock = (prodData?['stock'] ?? 0.0).toDouble();
-              batch.update(prodDoc.reference, {'stock': currentStock - qty});
-            }
-            await batch.commit();
-          }
-        }
-      }
-
       await _db.collection('stock_entries').doc(id).delete();
       _stockEntries.removeWhere((e) => e.id == id);
       notifyListeners();

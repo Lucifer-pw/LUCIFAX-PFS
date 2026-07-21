@@ -105,7 +105,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
   Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap) {
     final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
-    final initialStockVal = _initialStocks[prod.id] ?? prod.stock.toDouble();
+    final initialStockVal = _initialStocks[prod.id] ?? 0.0;
     final stockBefore = initialStockVal * factor;
 
     double totalPenjualan = 0.0;
