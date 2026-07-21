@@ -613,7 +613,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 const Text('Outlet/Customer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14)),
                 const SizedBox(width: 8),
                 SizedBox(
-                  width: 220,
+                  width: 280,
                   child: DropdownButtonFormField<Customer>(
                     value: _selectedCustomer,
                     isExpanded: true,
@@ -627,10 +627,14 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                     ),
                     hint: const Text('-- Semua Customer --', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                    items: customerProvider.customers.map((c) {
+                    items: (customerProvider.customers..sort((a, b) => a.displayName.compareTo(b.displayName))).map((c) {
                       return DropdownMenuItem<Customer>(
                         value: c,
-                        child: Text(c.customerName),
+                        child: Text(
+                          c.displayName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       );
                     }).toList(),
                     onChanged: (val) => setState(() => _selectedCustomer = val),

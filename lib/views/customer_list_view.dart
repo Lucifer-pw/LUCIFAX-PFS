@@ -375,13 +375,15 @@ class _CustomerListViewState extends State<CustomerListView> {
 
     // Apply local query filter
     final filteredCustomers = customerProvider.customers.where((c) {
-      final nameMatches = c.customerName.toLowerCase().contains(_searchQuery.toLowerCase());
-      final aliasMatches = c.aliasName.toLowerCase().contains(_searchQuery.toLowerCase());
-      final idMatches = c.id.toLowerCase().contains(_searchQuery.toLowerCase());
-      final cityMatches = c.city.toLowerCase().contains(_searchQuery.toLowerCase());
-      final provinceMatches = c.province.toLowerCase().contains(_searchQuery.toLowerCase());
-      final countryMatches = c.country.toLowerCase().contains(_searchQuery.toLowerCase());
-      return nameMatches || aliasMatches || idMatches || cityMatches || provinceMatches || countryMatches;
+      final q = _searchQuery.toLowerCase();
+      final nameMatches = c.customerName.toLowerCase().contains(q);
+      final aliasMatches = c.aliasName.toLowerCase().contains(q);
+      final displayMatches = c.displayName.toLowerCase().contains(q);
+      final idMatches = c.id.toLowerCase().contains(q);
+      final cityMatches = c.city.toLowerCase().contains(q);
+      final provinceMatches = c.province.toLowerCase().contains(q);
+      final countryMatches = c.country.toLowerCase().contains(q);
+      return nameMatches || aliasMatches || displayMatches || idMatches || cityMatches || provinceMatches || countryMatches;
     }).toList();
 
     return Scaffold(

@@ -847,10 +847,12 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
         _filteredCustomers = widget.customers.where((c) {
           final alias = c.aliasName.toLowerCase();
           final name = c.customerName.toLowerCase();
+          final display = c.displayName.toLowerCase();
           final city = c.city.toLowerCase();
           final id = c.id.toLowerCase();
           return alias.contains(cleanQuery) ||
                  name.contains(cleanQuery) ||
+                 display.contains(cleanQuery) ||
                  city.contains(cleanQuery) ||
                  id.contains(cleanQuery);
         }).toList();
@@ -897,7 +899,7 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
                         return ListTile(
                           dense: true,
                           title: Text(
-                            '${c.aliasName} (${c.customerName})',
+                            c.displayName,
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           subtitle: Text(
@@ -905,7 +907,7 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
                             style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                           ),
                           onTap: () {
-                            _controller.text = '${c.aliasName} (${c.customerName})';
+                            _controller.text = c.displayName;
                             widget.onSelected(c);
                             _focusNode.unfocus();
                           },

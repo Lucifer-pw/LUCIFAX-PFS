@@ -21,6 +21,15 @@ class Customer {
     required this.ktpNumber,
   });
 
+  String get displayName {
+    final name = customerName.trim();
+    final alias = aliasName.trim();
+    if (name.isNotEmpty && alias.isNotEmpty && name.toLowerCase() != alias.toLowerCase()) {
+      return '$name ($alias)';
+    }
+    return name.isNotEmpty ? name : alias;
+  }
+
   factory Customer.fromMap(Map<String, dynamic> map, String docId) {
     return Customer(
       id: docId,

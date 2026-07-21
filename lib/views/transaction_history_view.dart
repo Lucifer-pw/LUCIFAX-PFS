@@ -253,7 +253,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               items: customers.map((c) {
                                 return DropdownMenuItem<Customer>(
                                   value: c,
-                                  child: Text('${c.aliasName} (${c.customerName})', style: const TextStyle(fontSize: 12)),
+                                  child: Text(c.displayName, style: const TextStyle(fontSize: 12)),
                                 );
                               }).toList(),
                               onChanged: (val) {
@@ -1166,13 +1166,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         final matchInvoice = tr.invoiceNo.toString().contains(query);
         final matchAlias = tr.aliasName.toLowerCase().contains(query);
         final matchCust = tr.customerName.toLowerCase().contains(query);
+        final matchDisplay = '${tr.customerName} (${tr.aliasName})'.toLowerCase().contains(query) ||
+                             '${tr.aliasName} (${tr.customerName})'.toLowerCase().contains(query);
         final matchNote = tr.note.toLowerCase().contains(query);
         final matchDate = DateFormat('dd-MM-yyyy').format(tr.date).contains(query) ||
             (tr.deliveryDate != null && DateFormat('dd-MM-yyyy').format(tr.deliveryDate!).contains(query)) ||
             (tr.transferDate != null && DateFormat('dd-MM-yyyy').format(tr.transferDate!).contains(query)) ||
             (tr.erpSyncDate != null && DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!).contains(query));
 
-        return matchInvoice || matchAlias || matchCust || matchNote || matchDate;
+        return matchInvoice || matchAlias || matchCust || matchDisplay || matchNote || matchDate;
       }
 
       return true;
