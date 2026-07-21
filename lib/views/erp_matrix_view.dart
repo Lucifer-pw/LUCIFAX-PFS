@@ -119,7 +119,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       if (invoices != null && invoices.isNotEmpty) {
         for (var inv in invoices) {
           final invNoStr = (inv['invoiceNo'] ?? '').toString().toUpperCase();
-          final isSampleInvoice = invNoStr.startsWith('SA');
+          final isSampleInvoice = invNoStr.startsWith('SA') || invNoStr.contains('SAMPLE') || invNoStr.contains('BONUS');
 
           final items = inv['items'] as List<dynamic>?;
           if (items != null) {

@@ -692,8 +692,18 @@ class FirebaseService {
       });
     }
 
-    // Save transaction (status PENDING = no stock deduction, no ERP sync)
+    // Save transaction doc
     await _db.collection('transactions').doc(docId).set(trDoc.toMap());
+
+    // If imported transaction has erpSyncDate set, sync to erp_summary collection
+    if (erpSyncDate != null) {
+      final String monthYear = DateFormat('MM-yyyy').format(erpSyncDate);
+      final erpRef = _db.collection('erp_summary').doc("${monthYear}_${trDoc.customerId}");
+      await _db.runTransaction((transaction) async {
+        final erpSnap = await transaction.get(erpRef);
+        _addToErpSummary(transaction, erpRef, erpSnap, trDoc, monthYear);
+      });
+    }
   }
 
   // Update existing transaction with stock and ERP summary updates
