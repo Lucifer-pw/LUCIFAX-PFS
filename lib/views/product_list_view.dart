@@ -55,12 +55,18 @@ class _ProductListViewState extends State<ProductListView> {
 
   void _showProductDialog([Product? product]) {
     final isEdit = product != null;
+    final double initialStock = product?.stock ?? 0.0;
+
     final idController = TextEditingController(text: product?.id ?? '');
     final nameController = TextEditingController(text: product?.name ?? '');
     final priceController = TextEditingController(text: product != null ? product.price.toStringAsFixed(0) : '');
     final stockController = TextEditingController(text: product != null ? product.stock.toStringAsFixed(0) : '0');
+    final entryController = TextEditingController(text: '0');
     final cartonController = TextEditingController(text: product?.isiKarton.toString() ?? '');
     final sizeController = TextEditingController(text: product != null ? product.sizeGrams.toStringAsFixed(0) : '');
+
+    bool isUpdatingFromStock = false;
+    bool isUpdatingFromEntry = false;
 
     // Auto-parse size from name on change
     nameController.addListener(() {
@@ -75,167 +81,266 @@ class _ProductListViewState extends State<ProductListView> {
     showDialog(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(isEdit ? Icons.edit_note_rounded : Icons.add_box_rounded, color: const Color(0xFF38BDF8)),
-              const SizedBox(width: 10),
-              Text(isEdit ? 'Edit Data Barang' : 'Tambah Barang Baru', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 440,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final targetStock = _parseCleanDouble(stockController.text);
+            final entryDiff = isEdit ? (targetStock - initialStock) : targetStock;
+
+            Color entryColor;
+            String entryText;
+            IconData entryIcon;
+
+            if (entryDiff > 0) {
+              entryColor = const Color(0xFF4ADE80); // Bright Green
+              entryText = '+${entryDiff.toStringAsFixed(0)} pcs (Bertambah)';
+              entryIcon = Icons.trending_up_rounded;
+            } else if (entryDiff < 0) {
+              entryColor = const Color(0xFFF87171); // Bright Red
+              entryText = '${entryDiff.toStringAsFixed(0)} pcs (Berkurang)';
+              entryIcon = Icons.trending_down_rounded;
+            } else {
+              entryColor = const Color(0xFF94A3B8); // Neutral Grey
+              entryText = '0 pcs (Tetap)';
+              entryIcon = Icons.remove_rounded;
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
                 children: [
-                  TextFormField(
-                    controller: idController,
-                    enabled: !isEdit, // Cannot edit ID after creation (primary key)
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Kode Induk / SKU (e.g. BA-250)'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: nameController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Nama Barang (e.g. BAKSO AYAM 250 G)'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: priceController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Harga Unit (Rupiah)'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: stockController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Jumlah Stok Saat Ini'),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
+                  Icon(isEdit ? Icons.edit_note_rounded : Icons.add_box_rounded, color: const Color(0xFF38BDF8)),
+                  const SizedBox(width: 10),
+                  Text(isEdit ? 'Edit Data Barang' : 'Tambah Barang Baru', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 460,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: cartonController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: _buildInputDecoration(hint: 'Isi per Karton (Pcs)'),
+                      TextFormField(
+                        controller: idController,
+                        enabled: !isEdit, // Cannot edit ID after creation (primary key)
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration(hint: 'Kode Induk / SKU (e.g. BA-250)'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: nameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration(hint: 'Nama Barang (e.g. BAKSO AYAM 250 G)'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: priceController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration(hint: 'Harga Unit (Rupiah)'),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Stock & Entry Calculation Container
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isEdit ? entryColor.withOpacity(0.4) : const Color(0xFF334155)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (isEdit) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Stok Awal: ${initialStock.toStringAsFixed(0)} pcs',
+                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: entryColor.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: entryColor.withOpacity(0.5)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(entryIcon, color: entryColor, size: 14),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Entry: $entryText',
+                                          style: TextStyle(color: entryColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: stockController,
+                                    keyboardType: TextInputType.number,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    decoration: _buildInputDecoration(hint: isEdit ? 'Stok Baru' : 'Jumlah Stok Saat Ini'),
+                                    onChanged: (val) {
+                                      setDialogState(() {
+                                        if (isEdit && !isUpdatingFromEntry) {
+                                          isUpdatingFromStock = true;
+                                          final target = _parseCleanDouble(val);
+                                          final diff = target - initialStock;
+                                          entryController.text = diff > 0 ? '+${diff.toStringAsFixed(0)}' : diff.toStringAsFixed(0);
+                                          isUpdatingFromStock = false;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                                if (isEdit) ...[
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: entryController,
+                                      keyboardType: const TextInputType.numberWithOptions(signed: true),
+                                      style: TextStyle(color: entryColor, fontWeight: FontWeight.bold),
+                                      decoration: _buildInputDecoration(hint: 'Entry / Selisih (+/-)').copyWith(
+                                        prefixIcon: Icon(entryIcon, color: entryColor, size: 16),
+                                      ),
+                                      onChanged: (val) {
+                                        setDialogState(() {
+                                          if (!isUpdatingFromStock) {
+                                            isUpdatingFromEntry = true;
+                                            final cleanVal = val.replaceAll('+', '').trim();
+                                            final diff = double.tryParse(cleanVal) ?? 0.0;
+                                            final newStock = initialStock + diff;
+                                            stockController.text = newStock.toStringAsFixed(0);
+                                            isUpdatingFromEntry = false;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: sizeController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: _buildInputDecoration(hint: 'Berat (Gram)'),
-                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: cartonController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Isi per Karton (Pcs)'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: sizeController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Berat (Gram)'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0284C7),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              onPressed: () async {
-                final id = idController.text.trim().toUpperCase();
-                final name = nameController.text.trim().toUpperCase();
-                final price = _parseCleanDouble(priceController.text);
-                final stock = _parseCleanDouble(stockController.text);
-                final carton = _parseCleanInt(cartonController.text);
-                final size = _parseCleanDouble(sizeController.text);
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  onPressed: () async {
+                    final id = idController.text.trim().toUpperCase();
+                    final name = nameController.text.trim().toUpperCase();
+                    final price = _parseCleanDouble(priceController.text);
+                    final stock = _parseCleanDouble(stockController.text);
+                    final carton = _parseCleanInt(cartonController.text);
+                    final size = _parseCleanDouble(sizeController.text);
 
-                if (id.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Harap isi Kode Induk / SKU barang!'), backgroundColor: Colors.orange),
-                  );
-                  return;
-                }
-
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Harap isi Nama Barang!'), backgroundColor: Colors.orange),
-                  );
-                  return;
-                }
-
-                try {
-                  final localProduct = product;
-                  String docId = (isEdit && localProduct != null) ? localProduct.id : id;
-                  String parentKodeInduk = (isEdit && localProduct != null) ? localProduct.kodeInduk : id;
-                  double finalStock = stock;
-
-                  if (!isEdit) {
-                    final allProducts = Provider.of<ProductProvider>(context, listen: false).products;
-                    final existingVariants = allProducts.where((p) => p.kodeInduk.toUpperCase() == id || p.id.toUpperCase() == id).toList();
-
-                    if (existingVariants.isNotEmpty) {
-                      // Generate unique doc ID e.g. BRSM-500-2 while keeping parent Kode Induk BRSM-500
-                      docId = '$id-${existingVariants.length + 1}';
-                      parentKodeInduk = id;
-                      // Inherit shared stock from existing variant
-                      finalStock = existingVariants.first.stock;
+                    if (id.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Harap isi Kode Induk / SKU barang!'), backgroundColor: Colors.orange),
+                      );
+                      return;
                     }
-                  }
 
-                  final newProd = Product(
-                    id: docId,
-                    kodeInduk: parentKodeInduk,
-                    name: name,
-                    price: price,
-                    stock: finalStock,
-                    isiKarton: carton,
-                    sizeGrams: size,
-                  );
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Harap isi Nama Barang!'), backgroundColor: Colors.orange),
+                      );
+                      return;
+                    }
 
-                  await Provider.of<ProductProvider>(context, listen: false).saveProduct(newProd);
+                    try {
+                      final localProduct = product;
+                      if (localProduct != null) {
+                        // Edit Existing Product
+                        final updated = Product(
+                          id: id,
+                          name: name,
+                          price: price,
+                          stock: stock,
+                          isiKarton: carton,
+                          sizeGrams: size,
+                        );
+                        await Provider.of<ProductProvider>(context, listen: false).saveProduct(updated);
+                      } else {
+                        // Create New Product
+                        final newProd = Product(
+                          id: id,
+                          name: name,
+                          price: price,
+                          stock: stock,
+                          isiKarton: carton,
+                          sizeGrams: size,
+                        );
+                        await Provider.of<ProductProvider>(context, listen: false).saveProduct(newProd);
+                      }
 
-                  if (mounted) {
-                    // Reset search filter so newly added product is visible immediately
-                    _searchController.clear();
-                    setState(() {
-                      _searchQuery = '';
-                    });
-
-                    Navigator.pop(dialogContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(isEdit 
-                            ? 'Barang "$name" berhasil diperbarui.' 
-                            : 'Varian Barang "$name" ($parentKodeInduk) berhasil ditambahkan dengan stok terpusat!'),
-                        backgroundColor: Colors.teal[600],
-                        duration: const Duration(seconds: 4),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Gagal menyimpan barang: $e'), backgroundColor: Colors.redAccent),
-                    );
-                  }
-                }
-              },
-              child: const Text('Simpan Data', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
+                      if (context.mounted) {
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isEdit ? 'Barang $name berhasil diperbarui!' : 'Barang $name berhasil ditambahkan!'),
+                            backgroundColor: Colors.teal,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal menyimpan barang: $e'), backgroundColor: Colors.redAccent),
+                        );
+                      }
+                    }
+                  },
+                  child: Text(isEdit ? 'Simpan Data' : 'Tambah Barang', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
         );
       },
     );
