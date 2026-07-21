@@ -1180,8 +1180,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return true;
     }).toList();
 
-    // Sort by invoiceNo strictly descending (highest to lowest, e.g. #624, #623, #622...)
-    filteredTransactions.sort((a, b) => b.invoiceNo.compareTo(a.invoiceNo));
+    // Sort by invoiceNo strictly descending (highest to lowest, e.g. #625, #624, #SA34, #SA1...)
+    filteredTransactions.sort((a, b) {
+      final aNum = int.tryParse(a.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+      final bNum = int.tryParse(b.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (aNum != null && bNum != null && aNum != bNum) {
+        return bNum.compareTo(aNum);
+      }
+      return b.invoiceNo.compareTo(a.invoiceNo);
+    });
 
     // Calculate Pagination Slice
     final totalItems = filteredTransactions.length;

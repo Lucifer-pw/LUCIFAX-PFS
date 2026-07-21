@@ -405,15 +405,15 @@ class ImportService {
 
     for (final entry in invoiceRows.entries) {
       try {
-        final invNoStr = entry.key;
+        final invNoStr = entry.key.trim();
         final rows = entry.value;
         final firstRow = rows.first;
-        final invoiceNo = int.tryParse(invNoStr) ?? 0;
-        if (invoiceNo <= 0) {
+        if (invNoStr.isEmpty) {
           errors++;
-          errorList.add('Invoice "$invNoStr": Nomor invoice tidak valid.');
+          errorList.add('Baris ${firstRow + 1}: Nomor invoice kosong.');
           continue;
         }
+        final docId = invNoStr;
 
         // Build items from all rows with same invoice
         List<Map<String, dynamic>> items = [];
@@ -488,7 +488,7 @@ class ImportService {
         }
 
         await _dbService.importTransaction(
-          invoiceNo: invoiceNo,
+          invoiceNo: docId,
           customerId: colCustId != -1 ? _cellStr(sheet, firstRow, colCustId) : '',
           customerName: colCustName != -1 ? _cellStr(sheet, firstRow, colCustName) : '',
           aliasName: colAlias != -1 ? _cellStr(sheet, firstRow, colAlias) : '',

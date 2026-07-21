@@ -178,7 +178,27 @@ class FirebaseService {
     });
   }
 
-  // Save transaction with Auto-Increment Invoice Number & ERP update inside a Firestore Transaction
+  Future<String> peekNextInvoiceNo({String type = 'PO'}) async {
+    if (type == 'SA') {
+      final counterRef = _db.collection('counters').doc('sample_transactions');
+      final snap = await counterRef.get();
+      int current = 0;
+      if (snap.exists) {
+        current = snap.data()?['lastSaNo'] ?? 0;
+      }
+      return 'SA${current + 1}';
+    } else {
+      final counterRef = _db.collection('counters').doc('transactions');
+      final snap = await counterRef.get();
+      int current = 180;
+      if (snap.exists) {
+        current = snap.data()?['lastInvoiceNo'] ?? current;
+      }
+      return '${current + 1}';
+    }
+  }
+
+  // Save transaction with Auto-Increment Invoice Number (PO or SA) & ERP update inside a Firestore Transaction
   Future<model_tr.Transaction> createTransaction({
     required String customerId,
     required String customerName,
@@ -191,25 +211,50 @@ class FirebaseService {
     required double grandTotal,
     required String note,
     required String createdBy,
+    String invoiceType = 'PO', // 'PO' or 'SA'
+    String? customSaNo,
   }) async {
-    final counterRef = _db.collection('counters').doc('transactions');
     final now = DateTime.now();
+    String docId = '';
 
-    // Use a transaction to ensure atomic invoice increments
-    int newInvoiceNo = await _db.runTransaction<int>((transaction) async {
-      final counterSnapshot = await transaction.get(counterRef);
-      int currentNo = 180; // Starting invoice offset from VBA data
-      if (counterSnapshot.exists) {
-        currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
+    if (invoiceType == 'SA') {
+      if (customSaNo != null && customSaNo.trim().isNotEmpty) {
+        String clean = customSaNo.trim().toUpperCase();
+        if (!clean.startsWith('SA')) {
+          clean = 'SA$clean';
+        }
+        docId = clean;
+      } else {
+        final saCounterRef = _db.collection('counters').doc('sample_transactions');
+        int nextSa = await _db.runTransaction<int>((transaction) async {
+          final snap = await transaction.get(saCounterRef);
+          int current = 0;
+          if (snap.exists) {
+            current = snap.data()?['lastSaNo'] ?? 0;
+          }
+          final next = current + 1;
+          transaction.set(saCounterRef, {'lastSaNo': next});
+          return next;
+        });
+        docId = 'SA$nextSa';
       }
-      final nextNo = currentNo + 1;
-      transaction.set(counterRef, {'lastInvoiceNo': nextNo});
-      return nextNo;
-    });
+    } else {
+      final counterRef = _db.collection('counters').doc('transactions');
+      int nextNo = await _db.runTransaction<int>((transaction) async {
+        final counterSnapshot = await transaction.get(counterRef);
+        int currentNo = 180;
+        if (counterSnapshot.exists) {
+          currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
+        }
+        final next = currentNo + 1;
+        transaction.set(counterRef, {'lastInvoiceNo': next});
+        return next;
+      });
+      docId = nextNo.toString();
+    }
 
-    final docId = newInvoiceNo.toString();
     final trDoc = model_tr.Transaction(
-      invoiceNo: newInvoiceNo,
+      invoiceNo: docId,
       customerId: customerId,
       customerName: customerName,
       aliasName: aliasName,
@@ -233,14 +278,14 @@ class FirebaseService {
     return trDoc;
   }
 
-  Future<void> updateTransactionTransferStatus(int invoiceNo, String status, DateTime? transferDate) async {
+  Future<void> updateTransactionTransferStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {
     await _db.collection('transactions').doc(invoiceNo.toString()).update({
       'statusTransfer': status,
       'transferDate': transferDate != null ? Timestamp.fromDate(transferDate) : null,
     });
   }
 
-  Future<void> updateTransactionDeliveryDate(int invoiceNo, DateTime deliveryDate) async {
+  Future<void> updateTransactionDeliveryDate(dynamic invoiceNo, DateTime deliveryDate) async {
     await _db.collection('transactions').doc(invoiceNo.toString()).update({
       'deliveryDate': Timestamp.fromDate(deliveryDate),
     });
@@ -341,7 +386,7 @@ class FirebaseService {
     transaction.set(erpRef, erpData);
   }
 
-  Future<void> updateTransactionErpStatus(int invoiceNo, DateTime? newErpSyncDate) async {
+  Future<void> updateTransactionErpStatus(dynamic invoiceNo, DateTime? newErpSyncDate) async {
     final docRef = _db.collection('transactions').doc(invoiceNo.toString());
 
     await _db.runTransaction((transaction) async {
@@ -586,9 +631,9 @@ class FirebaseService {
     return customerErpMap.values.toList();
   }
 
-  // Import transaction (with specific invoice number)
+  // Import transaction (with specific invoice number, e.g. "625", "SA1", "SA34")
   Future<void> importTransaction({
-    required int invoiceNo,
+    required dynamic invoiceNo,
     required String customerId,
     required String customerName,
     required String aliasName,
@@ -608,9 +653,10 @@ class FirebaseService {
   }) async {
     final now = DateTime.now();
     final listItems = items.map((e) => model_tr.TransactionItem.fromMap(e)).toList();
+    final String docId = invoiceNo.toString();
 
     final trDoc = model_tr.Transaction(
-      invoiceNo: invoiceNo,
+      invoiceNo: docId,
       customerId: customerId,
       customerName: customerName,
       aliasName: aliasName,
@@ -630,21 +676,24 @@ class FirebaseService {
       createdAt: now,
     );
 
-    // Update lastInvoiceNo counter if imported invoice number is larger
-    final counterRef = _db.collection('counters').doc('transactions');
-    await _db.runTransaction((transaction) async {
-      final counterSnapshot = await transaction.get(counterRef);
-      int currentNo = 180;
-      if (counterSnapshot.exists) {
-        currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
-      }
-      if (invoiceNo > currentNo) {
-        transaction.set(counterRef, {'lastInvoiceNo': invoiceNo});
-      }
-    });
+    // Update lastInvoiceNo counter if imported numeric invoice number is larger
+    final int? numericInv = int.tryParse(docId);
+    if (numericInv != null) {
+      final counterRef = _db.collection('counters').doc('transactions');
+      await _db.runTransaction((transaction) async {
+        final counterSnapshot = await transaction.get(counterRef);
+        int currentNo = 180;
+        if (counterSnapshot.exists) {
+          currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
+        }
+        if (numericInv > currentNo) {
+          transaction.set(counterRef, {'lastInvoiceNo': numericInv});
+        }
+      });
+    }
 
     // Save transaction (status PENDING = no stock deduction, no ERP sync)
-    await _db.collection('transactions').doc(invoiceNo.toString()).set(trDoc.toMap());
+    await _db.collection('transactions').doc(docId).set(trDoc.toMap());
   }
 
   // Update existing transaction with stock and ERP summary updates
@@ -797,7 +846,7 @@ class FirebaseService {
   }
 
   // Delete transaction
-  Future<void> deleteTransaction(int invoiceNo) async {
+  Future<void> deleteTransaction(dynamic invoiceNo) async {
     final docRef = _db.collection('transactions').doc(invoiceNo.toString());
 
     await _db.runTransaction((transaction) async {

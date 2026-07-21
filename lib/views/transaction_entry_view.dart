@@ -318,6 +318,87 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   }
                 },
               ),
+              const SizedBox(height: 8),
+
+              // Invoice Type & Numbering Option Dropdown (PO vs SA)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 18),
+                        const SizedBox(width: 8),
+                        const Text('Jenis Invoice:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: trProvider.invoiceType,
+                              dropdownColor: const Color(0xFF1E293B),
+                              isExpanded: true,
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'PO',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.shopping_bag_rounded, color: Colors.greenAccent, size: 16),
+                                      SizedBox(width: 6),
+                                      Text('PO (Penjualan)'),
+                                    ],
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'SA',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.card_giftcard_rounded, color: Colors.amberAccent, size: 16),
+                                      SizedBox(width: 6),
+                                      Text('SA (Sample / Bonus)'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  trProvider.setInvoiceType(val);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (trProvider.invoiceType == 'SA') ...[
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          labelText: 'No. Invoice SA (Contoh: SA34 atau SA1)',
+                          labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                          hintText: 'Kosongkan untuk nomor otomatis (SA1, SA2...)',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                          isDense: true,
+                          filled: true,
+                          fillColor: const Color(0xFF1E293B),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                        ),
+                        onChanged: (val) {
+                          trProvider.setInvoiceType('SA', customSaNo: val);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),

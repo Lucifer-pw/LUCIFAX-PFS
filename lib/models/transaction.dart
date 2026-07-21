@@ -51,7 +51,7 @@ class TransactionItem {
 }
 
 class Transaction {
-  final int invoiceNo; // auto-incrementing ID
+  final String invoiceNo; // auto-incrementing or custom ID (e.g. "625", "SA1", "SA34")
   final String customerId;
   final String customerName;
   final String aliasName;
@@ -104,8 +104,12 @@ class Transaction {
     final rawDeliveryDate = map['deliveryDate'] != null ? (map['deliveryDate'] as Timestamp).toDate() : null;
     final deliveryDate = status == 'DIKIRIM' ? rawDeliveryDate : null;
 
+    final String finalInvoiceNo = map['invoiceNo']?.toString().isNotEmpty == true 
+        ? map['invoiceNo'].toString() 
+        : docId;
+
     return Transaction(
-      invoiceNo: int.tryParse(docId) ?? 0,
+      invoiceNo: finalInvoiceNo,
       customerId: map['customerId'] ?? '',
       customerName: map['customerName'] ?? '',
       aliasName: map['aliasName'] ?? '',
@@ -128,6 +132,7 @@ class Transaction {
 
   Map<String, dynamic> toMap() {
     return {
+      'invoiceNo': invoiceNo,
       'customerId': customerId,
       'customerName': customerName,
       'aliasName': aliasName,

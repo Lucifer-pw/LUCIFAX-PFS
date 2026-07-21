@@ -23,6 +23,8 @@ class TransactionProvider extends ChangeNotifier {
   String? _selectedCountry;
   String _note = "";
   DateTime _deliveryDate = DateTime.now();
+  String _invoiceType = 'PO'; // 'PO' or 'SA'
+  String _customSaNo = '';
 
   List<model_tr.Transaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
@@ -36,6 +38,18 @@ class TransactionProvider extends ChangeNotifier {
   String? get selectedCountry => _selectedCountry;
   String get note => _note;
   DateTime get deliveryDate => _deliveryDate;
+  String get invoiceType => _invoiceType;
+  String get customSaNo => _customSaNo;
+
+  void setInvoiceType(String type, {String? customSaNo}) {
+    _invoiceType = type;
+    if (customSaNo != null) _customSaNo = customSaNo;
+    notifyListeners();
+  }
+
+  Future<String> peekNextInvoiceNo() async {
+    return await _dbService.peekNextInvoiceNo(type: _invoiceType);
+  }
 
   double get grandTotal {
     return _cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
@@ -194,26 +208,28 @@ class TransactionProvider extends ChangeNotifier {
       grandTotal: grandTotal,
       note: _note,
       createdBy: createdBy,
+      invoiceType: _invoiceType,
+      customSaNo: _customSaNo,
     );
 
     clearCart();
     return savedTr;
   }
 
-  Future<void> updatePaymentStatus(int invoiceNo, String status, DateTime? transferDate) async {
+  Future<void> updatePaymentStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {
     await _dbService.updateTransactionTransferStatus(invoiceNo, status, transferDate);
   }
 
-  Future<void> updateDeliveryStatus(int invoiceNo, String status, DateTime? deliveryDate) async {
+  Future<void> updateDeliveryStatus(dynamic invoiceNo, String status, DateTime? deliveryDate) async {
     await _dbService.updateTransactionDeliveryStatus(invoiceNo, status, deliveryDate);
     notifyListeners();
   }
 
-  Future<void> updateDeliveryDate(int invoiceNo, DateTime deliveryDate) async {
+  Future<void> updateDeliveryDate(dynamic invoiceNo, DateTime deliveryDate) async {
     await _dbService.updateTransactionDeliveryDate(invoiceNo, deliveryDate);
   }
 
-  Future<void> updateErpStatus(int invoiceNo, DateTime? erpSyncDate) async {
+  Future<void> updateErpStatus(dynamic invoiceNo, DateTime? erpSyncDate) async {
     await _dbService.updateTransactionErpStatus(invoiceNo, erpSyncDate);
     notifyListeners();
   }
@@ -223,7 +239,7 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteTransaction(int invoiceNo) async {
+  Future<void> deleteTransaction(dynamic invoiceNo) async {
     await _dbService.deleteTransaction(invoiceNo);
     notifyListeners();
   }
