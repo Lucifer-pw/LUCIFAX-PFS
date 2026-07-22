@@ -48,7 +48,7 @@ void main() async {
     @override
     Widget build(BuildContext context) {
       return MaterialApp(
-        title: 'FIVA SOLO Cashier',
+        title: 'Lucifax - PFS Jateng',
         debugShowCheckedModeBanner: false,
         
         // Premium Slate-Dark Design System Theme

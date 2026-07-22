@@ -1,11 +1,11 @@
 {
-    "name": "cashier_app",
-    "short_name": "cashier_app",
+    "name": "Lucifax - PFS Jateng",
+    "short_name": "Lucifax PFS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0F172A",
+    "theme_color": "#0F172A",
+    "description": "Sistem Pengelolaan Transaksi PT. Putra Fiva Sejahterah Cabang Jawa Tengah",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
