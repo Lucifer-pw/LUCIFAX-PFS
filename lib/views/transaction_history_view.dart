@@ -544,8 +544,57 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  Map<String, String> _resolveCustomerDisplay(model_tr.Transaction tr, List<Customer> masterCustomers) {
+    String storeName = tr.aliasName.trim();
+    String ownerName = tr.customerName.trim();
+
+    if (ownerName.isEmpty || ownerName.toUpperCase() == storeName.toUpperCase()) {
+      Customer? matched;
+      if (tr.customerId.isNotEmpty) {
+        try {
+          matched = masterCustomers.firstWhere((c) => c.id == tr.customerId);
+        } catch (_) {}
+      }
+      if (matched == null && storeName.isNotEmpty) {
+        try {
+          matched = masterCustomers.firstWhere((c) => c.aliasName.trim().toUpperCase() == storeName.toUpperCase());
+        } catch (_) {}
+      }
+      if (matched == null && storeName.isNotEmpty) {
+        try {
+          matched = masterCustomers.firstWhere((c) => c.customerName.trim().toUpperCase() == storeName.toUpperCase());
+        } catch (_) {}
+      }
+
+      if (matched != null) {
+        if (storeName.isEmpty && matched.aliasName.trim().isNotEmpty) {
+          storeName = matched.aliasName.trim();
+        }
+        if (matched.customerName.trim().isNotEmpty && matched.customerName.trim().toUpperCase() != storeName.toUpperCase()) {
+          ownerName = matched.customerName.trim();
+        }
+      }
+    }
+
+    final hasStore = storeName.isNotEmpty;
+    final hasOwner = ownerName.isNotEmpty && ownerName.toUpperCase() != storeName.toUpperCase();
+
+    final firstLine = hasStore ? storeName : (hasOwner ? ownerName : '-');
+    final secondLine = (hasStore && hasOwner) ? '($ownerName)' : '';
+    final fullDisplay = (hasStore && hasOwner) ? '$storeName ($ownerName)' : firstLine;
+
+    return {
+      'firstLine': firstLine,
+      'secondLine': secondLine,
+      'fullDisplay': fullDisplay,
+    };
+  }
+
   // Show detailed item list in dialog
   void _showDetailDialog(model_tr.Transaction tr) {
+    final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
+    final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
+
     showDialog(
       context: context,
       builder: (context) {
@@ -573,9 +622,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     Expanded(
                       child: _buildDetailRow(
                         'Pelanggan:', 
-                        (tr.aliasName.trim().isNotEmpty && tr.customerName.trim().isNotEmpty && tr.customerName.trim().toUpperCase() != tr.aliasName.trim().toUpperCase())
-                            ? '${tr.aliasName.trim()} (${tr.customerName.trim()})'
-                            : (tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : (tr.customerName.trim().isNotEmpty ? tr.customerName.trim() : '-')),
+                        customerInfo['fullDisplay']!,
                       ),
                     ),
                     Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
@@ -1227,6 +1274,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   @override
   Widget build(BuildContext context) {
     final trProvider = Provider.of<TransactionProvider>(context);
+    final masterCustomers = Provider.of<CustomerProvider>(context).customers;
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
     final createdBy = user?.uid ?? 'system';
     final isKacab = user?.isKacab ?? false;
@@ -1582,13 +1630,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   DataCell(
                                                     Builder(
                                                       builder: (context) {
-                                                        final alias = tr.aliasName.trim();
-                                                        final owner = tr.customerName.trim();
-                                                        final hasAlias = alias.isNotEmpty;
-                                                        final hasOwner = owner.isNotEmpty && owner.toUpperCase() != alias.toUpperCase();
-
-                                                        final firstLine = hasAlias ? alias : (hasOwner ? owner : '-');
-                                                        final secondLine = (hasAlias && hasOwner) ? '($owner)' : '';
+                                                        final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
+                                                        final firstLine = customerInfo['firstLine']!;
+                                                        final secondLine = customerInfo['secondLine']!;
 
                                                         return Column(
                                                           mainAxisAlignment: MainAxisAlignment.center,
