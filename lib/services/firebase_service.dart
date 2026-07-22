@@ -434,7 +434,7 @@ class FirebaseService {
 
   // Update delivery status (DIKIRIM / PENDING) and deliveryDate with automatic stock deduction/restoration
   Future<void> updateTransactionDeliveryStatus(
-    int invoiceNo,
+    dynamic invoiceNo,
     String newStatus,
     DateTime? newDeliveryDate,
   ) async {
