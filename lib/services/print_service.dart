@@ -170,8 +170,8 @@ class PrintService {
                     );
                   }),
 
-                  // Padding Empty Rows to ensure uniform 10-row grid layout
-                  ...List.generate(10 - transaction.items.length, (_) {
+                  // Padding Empty Rows to ensure uniform 14-row grid layout
+                  ...List.generate((14 - transaction.items.length).clamp(0, 14), (_) {
                     return pw.TableRow(
                       children: [
                         _buildCell(' '),
@@ -454,7 +454,7 @@ class PrintService {
       buffer.writeln("$colName$colQty$colPrice$colDisc$colSub");
     }
 
-    final remainingRows = 10 - transaction.items.length;
+    final remainingRows = (14 - transaction.items.length).clamp(0, 14);
     for (var i = 0; i < remainingRows; i++) {
       buffer.writeln("");
     }
