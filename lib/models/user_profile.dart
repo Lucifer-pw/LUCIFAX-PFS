@@ -27,4 +27,8 @@ class UserProfile {
       'role': role,
     };
   }
+
+  bool get isDeveloper => role == 'developer';
+  bool get isKacab => role == 'kacab' || role == 'manager';
+  bool get isAdmin => role == 'admin' || role == 'developer';
 }

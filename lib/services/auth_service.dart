@@ -55,10 +55,10 @@ class AuthService {
 
       if (cleanUsername == 'admin') {
         role = 'developer';
-        displayName = 'Administrator';
-      } else if (cleanUsername == 'manager') {
-        role = 'manager';
-        displayName = 'Manager';
+        displayName = 'Developer';
+      } else if (cleanUsername == 'kacab' || cleanUsername == 'manager') {
+        role = 'kacab';
+        displayName = 'Kepala Sales';
       } else if (cleanUsername == 'setiawan') {
         role = 'cashier';
         displayName = 'Setiawan';
@@ -107,8 +107,9 @@ class AuthService {
   Future<void> seedDefaultUsers() async {
     final defaultUsers = [
       {'user': 'admin', 'pass': 'cabangjateng', 'role': 'developer', 'name': 'Developer'},
+      {'user': 'kacab', 'pass': 'salesjateng', 'role': 'kacab', 'name': 'Kepala Sales'},
+      {'user': 'manager', 'pass': 'pfs2025', 'role': 'kacab', 'name': 'Kepala Sales'},
       {'user': 'setiawan', 'pass': 'jateng', 'role': 'cashier', 'name': 'Setiawan'},
-      {'user': 'manager', 'pass': 'pfs2025', 'role': 'manager', 'name': 'Manager'},
     ];
 
     List<String> errors = [];

@@ -79,6 +79,17 @@ class _ShellViewState extends State<ShellView> {
 
   // Sidebar sections configuration based on user roles
   List<Map<String, dynamic>> _getNavItems(String role) {
+    // Kacab / Manager Role: Restricted to Histori Transaksi only
+    if (role == 'kacab' || role == 'manager') {
+      return [
+        {
+          'title': 'Histori Transaksi',
+          'icon': Icons.history_rounded,
+          'widget': const TransactionHistoryView(),
+        },
+      ];
+    }
+
     final List<Map<String, dynamic>> items = [
       {
         'title': 'Transaksi Kasir',
@@ -93,7 +104,7 @@ class _ShellViewState extends State<ShellView> {
     ];
 
     // Master data screens (Admin/Developer only)
-    if (role == 'developer') {
+    if (role == 'developer' || role == 'admin') {
       items.addAll([
         {
           'title': 'Master Barang',
@@ -108,7 +119,7 @@ class _ShellViewState extends State<ShellView> {
       ]);
     }
 
-    // ERP and Dashboard views (everyone, but CRUD inside restricted)
+    // ERP and Dashboard views
     items.addAll([
       {
         'title': 'Input Stok',
@@ -322,7 +333,7 @@ class _ShellViewState extends State<ShellView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Lucifax PFS v1.9.6',
+                    'Lucifax PFS v1.9.7',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.0),
                   ),
                   Text(

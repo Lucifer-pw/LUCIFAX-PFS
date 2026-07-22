@@ -1222,6 +1222,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final trProvider = Provider.of<TransactionProvider>(context);
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
     final createdBy = user?.uid ?? 'system';
+    final isKacab = user?.isKacab ?? false;
 
     // Apply local queries, month filter, and status filter
     final filteredTransactions = trProvider.transactions.where((tr) {
@@ -1461,19 +1462,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     });
                   },
                 ),
-                const SizedBox(width: 12),
-
-                // Import Excel Button
-                ElevatedButton.icon(
-                  onPressed: () => _importTransactionsFromExcel(createdBy),
-                  icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
-                  label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                if (!isKacab) ...[
+                  const SizedBox(width: 12),
+                  // Import Excel Button
+                  ElevatedButton.icon(
+                    onPressed: () => _importTransactionsFromExcel(createdBy),
+                    icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
+                    label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal[700],
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
             const SizedBox(height: 20),
@@ -1727,46 +1729,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                             ),
                                                           ),
                                                           const PopupMenuItem(
-                                                            value: 'delivery',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.local_shipping_outlined, color: Colors.greenAccent, size: 18),
-                                                                SizedBox(width: 10),
-                                                                Text('Update Status Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value: 'payment',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 18),
-                                                                SizedBox(width: 10),
-                                                                Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value: 'erp',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 18),
-                                                                SizedBox(width: 10),
-                                                                Text('Update Status ERP', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value: 'edit',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
-                                                                SizedBox(width: 10),
-                                                                Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
                                                             value: 'print',
                                                             child: Row(
                                                               children: [
@@ -1776,17 +1738,59 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                               ],
                                                             ),
                                                           ),
-                                                          const PopupMenuDivider(height: 8),
-                                                          const PopupMenuItem(
-                                                            value: 'delete',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                                                SizedBox(width: 10),
-                                                                Text('Hapus Transaksi', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
-                                                              ],
+                                                          if (!isKacab) ...[
+                                                            const PopupMenuItem(
+                                                              value: 'delivery',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.local_shipping_outlined, color: Colors.greenAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Update Status Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                ],
+                                                              ),
                                                             ),
-                                                          ),
+                                                            const PopupMenuItem(
+                                                              value: 'payment',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            const PopupMenuItem(
+                                                              value: 'erp',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Update Status ERP', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            const PopupMenuItem(
+                                                              value: 'edit',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            const PopupMenuDivider(height: 8),
+                                                            const PopupMenuItem(
+                                                              value: 'delete',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Hapus Transaksi', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ],
                                                       ),
                                                     ),
