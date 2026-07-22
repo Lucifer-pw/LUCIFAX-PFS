@@ -1181,6 +1181,42 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  void _deleteTransaction(dynamic invoiceNo) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: Text('Hapus Transaksi #$invoiceNo?', style: const TextStyle(color: Colors.white)),
+          content: const Text(
+            'Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.',
+            style: TextStyle(color: Color(0xFF94A3B8)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              onPressed: () async {
+                final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+                await trProvider.deleteTransaction(invoiceNo);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Transaksi #$invoiceNo berhasil dihapus.'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              },
+              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final trProvider = Provider.of<TransactionProvider>(context);
@@ -1664,19 +1700,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                                         onSelected: (action) {
                                                           if (action == 'detail') {
-                                                            _showTransactionDetailModal(tr);
+                                                            _showDetailDialog(tr);
                                                           } else if (action == 'delivery') {
-                                                            _showDeliveryStatusDialog(tr);
+                                                            _showUpdateDeliveryStatusDialog(tr);
                                                           } else if (action == 'payment') {
-                                                            _showPaymentStatusDialog(tr);
+                                                            _showUpdateStatusDialog(tr);
                                                           } else if (action == 'erp') {
-                                                            _showErpStatusDialog(tr);
+                                                            _showUpdateErpStatusDialog(tr);
                                                           } else if (action == 'edit') {
-                                                            _showEditTransactionModal(tr);
+                                                            _showEditTransactionDialog(tr);
                                                           } else if (action == 'print') {
-                                                            _showPrintOptionsDialog(tr);
+                                                            _showPrintDialog(tr);
                                                           } else if (action == 'delete') {
-                                                            _confirmDeleteTransaction(tr.invoiceNo);
+                                                            _deleteTransaction(tr.invoiceNo);
                                                           }
                                                         },
                                                         itemBuilder: (ctx) => [
