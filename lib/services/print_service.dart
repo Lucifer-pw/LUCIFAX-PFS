@@ -96,10 +96,10 @@ class PrintService {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          _buildHeaderField('No Invoice:', transaction.invoiceNo.toString()),
-                          _buildHeaderField('Kepada:', transaction.aliasName),
-                          _buildHeaderField('Tanggal Pengiriman:', delivDateStr),
-                          _buildHeaderField('Alamat:', '${transaction.city}, ${transaction.province}'),
+                          _buildHeaderField('No Invoice', transaction.invoiceNo.toString()),
+                          _buildHeaderField('Kepada', transaction.aliasName),
+                          _buildHeaderField('Tanggal Pengiriman', delivDateStr),
+                          _buildHeaderField('Alamat', '${transaction.city}, ${transaction.province}'),
                         ],
                       ),
                     ),
@@ -337,21 +337,28 @@ class PrintService {
 
   // Helper builder for header metadata fields
   static pw.Widget _buildHeaderField(String label, String value) {
+    final cleanLabel = label.replaceAll(':', '').trim();
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 115,
+            width: 105,
             child: pw.Text(
-              label,
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              cleanLabel,
+              style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold),
             ),
           ),
+          pw.Text(
+            ':',
+            style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(width: 6),
           pw.Expanded(
             child: pw.Text(
               value,
-              style: const pw.TextStyle(fontSize: 11),
+              style: const pw.TextStyle(fontSize: 10.5),
             ),
           ),
         ],
