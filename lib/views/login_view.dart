@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../providers/auth_provider.dart';
 import 'shell_view.dart';
 
@@ -276,8 +276,8 @@ class _LoginViewState extends State<LoginView> {
                             borderRadius: BorderRadius.circular(12.0),
                           ),
                         ).copyWith(
-                          backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-                            if (states.contains(WidgetState.disabled)) {
+                          backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                            if (states.contains(MaterialState.disabled)) {
                               return const Color(0xFF334155);
                             }
                             return const Color(0xFF4FACFE);
