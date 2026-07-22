@@ -753,19 +753,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       thumbVisibility: true,
                       child: SingleChildScrollView(
                         scrollDirection: Axis.vertical,
+                        padding: const EdgeInsets.only(bottom: 20),
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(
-                            width: 780,
+                            width: 830,
                             child: Table(
                               columnWidths: const {
-                                0: FixedColumnWidth(210), // Nama Barang
+                                0: FixedColumnWidth(260), // Nama Barang (Spacious)
                                 1: FixedColumnWidth(55),  // Qty
                                 2: FixedColumnWidth(95),  // Harga Unit
                                 3: FixedColumnWidth(105), // Total
-                                4: FixedColumnWidth(70),  // Disc %
+                                4: FixedColumnWidth(65),  // Disc %
                                 5: FixedColumnWidth(100), // Disc Rp
-                                6: FixedColumnWidth(145), // Subtotal
+                                6: FixedColumnWidth(140), // Subtotal
                               },
                               children: [
                                 TableRow(
