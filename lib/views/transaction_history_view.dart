@@ -740,8 +740,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Table Container with Clip, Scrollbar, and Bottom Padding
+                  // Table Container with Clip, Scrollbar, and 100% Full Width Alignment
                   Container(
+                    width: double.infinity,
                     constraints: BoxConstraints(maxHeight: isMobile ? 320 : 420),
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
@@ -754,59 +755,73 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.vertical,
                         padding: const EdgeInsets.only(bottom: 20),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: 840,
-                            child: Table(
-                              columnWidths: const {
-                                0: FixedColumnWidth(220), // Nama Barang
-                                1: FixedColumnWidth(55),  // Qty
-                                2: FixedColumnWidth(95),  // Harga Unit
-                                3: FixedColumnWidth(110), // Total
-                                4: FixedColumnWidth(65),  // Disc %
-                                5: FixedColumnWidth(100), // Disc Rp
-                                6: FixedColumnWidth(140), // Subtotal
-                              },
-                              children: [
-                                TableRow(
-                                  decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                child: Table(
+                                  columnWidths: isMobile
+                                      ? const {
+                                          0: FixedColumnWidth(210),
+                                          1: FixedColumnWidth(55),
+                                          2: FixedColumnWidth(95),
+                                          3: FixedColumnWidth(105),
+                                          4: FixedColumnWidth(65),
+                                          5: FixedColumnWidth(100),
+                                          6: FixedColumnWidth(130),
+                                        }
+                                      : const {
+                                          0: FlexColumnWidth(2.6), // Nama Barang (Spacious)
+                                          1: FlexColumnWidth(0.7), // Qty
+                                          2: FlexColumnWidth(1.1), // Harga Unit
+                                          3: FlexColumnWidth(1.2), // Total
+                                          4: FlexColumnWidth(0.8), // Disc %
+                                          5: FlexColumnWidth(1.1), // Disc Rp
+                                          6: FlexColumnWidth(1.4), // Subtotal
+                                        },
                                   children: [
-                                    _buildTableCell('Nama Barang', isHeader: true),
-                                    _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
-                                    _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
-                                    _buildTableCell('Total', isHeader: true, align: TextAlign.right),
-                                    _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
-                                    _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
-                                    _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                                    TableRow(
+                                      decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+                                      children: [
+                                        _buildTableCell('Nama Barang', isHeader: true),
+                                        _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                                        _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell('Total', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
+                                        _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                                      ],
+                                    ),
+                                    ...tr.items.asMap().entries.map((entry) {
+                                      final index = entry.key;
+                                      final item = entry.value;
+                                      final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
+                                      final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
+                                      final isEven = index % 2 == 0;
+
+                                      return TableRow(
+                                        decoration: BoxDecoration(
+                                          color: isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
+                                          border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
+                                        ),
+                                        children: [
+                                          _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                          _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
+                                          _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
+                                          _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
+                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                        ],
+                                      );
+                                    }),
                                   ],
                                 ),
-                                ...tr.items.asMap().entries.map((entry) {
-                                  final index = entry.key;
-                                  final item = entry.value;
-                                  final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
-                                  final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
-                                  final isEven = index % 2 == 0;
-
-                                  return TableRow(
-                                    decoration: BoxDecoration(
-                                      color: isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
-                                      border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
-                                    ),
-                                    children: [
-                                      _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
-                                      _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                      _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
-                                      _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
-                                      _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
-                                      _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
-                                      _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
-                                    ],
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
