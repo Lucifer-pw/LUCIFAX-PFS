@@ -570,7 +570,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 // Info rows
                 Row(
                   children: [
-                    Expanded(child: _buildDetailRow('Pelanggan:', '${tr.aliasName} (${tr.customerName})')),
+                    Expanded(
+                      child: _buildDetailRow(
+                        'Pelanggan:', 
+                        (tr.aliasName.trim().isNotEmpty && tr.customerName.trim().isNotEmpty && tr.customerName.trim().toUpperCase() != tr.aliasName.trim().toUpperCase())
+                            ? '${tr.aliasName.trim()} (${tr.customerName.trim()})'
+                            : (tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : (tr.customerName.trim().isNotEmpty ? tr.customerName.trim() : '-')),
+                      ),
+                    ),
                     Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
                   ],
                 ),
@@ -1575,9 +1582,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   DataCell(
                                                     Builder(
                                                       builder: (context) {
-                                                        final hasAlias = tr.aliasName.isNotEmpty && tr.aliasName.toUpperCase() != tr.customerName.toUpperCase();
-                                                        final firstLine = hasAlias ? tr.aliasName : tr.customerName;
-                                                        final secondLine = hasAlias ? '(${tr.customerName})' : '';
+                                                        final alias = tr.aliasName.trim();
+                                                        final owner = tr.customerName.trim();
+                                                        final hasAlias = alias.isNotEmpty;
+                                                        final hasOwner = owner.isNotEmpty && owner.toUpperCase() != alias.toUpperCase();
+
+                                                        final firstLine = hasAlias ? alias : (hasOwner ? owner : '-');
+                                                        final secondLine = (hasAlias && hasOwner) ? '($owner)' : '';
 
                                                         return Column(
                                                           mainAxisAlignment: MainAxisAlignment.center,

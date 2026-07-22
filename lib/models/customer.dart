@@ -25,9 +25,9 @@ class Customer {
     final name = customerName.trim();
     final alias = aliasName.trim();
     if (name.isNotEmpty && alias.isNotEmpty && name.toLowerCase() != alias.toLowerCase()) {
-      return '$name ($alias)';
+      return '$alias ($name)';
     }
-    return name.isNotEmpty ? name : alias;
+    return alias.isNotEmpty ? alias : name;
   }
 
   factory Customer.fromMap(Map<String, dynamic> map, String docId) {
