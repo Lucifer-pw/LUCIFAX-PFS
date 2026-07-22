@@ -594,12 +594,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   void _showDetailDialog(model_tr.Transaction tr) {
     final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
     final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
+          contentPadding: EdgeInsets.all(isMobile ? 12 : 20),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -611,127 +613,170 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ],
           ),
           content: SizedBox(
-            width: 800,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Info rows
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDetailRow(
-                        'Pelanggan:', 
-                        customerInfo['fullDisplay']!,
-                      ),
+            width: isMobile ? double.maxFinite : 800,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Info rows (Stacked on Mobile, 2 Columns on Desktop)
+                  if (isMobile) ...[
+                    _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!),
+                    const SizedBox(height: 6),
+                    _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}'),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
+                        Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
+                      ],
                     ),
-                    Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
-                    Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('Rincian Tanggal:', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11)),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date))),
-                    Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
-                  ],
-                ),
-                if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
-                        Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)))
-                      else
-                        const Spacer(),
-                      if (tr.erpSyncDate != null)
-                        Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy HH:mm').format(tr.erpSyncDate!)))
-                      else
-                        const Spacer(),
+                    const SizedBox(height: 10),
+                    const Text('Rincian Tanggal:', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11)),
+                    const SizedBox(height: 6),
+                    _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date)),
+                    const SizedBox(height: 6),
+                    _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'),
+                    if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
+                      const SizedBox(height: 6),
+                      _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)),
                     ],
-                  ),
-                ],
-                const SizedBox(height: 16),
-                const Divider(color: Color(0xFF334155)),
-                const SizedBox(height: 8),
-                const Text('Daftar Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 8),
-                
-                // Items Table
-                Flexible(
-                  child: Container(
-                    constraints: const BoxConstraints(maxHeight: 250),
+                    if (tr.erpSyncDate != null) ...[
+                      const SizedBox(height: 6),
+                      _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy HH:mm').format(tr.erpSyncDate!)),
+                    ],
+                  ] else ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            'Pelanggan:', 
+                            customerInfo['fullDisplay']!,
+                          ),
+                        ),
+                        Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
+                        Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Rincian Tanggal:', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date))),
+                        Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
+                      ],
+                    ),
+                    if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
+                            Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)))
+                          else
+                            const Spacer(),
+                          if (tr.erpSyncDate != null)
+                            Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy HH:mm').format(tr.erpSyncDate!)))
+                          else
+                            const Spacer(),
+                        ],
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: 16),
+                  const Divider(color: Color(0xFF334155)),
+                  const SizedBox(height: 8),
+                  const Text('Daftar Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  
+                  // Items Table with Horizontal Scroll
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 280),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0F172A),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: SingleChildScrollView(
-                      child: Table(
-                        columnWidths: const {
-                          0: FlexColumnWidth(2.2),
-                          1: FlexColumnWidth(0.6),
-                          2: FlexColumnWidth(1.2),
-                          3: FlexColumnWidth(1.2),
-                          4: FlexColumnWidth(0.8),
-                          5: FlexColumnWidth(1.2),
-                          6: FlexColumnWidth(1.3),
-                        },
-                        children: [
-                          TableRow(
-                            decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: 720,
+                          child: Table(
+                            columnWidths: const {
+                              0: FixedColumnWidth(180),
+                              1: FixedColumnWidth(55),
+                              2: FixedColumnWidth(95),
+                              3: FixedColumnWidth(100),
+                              4: FixedColumnWidth(70),
+                              5: FixedColumnWidth(95),
+                              6: FixedColumnWidth(125),
+                            },
                             children: [
-                              _buildTableCell('Nama Barang', isHeader: true),
-                              _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
-                              _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
-                              _buildTableCell('Total', isHeader: true, align: TextAlign.right),
-                              _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
-                              _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
-                              _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                              TableRow(
+                                decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+                                children: [
+                                  _buildTableCell('Nama Barang', isHeader: true),
+                                  _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                                  _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
+                                  _buildTableCell('Total', isHeader: true, align: TextAlign.right),
+                                  _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
+                                  _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
+                                  _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                                ],
+                              ),
+                              ...tr.items.map((item) {
+                                final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
+                                final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
+                                return TableRow(
+                                  children: [
+                                    _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                    _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                    _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                    _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
+                                    _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
+                                    _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
+                                    _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                  ],
+                                );
+                              }),
                             ],
                           ),
-                          ...tr.items.map((item) {
-                            final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
-                            final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
-                            return TableRow(
-                              children: [
-                                _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
-                                _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
-                                _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
-                                _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
-                                _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
-                                _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
-                              ],
-                            );
-                          }),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                
-                const SizedBox(height: 16),
-                const Divider(color: Color(0xFF334155)),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+                  
+                  const SizedBox(height: 16),
+                  const Divider(color: Color(0xFF334155)),
+                  const SizedBox(height: 8),
+                  if (isMobile) ...[
                     Text('Catatan: ${tr.note.isNotEmpty ? tr.note : "-"}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                    const SizedBox(height: 6),
                     Text(
                       'GRAND TOTAL: ${_rupiahFormatter.format(tr.grandTotal)}',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                     ),
+                  ] else ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Catatan: ${tr.note.isNotEmpty ? tr.note : "-"}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                        Text(
+                          'GRAND TOTAL: ${_rupiahFormatter.format(tr.grandTotal)}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ],
+                    ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           actions: [
