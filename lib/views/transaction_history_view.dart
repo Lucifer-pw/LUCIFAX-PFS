@@ -1467,7 +1467,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         // Month / Periode Dropdown Filter
         Container(
           width: 175,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(12),
@@ -1509,7 +1511,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         // Status Filter Dropdown
         Container(
           width: 190,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(12),
@@ -1544,35 +1548,42 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         const SizedBox(width: 12),
 
         // Toggle Barang Keluar Summary Button
-        IconButton(
-          tooltip: _showRightSummaryPanel ? 'Sembunyikan Total Barang Keluar' : 'Tampilkan Total Barang Keluar',
-          style: IconButton.styleFrom(
-            backgroundColor: _showRightSummaryPanel ? const Color(0xFF38BDF8).withOpacity(0.2) : const Color(0xFF1E293B),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            side: BorderSide(color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : Colors.transparent),
+        SizedBox(
+          height: 44,
+          width: 44,
+          child: IconButton(
+            tooltip: _showRightSummaryPanel ? 'Sembunyikan Total Barang Keluar' : 'Tampilkan Total Barang Keluar',
+            style: IconButton.styleFrom(
+              backgroundColor: _showRightSummaryPanel ? const Color(0xFF38BDF8).withOpacity(0.2) : const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              side: BorderSide(color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : Colors.transparent),
+            ),
+            icon: Icon(
+              Icons.inventory_2_rounded,
+              color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+              size: 20,
+            ),
+            onPressed: () {
+              setState(() {
+                _showRightSummaryPanel = !_showRightSummaryPanel;
+              });
+            },
           ),
-          icon: Icon(
-            Icons.inventory_2_rounded,
-            color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
-            size: 20,
-          ),
-          onPressed: () {
-            setState(() {
-              _showRightSummaryPanel = !_showRightSummaryPanel;
-            });
-          },
         ),
         if (!isKacab) ...[
           const SizedBox(width: 12),
           // Import Excel Button
-          ElevatedButton.icon(
-            onPressed: () => _importTransactionsFromExcel(createdBy),
-            icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
-            label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal[700],
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () => _importTransactionsFromExcel(createdBy),
+              icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
+              label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal[700],
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
         ],
@@ -1604,9 +1615,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           child: DataTable(
                                             columnSpacing: 20,
                                             horizontalMargin: 16,
+                                            headingRowHeight: 48,
+                                            dataRowMinHeight: 60,
+                                            dataRowMaxHeight: 66,
                                             headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                            dataRowMinHeight: 56,
-                                            dataRowMaxHeight: 56,
                                             headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
                                             columns: const [
                                               DataColumn(label: Text('INVOICE')),
