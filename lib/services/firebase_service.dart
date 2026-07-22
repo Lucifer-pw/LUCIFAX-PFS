@@ -182,9 +182,9 @@ class FirebaseService {
     if (type == 'SA') {
       final counterRef = _db.collection('counters').doc('sample_transactions');
       final snap = await counterRef.get();
-      int current = 0;
+      int current = 54;
       if (snap.exists) {
-        current = snap.data()?['lastSaNo'] ?? 0;
+        current = snap.data()?['lastSaNo'] ?? 54;
       }
       return 'SA${current + 1}';
     } else {
@@ -228,9 +228,9 @@ class FirebaseService {
         final saCounterRef = _db.collection('counters').doc('sample_transactions');
         int nextSa = await _db.runTransaction<int>((transaction) async {
           final snap = await transaction.get(saCounterRef);
-          int current = 0;
+          int current = 54;
           if (snap.exists) {
-            current = snap.data()?['lastSaNo'] ?? 0;
+            current = snap.data()?['lastSaNo'] ?? 54;
           }
           final next = current + 1;
           transaction.set(saCounterRef, {'lastSaNo': next});
