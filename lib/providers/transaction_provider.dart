@@ -103,12 +103,12 @@ class TransactionProvider extends ChangeNotifier {
     _note = noteText;
   }
 
-  // Active Cart Methods with 10-Item Constraint!
+  // Active Cart Methods with 14-Item Constraint!
   void addToCart(Product product, double qty, double discountPercent, {double? customPrice, bool isBonus = false}) {
     if (isBonus) {
       // Bonus items always add as a new separate line with price = 0
-      if (_cartItems.length >= 10) {
-        throw Exception("Batas Maksimal 10 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
+      if (_cartItems.length >= 14) {
+        throw Exception("Batas Maksimal 14 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
       }
       _cartItems.add(
         model_tr.TransactionItem(
@@ -143,9 +143,9 @@ class TransactionProvider extends ChangeNotifier {
           sizeGrams: product.sizeGrams,
         );
       } else {
-        // Enforce the 10-item limit constraint
-        if (_cartItems.length >= 10) {
-          throw Exception("Batas Maksimal 10 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
+        // Enforce the 14-item limit constraint
+        if (_cartItems.length >= 14) {
+          throw Exception("Batas Maksimal 14 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!");
         }
 
         final subtotal = qty * finalPrice * (1 - discountPercent / 100);

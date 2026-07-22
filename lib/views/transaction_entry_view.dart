@@ -609,18 +609,18 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: trProvider.cartItems.length >= 10 
+                  color: trProvider.cartItems.length >= 14 
                       ? Colors.redAccent.withOpacity(0.2) 
                       : const Color(0xFF0369A1).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: trProvider.cartItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
+                    color: trProvider.cartItems.length >= 14 ? Colors.redAccent : const Color(0xFF38BDF8),
                   ),
                 ),
                 child: Text(
-                  'Kertas: ${trProvider.cartItems.length} / 10 Item',
+                  'Kertas: ${trProvider.cartItems.length} / 14 Item',
                   style: TextStyle(
-                    color: trProvider.cartItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
+                    color: trProvider.cartItems.length >= 14 ? Colors.redAccent : const Color(0xFF38BDF8),
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),

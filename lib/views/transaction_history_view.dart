@@ -634,16 +634,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     const SizedBox(height: 10),
                     const Text('Rincian Tanggal:', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11)),
                     const SizedBox(height: 6),
-                    _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date)),
+                    _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date)),
                     const SizedBox(height: 6),
                     _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'),
                     if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
                       const SizedBox(height: 6),
-                      _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)),
+                      _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)),
                     ],
                     if (tr.erpSyncDate != null) ...[
                       const SizedBox(height: 6),
-                      _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy HH:mm').format(tr.erpSyncDate!)),
+                      _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)),
                     ],
                   ] else ...[
                     Row(
@@ -669,7 +669,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy HH:mm').format(tr.date))),
+                        Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date))),
                         Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
                       ],
                     ),
@@ -678,11 +678,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       Row(
                         children: [
                           if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
-                            Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy HH:mm').format(tr.transferDate!)))
+                            Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)))
                           else
                             const Spacer(),
                           if (tr.erpSyncDate != null)
-                            Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy HH:mm').format(tr.erpSyncDate!)))
+                            Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)))
                           else
                             const Spacer(),
                         ],
@@ -697,7 +697,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   
                   // Items Table with Horizontal Scroll
                   Container(
-                    constraints: const BoxConstraints(maxHeight: 280),
+                    constraints: const BoxConstraints(maxHeight: 380),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0F172A),
                       borderRadius: BorderRadius.circular(8),
