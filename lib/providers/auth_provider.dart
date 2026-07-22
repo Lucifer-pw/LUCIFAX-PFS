@@ -42,7 +42,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       _currentUser = await _authService.signIn(username, password);
     } catch (e) {
-      _errorMessage = "Login gagal: Username atau Password salah.";
+      _errorMessage = "Username atau Password yang Anda masukkan salah.";
       rethrow;
     } finally {
       _isLoading = false;

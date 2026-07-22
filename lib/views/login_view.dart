@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/auth_provider.dart';
 import 'shell_view.dart';
 
@@ -12,37 +13,30 @@ class LoginView extends StatefulWidget {
 
 class _LoginViewState extends State<LoginView> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscureText = true;
-  bool _isRegister = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
-    _nameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSubmit() async {
+    setState(() {
+      _errorMessage = null;
+    });
+
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       try {
-        if (_isRegister) {
-          await authProvider.signUp(
-            _usernameController.text,
-            _passwordController.text,
-            name: _nameController.text,
-            role: 'kacab',
-          );
-        } else {
-          await authProvider.signIn(
-            _usernameController.text,
-            _passwordController.text,
-          );
-        }
+        await authProvider.signIn(
+          _usernameController.text,
+          _passwordController.text,
+        );
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -50,15 +44,26 @@ class _LoginViewState extends State<LoginView> {
             MaterialPageRoute(builder: (context) => const ShellView()),
           );
         }
+      } on FirebaseAuthException catch (e) {
+        String msg = "Username atau Password yang Anda masukkan salah.";
+        if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+          msg = "Password yang Anda masukkan salah. Silakan periksa kembali!";
+        } else if (e.code == 'user-not-found') {
+          msg = "Username / Akun tidak terdaftar di sistem!";
+        } else if (e.code == 'too-many-requests') {
+          msg = "Terlalu banyak percobaan login gagal. Silakan tunggu beberapa saat.";
+        }
+
+        if (mounted) {
+          setState(() {
+            _errorMessage = msg;
+          });
+        }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(authProvider.errorMessage ?? e.toString()),
-              backgroundColor: Colors.redAccent,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          setState(() {
+            _errorMessage = authProvider.errorMessage ?? "Password atau Username salah. Silakan coba lagi!";
+          });
         }
       }
     }
@@ -103,7 +108,7 @@ class _LoginViewState extends State<LoginView> {
               ),
               const SizedBox(height: 16.0),
               const Text(
-                'FIVA SOLO',
+                'LUCIFAX PFS',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 28.0,
@@ -112,7 +117,7 @@ class _LoginViewState extends State<LoginView> {
                 ),
               ),
               const Text(
-                'Cashier & Distribution Management',
+                'PT. Putra Fiva Sejahtera • Jawa Tengah',
                 style: TextStyle(
                   color: Color(0xFF94A3B8),
                   fontSize: 14.0,
@@ -121,7 +126,7 @@ class _LoginViewState extends State<LoginView> {
               ),
               const SizedBox(height: 36.0),
 
-              // Login/Register Card with subtle glassmorphic styling
+              // Login Card with subtle glassmorphic styling
               Container(
                 width: 420.0,
                 padding: const EdgeInsets.all(32.0),
@@ -145,10 +150,10 @@ class _LoginViewState extends State<LoginView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        _isRegister ? 'DAFTAR AKUN BARU' : 'MASUK AKUN',
+                      const Text(
+                        'MASUK AKUN',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 18.0,
                           fontWeight: FontWeight.bold,
@@ -157,25 +162,26 @@ class _LoginViewState extends State<LoginView> {
                       ),
                       const SizedBox(height: 24.0),
 
-                      // Nama Lengkap (Only for Register)
-                      if (_isRegister) ...[
-                        TextFormField(
-                          controller: _nameController,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'Nama Lengkap (Opsional)',
-                            hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                            prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF64748B)),
-                            filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                              borderSide: const BorderSide(color: Color(0xFF00F2FE), width: 1.5),
-                            ),
+                      // Error message banner
+                      if (_errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16.0),
@@ -185,6 +191,11 @@ class _LoginViewState extends State<LoginView> {
                       TextFormField(
                         controller: _usernameController,
                         style: const TextStyle(color: Colors.white),
+                        onChanged: (_) {
+                          if (_errorMessage != null) {
+                            setState(() => _errorMessage = null);
+                          }
+                        },
                         decoration: InputDecoration(
                           hintText: 'Username',
                           hintStyle: const TextStyle(color: Color(0xFF64748B)),
@@ -214,6 +225,11 @@ class _LoginViewState extends State<LoginView> {
                         controller: _passwordController,
                         obscureText: _obscureText,
                         style: const TextStyle(color: Colors.white),
+                        onChanged: (_) {
+                          if (_errorMessage != null) {
+                            setState(() => _errorMessage = null);
+                          }
+                        },
                         decoration: InputDecoration(
                           hintText: 'Password',
                           hintStyle: const TextStyle(color: Color(0xFF64748B)),
@@ -244,9 +260,6 @@ class _LoginViewState extends State<LoginView> {
                           if (value == null || value.isEmpty) {
                             return 'Password tidak boleh kosong';
                           }
-                          if (_isRegister && value.length < 6) {
-                            return 'Password minimal 6 karakter';
-                          }
                           return null;
                         },
                       ),
@@ -263,8 +276,8 @@ class _LoginViewState extends State<LoginView> {
                             borderRadius: BorderRadius.circular(12.0),
                           ),
                         ).copyWith(
-                          backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-                            if (states.contains(MaterialState.disabled)) {
+                          backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                            if (states.contains(WidgetState.disabled)) {
                               return const Color(0xFF334155);
                             }
                             return const Color(0xFF4FACFE);
@@ -292,9 +305,9 @@ class _LoginViewState extends State<LoginView> {
                                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
                                   )
-                                : Text(
-                                    _isRegister ? 'DAFTAR' : 'MASUK',
-                                    style: const TextStyle(
+                                : const Text(
+                                    'MASUK',
+                                    style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 16.0,
                                       fontWeight: FontWeight.bold,
@@ -302,20 +315,6 @@ class _LoginViewState extends State<LoginView> {
                                     ),
                                   ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16.0),
-
-                      // Toggle Register / Login mode
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _isRegister = !_isRegister;
-                          });
-                        },
-                        child: Text(
-                          _isRegister ? 'Sudah punya akun? MASUK DI SINI' : 'Belum punya akun? DAFTAR AKUN BARU',
-                          style: const TextStyle(color: Color(0xFF00F2FE), fontSize: 13.0, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
