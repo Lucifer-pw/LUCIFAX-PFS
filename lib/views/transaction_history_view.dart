@@ -25,7 +25,10 @@ class TransactionHistoryView extends StatefulWidget {
 class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   final _searchController = TextEditingController();
   String _searchQuery = "";
-  String _statusFilter = "SEMUA"; // SEMUA, PAID, UNPAID
+  String _statusFilter = "SEMUA"; // SEMUA, PAID, UNPAID, DIKIRIM, PENDING
+  String _monthFilter = "SEMUA"; // SEMUA or "07-2026", "06-2026", etc.
+  bool _showRightSummaryPanel = true;
+  String _summaryProductSearch = "";
 
   // Pagination & Debounce State
   int _currentPage = 1;
@@ -37,6 +40,41 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     symbol: 'Rp ',
     decimalDigits: 0,
   );
+
+  List<String> _getMonthFilterOptions(List<model_tr.Transaction> transactions) {
+    final Set<String> months = {};
+    for (var tr in transactions) {
+      if (tr.deliveryDate != null) {
+        months.add(DateFormat('MM-yyyy').format(tr.deliveryDate!));
+      }
+      months.add(DateFormat('MM-yyyy').format(tr.date));
+    }
+
+    final now = DateTime.now();
+    for (int y = now.year + 1; y >= 2025; y--) {
+      for (int m = 12; m >= 1; m--) {
+        if (y == 2025 && m < 4) continue; // Start from April 2025
+        final mStr = m.toString().padLeft(2, '0');
+        months.add('$mStr-$y');
+      }
+    }
+
+    final list = months.toList();
+    list.sort((a, b) {
+      final partsA = a.split('-');
+      final partsB = b.split('-');
+      if (partsA.length == 2 && partsB.length == 2) {
+        final yearA = int.tryParse(partsA[1]) ?? 0;
+        final yearB = int.tryParse(partsB[1]) ?? 0;
+        if (yearA != yearB) return yearB.compareTo(yearA);
+        final monthA = int.tryParse(partsA[0]) ?? 0;
+        final monthB = int.tryParse(partsB[0]) ?? 0;
+        return monthB.compareTo(monthA);
+      }
+      return b.compareTo(a);
+    });
+    return ["SEMUA", ...list];
+  }
 
   @override
   void dispose() {
@@ -1149,9 +1187,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
     final createdBy = user?.uid ?? 'system';
 
-    // Apply local queries and filter status
+    // Apply local queries, month filter, and status filter
     final filteredTransactions = trProvider.transactions.where((tr) {
-      // 1. Status Filter
+      // 1. Month Filter
+      if (_monthFilter != "SEMUA") {
+        final delivMonth = tr.deliveryDate != null ? DateFormat('MM-yyyy').format(tr.deliveryDate!) : '';
+        final trMonth = DateFormat('MM-yyyy').format(tr.date);
+        final matchesMonth = (delivMonth == _monthFilter) || (trMonth == _monthFilter);
+        if (!matchesMonth) return false;
+      }
+
+      // 2. Status Filter
       if (_statusFilter != "SEMUA") {
         if (_statusFilter == "DIKIRIM" || _statusFilter == "PENDING") {
           if (tr.status != _statusFilter) return false;
@@ -1160,7 +1206,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         }
       }
 
-      // 2. Text Search Query
+      // 3. Text Search Query
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase().trim();
         final cleanQuery = query.replaceAll('#', '').trim();
@@ -1186,6 +1232,41 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
       return true;
     }).toList();
+
+    // Calculate Total Barang Keluar summary for transactions with status DIKIRIM
+    final Map<String, Map<String, dynamic>> shippedProductsMap = {};
+    double totalShippedQty = 0.0;
+    double totalShippedKg = 0.0;
+    double totalShippedRp = 0.0;
+
+    final deliveredTransactionsInScope = filteredTransactions.where((tr) => tr.status == 'DIKIRIM').toList();
+
+    for (var tr in deliveredTransactionsInScope) {
+      for (var item in tr.items) {
+        final key = item.productId.isNotEmpty ? item.productId : item.productName;
+        if (!shippedProductsMap.containsKey(key)) {
+          shippedProductsMap[key] = {
+            'productId': item.productId,
+            'productName': item.productName,
+            'totalQty': 0.0,
+            'totalKg': 0.0,
+            'totalRp': 0.0,
+            'invoiceCount': 0,
+          };
+        }
+        shippedProductsMap[key]!['totalQty'] = (shippedProductsMap[key]!['totalQty'] as double) + item.qty;
+        shippedProductsMap[key]!['totalKg'] = (shippedProductsMap[key]!['totalKg'] as double) + item.weightKg;
+        shippedProductsMap[key]!['totalRp'] = (shippedProductsMap[key]!['totalRp'] as double) + item.subtotal;
+        shippedProductsMap[key]!['invoiceCount'] = (shippedProductsMap[key]!['invoiceCount'] as int) + 1;
+
+        totalShippedQty += item.qty;
+        totalShippedKg += item.weightKg;
+        totalShippedRp += item.subtotal;
+      }
+    }
+
+    final shippedProductsList = shippedProductsMap.values.toList();
+    shippedProductsList.sort((a, b) => (b['totalQty'] as double).compareTo(a['totalQty'] as double));
 
     // Sort by invoiceNo strictly descending (highest to lowest, e.g. #625, #624, #SA34, #SA1...)
     filteredTransactions.sort((a, b) {
@@ -1217,19 +1298,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Search Input and Status Dropdown Header Row
+            // Search Input, Month Filter, Status Dropdown & Action Buttons Header Row
             Row(
               children: [
                 Expanded(
+                  flex: 3,
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: 'Cari invoice berdasarkan nomor, nama pelanggan, tanggal (dd-mm-yyyy), catatan...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+                      hintText: 'Cari invoice, pelanggan, tanggal (dd-mm-yyyy), catatan...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
                       filled: true,
                       fillColor: const Color(0xFF1E293B),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12.0),
                         borderSide: BorderSide.none,
@@ -1246,10 +1329,54 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     },
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
+
+                // Month / Periode Dropdown Filter
                 Container(
-                  width: 220,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  width: 175,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _monthFilter,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      items: _getMonthFilterOptions(trProvider.transactions).map((m) {
+                        return DropdownMenuItem(
+                          value: m,
+                          child: Row(
+                            children: [
+                              Icon(Icons.calendar_month_rounded, color: m != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: 14),
+                              const SizedBox(width: 6),
+                              Text(m == "SEMUA" ? "SEMUA BULAN" : m),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _monthFilter = val;
+                            _currentPage = 1;
+                            if (val != "SEMUA") {
+                              _showRightSummaryPanel = true;
+                            }
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Status Filter Dropdown
+                Container(
+                  width: 170,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(12),
@@ -1258,13 +1385,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     child: DropdownButton<String>(
                       value: _statusFilter,
                       dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                       items: const [
                         DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS")),
-                        DropdownMenuItem(value: "DIKIRIM", child: Text("STATUS BARANG: DIKIRIM")),
-                        DropdownMenuItem(value: "PENDING", child: Text("STATUS BARANG: PENDING")),
-                        DropdownMenuItem(value: "UNPAID", child: Text("STATUS BAYAR: UNPAID")),
-                        DropdownMenuItem(value: "PAID", child: Text("STATUS BAYAR: PAID")),
+                        DropdownMenuItem(value: "DIKIRIM", child: Text("KIRIM: DIKIRIM")),
+                        DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING")),
+                        DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID")),
+                        DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID")),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -1277,14 +1404,37 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
+
+                // Toggle Barang Keluar Summary Button
+                IconButton(
+                  tooltip: _showRightSummaryPanel ? 'Sembunyikan Total Barang Keluar' : 'Tampilkan Total Barang Keluar',
+                  style: IconButton.styleFrom(
+                    backgroundColor: _showRightSummaryPanel ? const Color(0xFF38BDF8).withOpacity(0.2) : const Color(0xFF1E293B),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    side: BorderSide(color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : Colors.transparent),
+                  ),
+                  icon: Icon(
+                    Icons.inventory_2_rounded,
+                    color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showRightSummaryPanel = !_showRightSummaryPanel;
+                    });
+                  },
+                ),
+                const SizedBox(width: 12),
+
+                // Import Excel Button
                 ElevatedButton.icon(
                   onPressed: () => _importTransactionsFromExcel(createdBy),
-                  icon: const Icon(Icons.file_upload_rounded, color: Colors.white),
-                  label: const Text('Import Excel', style: TextStyle(color: Colors.white)),
+                  icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
+                  label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -1292,467 +1442,657 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ),
             const SizedBox(height: 20),
 
-            // History DataTable list with Pagination
+            // History Main Body: Split View (Left: Invoice Table, Right: Barang Keluar Panel)
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                ),
-                child: trProvider.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : filteredTransactions.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Tidak ada histori transaksi ditemukan.',
-                              style: TextStyle(color: Color(0xFF64748B)),
-                            ),
-                          )
-                        : Column(
-                            children: [
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.vertical,
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: DataTable(
-                                      columnSpacing: 20,
-                                      horizontalMargin: 16,
-                                      headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                      dataRowMinHeight: 56,
-                                      dataRowMaxHeight: 56,
-                                      headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
-                                      columns: const [
-                                        DataColumn(label: Text('INVOICE')),
-                                        DataColumn(label: Text('TANGGAL')),
-                                        DataColumn(label: Text('PELANGGAN')),
-                                        DataColumn(label: Text('KOTA')),
-                                        DataColumn(label: Text('TOTAL BERAT'), numeric: true),
-                                        DataColumn(label: Text('GRAND TOTAL'), numeric: true),
-                                        DataColumn(label: Center(child: Text('STATUS BARANG'))),
-                                        DataColumn(label: Center(child: Text('STATUS BAYAR'))),
-                                        DataColumn(label: Center(child: Text('STATUS ERP'))),
-                                        DataColumn(label: Center(child: Text('AKSI'))),
-                                      ],
-                                      rows: paginatedTransactions.map((tr) {
-                                        // Calculate total weight in kg across items
-                                        final totalKg = tr.items.fold(0.0, (sum, item) => sum + item.weightKg);
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left Side: Invoice DataTable with Pagination
+                  Expanded(
+                    flex: 6,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                      ),
+                      child: trProvider.isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : filteredTransactions.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'Tidak ada histori transaksi ditemukan.',
+                                    style: TextStyle(color: Color(0xFF64748B)),
+                                  ),
+                                )
+                              : Column(
+                                  children: [
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.vertical,
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: DataTable(
+                                            columnSpacing: 20,
+                                            horizontalMargin: 16,
+                                            headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                            dataRowMinHeight: 56,
+                                            dataRowMaxHeight: 56,
+                                            headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                                            columns: const [
+                                              DataColumn(label: Text('INVOICE')),
+                                              DataColumn(label: Text('TANGGAL')),
+                                              DataColumn(label: Text('PELANGGAN')),
+                                              DataColumn(label: Text('KOTA')),
+                                              DataColumn(label: Text('TOTAL BERAT'), numeric: true),
+                                              DataColumn(label: Text('GRAND TOTAL'), numeric: true),
+                                              DataColumn(label: Center(child: Text('STATUS BARANG'))),
+                                              DataColumn(label: Center(child: Text('STATUS BAYAR'))),
+                                              DataColumn(label: Center(child: Text('STATUS ERP'))),
+                                              DataColumn(label: Center(child: Text('AKSI'))),
+                                            ],
+                                            rows: paginatedTransactions.map((tr) {
+                                              // Calculate total weight in kg across items
+                                              final totalKg = tr.items.fold(0.0, (sum, item) => sum + item.weightKg);
 
-                                        return DataRow(
-                                          cells: [
-                                            DataCell(
-                                              Text('#${tr.invoiceNo}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
-                                              onTap: () => _showDetailDialog(tr),
-                                            ),
-                                            DataCell(
-                                              Padding(
-                                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    // Tanggal Invoice (Received)
-                                                    Row(
-                                                      mainAxisSize: MainAxisSize.min,
+                                              return DataRow(
+                                                cells: [
+                                                  DataCell(
+                                                    Text(
+                                                      '#${tr.invoiceNo}',
+                                                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Column(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
-                                                        const Icon(Icons.receipt_long_rounded, color: Color(0xFF94A3B8), size: 10),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          DateFormat('dd-MM-yyyy').format(tr.date),
-                                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    // Tanggal Kirim
-                                                    Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Icon(
-                                                          Icons.local_shipping_rounded,
-                                                          color: (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                                                          size: 10,
-                                                        ),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          'Kirim: ${(tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}',
-                                                          style: TextStyle(
-                                                            color: (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                                                            fontSize: 9,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
-                                                      const SizedBox(height: 2),
-                                                      // Tanggal PAID
-                                                      Row(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 10),
-                                                          const SizedBox(width: 4),
-                                                          Text(
-                                                            'Paid: ${DateFormat('dd-MM-yyyy').format(tr.transferDate!)}',
-                                                            style: const TextStyle(color: Colors.greenAccent, fontSize: 9),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                              ),
-                                              onTap: () => _showDetailDialog(tr),
-                                            ),
-                                            DataCell(
-                                              Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Text(tr.aliasName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                                  Text(tr.customerName, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                                                ],
-                                              ),
-                                              onTap: () => _showDetailDialog(tr),
-                                            ),
-                                            DataCell(Text(tr.city, style: const TextStyle(color: Colors.white))),
-                                            DataCell(Text('${totalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.white))),
-                                            DataCell(Text(_rupiahFormatter.format(tr.grandTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                            
-                                            // Status Kirim Badge
-                                            DataCell(
-                                              Center(
-                                                child: InkWell(
-                                                  onTap: () => _showUpdateDeliveryStatusDialog(tr),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                    decoration: BoxDecoration(
-                                                      color: tr.status == 'DIKIRIM' 
-                                                          ? Colors.greenAccent.withOpacity(0.15) 
-                                                          : Colors.orangeAccent.withOpacity(0.15),
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      border: Border.all(
-                                                        color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
-                                                        width: 0.8,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      tr.status,
-                                                      style: TextStyle(
-                                                        color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-
-                                            // Status Bayar Badge
-                                            DataCell(
-                                              Center(
-                                                child: InkWell(
-                                                  onTap: () => _showUpdateStatusDialog(tr),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                    decoration: BoxDecoration(
-                                                      color: tr.statusTransfer == 'PAID' 
-                                                          ? Colors.greenAccent.withOpacity(0.15) 
-                                                          : Colors.redAccent.withOpacity(0.15),
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      border: Border.all(
-                                                        color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                                        width: 0.8,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      tr.statusTransfer,
-                                                      style: TextStyle(
-                                                        color: tr.statusTransfer == 'PAID' ? Colors.greenAccent : Colors.redAccent,
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-
-                                            // Status ERP Badge
-                                            DataCell(
-                                              Center(
-                                                child: InkWell(
-                                                  onTap: () => _showUpdateErpStatusDialog(tr),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                    decoration: BoxDecoration(
-                                                      color: tr.erpSyncDate != null 
-                                                          ? Colors.amberAccent.withOpacity(0.15) 
-                                                          : Colors.grey.withOpacity(0.15),
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      border: Border.all(
-                                                        color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
-                                                        width: 0.8,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      tr.erpSyncDate != null 
-                                                          ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!) 
-                                                          : 'BELUM ERP',
-                                                      style: TextStyle(
-                                                        color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.grey,
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-
-                                            // Action PopupMenuButton (Titik 3)
-                                            DataCell(
-                                              Center(
-                                                child: PopupMenuButton<String>(
-                                                  color: const Color(0xFF1E293B),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(12),
-                                                    side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                                                  ),
-                                                  icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8)),
-                                                  tooltip: 'Menu Aksi',
-                                                  onSelected: (action) {
-                                                    if (action == 'detail') {
-                                                      _showDetailDialog(tr);
-                                                    } else if (action == 'delivery') {
-                                                      _showUpdateDeliveryStatusDialog(tr);
-                                                    } else if (action == 'payment') {
-                                                      _showUpdateStatusDialog(tr);
-                                                    } else if (action == 'erp') {
-                                                      _showUpdateErpStatusDialog(tr);
-                                                    } else if (action == 'edit') {
-                                                      _showEditTransactionDialog(tr);
-                                                    } else if (action == 'print') {
-                                                      _showPrintDialog(tr);
-                                                    } else if (action == 'delete') {
-                                                      showDialog(
-                                                        context: context,
-                                                        builder: (context) => AlertDialog(
-                                                          backgroundColor: const Color(0xFF1E293B),
-                                                          title: const Text('Hapus Transaksi', style: TextStyle(color: Colors.white)),
-                                                          content: Text('Apakah Anda yakin ingin menghapus Transaksi #${tr.invoiceNo} untuk ${tr.aliasName}? Data transaksi ini akan dihapus dari histori.', style: const TextStyle(color: Color(0xFF94A3B8))),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () => Navigator.pop(context),
-                                                              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-                                                            ),
-                                                            ElevatedButton(
-                                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                                              onPressed: () async {
-                                                                try {
-                                                                  await trProvider.deleteTransaction(tr.invoiceNo);
-                                                                  if (context.mounted) {
-                                                                    Navigator.pop(context);
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                                      const SnackBar(content: Text('Transaksi berhasil dihapus.'), backgroundColor: Colors.teal),
-                                                                    );
-                                                                  }
-                                                                } catch (e) {
-                                                                  if (context.mounted) {
-                                                                    Navigator.pop(context);
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                                      SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.redAccent),
-                                                                    );
-                                                                  }
-                                                                }
-                                                              },
-                                                              child: const Text('Hapus'),
+                                                        Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            const Icon(Icons.calendar_today_rounded, size: 11, color: Color(0xFF94A3B8)),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              DateFormat('dd-MM-yyyy').format(tr.date),
+                                                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                                             ),
                                                           ],
                                                         ),
-                                                      );
-                                                    }
-                                                  },
-                                                  itemBuilder: (context) => [
-                                                    const PopupMenuItem(
-                                                      value: 'detail',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.list_alt_rounded, color: Colors.amberAccent, size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Detail Rincian', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                        if (tr.deliveryDate != null)
+                                                          Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              const Icon(Icons.local_shipping_rounded, size: 10, color: Color(0xFF38BDF8)),
+                                                              const SizedBox(width: 4),
+                                                              Text(
+                                                                'Kirim: ${DateFormat('dd-MM-yyyy').format(tr.deliveryDate!)}',
+                                                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Builder(
+                                                      builder: (context) {
+                                                        final hasAlias = tr.aliasName.isNotEmpty && tr.aliasName.toUpperCase() != tr.customerName.toUpperCase();
+                                                        final firstLine = hasAlias ? tr.aliasName : tr.customerName;
+                                                        final secondLine = hasAlias ? '(${tr.customerName})' : '';
+
+                                                        return Column(
+                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(
+                                                              firstLine,
+                                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                            if (secondLine.isNotEmpty)
+                                                              Text(
+                                                                secondLine,
+                                                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                          ],
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      tr.city.isNotEmpty ? tr.city.toUpperCase() : '-',
+                                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      '${totalKg.toStringAsFixed(2)} Kg',
+                                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      _rupiahFormatter.format(tr.grandTotal),
+                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Center(
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: tr.status == 'DIKIRIM'
+                                                              ? Colors.greenAccent.withOpacity(0.15)
+                                                              : Colors.orangeAccent.withOpacity(0.15),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          border: Border.all(
+                                                            color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                            width: 0.5,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          tr.status,
+                                                          style: TextStyle(
+                                                            color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Center(
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: tr.statusTransfer == 'PAID'
+                                                              ? Colors.tealAccent.withOpacity(0.15)
+                                                              : Colors.redAccent.withOpacity(0.15),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          border: Border.all(
+                                                            color: tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent,
+                                                            width: 0.5,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          tr.statusTransfer,
+                                                          style: TextStyle(
+                                                            color: tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent,
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Center(
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: tr.erpSyncDate != null
+                                                              ? Colors.amberAccent.withOpacity(0.15)
+                                                              : Colors.white10,
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          border: Border.all(
+                                                            color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white24,
+                                                            width: 0.5,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          tr.erpSyncDate != null
+                                                              ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)
+                                                              : 'BELUM ERP',
+                                                          style: TextStyle(
+                                                            color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white54,
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Center(
+                                                      child: PopupMenuButton<String>(
+                                                        icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 18),
+                                                        color: const Color(0xFF1E293B),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                        onSelected: (action) {
+                                                          if (action == 'detail') {
+                                                            _showTransactionDetailModal(tr);
+                                                          } else if (action == 'delivery') {
+                                                            _showDeliveryStatusDialog(tr);
+                                                          } else if (action == 'payment') {
+                                                            _showPaymentStatusDialog(tr);
+                                                          } else if (action == 'erp') {
+                                                            _showErpStatusDialog(tr);
+                                                          } else if (action == 'edit') {
+                                                            _showEditTransactionModal(tr);
+                                                          } else if (action == 'print') {
+                                                            _showPrintOptionsDialog(tr);
+                                                          } else if (action == 'delete') {
+                                                            _confirmDeleteTransaction(tr.invoiceNo);
+                                                          }
+                                                        },
+                                                        itemBuilder: (ctx) => [
+                                                          const PopupMenuItem(
+                                                            value: 'detail',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.visibility_outlined, color: Colors.cyanAccent, size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Lihat Rincian Item', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'delivery',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.local_shipping_outlined, color: Colors.greenAccent, size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Update Status Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'payment',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'erp',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Update Status ERP', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'edit',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuItem(
+                                                            value: 'print',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Cetak Invoice PDF', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuDivider(height: 8),
+                                                          const PopupMenuItem(
+                                                            value: 'delete',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                                SizedBox(width: 10),
+                                                                Text('Hapus Transaksi', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                                              ],
+                                                            ),
+                                                          ),
                                                         ],
                                                       ),
                                                     ),
-                                                    const PopupMenuItem(
-                                                      value: 'delivery',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.local_shipping_rounded, color: Color(0xFF38BDF8), size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Update Status Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const PopupMenuItem(
-                                                      value: 'payment',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const PopupMenuItem(
-                                                      value: 'erp',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Update Status ERP', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const PopupMenuItem(
-                                                      value: 'edit',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const PopupMenuItem(
-                                                      value: 'print',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Cetak Invoice PDF', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const PopupMenuDivider(height: 8),
-                                                    const PopupMenuItem(
-                                                      value: 'delete',
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                                          SizedBox(width: 10),
-                                                          Text('Hapus Transaksi', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
+                                                  ),
+                                                ],
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Bottom Pagination Control Bar
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F172A),
+                                        borderRadius: const BorderRadius.only(
+                                          bottomLeft: Radius.circular(12),
+                                          bottomRight: Radius.circular(12),
+                                        ),
+                                        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            totalItems == 0
+                                                ? '0 transaksi'
+                                                : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
+                                          ),
+                                          Row(
+                                            children: [
+                                              const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                              const SizedBox(width: 8),
+                                              DropdownButton<int>(
+                                                value: _rowsPerPage,
+                                                dropdownColor: const Color(0xFF1E293B),
+                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                underline: const SizedBox(),
+                                                items: const [10, 25, 50, 100].map((count) {
+                                                  return DropdownMenuItem<int>(
+                                                    value: count,
+                                                    child: Text('$count / hal'),
+                                                  );
+                                                }).toList(),
+                                                onChanged: (val) {
+                                                  if (val != null) {
+                                                    setState(() {
+                                                      _rowsPerPage = val;
+                                                      _currentPage = 1;
+                                                    });
+                                                  }
+                                                },
+                                              ),
+                                              const SizedBox(width: 24),
+                                              IconButton(
+                                                icon: const Icon(Icons.first_page_rounded, size: 20),
+                                                color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
+                                                tooltip: 'Halaman Pertama',
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                                                color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                                                tooltip: 'Halaman Sebelumnya',
+                                              ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1E293B),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                                ),
+                                                child: Text(
+                                                  'Hal $_currentPage dari $totalPages',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              // Bottom Pagination Control Bar
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
-                                  borderRadius: const BorderRadius.only(
-                                    bottomLeft: Radius.circular(12),
-                                    bottomRight: Radius.circular(12),
-                                  ),
-                                  border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      totalItems == 0
-                                          ? '0 transaksi'
-                                          : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
-                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
-                                    ),
-                                    Row(
-                                      children: [
-                                        const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                                        const SizedBox(width: 8),
-                                        DropdownButton<int>(
-                                          value: _rowsPerPage,
-                                          dropdownColor: const Color(0xFF1E293B),
-                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                          underline: const SizedBox(),
-                                          items: const [10, 25, 50, 100].map((count) {
-                                            return DropdownMenuItem<int>(
-                                              value: count,
-                                              child: Text('$count / hal'),
-                                            );
-                                          }).toList(),
-                                          onChanged: (val) {
-                                            if (val != null) {
-                                              setState(() {
-                                                _rowsPerPage = val;
-                                                _currentPage = 1;
-                                              });
-                                            }
-                                          },
-                                        ),
-                                        const SizedBox(width: 24),
-                                        IconButton(
-                                          icon: const Icon(Icons.first_page_rounded, size: 20),
-                                          color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                          onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
-                                          tooltip: 'Halaman Pertama',
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                                          color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                          onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
-                                          tooltip: 'Halaman Sebelumnya',
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF1E293B),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                              IconButton(
+                                                icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                                                color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                                                tooltip: 'Halaman Selanjutnya',
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.last_page_rounded, size: 20),
+                                                color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
+                                                tooltip: 'Halaman Terakhir',
+                                              ),
+                                            ],
                                           ),
-                                          child: Text(
-                                            'Hal $_currentPage dari $totalPages',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                                          color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                          onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
-                                          tooltip: 'Halaman Selanjutnya',
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.last_page_rounded, size: 20),
-                                          color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                          onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
-                                          tooltip: 'Halaman Terakhir',
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ],
-                          ),
+                    ),
+                  ),
+
+                  // Right Side: Rincian Barang Keluar Panel
+                  if (_showRightSummaryPanel) ...[
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 4,
+                      child: _buildShippedProductsPanel(
+                        shippedProductsList,
+                        totalShippedQty,
+                        totalShippedKg,
+                        totalShippedRp,
+                        deliveredTransactionsInScope.length,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Widget Panel Ringkasan Barang Keluar (DIKIRIM)
+  Widget _buildShippedProductsPanel(
+    List<Map<String, dynamic>> shippedProductsList,
+    double totalShippedQty,
+    double totalShippedKg,
+    double totalShippedRp,
+    int deliveredCount,
+  ) {
+    final filteredProducts = shippedProductsList.where((p) {
+      if (_summaryProductSearch.isEmpty) return true;
+      final q = _summaryProductSearch.toLowerCase().trim();
+      final pName = (p['productName'] ?? '').toString().toLowerCase();
+      final pId = (p['productId'] ?? '').toString().toLowerCase();
+      return pName.contains(q) || pId.contains(q);
+    }).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Title & Close Button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        _monthFilter == "SEMUA" ? 'Total Barang Keluar' : 'Barang Keluar ($_monthFilter)',
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Barang Keluar = Transaksi Status DIKIRIM',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
+                tooltip: 'Sembunyikan Panel',
+                onPressed: () {
+                  setState(() {
+                    _showRightSummaryPanel = false;
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Metric Cards Row
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.greenAccent.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('TOTAL BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${NumberFormat.decimalPattern('id_ID').format(totalShippedQty.toInt())} Pcs',
+                        style: const TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${totalShippedKg.toStringAsFixed(2)} Kg',
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('TOTAL NOMINAL', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _rupiahFormatter.format(totalShippedRp),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '$deliveredCount Invoice Dikirim',
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Search Field for summary
+          TextField(
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+            decoration: InputDecoration(
+              hintText: 'Cari produk dalam rincian...',
+              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B), size: 16),
+              isDense: true,
+              filled: true,
+              fillColor: const Color(0xFF0F172A),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            ),
+            onChanged: (val) {
+              setState(() {
+                _summaryProductSearch = val;
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+
+          // Product List Breakdown
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: filteredProducts.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Tidak ada barang keluar pada periode ini.',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: filteredProducts.length,
+                      separatorBuilder: (ctx, idx) => const Divider(color: Color(0xFF1E293B), height: 1),
+                      itemBuilder: (ctx, idx) {
+                        final p = filteredProducts[idx];
+                        final name = (p['productName'] ?? p['productId']).toString();
+                        final qty = (p['totalQty'] as double).toInt();
+                        final kg = (p['totalKg'] as double).toStringAsFixed(2);
+                        final rp = _rupiahFormatter.format(p['totalRp']);
+                        final invCount = p['invoiceCount'];
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 12,
+                                backgroundColor: const Color(0xFF38BDF8).withOpacity(0.15),
+                                child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '$invCount nota | $kg Kg',
+                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${NumberFormat.decimalPattern('id_ID').format(qty)} pcs',
+                                    style: const TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    rp,
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
