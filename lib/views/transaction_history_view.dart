@@ -630,7 +630,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ],
           ),
           content: SizedBox(
-            width: isMobile ? double.maxFinite : 820,
+            width: isMobile ? double.maxFinite : 900,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -757,13 +757,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(
-                            width: 830,
+                            width: 840,
                             child: Table(
                               columnWidths: const {
-                                0: FixedColumnWidth(260), // Nama Barang (Spacious)
+                                0: FixedColumnWidth(220), // Nama Barang
                                 1: FixedColumnWidth(55),  // Qty
                                 2: FixedColumnWidth(95),  // Harga Unit
-                                3: FixedColumnWidth(105), // Total
+                                3: FixedColumnWidth(110), // Total
                                 4: FixedColumnWidth(65),  // Disc %
                                 5: FixedColumnWidth(100), // Disc Rp
                                 6: FixedColumnWidth(140), // Subtotal
