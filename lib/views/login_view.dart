@@ -35,6 +35,7 @@ class _LoginViewState extends State<LoginView> {
             _usernameController.text,
             _passwordController.text,
             name: _nameController.text,
+            role: 'kacab',
           );
         } else {
           await authProvider.signIn(

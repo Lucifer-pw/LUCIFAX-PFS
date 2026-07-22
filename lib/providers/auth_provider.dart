@@ -50,7 +50,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> signUp(String username, String password, {String name = '', String role = 'developer'}) async {
+  Future<void> signUp(String username, String password, {String name = '', String role = 'kacab'}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();

@@ -77,7 +77,7 @@ class AuthService {
   }
 
   // Sign Up / Register new account using username and password
-  Future<UserProfile> signUp(String username, String password, {String name = '', String role = 'developer'}) async {
+  Future<UserProfile> signUp(String username, String password, {String name = '', String role = 'kacab'}) async {
     final email = _mapUsernameToEmail(username);
     final credentials = await _auth.createUserWithEmailAndPassword(
       email: email,
