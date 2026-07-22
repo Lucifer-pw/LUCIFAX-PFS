@@ -1338,8 +1338,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       if (_statusFilter != "SEMUA") {
         if (_statusFilter == "DIKIRIM" || _statusFilter == "PENDING") {
           if (tr.status != _statusFilter) return false;
-        } else {
+        } else if (_statusFilter == "UNPAID" || _statusFilter == "PAID") {
           if (tr.statusTransfer != _statusFilter) return false;
+        } else if (_statusFilter == "ERP_SYNC") {
+          if (tr.erpSyncDate == null) return false;
+        } else if (_statusFilter == "ERP_NOT_SYNC") {
+          if (tr.erpSyncDate != null) return false;
         }
       }
 
@@ -1504,23 +1508,27 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
         // Status Filter Dropdown
         Container(
-          width: 170,
+          width: 190,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _statusFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _statusFilter,
               dropdownColor: const Color(0xFF1E293B),
+              isExpanded: true,
               style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
               items: const [
-                DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS")),
-                DropdownMenuItem(value: "DIKIRIM", child: Text("KIRIM: DIKIRIM")),
-                DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING")),
-                DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID")),
-                DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID")),
+                DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "DIKIRIM", child: Text("KIRIM: DIKIRIM", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "ERP_SYNC", child: Text("ERP: SUDAH SYNC", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "ERP_NOT_SYNC", child: Text("ERP: BELUM SYNC", overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (val) {
                 if (val != null) {
