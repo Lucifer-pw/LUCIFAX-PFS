@@ -54,10 +54,12 @@ class PrintService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           // Real Circular Fiva Logo Image (Transparent background)
-                          pw.Image(
-                            logoImage,
-                            width: 54,
-                            height: 54,
+                          pw.ClipOval(
+                            child: pw.Image(
+                              logoImage,
+                              width: 54,
+                              height: 54,
+                            ),
                           ),
                           pw.SizedBox(width: 8),
                           pw.Expanded(
