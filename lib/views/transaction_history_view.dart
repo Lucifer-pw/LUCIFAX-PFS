@@ -1906,96 +1906,105 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       ),
                                     ),
 
-                                    // Bottom Pagination Control Bar
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F172A),
-                                        borderRadius: const BorderRadius.only(
-                                          bottomLeft: Radius.circular(12),
-                                          bottomRight: Radius.circular(12),
-                                        ),
-                                        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
-                                      ),
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              totalItems == 0
-                                                  ? '0 transaksi'
-                                                  : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
-                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            Row(
-                                              children: [
-                                                const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                                                const SizedBox(width: 8),
-                                                DropdownButton<int>(
-                                                  value: _rowsPerPage,
-                                                  dropdownColor: const Color(0xFF1E293B),
-                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                  underline: const SizedBox(),
-                                                  items: const [10, 25, 50, 100].map((count) {
-                                                    return DropdownMenuItem<int>(
-                                                      value: count,
-                                                      child: Text('$count / hal'),
-                                                    );
-                                                  }).toList(),
-                                                  onChanged: (val) {
-                                                    if (val != null) {
-                                                      setState(() {
-                                                        _rowsPerPage = val;
-                                                        _currentPage = 1;
-                                                      });
-                                                    }
-                                                  },
-                                                ),
-                                                const SizedBox(width: 16),
-                                                IconButton(
-                                                  icon: const Icon(Icons.first_page_rounded, size: 20),
-                                                  color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                  onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
-                                                  tooltip: 'Halaman Pertama',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                                                  color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                  onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
-                                                  tooltip: 'Halaman Sebelumnya',
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF1E293B),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(color: Colors.white.withOpacity(0.1)),
-                                                  ),
-                                                  child: Text(
-                                                    'Hal $_currentPage dari $totalPages',
-                                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                                                  color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                  onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
-                                                  tooltip: 'Halaman Selanjutnya',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(Icons.last_page_rounded, size: 20),
-                                                  color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                  onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
-                                                  tooltip: 'Halaman Terakhir',
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                     // Bottom Pagination Control Bar
+                                     Container(
+                                       decoration: BoxDecoration(
+                                         color: const Color(0xFF0F172A),
+                                         borderRadius: const BorderRadius.only(
+                                           bottomLeft: Radius.circular(12),
+                                           bottomRight: Radius.circular(12),
+                                         ),
+                                         border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+                                       ),
+                                       child: LayoutBuilder(
+                                         builder: (context, constraints) {
+                                           return SingleChildScrollView(
+                                             scrollDirection: Axis.horizontal,
+                                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                             child: ConstrainedBox(
+                                               constraints: BoxConstraints(
+                                                 minWidth: (constraints.maxWidth - 40).clamp(0, 99999),
+                                               ),
+                                               child: Row(
+                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                 children: [
+                                                   Text(
+                                                     totalItems == 0
+                                                         ? '0 transaksi'
+                                                         : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
+                                                     style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500),
+                                                   ),
+                                                   const SizedBox(width: 24),
+                                                   Row(
+                                                     children: [
+                                                       const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                                       const SizedBox(width: 8),
+                                                       DropdownButton<int>(
+                                                         value: _rowsPerPage,
+                                                         dropdownColor: const Color(0xFF1E293B),
+                                                         style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                         underline: const SizedBox(),
+                                                         items: const [10, 25, 50, 100].map((count) {
+                                                           return DropdownMenuItem<int>(
+                                                             value: count,
+                                                             child: Text('$count / hal'),
+                                                           );
+                                                         }).toList(),
+                                                         onChanged: (val) {
+                                                           if (val != null) {
+                                                             setState(() {
+                                                               _rowsPerPage = val;
+                                                               _currentPage = 1;
+                                                             });
+                                                           }
+                                                         },
+                                                       ),
+                                                       const SizedBox(width: 16),
+                                                       IconButton(
+                                                         icon: const Icon(Icons.first_page_rounded, size: 20),
+                                                         color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                         onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
+                                                         tooltip: 'Halaman Pertama',
+                                                       ),
+                                                       IconButton(
+                                                         icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                                                         color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                         onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                                                         tooltip: 'Halaman Sebelumnya',
+                                                       ),
+                                                       Container(
+                                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                                         decoration: BoxDecoration(
+                                                           color: const Color(0xFF1E293B),
+                                                           borderRadius: BorderRadius.circular(8),
+                                                           border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                                         ),
+                                                         child: Text(
+                                                           'Hal $_currentPage dari $totalPages',
+                                                           style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                         ),
+                                                       ),
+                                                       IconButton(
+                                                         icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                                                         color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                         onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                                                         tooltip: 'Halaman Selanjutnya',
+                                                       ),
+                                                       IconButton(
+                                                         icon: const Icon(Icons.last_page_rounded, size: 20),
+                                                         color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                         onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
+                                                         tooltip: 'Halaman Terakhir',
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 ],
+                                               ),
+                                             ),
+                                           );
+                                         },
+                                       ),
+                                     ),
                                   ],
                                 ),
     );
