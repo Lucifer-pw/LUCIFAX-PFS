@@ -1384,171 +1384,154 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       endIndex,
     );
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            // Search Input, Month Filter, Status Dropdown & Action Buttons Header Row
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Cari invoice, pelanggan, tanggal (dd-mm-yyyy), catatan...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12.0),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (val) {
-                      if (_debounce?.isActive ?? false) _debounce!.cancel();
-                      _debounce = Timer(const Duration(milliseconds: 300), () {
-                        setState(() {
-                          _searchQuery = val;
-                          _currentPage = 1;
-                        });
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
+    final isMobile = MediaQuery.of(context).size.width < 900;
 
-                // Month / Periode Dropdown Filter
-                Container(
-                  width: 175,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _monthFilter,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      items: _getMonthFilterOptions(trProvider.transactions).map((m) {
-                        return DropdownMenuItem(
-                          value: m,
-                          child: Row(
-                            children: [
-                              Icon(Icons.calendar_month_rounded, color: m != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: 14),
-                              const SizedBox(width: 6),
-                              Text(m == "SEMUA" ? "SEMUA BULAN" : m),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _monthFilter = val;
-                            _currentPage = 1;
-                            if (val != "SEMUA") {
-                              _showRightSummaryPanel = true;
-                            }
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
+    final searchField = TextField(
+      controller: _searchController,
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+      decoration: InputDecoration(
+        hintText: 'Cari invoice, pelanggan, tanggal (dd-mm-yyyy), catatan...',
+        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+        filled: true,
+        fillColor: const Color(0xFF1E293B),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      onChanged: (val) {
+        if (_debounce?.isActive ?? false) _debounce!.cancel();
+        _debounce = Timer(const Duration(milliseconds: 300), () {
+          setState(() {
+            _searchQuery = val;
+            _currentPage = 1;
+          });
+        });
+      },
+    );
 
-                // Status Filter Dropdown
-                Container(
-                  width: 170,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
+    final filterRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Month / Periode Dropdown Filter
+        Container(
+          width: 175,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _monthFilter,
+              dropdownColor: const Color(0xFF1E293B),
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              items: _getMonthFilterOptions(trProvider.transactions).map((m) {
+                return DropdownMenuItem(
+                  value: m,
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_month_rounded, color: m != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: 14),
+                      const SizedBox(width: 6),
+                      Text(m == "SEMUA" ? "SEMUA BULAN" : m),
+                    ],
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _statusFilter,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      items: const [
-                        DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS")),
-                        DropdownMenuItem(value: "DIKIRIM", child: Text("KIRIM: DIKIRIM")),
-                        DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING")),
-                        DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID")),
-                        DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID")),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _statusFilter = val;
-                            _currentPage = 1;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Toggle Barang Keluar Summary Button
-                IconButton(
-                  tooltip: _showRightSummaryPanel ? 'Sembunyikan Total Barang Keluar' : 'Tampilkan Total Barang Keluar',
-                  style: IconButton.styleFrom(
-                    backgroundColor: _showRightSummaryPanel ? const Color(0xFF38BDF8).withOpacity(0.2) : const Color(0xFF1E293B),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    side: BorderSide(color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : Colors.transparent),
-                  ),
-                  icon: Icon(
-                    Icons.inventory_2_rounded,
-                    color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _showRightSummaryPanel = !_showRightSummaryPanel;
-                    });
-                  },
-                ),
-                if (!isKacab) ...[
-                  const SizedBox(width: 12),
-                  // Import Excel Button
-                  ElevatedButton.icon(
-                    onPressed: () => _importTransactionsFromExcel(createdBy),
-                    icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
-                    label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal[700],
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ],
-              ],
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _monthFilter = val;
+                    _currentPage = 1;
+                    if (val != "SEMUA") {
+                      _showRightSummaryPanel = true;
+                    }
+                  });
+                }
+              },
             ),
-            const SizedBox(height: 20),
+          ),
+        ),
+        const SizedBox(width: 12),
 
-            // History Main Body: Split View (Left: Invoice Table, Right: Barang Keluar Panel)
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left Side: Invoice DataTable with Pagination
-                  Expanded(
-                    flex: 6,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
-                      ),
+        // Status Filter Dropdown
+        Container(
+          width: 170,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _statusFilter,
+              dropdownColor: const Color(0xFF1E293B),
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              items: const [
+                DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS")),
+                DropdownMenuItem(value: "DIKIRIM", child: Text("KIRIM: DIKIRIM")),
+                DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING")),
+                DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID")),
+                DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID")),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _statusFilter = val;
+                    _currentPage = 1;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        // Toggle Barang Keluar Summary Button
+        IconButton(
+          tooltip: _showRightSummaryPanel ? 'Sembunyikan Total Barang Keluar' : 'Tampilkan Total Barang Keluar',
+          style: IconButton.styleFrom(
+            backgroundColor: _showRightSummaryPanel ? const Color(0xFF38BDF8).withOpacity(0.2) : const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            side: BorderSide(color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : Colors.transparent),
+          ),
+          icon: Icon(
+            Icons.inventory_2_rounded,
+            color: _showRightSummaryPanel ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+            size: 20,
+          ),
+          onPressed: () {
+            setState(() {
+              _showRightSummaryPanel = !_showRightSummaryPanel;
+            });
+          },
+        ),
+        if (!isKacab) ...[
+          const SizedBox(width: 12),
+          // Import Excel Button
+          ElevatedButton.icon(
+            onPressed: () => _importTransactionsFromExcel(createdBy),
+            icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
+            label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal[700],
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final mainTableWidget = Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
                       child: trProvider.isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : filteredTransactions.isEmpty
@@ -1860,7 +1843,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                                     // Bottom Pagination Control Bar
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF0F172A),
                                         borderRadius: const BorderRadius.only(
@@ -1869,102 +1852,152 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         ),
                                         border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            totalItems == 0
-                                                ? '0 transaksi'
-                                                : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
-                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
-                                          ),
-                                          Row(
-                                            children: [
-                                              const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                                              const SizedBox(width: 8),
-                                              DropdownButton<int>(
-                                                value: _rowsPerPage,
-                                                dropdownColor: const Color(0xFF1E293B),
-                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                underline: const SizedBox(),
-                                                items: const [10, 25, 50, 100].map((count) {
-                                                  return DropdownMenuItem<int>(
-                                                    value: count,
-                                                    child: Text('$count / hal'),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (val) {
-                                                  if (val != null) {
-                                                    setState(() {
-                                                      _rowsPerPage = val;
-                                                      _currentPage = 1;
-                                                    });
-                                                  }
-                                                },
-                                              ),
-                                              const SizedBox(width: 24),
-                                              IconButton(
-                                                icon: const Icon(Icons.first_page_rounded, size: 20),
-                                                color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
-                                                tooltip: 'Halaman Pertama',
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                                                color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
-                                                tooltip: 'Halaman Sebelumnya',
-                                              ),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF1E293B),
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                                                ),
-                                                child: Text(
-                                                  'Hal $_currentPage dari $totalPages',
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              totalItems == 0
+                                                  ? '0 transaksi'
+                                                  : 'Menampilkan ${startIndex + 1}-${endIndex} dari ${NumberFormat.decimalPattern('id_ID').format(totalItems)} transaksi',
+                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Row(
+                                              children: [
+                                                const Text('Tampilkan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                                const SizedBox(width: 8),
+                                                DropdownButton<int>(
+                                                  value: _rowsPerPage,
+                                                  dropdownColor: const Color(0xFF1E293B),
                                                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                  underline: const SizedBox(),
+                                                  items: const [10, 25, 50, 100].map((count) {
+                                                    return DropdownMenuItem<int>(
+                                                      value: count,
+                                                      child: Text('$count / hal'),
+                                                    );
+                                                  }).toList(),
+                                                  onChanged: (val) {
+                                                    if (val != null) {
+                                                      setState(() {
+                                                        _rowsPerPage = val;
+                                                        _currentPage = 1;
+                                                      });
+                                                    }
+                                                  },
                                                 ),
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                                                color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
-                                                tooltip: 'Halaman Selanjutnya',
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(Icons.last_page_rounded, size: 20),
-                                                color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
-                                                onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
-                                                tooltip: 'Halaman Terakhir',
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                                const SizedBox(width: 16),
+                                                IconButton(
+                                                  icon: const Icon(Icons.first_page_rounded, size: 20),
+                                                  color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                  onPressed: _currentPage > 1 ? () => setState(() => _currentPage = 1) : null,
+                                                  tooltip: 'Halaman Pertama',
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                                                  color: _currentPage > 1 ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                  onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                                                  tooltip: 'Halaman Sebelumnya',
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF1E293B),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                                  ),
+                                                  child: Text(
+                                                    'Hal $_currentPage dari $totalPages',
+                                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                                                  color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                  onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                                                  tooltip: 'Halaman Selanjutnya',
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.last_page_rounded, size: 20),
+                                                  color: _currentPage < totalPages ? const Color(0xFF38BDF8) : const Color(0xFF475569),
+                                                  onPressed: _currentPage < totalPages ? () => setState(() => _currentPage = totalPages) : null,
+                                                  tooltip: 'Halaman Terakhir',
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
-                    ),
-                  ),
+    );
 
-                  // Right Side: Rincian Barang Keluar Panel
-                  if (_showRightSummaryPanel) ...[
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 4,
-                      child: _buildShippedProductsPanel(
-                        shippedProductsList,
-                        totalShippedQty,
-                        totalShippedKg,
-                        totalShippedRp,
-                        deliveredTransactionsInScope.length,
-                      ),
-                    ),
-                  ],
+    final summaryPanelWidget = _buildShippedProductsPanel(
+      shippedProductsList,
+      totalShippedQty,
+      totalShippedKg,
+      totalShippedRp,
+      deliveredTransactionsInScope.length,
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Padding(
+        padding: EdgeInsets.all(isMobile ? 10.0 : 20.0),
+        child: Column(
+          children: [
+            // Search Input, Month Filter, Status Dropdown & Action Buttons Header Row
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  searchField,
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: filterRow,
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: searchField,
+                  ),
+                  const SizedBox(width: 12),
+                  filterRow,
                 ],
               ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: isMobile
+                  ? Column(
+                      children: [
+                        Expanded(child: mainTableWidget),
+                        if (_showRightSummaryPanel) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 320,
+                            child: summaryPanelWidget,
+                          ),
+                        ],
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 6, child: mainTableWidget),
+                        if (_showRightSummaryPanel) ...[
+                          const SizedBox(width: 16),
+                          Expanded(flex: 4, child: summaryPanelWidget),
+                        ],
+                      ],
+                    ),
             ),
           ],
         ),
