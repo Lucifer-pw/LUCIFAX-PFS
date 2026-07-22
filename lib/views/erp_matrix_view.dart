@@ -895,6 +895,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   }
 
   Widget _buildInvoiceDetailTab() {
+    final productProvider = Provider.of<ProductProvider>(context);
+
     if (_loadingErp) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -945,10 +947,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       grandTotalIncome += (record['totalIncome'] ?? 0.0).toDouble();
       final invoices = List<dynamic>.from(record['invoices'] ?? []);
       for (var inv in invoices) {
+        if (inv is! Map) continue;
         final items = List<dynamic>.from(inv['items'] ?? []);
         for (var item in items) {
-          final itemMap = Map<String, dynamic>.from(item as Map);
-          grandTotalWeightKg += (itemMap['weightKg'] ?? 0.0).toDouble();
+          if (item is! Map) continue;
+          final itemMap = Map<String, dynamic>.from(item);
+          grandTotalWeightKg += ((itemMap['weightKg'] ?? 0.0) as num).toDouble();
         }
       }
     }
@@ -1133,10 +1137,19 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                               runSpacing: 6,
                               children: productsMap.entries.map((entry) {
                                 final prodData = entry.value is Map ? Map<String, dynamic>.from(entry.value) : {};
-                                final pcs = (prodData['pcs'] ?? 0.0).toDouble();
-                                final kg = (prodData['kg'] ?? 0.0).toDouble();
+                                final pcs = ((prodData['pcs'] ?? 0.0) as num).toDouble();
+                                final kg = ((prodData['kg'] ?? 0.0) as num).toDouble();
                                 final displayVal = _showPcs ? pcs.toStringAsFixed(0) : kg.toStringAsFixed(2);
                                 final unit = _showPcs ? 'pcs' : 'kg';
+
+                                String productName = entry.key;
+                                try {
+                                  final matched = productProvider.products.firstWhere(
+                                    (p) => p.id == entry.key || p.name == entry.key,
+                                  );
+                                  productName = matched.name;
+                                } catch (_) {}
+
                                 return Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
@@ -1145,7 +1158,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                     border: Border.all(color: const Color(0xFF334155)),
                                   ),
                                   child: Text(
-                                    '${entry.key}: $displayVal $unit',
+                                    '$productName: $displayVal $unit',
                                     style: const TextStyle(color: Colors.white70, fontSize: 11),
                                   ),
                                 );
@@ -1158,10 +1171,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
                     // Invoice list
                     ...invoices.map((inv) {
+                      if (inv is! Map) return const SizedBox();
                       final invNo = inv['invoiceNo'] ?? 0;
                       final invItems = List<dynamic>.from(inv['items'] ?? []);
                       final calculatedInvTotal = invItems.fold(0.0, (sum, it) {
-                        final itemMap = Map<String, dynamic>.from(it as Map);
+                        if (it is! Map) return sum;
+                        final itemMap = Map<String, dynamic>.from(it);
                         final isBonus = itemMap['isBonus'] == true;
                         final sub = ((itemMap['subtotal'] ?? 0.0) as num).toDouble().roundToDouble();
                         return sum + (isBonus ? 0.0 : sub);
