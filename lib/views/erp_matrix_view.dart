@@ -894,6 +894,18 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     );
   }
 
+  int _safeParseInvoiceInt(dynamic val) {
+    if (val == null) return 0;
+    if (val is int) return val;
+    if (val is num) return val.toInt();
+    final str = val.toString();
+    final digits = RegExp(r'\d+').stringMatch(str);
+    if (digits != null) {
+      return int.tryParse(digits) ?? 0;
+    }
+    return 0;
+  }
+
   Widget _buildInvoiceDetailTab() {
     final productProvider = Provider.of<ProductProvider>(context);
 
@@ -935,8 +947,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         ),
       );
     }
-
-    // Sort records by customerName
     filteredRecords.sort((a, b) => (a['customerName'] ?? '').toString().compareTo((b['customerName'] ?? '').toString()));
 
     // Calculate Summary stats for Detail Invoice ERP tab
@@ -1052,8 +1062,16 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             final invoices = List<dynamic>.from(record['invoices'] ?? []);
             final productsMap = Map<String, dynamic>.from(record['products'] ?? {});
 
-            // Sort invoices by invoiceNo
-            invoices.sort((a, b) => ((a['invoiceNo'] ?? 0) as int).compareTo((b['invoiceNo'] ?? 0) as int));
+            // Sort invoices by invoiceNo safely without unsafe type casting
+            invoices.sort((a, b) {
+              if (a is! Map || b is! Map) return 0;
+              final invA = a['invoiceNo'];
+              final invB = b['invoiceNo'];
+              final numA = _safeParseInvoiceInt(invA);
+              final numB = _safeParseInvoiceInt(invB);
+              if (numA != numB) return numA.compareTo(numB);
+              return invA.toString().compareTo(invB.toString());
+            });
 
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
