@@ -14,6 +14,7 @@ class KMeansAnalysisView extends StatefulWidget {
 }
 
 class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
+  int _selectedTab = 0;
   late String _selectedMonthYear;
   int _clusterK = 3;
   double _splitRatio = 0.80; // 80% Training, 20% Testing
