@@ -41,6 +41,9 @@ class StockProvider with ChangeNotifier {
       _stockEntries = snapshot.docs
           .map((doc) => StockEntry.fromFirestore(doc))
           .toList();
+
+      // Auto-sync unsynced entries to products collection
+      _syncUnsyncedEntries(snapshot.docs);
     } catch (e) {
       _error = e.toString();
       debugPrint("Error fetching stock entries: $e");
@@ -50,11 +53,46 @@ class StockProvider with ChangeNotifier {
     }
   }
 
+  Future<void> _syncUnsyncedEntries(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+    for (var doc in docs) {
+      final data = doc.data();
+      final bool isSynced = data['isSynced'] ?? false;
+      if (!isSynced) {
+        final String productId = data['productId'] ?? '';
+        final double qty = (data['qty'] ?? 0.0).toDouble();
+
+        if (productId.isNotEmpty && qty > 0) {
+          await _db.collection('products').doc(productId).update({
+            'stock': FieldValue.increment(qty),
+          }).catchError((err) {
+            debugPrint("Sync product stock error: $err");
+          });
+
+          await doc.reference.update({'isSynced': true}).catchError((err) {
+            debugPrint("Sync flag error: $err");
+          });
+        }
+      }
+    }
+  }
+
   Future<bool> saveStockEntry(StockEntry entry) async {
     try {
-      final docRef = await _db.collection('stock_entries').add(entry.toFirestore());
+      final data = entry.toFirestore();
+      data['isSynced'] = true;
+
+      final docRef = await _db.collection('stock_entries').add(data);
       final newEntry = entry.copyWith(id: docRef.id);
       _stockEntries.insert(0, newEntry);
+
+      // Increment stock in products collection
+      if (entry.productId.isNotEmpty && entry.qty > 0) {
+        await _db.collection('products').doc(entry.productId).update({
+          'stock': FieldValue.increment(entry.qty),
+        }).catchError((err) {
+          debugPrint("Could not update product stock by ID: $err");
+        });
+      }
 
       notifyListeners();
       return true;
@@ -68,6 +106,19 @@ class StockProvider with ChangeNotifier {
 
   Future<bool> deleteStockEntry(String id) async {
     try {
+      final existingIndex = _stockEntries.indexWhere((e) => e.id == id);
+      if (existingIndex != -1) {
+        final existingEntry = _stockEntries[existingIndex];
+        // Decrement stock in products collection
+        if (existingEntry.productId.isNotEmpty && existingEntry.qty > 0) {
+          await _db.collection('products').doc(existingEntry.productId).update({
+            'stock': FieldValue.increment(-existingEntry.qty),
+          }).catchError((err) {
+            debugPrint("Could not revert product stock by ID: $err");
+          });
+        }
+      }
+
       await _db.collection('stock_entries').doc(id).delete();
       _stockEntries.removeWhere((e) => e.id == id);
       notifyListeners();

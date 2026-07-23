@@ -607,6 +607,9 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                                       );
                                                       if (confirm == true) {
                                                         await stockProvider.deleteStockEntry(entry.id);
+                                                        if (mounted) {
+                                                          Provider.of<ProductProvider>(context, listen: false).fetchProducts();
+                                                        }
                                                       }
                                                     },
                                                   ),
