@@ -103,7 +103,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     return list;
   }
 
-  Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap) {
+  Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap, List<dynamic> allProducts) {
+    // Collect all product IDs and names that share the exact same kodeInduk as prod
+    final String currentKodeInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
+        ? prod.kodeInduk.toString().trim().toLowerCase()
+        : prod.id.toString().trim().toLowerCase();
+
+    final siblingProducts = allProducts.where((p) {
+      final k = (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty)
+          ? p.kodeInduk.toString().trim().toLowerCase()
+          : p.id.toString().trim().toLowerCase();
+      return k == currentKodeInduk;
+    }).toList();
+
+    final Set<String> targetIds = {};
+    final Set<String> targetNames = {};
+
+    for (var p in siblingProducts) {
+      targetIds.add(p.id.toString().trim().toLowerCase());
+      targetNames.add(p.name.toString().trim().toLowerCase());
+    }
+
     final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
     final initialStockVal = _initialStocks[prod.id] ?? 0.0;
     final stockBefore = initialStockVal * factor;
@@ -124,14 +144,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           final items = inv['items'] as List<dynamic>?;
           if (items != null) {
             for (var item in items) {
-              final itemMap = Map<String, dynamic>.from(item as Map);
+              if (item is! Map) continue;
+              final itemMap = Map<String, dynamic>.from(item);
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
-              final targetId = prod.id.toString().trim().toLowerCase();
-              final targetName = prod.name.toString().trim().toLowerCase();
 
-              final isMatch = (itemPId.isNotEmpty && (itemPId == targetId || itemPId == targetName)) ||
-                              (itemPName.isNotEmpty && (itemPName == targetName || itemPName == targetId));
+              final isMatch = (itemPId.isNotEmpty && targetIds.contains(itemPId)) ||
+                              (itemPName.isNotEmpty && targetNames.contains(itemPName));
 
               if (isMatch) {
                 final qty = (itemMap['qty'] ?? 0.0).toDouble();
@@ -151,7 +170,9 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       } else {
         final prodSales = r['products'] as Map<String, dynamic>?;
         if (prodSales != null) {
-          totalPenjualan += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
+          for (var p in siblingProducts) {
+            totalPenjualan += _getProductSoldQty(prodSales, p.id, _showPcs, p.sizeGrams);
+          }
         }
       }
     }
@@ -204,8 +225,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               pw.TableHelper.fromTextArray(
                 headers: [
                   'Produk',
+                  'Stok Awal',
                   'Total Penjualan',
-                  'Stock Before',
                   'Sample Bonus',
                   'Total Keluar',
                   'M1',
@@ -219,14 +240,14 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 data: List.generate(products.length, (idx) {
                   final prod = products[idx];
                   final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
-                  final stats = _calculateProductStats(prod, wMap);
+                  final stats = _calculateProductStats(prod, wMap, products);
 
                   final fmt = _showPcs ? 0 : 2;
 
                   return [
                     prod.name,
-                    stats['totalPenjualan']!.toStringAsFixed(fmt),
                     stats['stockBefore']!.toStringAsFixed(fmt),
+                    stats['totalPenjualan']!.toStringAsFixed(fmt),
                     stats['sampleBonus']!.toStringAsFixed(fmt),
                     stats['totalKeluar']!.toStringAsFixed(fmt),
                     stats['m1']!.toStringAsFixed(fmt),
@@ -805,10 +826,10 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                         label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                       DataColumn(
-                        label: Tooltip(message: 'Total Penjualan', child: Text('TOT. JUAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                        label: Tooltip(message: 'Stok Awal Bulan', child: Text('STOK AWAL', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11))),
                       ),
                       DataColumn(
-                        label: Tooltip(message: 'Stok Awal Bulan', child: Text('STOK BEFORE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11))),
+                        label: Tooltip(message: 'Total Penjualan', child: Text('TOT. JUAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
                       ),
                       DataColumn(
                         label: Tooltip(message: 'Sample Bonus', child: Text('SAMPLE', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11))),
@@ -841,7 +862,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     rows: List.generate(filteredProducts.length, (idx) {
                       final prod = filteredProducts[idx];
                       final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
-                      final stats = _calculateProductStats(prod, wMap);
+                      final stats = _calculateProductStats(prod, wMap, products);
 
                       final fmt = _showPcs ? 0 : 2;
 
@@ -860,8 +881,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                       return DataRow(
                         cells: [
                           DataCell(Text(prod.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-                          DataCell(Text(totalPenjualan.toStringAsFixed(fmt), style: TextStyle(color: totalPenjualan > 0 ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: totalPenjualan > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
                           DataCell(Text(stockBefore.toStringAsFixed(fmt), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                          DataCell(Text(totalPenjualan.toStringAsFixed(fmt), style: TextStyle(color: totalPenjualan > 0 ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: totalPenjualan > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
                           DataCell(Text(sampleBonus.toStringAsFixed(fmt), style: TextStyle(color: sampleBonus > 0 ? Colors.purpleAccent : Colors.white70, fontWeight: sampleBonus > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
                           DataCell(Text(totalKeluar.toStringAsFixed(fmt), style: TextStyle(color: totalKeluar > 0 ? Colors.redAccent : Colors.white70, fontWeight: totalKeluar > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
                           DataCell(Text(m1.toStringAsFixed(fmt), style: TextStyle(color: m1 > 0 ? const Color(0xFF38BDF8) : Colors.white38, fontWeight: m1 > 0 ? FontWeight.bold : FontWeight.normal, fontSize: 12))),
