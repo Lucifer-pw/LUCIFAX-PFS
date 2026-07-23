@@ -44,10 +44,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   List<String> _getMonthFilterOptions(List<model_tr.Transaction> transactions) {
     final Set<String> months = {};
     for (var tr in transactions) {
-      if (tr.deliveryDate != null) {
-        months.add(DateFormat('MM-yyyy').format(tr.deliveryDate!));
-      }
-      months.add(DateFormat('MM-yyyy').format(tr.date));
+      final effectiveDate = tr.deliveryDate ?? tr.date;
+      months.add(DateFormat('MM-yyyy').format(effectiveDate));
     }
 
     final now = DateTime.now();
@@ -1435,10 +1433,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final filteredTransactions = trProvider.transactions.where((tr) {
       // 1. Month Filter
       if (_monthFilter != "SEMUA") {
-        final delivMonth = tr.deliveryDate != null ? DateFormat('MM-yyyy').format(tr.deliveryDate!) : '';
-        final trMonth = DateFormat('MM-yyyy').format(tr.date);
-        final matchesMonth = (delivMonth == _monthFilter) || (trMonth == _monthFilter);
-        if (!matchesMonth) return false;
+        final effectiveDate = tr.deliveryDate ?? tr.date;
+        final effectiveMonth = DateFormat('MM-yyyy').format(effectiveDate);
+        if (effectiveMonth != _monthFilter) return false;
       }
 
       // 2. Status Filter
