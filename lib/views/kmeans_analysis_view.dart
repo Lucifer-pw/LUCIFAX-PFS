@@ -15,7 +15,7 @@ class KMeansAnalysisView extends StatefulWidget {
 
 class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   int _selectedTab = 0; // 0: Hasil Clustering, 1: Data Training & Testing, 2: Rekonsiliasi Stok
-  String _selectedMonthYear = '06-2026';
+  String _selectedMonthYear = 'Semua Periode (Semua Histori)';
   int _clusterK = 3;
   double _splitRatio = 0.80; // 80% Training, 20% Testing
   bool _isProcessing = false;
@@ -26,10 +26,6 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   KMeansResult? _kmeansResult;
   KMeansResult? _trainingResult;
   List<KMeansPoint> _testingPredictions = [];
-
-  final List<String> _monthOptions = [
-    '01-2026', '02-2026', '03-2026', '04-2026', '05-2026', '06-2026', '07-2026', '08-2026'
-  ];
 
   @override
   void initState() {
@@ -48,62 +44,64 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
       final stockProvider = Provider.of<StockProvider>(context, listen: false);
 
       final products = productProvider.products;
-      final erpRecords = await trProvider.getMonthlyErpSummary(_selectedMonthYear);
-      final initialStocks = await stockProvider.fetchInitialStocks(_selectedMonthYear);
-      final weeklyMap = stockProvider.getWeeklySummary(_selectedMonthYear);
+      final allTransactions = trProvider.transactions;
 
-      // Extract features for each product
+      // Filter transactions by selected period if specified
+      List<dynamic> targetTransactions = allTransactions;
+      if (_selectedMonthYear != 'Semua Periode (Semua Histori)') {
+        final filtered = allTransactions.where((t) {
+          final dateStr = DateFormat('MM-yyyy').format(t.date);
+          final delivStr = t.deliveryDate != null ? DateFormat('MM-yyyy').format(t.deliveryDate!) : dateStr;
+          return dateStr == _selectedMonthYear || delivStr == _selectedMonthYear;
+        }).toList();
+        if (filtered.isNotEmpty) {
+          targetTransactions = filtered;
+        }
+      }
+
+      final initialStocks = await stockProvider.fetchInitialStocks(_selectedMonthYear == 'Semua Periode (Semua Histori)' ? '06-2026' : _selectedMonthYear);
+      final weeklyMap = stockProvider.getWeeklySummary(_selectedMonthYear == 'Semua Periode (Semua Histori)' ? '06-2026' : _selectedMonthYear);
+
+      // Extract features for each product directly from Histori Transaksi
       final List<KMeansPoint> points = [];
 
       for (var prod in products) {
         final String ownId = prod.id.trim().toLowerCase();
+        final String ownName = prod.name.trim().toLowerCase();
 
-        // Calculate sales, sample, and delay for this product
         double totalSalesPcs = 0.0;
         double totalSamplePcs = 0.0;
         double totalDelayDaysSum = 0.0;
         int delayTransactionCount = 0;
         double crossMonthLagQtyPcs = 0.0;
 
-        for (var r in erpRecords) {
-          final invoices = r['invoices'] as List<dynamic>?;
-          if (invoices != null && invoices.isNotEmpty) {
-            for (var inv in invoices) {
-              final items = inv['items'] as List<dynamic>?;
-              final deliveryDateStr = inv['deliveryDate'] as String?;
-              final invDateStr = inv['date'] as String?;
+        for (var tr in targetTransactions) {
+          final trDate = tr.date as DateTime;
+          final delivDate = tr.deliveryDate as DateTime? ?? trDate;
+          final status = (tr.status as String? ?? '').toUpperCase();
 
-              DateTime? deliveryDate = deliveryDateStr != null ? DateTime.tryParse(deliveryDateStr) : null;
-              DateTime? invDate = invDateStr != null ? DateTime.tryParse(invDateStr) : null;
+          for (var item in tr.items) {
+            final itemId = (item.productId as String).trim().toLowerCase();
+            final itemName = (item.productName as String).trim().toLowerCase();
 
-              if (items != null) {
-                for (var item in items) {
-                  if (item is! Map) continue;
-                  final itemMap = Map<String, dynamic>.from(item);
-                  final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
+            if (itemId == ownId || (itemId.isEmpty && itemName == ownName)) {
+              final double qty = (item.qty as num).toDouble();
+              final bool isBonus = item.isBonus == true;
 
-                  if (itemPId == ownId) {
-                    final qty = (itemMap['qty'] ?? 0.0).toDouble();
-                    final isBonus = itemMap['isBonus'] == true;
+              if (isBonus) {
+                totalSamplePcs += qty;
+              } else {
+                totalSalesPcs += qty;
+              }
 
-                    if (isBonus) {
-                      totalSamplePcs += qty;
-                    } else {
-                      totalSalesPcs += qty;
-                    }
+              // Calculate delay in days between physical delivery and ERP invoice date
+              final delayDays = trDate.difference(delivDate).inDays.abs().toDouble();
+              totalDelayDaysSum += delayDays;
+              delayTransactionCount++;
 
-                    if (deliveryDate != null && invDate != null) {
-                      final delay = invDate.difference(deliveryDate).inDays;
-                      if (delay >= 0) {
-                        totalDelayDaysSum += delay;
-                        delayTransactionCount++;
-                      }
-                      if (deliveryDate.month != invDate.month) {
-                        crossMonthLagQtyPcs += qty;
-                      }
-                    }
-                  }
-                }
+              // Check if delivery month differs from invoice report month or status is DIKIRIM
+              if (trDate.month != delivDate.month || status == 'DIKIRIM') {
+                crossMonthLagQtyPcs += qty;
               }
             }
           }
@@ -116,7 +114,9 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
         final double totalKeluarPcs = totalSalesPcs + totalSamplePcs;
         final double expectedStockAkhir = initialStockVal + totalMasukPcs - totalKeluarPcs;
         final double actualOpnameStock = prod.stock.toDouble();
-        final double discrepancyGap = (actualOpnameStock - expectedStockAkhir).abs();
+
+        // Discrepancy gap is the lag impact or variance
+        final double discrepancyGap = crossMonthLagQtyPcs > 0 ? crossMonthLagQtyPcs : (actualOpnameStock - expectedStockAkhir).abs();
 
         points.add(KMeansPoint(
           productId: prod.id,
@@ -168,6 +168,13 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
   @override
   Widget build(BuildContext context) {
+    final trProvider = Provider.of<TransactionProvider>(context);
+    if (!_isProcessing && _allPoints.isEmpty && trProvider.transactions.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadAndProcessData();
+      });
+    }
+
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -204,29 +211,48 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Period Selector
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedMonthYear,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        items: _monthOptions.map((m) {
-                          return DropdownMenuItem(value: m, child: Text('Periode: $m'));
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedMonthYear = val);
-                            _loadAndProcessData();
-                          }
-                        },
-                      ),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final trProvider = Provider.of<TransactionProvider>(context);
+                      final Set<String> monthOpts = {'Semua Periode (Semua Histori)'};
+                      for (var tr in trProvider.transactions) {
+                        monthOpts.add(DateFormat('MM-yyyy').format(tr.date));
+                        if (tr.deliveryDate != null) {
+                          monthOpts.add(DateFormat('MM-yyyy').format(tr.deliveryDate!));
+                        }
+                      }
+                      monthOpts.addAll(['05-2026', '06-2026', '07-2026', '08-2026']);
+                      final monthOptionsList = monthOpts.toList();
+
+                      if (!monthOptionsList.contains(_selectedMonthYear)) {
+                        _selectedMonthYear = monthOptionsList.first;
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedMonthYear,
+                            dropdownColor: const Color(0xFF1E293B),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            items: monthOptionsList.map((m) {
+                              return DropdownMenuItem(value: m, child: Text(m == 'Semua Periode (Semua Histori)' ? m : 'Periode: $m'));
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _selectedMonthYear = val);
+                                _loadAndProcessData();
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 12),
 
