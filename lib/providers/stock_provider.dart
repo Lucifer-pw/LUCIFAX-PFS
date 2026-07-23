@@ -53,6 +53,32 @@ class StockProvider with ChangeNotifier {
     }
   }
 
+  Future<void> _updateStockForProductAndSiblings(String productId, double deltaQty) async {
+    if (productId.isEmpty || deltaQty == 0) return;
+    try {
+      final targetDoc = await _db.collection('products').doc(productId).get();
+      if (targetDoc.exists) {
+        final data = targetDoc.data();
+        final String kodeInduk = (data?['kodeInduk'] ?? '').toString().trim();
+
+        if (kodeInduk.isNotEmpty) {
+          final query = await _db.collection('products').where('kodeInduk', isEqualTo: kodeInduk).get();
+          if (query.docs.isNotEmpty) {
+            final batch = _db.batch();
+            for (var doc in query.docs) {
+              batch.update(doc.reference, {'stock': FieldValue.increment(deltaQty)});
+            }
+            await batch.commit();
+            return;
+          }
+        }
+      }
+      await _db.collection('products').doc(productId).update({'stock': FieldValue.increment(deltaQty)});
+    } catch (e) {
+      debugPrint("Error updating sibling stock: $e");
+    }
+  }
+
   Future<void> _syncUnsyncedEntries(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
     for (var doc in docs) {
       final data = doc.data();
@@ -62,12 +88,7 @@ class StockProvider with ChangeNotifier {
         final double qty = (data['qty'] ?? 0.0).toDouble();
 
         if (productId.isNotEmpty && qty > 0) {
-          await _db.collection('products').doc(productId).update({
-            'stock': FieldValue.increment(qty),
-          }).catchError((err) {
-            debugPrint("Sync product stock error: $err");
-          });
-
+          await _updateStockForProductAndSiblings(productId, qty);
           await doc.reference.update({'isSynced': true}).catchError((err) {
             debugPrint("Sync flag error: $err");
           });
@@ -85,13 +106,9 @@ class StockProvider with ChangeNotifier {
       final newEntry = entry.copyWith(id: docRef.id);
       _stockEntries.insert(0, newEntry);
 
-      // Increment stock in products collection
+      // Increment stock across all variants with matching kodeInduk
       if (entry.productId.isNotEmpty && entry.qty > 0) {
-        await _db.collection('products').doc(entry.productId).update({
-          'stock': FieldValue.increment(entry.qty),
-        }).catchError((err) {
-          debugPrint("Could not update product stock by ID: $err");
-        });
+        await _updateStockForProductAndSiblings(entry.productId, entry.qty);
       }
 
       notifyListeners();
@@ -109,13 +126,9 @@ class StockProvider with ChangeNotifier {
       final existingIndex = _stockEntries.indexWhere((e) => e.id == id);
       if (existingIndex != -1) {
         final existingEntry = _stockEntries[existingIndex];
-        // Decrement stock in products collection
+        // Decrement stock across all variants with matching kodeInduk
         if (existingEntry.productId.isNotEmpty && existingEntry.qty > 0) {
-          await _db.collection('products').doc(existingEntry.productId).update({
-            'stock': FieldValue.increment(-existingEntry.qty),
-          }).catchError((err) {
-            debugPrint("Could not revert product stock by ID: $err");
-          });
+          await _updateStockForProductAndSiblings(existingEntry.productId, -existingEntry.qty);
         }
       }
 

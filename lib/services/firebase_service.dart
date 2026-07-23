@@ -25,20 +25,25 @@ class FirebaseService {
   Future<void> saveProduct(Product product) async {
     await _db.collection('products').doc(product.id).set(product.toMap());
 
-    // Sync stock across all variants sharing the same kodeInduk
-    final query = await _db
-        .collection('products')
-        .where('kodeInduk', isEqualTo: product.kodeInduk)
-        .get();
+    if (product.kodeInduk.isNotEmpty) {
+      final query = await _db
+          .collection('products')
+          .where('kodeInduk', isEqualTo: product.kodeInduk)
+          .get();
 
-    if (query.docs.length > 1) {
-      final batch = _db.batch();
-      for (var doc in query.docs) {
-        if (doc.id != product.id) {
-          batch.update(doc.reference, {'stock': product.stock});
+      if (query.docs.length > 1) {
+        double targetStock = product.stock;
+        for (var doc in query.docs) {
+          final sStock = (doc.data()['stock'] ?? 0.0).toDouble();
+          if (sStock > targetStock) targetStock = sStock;
         }
+
+        final batch = _db.batch();
+        for (var doc in query.docs) {
+          batch.update(doc.reference, {'stock': targetStock});
+        }
+        await batch.commit();
       }
-      await batch.commit();
     }
   }
 

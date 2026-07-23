@@ -118,11 +118,11 @@ class _ProductListViewState extends State<ProductListView> {
                           Expanded(
                             child: TextFormField(
                               controller: idController,
-                              enabled: !isEdit, // Cannot edit ID after creation (primary key)
-                              style: const TextStyle(color: Colors.white),
+                              enabled: true, // Editable Kode Barang (ID)
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                               decoration: _buildInputDecoration(hint: 'Kode Barang (ID)').copyWith(
                                 labelText: 'Kode Barang (ID)',
-                                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -300,6 +300,9 @@ class _ProductListViewState extends State<ProductListView> {
                       final localProduct = product;
                       if (localProduct != null) {
                         // Edit Existing Product
+                        if (localProduct.id != id) {
+                          await Provider.of<ProductProvider>(context, listen: false).deleteProduct(localProduct.id);
+                        }
                         final updated = Product(
                           id: id,
                           kodeInduk: kodeInduk,
