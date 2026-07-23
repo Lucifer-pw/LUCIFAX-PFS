@@ -290,13 +290,14 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
           const SizedBox(height: 20),
 
           // Tab Bar Navigation
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
               _buildTabButton(0, Icons.pie_chart_outline_rounded, 'Hasil Clustering & Identifikasi'),
-              const SizedBox(width: 12),
               _buildTabButton(1, Icons.model_training_rounded, 'Data Training & Testing (Dosen)'),
-              const SizedBox(width: 12),
               _buildTabButton(2, Icons.fact_check_rounded, 'Kalkulator Rekonsiliasi Stok'),
+              _buildTabButton(3, Icons.timer_outlined, 'Aging Delay Pengiriman'),
             ],
           ),
           const SizedBox(height: 20),
@@ -309,7 +310,9 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                     ? _buildClusteringResultsTab()
                     : _selectedTab == 1
                         ? _buildTrainingTestingTab()
-                        : _buildReconciliationTab(),
+                        : _selectedTab == 2
+                            ? _buildReconciliationTab()
+                            : _buildAgingDelayTab(),
           ),
         ],
       ),
@@ -679,8 +682,6 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
   // TAB 3: Stock Reconciliation Calculator
   Widget _buildReconciliationTab() {
-    final NumberFormat currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -730,186 +731,229 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                   child: Text('⚖️ Tabel Matriks Rekonsiliasi Penyesuaian (Sebelum vs Sesudah)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(color: Color(0xFF334155), height: 1),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                    columns: const [
-                      DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('STOK ERP CATATAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('BARANG DIKIRIM (PENDING)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('STOK REKONSILIASI HASIL', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('STOK FISIK OPNAME', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('STATUS SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                    ],
-                    rows: _allPoints.map((p) {
-                      final double erpRecorded = p.totalQtySold;
-                      final double pendingDelivery = p.crossMonthLagQty;
-                      final double reconciledStock = erpRecorded - pendingDelivery;
-                      final bool isMatch = (p.discrepancyGap == 0 || pendingDelivery > 0);
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                        child: DataTable(
+                          columnSpacing: 14,
+                          horizontalMargin: 12,
+                          headingRowHeight: 46,
+                          dataRowMaxHeight: 48,
+                          headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                          columns: const [
+                            DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('STOK ERP CATATAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('BARANG DIKIRIM (PENDING)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('STOK REKONSILIASI HASIL', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('STOK FISIK OPNAME', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('STATUS SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                          ],
+                          rows: _allPoints.map((p) {
+                            final double erpRecorded = p.totalQtySold;
+                            final double pendingDelivery = p.crossMonthLagQty;
+                            final double reconciledStock = erpRecorded - pendingDelivery;
+                            final bool isMatch = (p.discrepancyGap == 0 || pendingDelivery > 0);
 
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                          DataCell(Text('${erpRecorded.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
-                          DataCell(Text('+${pendingDelivery.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                          DataCell(Text('${reconciledStock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
-                          DataCell(Text('${p.discrepancyGap.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isMatch ? const Color(0xFF4ADE80).withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                isMatch ? 'MATCH (100% COCOK)' : 'SELISIH FISIK',
-                                style: TextStyle(color: isMatch ? const Color(0xFF4ADE80) : Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                            return DataRow(
+                              cells: [
+                                DataCell(Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                DataCell(Text('${erpRecorded.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
+                                DataCell(Text('+${pendingDelivery.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
+                                DataCell(Text('${reconciledStock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
+                                DataCell(Text('${p.discrepancyGap.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isMatch ? const Color(0xFF4ADE80).withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      isMatch ? 'MATCH (100% COCOK)' : 'SELISIH FISIK',
+                                      style: TextStyle(color: isMatch ? const Color(0xFF4ADE80) : Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // TAB 4: Dedicated Aging Delay Tracking View
+  Widget _buildAgingDelayTab() {
+    final trProvider = Provider.of<TransactionProvider>(context);
+    final now = DateTime.now();
+
+    // Filter transactions with status DIKIRIM or delay > 0
+    final pendingDeliveries = trProvider.transactions.where((t) {
+      final status = t.status.toUpperCase();
+      final delivDate = t.deliveryDate ?? t.date;
+      return status == 'DIKIRIM' || t.date.difference(delivDate).inDays > 0;
+    }).toList();
+
+    pendingDeliveries.sort((a, b) {
+      final dateA = a.deliveryDate ?? a.date;
+      final dateB = b.deliveryDate ?? b.date;
+      return dateA.compareTo(dateB); // Oldest first
+    });
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFF38BDF8).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.timer_outlined, color: Color(0xFF38BDF8), size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Pemantau Aging Delay Pengiriman Barang (Status Kirim Belum Masuk ERP)', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 4),
+                      Text('Menampilkan rincian hari & bulan penundaan penginputan invoice ERP dari tanggal pengiriman fisik barang sampai hari ini.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF38BDF8))),
+                  child: Text(
+                    'Total: ${pendingDeliveries.length} Nota Pending',
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // AGING DELAY TRACKING SECTION FOR DIKIRIM TRANSACTIONS
-          Builder(
-            builder: (context) {
-              final trProvider = Provider.of<TransactionProvider>(context);
-              final now = DateTime.now();
-
-              // Filter transactions with status DIKIRIM or delay > 0
-              final pendingDeliveries = trProvider.transactions.where((t) {
-                final status = t.status.toUpperCase();
-                final delivDate = t.deliveryDate ?? t.date;
-                return status == 'DIKIRIM' || t.date.difference(delivDate).inDays > 0;
-              }).toList();
-
-              pendingDeliveries.sort((a, b) {
-                final dateA = a.deliveryDate ?? a.date;
-                final dateB = b.deliveryDate ?? b.date;
-                return dateA.compareTo(dateB); // Oldest first
-              });
-
-              return Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+          // Aging Delay Table
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF334155)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('⏱️ Daftar Transaksi Pending Invoice ERP & Perhitungan Aging Delay Hari / Bulan', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.timer_outlined, color: Color(0xFF38BDF8)),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('⏱️ Aging Delay Pengiriman Barang (Status Kirim Belum Masuk ERP)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                              SizedBox(height: 2),
-                              Text('Menampilkan rincian hari & bulan penundaan penginputan invoice ERP dari pengiriman fisik sampai hari ini.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                            ],
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF38BDF8))),
-                            child: Text(
-                              'Total: ${pendingDeliveries.length} Nota Pending',
-                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(color: Color(0xFF334155), height: 1),
-                    pendingDeliveries.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(24.0),
-                            child: Center(
-                              child: Text('✅ Tidak ada transaksi berstatus DIKIRIM yang menunggak laporan ERP saat ini.', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w500)),
-                            ),
-                          )
-                        : SingleChildScrollView(
+                const Divider(color: Color(0xFF334155), height: 1),
+                pendingDeliveries.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: Center(
+                          child: Text('✅ Tidak ada transaksi berstatus DIKIRIM yang menunggak laporan ERP saat ini.', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w500, fontSize: 15)),
+                        ),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                              columns: const [
-                                DataColumn(label: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('DETAIL ITEM BARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('LAMA DELAY (HARI)', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                              ],
-                              rows: pendingDeliveries.map((tr) {
-                                final delivDate = tr.deliveryDate ?? tr.date;
-                                final delayDays = now.difference(delivDate).inDays;
-                                final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                              child: DataTable(
+                                columnSpacing: 12,
+                                horizontalMargin: 10,
+                                headingRowHeight: 46,
+                                dataRowMaxHeight: 52,
+                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                columns: const [
+                                  DataColumn(label: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('DETAIL ITEM BARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('LAMA DELAY (HARI)', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold))),
+                                  DataColumn(label: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                ],
+                                rows: pendingDeliveries.map((tr) {
+                                  final delivDate = tr.deliveryDate ?? tr.date;
+                                  final delayDays = now.difference(delivDate).inDays;
+                                  final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
 
-                                Color statusColor = const Color(0xFF4ADE80);
-                                String statusText = 'Normal (< 7 Hari)';
+                                  Color statusColor = const Color(0xFF4ADE80);
+                                  String statusText = 'Normal (< 7 Hari)';
 
-                                if (delayDays >= 30 || delayMonths >= 1) {
-                                  statusColor = Colors.redAccent;
-                                  statusText = 'Kritis (Keterlambatan Lintas Bulan)';
-                                } else if (delayDays >= 7) {
-                                  statusColor = Colors.amberAccent;
-                                  statusText = 'Perhatian (7-30 Hari)';
-                                }
+                                  if (delayDays >= 30 || delayMonths >= 1) {
+                                    statusColor = Colors.redAccent;
+                                    statusText = 'Kritis (> 30 Hari)';
+                                  } else if (delayDays >= 7) {
+                                    statusColor = Colors.amberAccent;
+                                    statusText = 'Perhatian (7-30 Hari)';
+                                  }
 
-                                final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
-                                final String displayCustomer = tr.aliasName.trim().isNotEmpty
-                                    ? tr.aliasName
-                                    : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
+                                  final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+                                  final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                      ? tr.aliasName
+                                      : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
 
-                                return DataRow(
-                                  cells: [
-                                    DataCell(Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                    DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70))),
-                                    DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent))),
-                                    DataCell(
-                                      SizedBox(
-                                        width: 200,
-                                        child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                      ),
-                                    ),
-                                    DataCell(Text('$delayDays Hari', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold))),
-                                    DataCell(Text('$delayMonths Bulan', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold))),
-                                    DataCell(
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: statusColor.withOpacity(0.4)),
-                                        ),
-                                        child: Text(
-                                          statusText,
-                                          style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                      DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70))),
+                                      DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent))),
+                                      DataCell(
+                                        SizedBox(
+                                          width: 220,
+                                          child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
+                                      DataCell(Text('$delayDays Hari', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold))),
+                                      DataCell(Text('$delayMonths Bulan', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold))),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: statusColor.withOpacity(0.4)),
+                                          ),
+                                          child: Text(
+                                            statusText,
+                                            style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
                             ),
-                          ),
-                  ],
-                ),
-              );
-            },
+                          );
+                        },
+                      ),
+              ],
+            ),
           ),
         ],
       ),
