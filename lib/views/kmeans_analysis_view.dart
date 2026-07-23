@@ -744,6 +744,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                           dataRowMaxHeight: 48,
                           headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                           columns: const [
+                            DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('STOK ERP CATATAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('BARANG DIKIRIM (PENDING)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
@@ -751,7 +752,9 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                             DataColumn(label: Text('STOK FISIK OPNAME', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('STATUS SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                           ],
-                          rows: _allPoints.map((p) {
+                          rows: _allPoints.asMap().entries.map((entry) {
+                            final index = entry.key + 1;
+                            final p = entry.value;
                             final double erpRecorded = p.totalQtySold;
                             final double pendingDelivery = p.crossMonthLagQty;
                             final double reconciledStock = erpRecorded - pendingDelivery;
@@ -759,6 +762,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
                             return DataRow(
                               cells: [
+                                DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold))),
                                 DataCell(Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                 DataCell(Text('${erpRecorded.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
                                 DataCell(Text('+${pendingDelivery.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
@@ -882,12 +886,13 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                             child: ConstrainedBox(
                               constraints: BoxConstraints(minWidth: constraints.maxWidth),
                               child: DataTable(
-                                columnSpacing: 12,
-                                horizontalMargin: 10,
+                                columnSpacing: 10,
+                                horizontalMargin: 8,
                                 headingRowHeight: 46,
                                 dataRowMaxHeight: 52,
                                 headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                 columns: const [
+                                  DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
@@ -896,7 +901,9 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                   DataColumn(label: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                 ],
-                                rows: pendingDeliveries.map((tr) {
+                                rows: pendingDeliveries.asMap().entries.map((entry) {
+                                  final index = entry.key + 1;
+                                  final tr = entry.value;
                                   final delivDate = tr.deliveryDate ?? tr.date;
                                   final delayDays = now.difference(delivDate).inDays;
                                   final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
@@ -919,12 +926,13 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
                                   return DataRow(
                                     cells: [
+                                      DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold))),
                                       DataCell(Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                       DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70))),
                                       DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent))),
                                       DataCell(
                                         SizedBox(
-                                          width: 220,
+                                          width: 200,
                                           child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                                         ),
                                       ),
