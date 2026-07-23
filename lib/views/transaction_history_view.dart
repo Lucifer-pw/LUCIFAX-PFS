@@ -1478,13 +1478,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return true;
     }).toList();
 
-    // Calculate Total Barang Keluar summary for transactions with status DIKIRIM
+    // Calculate Barang summary for transactions matching active month, status & search filters
     final Map<String, Map<String, dynamic>> shippedProductsMap = {};
     double totalShippedQty = 0.0;
     double totalShippedKg = 0.0;
     double totalShippedRp = 0.0;
 
-    final deliveredTransactionsInScope = filteredTransactions.where((tr) => tr.status == 'DIKIRIM').toList();
+    final deliveredTransactionsInScope = filteredTransactions;
 
     for (var tr in deliveredTransactionsInScope) {
       for (var item in tr.items) {
@@ -2199,6 +2199,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return pName.contains(q) || pId.contains(q);
     }).toList();
 
+    String panelTitle = _monthFilter == "SEMUA" ? 'Rincian Barang' : 'Rincian Barang ($_monthFilter)';
+    if (_statusFilter != "SEMUA") {
+      panelTitle += ' - $_statusFilter';
+    }
+
+    String panelSubtitle = _statusFilter == "SEMUA"
+        ? 'Ringkasan Item Transaksi Tersaring'
+        : 'Ringkasan Item Status: $_statusFilter';
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
@@ -2221,15 +2230,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       const Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        _monthFilter == "SEMUA" ? 'Total Barang Keluar' : 'Barang Keluar ($_monthFilter)',
-                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                        panelTitle,
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
-                  const Text(
-                    'Barang Keluar = Transaksi Status DIKIRIM',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  Text(
+                    panelSubtitle,
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                   ),
                 ],
               ),
@@ -2294,7 +2303,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '$deliveredCount Invoice Dikirim',
+                        '$deliveredCount Invoice',
                         style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
                       ),
                     ],
@@ -2336,7 +2345,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               child: filteredProducts.isEmpty
                   ? const Center(
                       child: Text(
-                        'Tidak ada barang keluar pada periode ini.',
+                        'Tidak ada barang ditemukan pada filter ini.',
                         style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                       ),
                     )
