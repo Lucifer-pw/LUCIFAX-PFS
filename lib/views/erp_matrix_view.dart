@@ -104,10 +104,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   }
 
   Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap, List<dynamic> allProducts) {
+    final String ownId = prod.id.toString().trim().toLowerCase();
+    final String ownName = prod.name.toString().trim().toLowerCase();
+
     // Collect all product IDs and names that share the exact same kodeInduk as prod
     final String currentKodeInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
         ? prod.kodeInduk.toString().trim().toLowerCase()
-        : prod.id.toString().trim().toLowerCase();
+        : ownId;
 
     final siblingProducts = allProducts.where((p) {
       final k = (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty)
@@ -116,20 +119,21 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       return k == currentKodeInduk;
     }).toList();
 
-    final Set<String> targetIds = {};
-    final Set<String> targetNames = {};
+    final Set<String> groupIds = {};
+    final Set<String> groupNames = {};
 
     for (var p in siblingProducts) {
-      targetIds.add(p.id.toString().trim().toLowerCase());
-      targetNames.add(p.name.toString().trim().toLowerCase());
+      groupIds.add(p.id.toString().trim().toLowerCase());
+      groupNames.add(p.name.toString().trim().toLowerCase());
     }
 
     final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
     final initialStockVal = _initialStocks[prod.id] ?? 0.0;
     final stockBefore = initialStockVal * factor;
 
-    double totalPenjualan = 0.0;
-    double sampleBonus = 0.0;
+    double ownTotalPenjualan = 0.0;
+    double ownSampleBonus = 0.0;
+    double groupTotalKeluar = 0.0;
 
     for (var r in _erpRecords) {
       if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
@@ -149,20 +153,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-              final isMatch = (itemPId.isNotEmpty && targetIds.contains(itemPId)) ||
-                              (itemPName.isNotEmpty && targetNames.contains(itemPName));
+              final isOwnMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
+                                 (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
 
-              if (isMatch) {
-                final qty = (itemMap['qty'] ?? 0.0).toDouble();
-                final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
-                final isBonusItem = itemMap['isBonus'] == true;
-                final val = _showPcs ? qty : weightKg;
+              final isGroupMatch = (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
+                                   (itemPName.isNotEmpty && groupNames.contains(itemPName));
 
+              final qty = (itemMap['qty'] ?? 0.0).toDouble();
+              final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
+              final isBonusItem = itemMap['isBonus'] == true;
+              final val = _showPcs ? qty : weightKg;
+
+              if (isOwnMatch) {
                 if (isSampleInvoice || isBonusItem) {
-                  sampleBonus += val;
+                  ownSampleBonus += val;
                 } else {
-                  totalPenjualan += val;
+                  ownTotalPenjualan += val;
                 }
+              }
+
+              if (isGroupMatch) {
+                groupTotalKeluar += val;
               }
             }
           }
@@ -170,14 +181,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       } else {
         final prodSales = r['products'] as Map<String, dynamic>?;
         if (prodSales != null) {
+          ownTotalPenjualan += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
           for (var p in siblingProducts) {
-            totalPenjualan += _getProductSoldQty(prodSales, p.id, _showPcs, p.sizeGrams);
+            groupTotalKeluar += _getProductSoldQty(prodSales, p.id, _showPcs, p.sizeGrams);
           }
         }
       }
     }
-
-    final totalKeluar = totalPenjualan + sampleBonus;
 
     final m1 = (wMap[1] ?? 0.0) * factor;
     final m2 = (wMap[2] ?? 0.0) * factor;
@@ -186,13 +196,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     final m5 = (wMap[5] ?? 0.0) * factor;
     final totalMasuk = m1 + m2 + m3 + m4 + m5;
 
-    final stockAkhir = stockBefore + totalMasuk - totalKeluar;
+    final stockAkhir = stockBefore + totalMasuk - groupTotalKeluar;
 
     return {
-      'totalPenjualan': totalPenjualan,
+      'totalPenjualan': ownTotalPenjualan,
       'stockBefore': stockBefore,
-      'sampleBonus': sampleBonus,
-      'totalKeluar': totalKeluar,
+      'sampleBonus': ownSampleBonus,
+      'totalKeluar': groupTotalKeluar,
       'm1': m1,
       'm2': m2,
       'm3': m3,
