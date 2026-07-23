@@ -27,6 +27,8 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   KMeansResult? _trainingResult;
   List<KMeansPoint> _testingPredictions = [];
 
+  int _lastProcessedTrCount = -1;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +47,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
       final products = productProvider.products;
       final allTransactions = trProvider.transactions;
+      _lastProcessedTrCount = allTransactions.length;
 
       // Filter transactions by selected period if specified
       List<dynamic> targetTransactions = allTransactions;
@@ -81,10 +84,14 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
           final status = (tr.status as String? ?? '').toUpperCase();
 
           for (var item in tr.items) {
-            final itemId = (item.productId as String).trim().toLowerCase();
-            final itemName = (item.productName as String).trim().toLowerCase();
+            final itemId = (item.productId as String? ?? '').trim().toLowerCase();
+            final itemName = (item.productName as String? ?? '').trim().toLowerCase();
 
-            if (itemId == ownId || (itemId.isEmpty && itemName == ownName)) {
+            // Flexible product matching by ID, exact Name, or substring
+            final bool isMatch = (itemId.isNotEmpty && (itemId == ownId || itemId == ownName)) ||
+                                 (itemName.isNotEmpty && (itemName == ownName || itemName == ownId || itemName.contains(ownName) || ownName.contains(itemName)));
+
+            if (isMatch) {
               final double qty = (item.qty as num).toDouble();
               final bool isBonus = item.isBonus == true;
 
@@ -126,6 +133,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
           totalQtySold: totalSalesPcs + totalSamplePcs,
           crossMonthLagQty: crossMonthLagQtyPcs,
           discrepancyGap: double.parse(discrepancyGap.toStringAsFixed(1)),
+          opnameStock: actualOpnameStock,
         ));
       }
 
@@ -169,7 +177,8 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   @override
   Widget build(BuildContext context) {
     final trProvider = Provider.of<TransactionProvider>(context);
-    if (!_isProcessing && _allPoints.isEmpty && trProvider.transactions.isNotEmpty) {
+    if (!_isProcessing && trProvider.transactions.isNotEmpty && trProvider.transactions.length != _lastProcessedTrCount) {
+      _lastProcessedTrCount = trProvider.transactions.length;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadAndProcessData();
       });
@@ -767,7 +776,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                 DataCell(Text('${erpRecorded.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
                                 DataCell(Text('+${pendingDelivery.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
                                 DataCell(Text('${reconciledStock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
-                                DataCell(Text('${p.discrepancyGap.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
+                                DataCell(Text('${p.opnameStock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
                                 DataCell(
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

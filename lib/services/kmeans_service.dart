@@ -9,6 +9,7 @@ class KMeansPoint {
   final double totalQtySold;     // X2: Total volume penjualan + sample (Pcs)
   final double crossMonthLagQty; // X3: Volume barang dikirim fisik tapi ERP beda bulan (Pcs)
   final double discrepancyGap;   // X4: Selisih Stok Opname (Pcs)
+  final double opnameStock;      // Physical stock in Master Barang (Pcs)
 
   int clusterIndex;
   double distanceToCentroid;
@@ -21,6 +22,7 @@ class KMeansPoint {
     required this.totalQtySold,
     required this.crossMonthLagQty,
     required this.discrepancyGap,
+    this.opnameStock = 0.0,
     this.clusterIndex = -1,
     this.distanceToCentroid = 0.0,
   });
