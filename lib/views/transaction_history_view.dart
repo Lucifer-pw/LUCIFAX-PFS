@@ -27,6 +27,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   String _searchQuery = "";
   String _statusFilter = "SEMUA"; // SEMUA, PAID, UNPAID, DIKIRIM, PENDING
   String _monthFilter = "SEMUA"; // SEMUA or "07-2026", "06-2026", etc.
+  String _productFilter = "SEMUA"; // SEMUA or selected product name
   bool _showRightSummaryPanel = true;
   String _summaryProductSearch = "";
 
@@ -72,6 +73,125 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return b.compareTo(a);
     });
     return ["SEMUA", ...list];
+  }
+
+  void _showSearchableProductFilterDialog(List<String> productNames) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        String tempSearch = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredList = productNames.where((p) {
+              if (tempSearch.isEmpty) return true;
+              return p.toLowerCase().contains(tempSearch.toLowerCase().trim());
+            }).toList();
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.shopping_bag_rounded, color: Color(0xFF38BDF8), size: 20),
+                  SizedBox(width: 8),
+                  Text('Filter Nama Produk', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SizedBox(
+                width: 420,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Ketik nama produk...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 18),
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          tempSearch = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ListView(
+                          padding: const EdgeInsets.all(4),
+                          children: [
+                            ListTile(
+                              dense: true,
+                              selected: _productFilter == "SEMUA",
+                              selectedTileColor: const Color(0xFF38BDF8).withOpacity(0.15),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              leading: const Icon(Icons.apps_rounded, color: Color(0xFF38BDF8), size: 16),
+                              title: const Text(
+                                'SEMUA PRODUK',
+                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  _productFilter = "SEMUA";
+                                  _currentPage = 1;
+                                });
+                                Navigator.pop(ctx);
+                              },
+                            ),
+                            const Divider(color: Color(0xFF1E293B), height: 1),
+                            ...filteredList.map((pName) {
+                              final isSel = _productFilter.toLowerCase() == pName.toLowerCase();
+                              return ListTile(
+                                dense: true,
+                                selected: isSel,
+                                selectedTileColor: const Color(0xFF38BDF8).withOpacity(0.15),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                title: Text(
+                                  pName,
+                                  style: TextStyle(
+                                    color: isSel ? const Color(0xFF38BDF8) : Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                onTap: () {
+                                  setState(() {
+                                    _productFilter = pName;
+                                    _currentPage = 1;
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                              );
+                            }).toList(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -1429,6 +1549,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final createdBy = user?.uid ?? 'system';
     final isKacab = user?.isKacab ?? false;
 
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final Set<String> allProductsSet = {};
+    for (var p in productProvider.products) {
+      if (p.name.trim().isNotEmpty) allProductsSet.add(p.name.trim());
+    }
+    for (var tr in trProvider.transactions) {
+      for (var item in tr.items) {
+        if (item.productName.trim().isNotEmpty) allProductsSet.add(item.productName.trim());
+      }
+    }
+    final allProductsList = allProductsSet.toList()..sort();
+
     // Apply local queries, month filter, and status filter
     final filteredTransactions = trProvider.transactions.where((tr) {
       // 1. Month Filter
@@ -1451,7 +1583,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         }
       }
 
-      // 3. Text Search Query
+      // 3. Product Filter
+      if (_productFilter != "SEMUA") {
+        final targetProd = _productFilter.toLowerCase().trim();
+        final hasProduct = tr.items.any((item) {
+          final pId = item.productId.toLowerCase().trim();
+          final pName = item.productName.toLowerCase().trim();
+          return pId == targetProd || pName == targetProd || pName.contains(targetProd);
+        });
+        if (!hasProduct) return false;
+      }
+
+      // 4. Text Search Query
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase().trim();
         final cleanQuery = query.replaceAll('#', '').trim();
@@ -1646,6 +1789,52 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   });
                 }
               },
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        // Product Filter Selector (Searchable Dropdown)
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _showSearchableProductFilterDialog(allProductsList),
+          child: Container(
+            width: 195,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.shopping_bag_outlined, color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _productFilter == "SEMUA" ? "SEMUA PRODUK" : _productFilter,
+                    style: TextStyle(
+                      color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_productFilter != "SEMUA")
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _productFilter = "SEMUA";
+                        _currentPage = 1;
+                      });
+                    },
+                    child: const Icon(Icons.close_rounded, color: Colors.white70, size: 16),
+                  )
+                else
+                  const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 20),
+              ],
             ),
           ),
         ),
@@ -2202,6 +2391,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     String panelTitle = _monthFilter == "SEMUA" ? 'Rincian Barang' : 'Rincian Barang ($_monthFilter)';
     if (_statusFilter != "SEMUA") {
       panelTitle += ' - $_statusFilter';
+    }
+    if (_productFilter != "SEMUA") {
+      panelTitle += ' ($_productFilter)';
     }
 
     String panelSubtitle = _statusFilter == "SEMUA"
