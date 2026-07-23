@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
@@ -7,6 +8,7 @@ class AuthProvider extends ChangeNotifier {
   UserProfile? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
+  Timer? _presenceTimer;
 
   UserProfile? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
@@ -17,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider() {
     _authService.authStateChanges.listen((user) async {
       if (user == null) {
+        _stopPresenceHeartbeat();
         _currentUser = null;
         notifyListeners();
       } else {
@@ -24,6 +27,9 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         try {
           _currentUser = await _authService.getCurrentUserProfile();
+          if (_currentUser != null) {
+            _startPresenceHeartbeat();
+          }
         } catch (e) {
           _errorMessage = e.toString();
         } finally {
@@ -34,6 +40,31 @@ class AuthProvider extends ChangeNotifier {
     });
   }
 
+  void _startPresenceHeartbeat() {
+    _stopPresenceHeartbeat();
+    final uid = _currentUser?.uid;
+    if (uid == null) return;
+
+    // Send immediate presence update
+    _authService.updateUserPresence(uid, true);
+
+    // Heartbeat every 25 seconds
+    _presenceTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (_currentUser != null) {
+        _authService.updateUserPresence(_currentUser!.uid, true);
+      }
+    });
+  }
+
+  void _stopPresenceHeartbeat() {
+    _presenceTimer?.cancel();
+    _presenceTimer = null;
+  }
+
+  Stream<List<UserProfile>> getUsersStream() {
+    return _authService.getUsersStream();
+  }
+
   Future<void> signIn(String username, String password) async {
     _isLoading = true;
     _errorMessage = null;
@@ -41,6 +72,9 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       _currentUser = await _authService.signIn(username, password);
+      if (_currentUser != null) {
+        _startPresenceHeartbeat();
+      }
     } catch (e) {
       _errorMessage = "Username atau Password yang Anda masukkan salah.";
       rethrow;
@@ -57,6 +91,9 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       _currentUser = await _authService.signUp(username, password, name: name, role: role);
+      if (_currentUser != null) {
+        _startPresenceHeartbeat();
+      }
     } catch (e) {
       _errorMessage = "Pendaftaran gagal: Username sudah terpakai atau password kurang kuat.";
       rethrow;
@@ -70,6 +107,10 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      _stopPresenceHeartbeat();
+      if (_currentUser != null) {
+        await _authService.updateUserPresence(_currentUser!.uid, false);
+      }
       await _authService.signOut();
       _currentUser = null;
     } catch (e) {
@@ -82,5 +123,11 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> seedDefaultUsers() async {
     await _authService.seedDefaultUsers();
+  }
+
+  @override
+  void dispose() {
+    _stopPresenceHeartbeat();
+    super.dispose();
   }
 }

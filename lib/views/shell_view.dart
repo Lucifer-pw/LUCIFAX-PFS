@@ -15,6 +15,7 @@ import 'receivable_list_view.dart';
 import 'ranking_kacab_view.dart';
 import 'stock_input_view.dart';
 import 'attendance_view.dart';
+import 'user_presence_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -152,6 +153,15 @@ class _ShellViewState extends State<ShellView> {
         'widget': const DashboardView(),
       },
     ]);
+
+    // Developer-Only Activity & Presence Monitor Screen
+    if (role == 'developer') {
+      items.add({
+        'title': 'User Online Monitor',
+        'icon': Icons.sensors_rounded,
+        'widget': const UserPresenceView(),
+      });
+    }
 
     return items;
   }

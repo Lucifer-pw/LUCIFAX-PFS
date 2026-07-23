@@ -45,6 +45,8 @@ class AuthService {
     final docRef = _db.collection('users').doc(user.uid);
     final doc = await docRef.get();
 
+    await recordUserLogin(user.uid);
+
     if (doc.exists) {
       return UserProfile.fromMap(doc.data()!, user.uid);
     } else {
@@ -150,8 +152,45 @@ class AuthService {
     }
   }
 
+  // Update user online status and lastSeen timestamp
+  Future<void> updateUserPresence(String uid, bool isOnline) async {
+    try {
+      final updates = <String, dynamic>{
+        'isOnline': isOnline,
+        'lastSeen': FieldValue.serverTimestamp(),
+      };
+      await _db.collection('users').doc(uid).set(updates, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error updating user presence: $e");
+    }
+  }
+
+  // Record login event
+  Future<void> recordUserLogin(String uid) async {
+    try {
+      await _db.collection('users').doc(uid).set({
+        'isOnline': true,
+        'lastSeen': FieldValue.serverTimestamp(),
+        'lastLogin': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error recording user login: $e");
+    }
+  }
+
+  // Stream all user profiles for developer activity monitor
+  Stream<List<UserProfile>> getUsersStream() {
+    return _db.collection('users').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => UserProfile.fromMap(doc.data(), doc.id)).toList();
+    });
+  }
+
   // Sign Out
   Future<void> signOut() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      await updateUserPresence(user.uid, false);
+    }
     await _auth.signOut();
   }
 
