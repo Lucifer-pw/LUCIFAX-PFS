@@ -18,6 +18,7 @@ class RolePermissionsProvider with ChangeNotifier {
     'ranking_kacab': false,
     'attendance': false,
     'dashboard': false,
+    'kmeans_analysis': false,
   };
 
   bool _isLoading = true;

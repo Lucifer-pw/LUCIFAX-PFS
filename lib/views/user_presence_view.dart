@@ -77,6 +77,12 @@ class _UserPresenceViewState extends State<UserPresenceView> {
       'icon': Icons.bar_chart_rounded,
       'desc': 'Grafik analisis performa bisnis, omset bulanan, dan statistik barang.',
     },
+    {
+      'key': 'kmeans_analysis',
+      'title': 'Clustering K-Means (Skripsi)',
+      'icon': Icons.hub_rounded,
+      'desc': 'Analisis K-Means Clustering, Data Training & Testing, dan Rekonsiliasi Stok.',
+    },
   ];
 
   String _formatRelativeTime(DateTime? date, bool isOnline) {

@@ -17,6 +17,7 @@ import 'ranking_kacab_view.dart';
 import 'stock_input_view.dart';
 import 'attendance_view.dart';
 import 'user_presence_view.dart';
+import 'kmeans_analysis_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -167,6 +168,14 @@ class _ShellViewState extends State<ShellView> {
         });
       }
 
+      if (kacabPerms['kmeans_analysis'] == true) {
+        items.add({
+          'title': 'Clustering K-Means (Skripsi)',
+          'icon': Icons.hub_rounded,
+          'widget': const KMeansAnalysisView(),
+        });
+      }
+
       // Safety fallback: If developer turns off all menus, show Histori Transaksi as default
       if (items.isEmpty) {
         items.add({
@@ -239,6 +248,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Analitik & Klasifikasi',
         'icon': Icons.bar_chart_rounded,
         'widget': const DashboardView(),
+      },
+      {
+        'title': 'Clustering K-Means (Skripsi)',
+        'icon': Icons.hub_rounded,
+        'widget': const KMeansAnalysisView(),
       },
     ]);
 
