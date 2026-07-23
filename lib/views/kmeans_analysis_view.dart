@@ -14,8 +14,7 @@ class KMeansAnalysisView extends StatefulWidget {
 }
 
 class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
-  int _selectedTab = 0; // 0: Hasil Clustering, 1: Data Training & Testing, 2: Rekonsiliasi Stok
-  String _selectedMonthYear = 'Semua Periode (Semua Histori)';
+  late String _selectedMonthYear;
   int _clusterK = 3;
   double _splitRatio = 0.80; // 80% Training, 20% Testing
   bool _isProcessing = false;
@@ -32,6 +31,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   @override
   void initState() {
     super.initState();
+    _selectedMonthYear = DateFormat('MM-yyyy').format(DateTime.now());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAndProcessData();
     });
@@ -223,7 +223,8 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                   Builder(
                     builder: (context) {
                       final trProvider = Provider.of<TransactionProvider>(context);
-                      final Set<String> monthOpts = {'Semua Periode (Semua Histori)'};
+                      final currentMonthStr = DateFormat('MM-yyyy').format(DateTime.now());
+                      final Set<String> monthOpts = {'Semua Periode (Semua Histori)', currentMonthStr};
                       for (var tr in trProvider.transactions) {
                         monthOpts.add(DateFormat('MM-yyyy').format(tr.date));
                         if (tr.deliveryDate != null) {
@@ -234,7 +235,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       final monthOptionsList = monthOpts.toList();
 
                       if (!monthOptionsList.contains(_selectedMonthYear)) {
-                        _selectedMonthYear = monthOptionsList.first;
+                        _selectedMonthYear = currentMonthStr;
                       }
 
                       return Container(
