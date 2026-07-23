@@ -45,8 +45,6 @@ class ProductProvider extends ChangeNotifier {
           _products = syncedList;
           _isLoading = false;
           notifyListeners();
-
-          _dbService.syncAllKodeIndukStocksToFirestore(kodeIndukStockMap);
         }, onError: (error) {
           debugPrint("Product stream error: $error");
         });
