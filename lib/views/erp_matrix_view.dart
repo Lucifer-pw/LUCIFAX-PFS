@@ -303,6 +303,167 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     return 0.0;
   }
 
+  String _getPreviousMonthYear(String currentMonthYear) {
+    final parts = currentMonthYear.split('-');
+    if (parts.length != 2) return currentMonthYear;
+    int month = int.tryParse(parts[0]) ?? 1;
+    int year = int.tryParse(parts[1]) ?? 2026;
+
+    if (month == 1) {
+      month = 12;
+      year -= 1;
+    } else {
+      month -= 1;
+    }
+
+    final mStr = month.toString().padLeft(2, '0');
+    return '$mStr-$year';
+  }
+
+  Future<Map<String, double>> _calculatePrevMonthStockAkhir(String prevMonthYear) async {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final stockProvider = Provider.of<StockProvider>(context, listen: false);
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final products = productProvider.products;
+
+    final prevErpRecords = await trProvider.getMonthlyErpSummary(prevMonthYear);
+    final prevInitialStocks = await stockProvider.fetchInitialStocks(prevMonthYear);
+    final prevWeeklyMap = stockProvider.getWeeklySummary(prevMonthYear);
+
+    final Map<String, double> prevStockAkhirMap = {};
+
+    for (var prod in products) {
+      final String ownId = prod.id.toString().trim().toLowerCase();
+
+      final String currentKodeInduk = prod.kodeInduk.trim().isNotEmpty
+          ? prod.kodeInduk.trim().toLowerCase()
+          : ownId;
+
+      final siblingProducts = products.where((p) {
+        final k = p.kodeInduk.trim().isNotEmpty
+            ? p.kodeInduk.trim().toLowerCase()
+            : p.id.trim().toLowerCase();
+        return k == currentKodeInduk;
+      }).toList();
+
+      final Set<String> groupIds = {};
+      final Set<String> groupNames = {};
+
+      for (var p in siblingProducts) {
+        groupIds.add(p.id.trim().toLowerCase());
+        groupNames.add(p.name.trim().toLowerCase());
+      }
+
+      final initialStockVal = prevInitialStocks[prod.id] ?? 0.0;
+      final stockBeforePcs = initialStockVal; // in Pcs
+
+      double groupTotalKeluarPcs = 0.0;
+
+      for (var r in prevErpRecords) {
+        final invoices = r['invoices'] as List<dynamic>?;
+        if (invoices != null && invoices.isNotEmpty) {
+          for (var inv in invoices) {
+            final items = inv['items'] as List<dynamic>?;
+            if (items != null) {
+              for (var item in items) {
+                if (item is! Map) continue;
+                final itemMap = Map<String, dynamic>.from(item);
+                final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
+                final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
+
+                final isGroupMatch = (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
+                                     (itemPName.isNotEmpty && groupNames.contains(itemPName));
+
+                if (isGroupMatch) {
+                  final qty = (itemMap['qty'] ?? 0.0).toDouble();
+                  groupTotalKeluarPcs += qty;
+                }
+              }
+            }
+          }
+        } else {
+          final prodSales = r['products'] as Map<String, dynamic>?;
+          if (prodSales != null) {
+            for (var p in siblingProducts) {
+              groupTotalKeluarPcs += _getProductSoldQty(prodSales, p.id, true, p.sizeGrams);
+            }
+          }
+        }
+      }
+
+      final wMap = prevWeeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+      final m1 = wMap[1] ?? 0.0;
+      final m2 = wMap[2] ?? 0.0;
+      final m3 = wMap[3] ?? 0.0;
+      final m4 = wMap[4] ?? 0.0;
+      final m5 = wMap[5] ?? 0.0;
+      final totalMasukPcs = m1 + m2 + m3 + m4 + m5;
+
+      final stockAkhirPcs = stockBeforePcs + totalMasukPcs - groupTotalKeluarPcs;
+      prevStockAkhirMap[prod.id] = stockAkhirPcs;
+    }
+
+    return prevStockAkhirMap;
+  }
+
+  Future<void> _copyPrevMonthStockAkhir() async {
+    final prevMonth = _getPreviousMonthYear(_selectedMonthYear);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Row(
+          children: const [
+            Icon(Icons.history_toggle_off_rounded, color: Color(0xFF38BDF8)),
+            SizedBox(width: 8),
+            Text('Salin Stok Akhir Bulan Lalu', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin menyalin Stok Akhir bulan $prevMonth sebagai Stok Awal bulan $_selectedMonthYear?',
+          style: const TextStyle(color: Color(0xFF94A3B8)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ya, Salin Stok Awal'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _loadingErp = true);
+      try {
+        final stockProvider = Provider.of<StockProvider>(context, listen: false);
+        final prevStocks = await _calculatePrevMonthStockAkhir(prevMonth);
+        await stockProvider.saveInitialStocks(_selectedMonthYear, prevStocks);
+        await _loadErpData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Stok awal bulan $_selectedMonthYear berhasil di-update dari Stok Akhir bulan $prevMonth!'),
+              backgroundColor: Colors.teal,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menyalin stok akhir: $e'), backgroundColor: Colors.redAccent),
+          );
+        }
+      } finally {
+        setState(() => _loadingErp = false);
+      }
+    }
+  }
+
   void _showSetInitialStockDialog() {
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final stockProvider = Provider.of<StockProvider>(context, listen: false);
@@ -379,9 +540,35 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Auto-fill from master stock button
-                    Row(
+                    // Auto-fill buttons
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final prevMonth = _getPreviousMonthYear(_selectedMonthYear);
+                            final prevStocks = await _calculatePrevMonthStockAkhir(prevMonth);
+                            for (var prod in products) {
+                              final val = prevStocks[prod.id] ?? 0.0;
+                              controllers[prod.id]!.text = val.toStringAsFixed(0);
+                            }
+                            setDialogState(() {});
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Stok awal diisi dari Stok Akhir bulan $prevMonth!'), backgroundColor: Colors.teal),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.history_toggle_off_rounded, size: 16),
+                          label: Text('Salin Stok Akhir (${_getPreviousMonthYear(_selectedMonthYear)})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.greenAccent,
+                            side: const BorderSide(color: Colors.greenAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
                         OutlinedButton.icon(
                           onPressed: () {
                             for (var prod in products) {
@@ -398,7 +585,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                         ),
-                        const SizedBox(width: 8),
                         OutlinedButton.icon(
                           onPressed: () {
                             for (var prod in products) {
@@ -593,6 +779,18 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     onPressed: _showSetInitialStockDialog,
                     icon: const Icon(Icons.edit_note_rounded, size: 18),
                     label: const Text('Set Stok Awal Bulan', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E293B),
+                      foregroundColor: Colors.greenAccent,
+                      side: const BorderSide(color: Colors.greenAccent),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: _copyPrevMonthStockAkhir,
+                    icon: const Icon(Icons.history_toggle_off_rounded, size: 18),
+                    label: const Text('Salin Stok Akhir Bulan Lalu', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
