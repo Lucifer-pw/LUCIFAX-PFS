@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/auth_provider.dart';
 import '../providers/update_provider.dart';
+import '../providers/role_permissions_provider.dart';
 import 'login_view.dart';
 import 'transaction_entry_view.dart';
 import 'product_list_view.dart';
@@ -78,17 +79,104 @@ class _ShellViewState extends State<ShellView> {
     );
   }
 
-  // Sidebar sections configuration based on user roles
-  List<Map<String, dynamic>> _getNavItems(String role) {
-    // Kacab / Manager Role: Restricted to Histori Transaksi only
+  // Sidebar sections configuration based on user roles and developer permissions
+  List<Map<String, dynamic>> _getNavItems(String role, RolePermissionsProvider permissionsProvider) {
+    final kacabPerms = permissionsProvider.kacabPermissions;
+
+    // Kacab / Manager Role: Dynamically configured by Developer Settings
     if (role == 'kacab' || role == 'manager') {
-      return [
-        {
+      final List<Map<String, dynamic>> items = [];
+
+      if (kacabPerms['transaction_entry'] == true) {
+        items.add({
+          'title': 'Transaksi Kasir',
+          'icon': Icons.point_of_sale_rounded,
+          'widget': const TransactionEntryView(),
+        });
+      }
+
+      if (kacabPerms['transaction_history'] == true) {
+        items.add({
           'title': 'Histori Transaksi',
           'icon': Icons.history_rounded,
           'widget': const TransactionHistoryView(),
-        },
-      ];
+        });
+      }
+
+      if (kacabPerms['master_product'] == true) {
+        items.add({
+          'title': 'Master Barang',
+          'icon': Icons.shopping_bag_outlined,
+          'widget': const ProductListView(),
+        });
+      }
+
+      if (kacabPerms['master_customer'] == true) {
+        items.add({
+          'title': 'Master Pelanggan',
+          'icon': Icons.people_outline_rounded,
+          'widget': const CustomerListView(),
+        });
+      }
+
+      if (kacabPerms['stock_input'] == true) {
+        items.add({
+          'title': 'Input Stok',
+          'icon': Icons.add_box_outlined,
+          'widget': const StockInputView(),
+        });
+      }
+
+      if (kacabPerms['erp_matrix'] == true) {
+        items.add({
+          'title': 'Stok ERP & Opname',
+          'icon': Icons.table_chart_outlined,
+          'widget': const ErpMatrixView(),
+        });
+      }
+
+      if (kacabPerms['receivable_list'] == true) {
+        items.add({
+          'title': 'Kartu Piutang Toko',
+          'icon': Icons.account_balance_wallet_outlined,
+          'widget': const ReceivableListView(),
+        });
+      }
+
+      if (kacabPerms['ranking_kacab'] == true) {
+        items.add({
+          'title': 'Ranking Kacab',
+          'icon': Icons.leaderboard_outlined,
+          'widget': const RankingKacabView(),
+        });
+      }
+
+      if (kacabPerms['attendance'] == true) {
+        items.add({
+          'title': 'Absensi Pegawai',
+          'icon': Icons.assignment_ind_rounded,
+          'widget': const AttendanceView(),
+        });
+      }
+
+      if (kacabPerms['dashboard'] == true) {
+        items.add({
+          'title': 'Analitik & Klasifikasi',
+          'icon': Icons.bar_chart_rounded,
+          'widget': const DashboardView(),
+        });
+      }
+
+      // Safety fallback: If developer turns off all menus, show Histori Transaksi as default
+      if (items.isEmpty) {
+        items.add({
+          'title': 'Histori Transaksi',
+          'icon': Icons.history_rounded,
+          'widget': const TransactionHistoryView(),
+        });
+      }
+
+      return items;
     }
 
     final List<Map<String, dynamic>> items = [
@@ -157,7 +245,7 @@ class _ShellViewState extends State<ShellView> {
     // Developer-Only Activity & Presence Monitor Screen
     if (role == 'developer') {
       items.add({
-        'title': 'User Online Monitor',
+        'title': 'Developer Control & Monitor',
         'icon': Icons.sensors_rounded,
         'widget': const UserPresenceView(),
       });
@@ -170,6 +258,7 @@ class _ShellViewState extends State<ShellView> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final updateProvider = Provider.of<UpdateProvider>(context);
+    final permissionsProvider = Provider.of<RolePermissionsProvider>(context);
     final user = authProvider.currentUser;
 
     // Redirect to login if user session is lost
@@ -183,7 +272,7 @@ class _ShellViewState extends State<ShellView> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final navItems = _getNavItems(user.role);
+    final navItems = _getNavItems(user.role, permissionsProvider);
     if (_currentIndex >= navItems.length) {
       _currentIndex = 0;
     }
