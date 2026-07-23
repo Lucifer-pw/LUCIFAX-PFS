@@ -442,7 +442,14 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(prod.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                                        Text('Master: ${prod.stock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                        Wrap(
+                                          spacing: 6,
+                                          children: [
+                                            Text('Master: ${prod.stock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                            if (prod.kodeInduk != null && prod.kodeInduk.isNotEmpty && prod.kodeInduk != prod.id)
+                                              Text('• Induk: ${prod.kodeInduk}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w500)),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -464,6 +471,20 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                         suffixText: 'pcs',
                                         suffixStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
                                       ),
+                                      onChanged: (val) {
+                                        final currentKode = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
+                                            ? prod.kodeInduk.toString().trim().toLowerCase()
+                                            : prod.id.toString().trim().toLowerCase();
+
+                                        for (var p in products) {
+                                          final pKode = (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty)
+                                              ? p.kodeInduk.toString().trim().toLowerCase()
+                                              : p.id.toString().trim().toLowerCase();
+                                          if (pKode == currentKode && p.id != prod.id) {
+                                            controllers[p.id]?.text = val;
+                                          }
+                                        }
+                                      },
                                     ),
                                   ),
                                 ],
