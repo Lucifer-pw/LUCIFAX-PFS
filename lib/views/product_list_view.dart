@@ -58,6 +58,7 @@ class _ProductListViewState extends State<ProductListView> {
     final double initialStock = product?.stock ?? 0.0;
 
     final idController = TextEditingController(text: product?.id ?? '');
+    final kodeIndukController = TextEditingController(text: product?.kodeInduk ?? product?.id ?? '');
     final nameController = TextEditingController(text: product?.name ?? '');
     final priceController = TextEditingController(text: product != null ? product.price.toStringAsFixed(0) : '');
     final stockController = TextEditingController(text: product != null ? product.stock.toStringAsFixed(0) : '0');
@@ -112,11 +113,32 @@ class _ProductListViewState extends State<ProductListView> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextFormField(
-                        controller: idController,
-                        enabled: !isEdit, // Cannot edit ID after creation (primary key)
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _buildInputDecoration(hint: 'Kode Induk / SKU (e.g. BA-250)'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: idController,
+                              enabled: !isEdit, // Cannot edit ID after creation (primary key)
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Kode Barang (ID)').copyWith(
+                                labelText: 'Kode Barang (ID)',
+                                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: kodeIndukController,
+                              enabled: true, // Always editable!
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              decoration: _buildInputDecoration(hint: 'Kode Induk (e.g. BRSM-500)').copyWith(
+                                labelText: 'Kode Induk',
+                                labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -252,6 +274,8 @@ class _ProductListViewState extends State<ProductListView> {
                   ),
                   onPressed: () async {
                     final id = idController.text.trim().toUpperCase();
+                    final kodeIndukRaw = kodeIndukController.text.trim().toUpperCase();
+                    final kodeInduk = kodeIndukRaw.isNotEmpty ? kodeIndukRaw : id;
                     final name = nameController.text.trim().toUpperCase();
                     final price = _parseCleanDouble(priceController.text);
                     final stock = _parseCleanDouble(stockController.text);
@@ -260,7 +284,7 @@ class _ProductListViewState extends State<ProductListView> {
 
                     if (id.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Harap isi Kode Induk / SKU barang!'), backgroundColor: Colors.orange),
+                        const SnackBar(content: Text('Harap isi Kode Barang (ID)!'), backgroundColor: Colors.orange),
                       );
                       return;
                     }
@@ -278,6 +302,7 @@ class _ProductListViewState extends State<ProductListView> {
                         // Edit Existing Product
                         final updated = Product(
                           id: id,
+                          kodeInduk: kodeInduk,
                           name: name,
                           price: price,
                           stock: stock,
@@ -289,6 +314,7 @@ class _ProductListViewState extends State<ProductListView> {
                         // Create New Product
                         final newProd = Product(
                           id: id,
+                          kodeInduk: kodeInduk,
                           name: name,
                           price: price,
                           stock: stock,
