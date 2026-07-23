@@ -51,4 +51,24 @@ class Product {
     }
     return 0.0;
   }
+
+  Product copyWith({
+    String? id,
+    String? kodeInduk,
+    String? name,
+    double? price,
+    double? stock,
+    int? isiKarton,
+    double? sizeGrams,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      kodeInduk: kodeInduk ?? this.kodeInduk,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      stock: stock ?? this.stock,
+      isiKarton: isiKarton ?? this.isiKarton,
+      sizeGrams: sizeGrams ?? this.sizeGrams,
+    );
+  }
 }

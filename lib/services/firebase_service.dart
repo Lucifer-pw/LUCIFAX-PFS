@@ -51,6 +51,36 @@ class FirebaseService {
     await _db.collection('products').doc(id).delete();
   }
 
+  Future<void> syncAllKodeIndukStocksToFirestore(Map<String, double> kodeIndukStockMap) async {
+    try {
+      final batch = _db.batch();
+      bool needsCommit = false;
+
+      for (var entry in kodeIndukStockMap.entries) {
+        if (entry.key.isNotEmpty && entry.value > 0) {
+          final query = await _db
+              .collection('products')
+              .where('kodeInduk', isEqualTo: entry.key)
+              .get();
+
+          for (var doc in query.docs) {
+            final double currentDocStock = (doc.data()['stock'] ?? 0.0).toDouble();
+            if (currentDocStock != entry.value) {
+              batch.update(doc.reference, {'stock': entry.value});
+              needsCommit = true;
+            }
+          }
+        }
+      }
+
+      if (needsCommit) {
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint("Error syncing kodeInduk stocks to Firestore: $e");
+    }
+  }
+
   // ==========================================
   // CUSTOMERS CRUD & ID GENERATION
   // ==========================================
