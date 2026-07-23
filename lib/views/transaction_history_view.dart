@@ -1799,7 +1799,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           borderRadius: BorderRadius.circular(12),
           onTap: () => _showSearchableProductFilterDialog(allProductsList),
           child: Container(
-            width: 195,
+            width: 215,
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
@@ -1814,12 +1814,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 Expanded(
                   child: Text(
                     _productFilter == "SEMUA" ? "SEMUA PRODUK" : _productFilter,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (_productFilter != "SEMUA")
@@ -2392,13 +2393,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     if (_statusFilter != "SEMUA") {
       panelTitle += ' - $_statusFilter';
     }
-    if (_productFilter != "SEMUA") {
-      panelTitle += ' ($_productFilter)';
-    }
 
-    String panelSubtitle = _statusFilter == "SEMUA"
-        ? 'Ringkasan Item Transaksi Tersaring'
-        : 'Ringkasan Item Status: $_statusFilter';
+    String panelSubtitle = 'Ringkasan Item Transaksi Tersaring';
+    if (_productFilter != "SEMUA") {
+      panelSubtitle = 'Produk: $_productFilter';
+      if (_statusFilter != "SEMUA") {
+        panelSubtitle += ' | Status: $_statusFilter';
+      }
+    } else if (_statusFilter != "SEMUA") {
+      panelSubtitle = 'Ringkasan Item Status: $_statusFilter';
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -2414,25 +2418,33 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        panelTitle,
-                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    panelSubtitle,
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            panelTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      panelSubtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
