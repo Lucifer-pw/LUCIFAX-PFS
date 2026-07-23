@@ -870,11 +870,14 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                 }
 
                                 final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+                                final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                    ? tr.aliasName
+                                    : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
 
                                 return DataRow(
                                   cells: [
                                     DataCell(Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                    DataCell(Text(tr.customerName.isEmpty ? 'Pelanggan Umum' : tr.customerName, style: const TextStyle(color: Colors.white70))),
+                                    DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70))),
                                     DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent))),
                                     DataCell(
                                       SizedBox(
