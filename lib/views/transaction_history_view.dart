@@ -810,15 +810,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       if (isDownload) {
         final pdf = await PrintService.buildInvoiceDocument(toPrint);
         final bytes = await pdf.save();
-        final String cleanCustomer = toPrint.customerName.replaceAll(' ', '_');
-        final String filename = 'Invoice_${toPrint.invoiceNo}_$cleanCustomer.pdf';
+        final String filename = PrintService.generateInvoiceFilename(toPrint);
         
         await Printing.sharePdf(bytes: bytes, filename: filename);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('PDF Invoice #${toPrint.invoiceNo} berhasil di-download / dibagikan!'),
+              content: Text('PDF $filename berhasil di-download!'),
               backgroundColor: Colors.teal,
               behavior: SnackBarBehavior.floating,
             ),

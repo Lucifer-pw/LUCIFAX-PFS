@@ -304,22 +304,59 @@ class PrintService {
     return pdf;
   }
 
+  // Generates PDF download filename according to exact user pattern:
+  // {no_invoice}_{AliasToko}_{Kota}_{Diskon% if present}_{tanggalkirim YYYYMMDD}.pdf
+  // Example: 628_HANA_MAKMUR_PURBALINGGA_17,50%_20260721.pdf
+  static String generateInvoiceFilename(model_tr.Transaction transaction) {
+    // 1. Invoice No
+    final String invNo = transaction.invoiceNo.toString();
+
+    // 2. Alias Toko (or customerName fallback if aliasName is empty)
+    String alias = transaction.aliasName.trim();
+    if (alias.isEmpty) {
+      alias = transaction.customerName.trim();
+    }
+    alias = alias.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), '_').replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+    if (alias.isEmpty) alias = 'PELANGGAN';
+
+    // 3. Kota
+    String city = transaction.city.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), '_').replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+    if (city.isEmpty) city = 'KOTA';
+
+    // 4. Check for Discount % across items
+    double maxDisc = 0.0;
+    for (var item in transaction.items) {
+      if (!item.isBonus && item.discountPercent > maxDisc) {
+        maxDisc = item.discountPercent;
+      }
+    }
+    String discPart = '';
+    if (maxDisc > 0) {
+      String formattedDisc = maxDisc.toStringAsFixed(maxDisc % 1 == 0 ? 0 : 2).replaceAll('.', ',');
+      discPart = '_${formattedDisc}%';
+    }
+
+    // 5. Tanggal Kirim (deliveryDate ?? date)
+    final DateTime targetDate = transaction.deliveryDate ?? transaction.date;
+    final String dateStr = DateFormat('yyyyMMdd').format(targetDate);
+
+    return '${invNo}_${alias}_${city}${discPart}_$dateStr.pdf';
+  }
+
   // Opens direct browser/system print dialog with "Microsoft Print to PDF" target
   static Future<void> printInvoice(model_tr.Transaction transaction) async {
     final pdf = await buildInvoiceDocument(transaction);
+    final filename = generateInvoiceFilename(transaction);
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Invoice_${transaction.invoiceNo}.pdf',
+      name: filename,
     );
   }
 
   // Save PDF file locally for device file system or layout
   static Future<File?> generateInvoicePdf(model_tr.Transaction transaction) async {
     final pdf = await buildInvoiceDocument(transaction);
-
-    final String cleanCustomer = transaction.customerName.replaceAll(' ', '_');
-    final String dateStr = DateFormat('yyyyMMdd').format(transaction.date);
-    final String filename = "Invoice_${transaction.invoiceNo}_${cleanCustomer}_$dateStr.pdf";
+    final filename = generateInvoiceFilename(transaction);
 
     if (kIsWeb) {
       try {
