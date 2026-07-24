@@ -103,46 +103,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     return list;
   }
 
-  bool _checkProductMatch(
-    dynamic prod,
-    List<dynamic> allProducts,
-    String itemPId,
-    String itemPName,
-  ) {
-    final ownId = prod.id.toString().trim().toLowerCase();
-    final ownName = prod.name.toString().trim().toLowerCase();
-
-    // 1. Direct Exact ID or Exact Name Match
-    if (itemPId.isNotEmpty && itemPId == ownId) return true;
-    if (itemPName.isNotEmpty && itemPName == ownName) return true;
-    if (itemPId.isNotEmpty && itemPId == ownName) return true;
-    if (itemPName.isNotEmpty && itemPName == ownId) return true;
-
-    // 2. Cleaned Name Fallback (removing (MBG) tags and extra spaces)
-    final cleanItemName = itemPName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
-    final cleanOwnName = ownName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
-
-    if (cleanItemName.isNotEmpty && cleanItemName == cleanOwnName) {
-      final matches = allProducts.where((p) {
-        final pName = p.name.toString().trim().toLowerCase().replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-        return pName == cleanItemName;
-      }).toList();
-
-      if (matches.length <= 1) return true;
-
-      // If multiple products share the same clean name (e.g. MBG vs non-MBG),
-      // give priority to the primary product containing '(MBG)'.
-      dynamic primaryProd = matches.firstWhere(
-        (p) => p.name.toString().toUpperCase().contains('(MBG)'),
-        orElse: () => matches.first,
-      );
-
-      return prod.id == primaryProd.id;
-    }
-
-    return false;
-  }
-
   Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap, List<dynamic> allProducts) {
     final String ownId = prod.id.toString().trim().toLowerCase();
     final String ownName = prod.name.toString().trim().toLowerCase();
@@ -159,12 +119,21 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       return k == currentKodeInduk;
     }).toList();
 
+    // Determine if this prod is the main (primary) representative for this kodeInduk group.
+    // If prod name contains '(mbg)', or if it is the first sibling in the list, it acts as the primary group item.
+    final bool isPrimaryGroupItem = (siblingProducts.isNotEmpty && siblingProducts.first.id == prod.id) ||
+                                    ownName.contains('(mbg)');
+
     final Set<String> groupIds = {};
     final Set<String> groupNames = {};
+    final Set<String> groupKodeInduk = {currentKodeInduk};
 
     for (var p in siblingProducts) {
       groupIds.add(p.id.toString().trim().toLowerCase());
       groupNames.add(p.name.toString().trim().toLowerCase());
+      if (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty) {
+        groupKodeInduk.add(p.kodeInduk.toString().trim().toLowerCase());
+      }
     }
 
     final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
@@ -192,12 +161,23 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemMap = Map<String, dynamic>.from(item);
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
+              final itemKodeInduk = (itemMap['kodeInduk'] ?? itemMap['kode_Induk'] ?? '').toString().trim().toLowerCase();
 
-              final isOwnMatch = _checkProductMatch(prod, allProducts, itemPId, itemPName);
+              final cleanItemName = itemPName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+              final cleanOwnName = ownName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
 
-              final isGroupMatch = isOwnMatch ||
-                                   (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
-                                   (itemPName.isNotEmpty && groupNames.contains(itemPName));
+              final isExactMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
+                                   (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
+
+              final isKodeIndukMatch = (itemKodeInduk.isNotEmpty && groupKodeInduk.contains(itemKodeInduk)) ||
+                                       (itemPId.isNotEmpty && (groupIds.contains(itemPId) || groupKodeInduk.contains(itemPId))) ||
+                                       (itemPName.isNotEmpty && groupNames.contains(itemPName)) ||
+                                       (cleanItemName.isNotEmpty && cleanItemName == cleanOwnName);
+
+              final isGroupMatch = isExactMatch || isKodeIndukMatch;
+
+              // Primary group item (MBG item) consolidates all sales matching its kodeInduk group
+              final isOwnMatch = isExactMatch || (isPrimaryGroupItem && isKodeIndukMatch);
 
               final qty = (itemMap['qty'] ?? 0.0).toDouble();
               final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
