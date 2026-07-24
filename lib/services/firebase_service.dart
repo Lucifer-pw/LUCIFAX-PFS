@@ -31,16 +31,10 @@ class FirebaseService {
           .where('kodeInduk', isEqualTo: product.kodeInduk)
           .get();
 
-      if (query.docs.length > 1) {
-        double targetStock = product.stock;
-        for (var doc in query.docs) {
-          final sStock = (doc.data()['stock'] ?? 0.0).toDouble();
-          if (sStock > targetStock) targetStock = sStock;
-        }
-
+      if (query.docs.isNotEmpty) {
         final batch = _db.batch();
         for (var doc in query.docs) {
-          batch.update(doc.reference, {'stock': targetStock});
+          batch.update(doc.reference, {'stock': product.stock});
         }
         await batch.commit();
       }
