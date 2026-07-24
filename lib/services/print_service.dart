@@ -322,10 +322,14 @@ class PrintService {
     final String filename = "Invoice_${transaction.invoiceNo}_${cleanCustomer}_$dateStr.pdf";
 
     if (kIsWeb) {
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: filename,
-      );
+      try {
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdf.save(),
+          name: filename,
+        );
+      } catch (e) {
+        debugPrint("Print layout exception on web: $e");
+      }
       return null;
     }
 
@@ -391,8 +395,12 @@ class PrintService {
     final filename = "raw_invoice_${transaction.invoiceNo}.txt";
 
     if (kIsWeb) {
-      final bytes = Uint8List.fromList(text.codeUnits);
-      await Printing.sharePdf(bytes: bytes, filename: filename);
+      try {
+        final bytes = Uint8List.fromList(text.codeUnits);
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+      } catch (e) {
+        debugPrint("Share raw ESC/P exception on web: $e");
+      }
       return null;
     }
 

@@ -753,7 +753,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                     child: ElevatedButton.icon(
                       onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
                           ? null
-                          : () => _submitOnly(trProvider, user.uid),
+                          : () async => await _submitOnly(trProvider, user.uid),
                       icon: const Icon(Icons.save_rounded, color: Colors.white),
                       label: const Text('Simpan Saja', style: TextStyle(color: Colors.white, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
@@ -768,7 +768,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                     child: ElevatedButton.icon(
                       onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
                           ? null
-                          : () => _submitAndPrint(trProvider, user.uid),
+                          : () async => await _submitAndPrint(trProvider, user.uid),
                       icon: const Icon(Icons.print_rounded, color: Colors.white),
                       label: const Text('Simpan & Cetak', style: TextStyle(color: Colors.white, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
