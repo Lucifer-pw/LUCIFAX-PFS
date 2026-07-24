@@ -14,6 +14,7 @@ import '../providers/product_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/print_service.dart';
 import '../services/import_service.dart';
+import 'package:printing/printing.dart';
 import 'transaction_entry_view.dart';
 
 class TransactionHistoryView extends StatefulWidget {
@@ -777,6 +778,73 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     };
   }
 
+  Future<void> _handlePrintOrDownloadPdf(model_tr.Transaction tr, {bool isDownload = false}) async {
+    try {
+      final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
+      Customer? c;
+      try {
+        c = masterCustomers.firstWhere((cust) => cust.id == tr.customerId);
+      } catch (_) {}
+
+      final toPrint = model_tr.Transaction(
+        invoiceNo: tr.invoiceNo,
+        customerId: tr.customerId,
+        customerName: tr.customerName,
+        aliasName: (c != null && c.aliasName.isNotEmpty) ? c.aliasName : tr.customerName,
+        date: tr.date,
+        deliveryDate: tr.deliveryDate,
+        city: (c != null && c.city.isNotEmpty) ? c.city : tr.city,
+        province: (c != null && c.province.isNotEmpty) ? c.province : tr.province,
+        country: (c != null && c.country.isNotEmpty) ? c.country : tr.country,
+        items: tr.items,
+        grandTotal: tr.grandTotal,
+        note: tr.note,
+        status: tr.status,
+        statusTransfer: tr.statusTransfer,
+        transferDate: tr.transferDate,
+        erpSyncDate: tr.erpSyncDate,
+        createdBy: tr.createdBy,
+        createdAt: tr.createdAt,
+      );
+
+      if (isDownload) {
+        final pdf = await PrintService.buildInvoiceDocument(toPrint);
+        final bytes = await pdf.save();
+        final String cleanCustomer = toPrint.customerName.replaceAll(' ', '_');
+        final String filename = 'Invoice_${toPrint.invoiceNo}_$cleanCustomer.pdf';
+        
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('PDF Invoice #${toPrint.invoiceNo} berhasil di-download / dibagikan!'),
+              backgroundColor: Colors.teal,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        await PrintService.printInvoice(toPrint);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('PDF Invoice #${toPrint.invoiceNo} siap dicetak!'),
+              backgroundColor: Colors.teal,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak / download: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   // Show detailed item list in dialog
   void _showDetailDialog(model_tr.Transaction tr) {
     final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
@@ -1069,15 +1137,75 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ),
           ),
           actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0284C7),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            if (isMobile) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
+                          icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
+                          label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.redAccent),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: false),
+                          icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
+                          label: const Text('Cetak / Print', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Tutup', style: TextStyle(color: Color(0xFF64748B))),
+                  ),
+                ],
               ),
-              child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
+            ] else ...[
+              OutlinedButton.icon(
+                onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
+                icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
+                label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: false),
+                icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
+                label: const Text('Cetak / Print', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0284C7),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+            ],
           ],
         );
       },
@@ -2129,10 +2257,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               return DataRow(
                                                 cells: [
                                                   DataCell(
-                                                    Text(
-                                                      '#${tr.invoiceNo}',
-                                                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                                    Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          '#${tr.invoiceNo}',
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF38BDF8),
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 13,
+                                                            decoration: TextDecoration.underline,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        const Icon(Icons.open_in_new_rounded, size: 12, color: Color(0xFF38BDF8)),
+                                                      ],
                                                     ),
+                                                    onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
                                                     Column(
@@ -2164,6 +2305,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                           ),
                                                       ],
                                                     ),
+                                                    onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
                                                     Builder(
@@ -2191,24 +2333,28 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         );
                                                       },
                                                     ),
+                                                    onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
                                                     Text(
                                                       tr.city.isNotEmpty ? tr.city.toUpperCase() : '-',
                                                       style: const TextStyle(color: Colors.white, fontSize: 12),
                                                     ),
+                                                    onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
                                                     Text(
                                                       '${totalKg.toStringAsFixed(2)} Kg',
                                                       style: const TextStyle(color: Colors.white, fontSize: 12),
                                                     ),
+                                                    onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
                                                     Text(
                                                       _rupiahFormatter.format(tr.grandTotal),
                                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                                     ),
+                                                    onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
                                                     Center(
