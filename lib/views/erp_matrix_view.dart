@@ -153,12 +153,10 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-              final cleanItemName = itemPName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-              final cleanOwnName = ownName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-
-              final isOwnMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
-                                 (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId)) ||
-                                 (cleanItemName.isNotEmpty && cleanItemName == cleanOwnName);
+              final isOwnMatch = (itemPId.isNotEmpty && itemPId == ownId) ||
+                                 (itemPName.isNotEmpty && itemPName == ownName) ||
+                                 (itemPId.isNotEmpty && itemPId == ownName) ||
+                                 (itemPName.isNotEmpty && itemPName == ownId);
 
               final isGroupMatch = isOwnMatch ||
                                    (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
