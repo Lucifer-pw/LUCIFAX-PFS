@@ -19,15 +19,26 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
   bool _isLoading = false;
   String _erpSourceFilter = 'ERP_ONLY'; // 'ERP_ONLY' or 'ALL_TRANSACTIONS'
-  String _selectedPeriodKey = 'AUTO_3_MONTHS'; // Auto-detect or specific preset
+  
+  // Selected 3-Month Range Start (Month & Year)
+  int _startMonth = 5; // Default: Mei (5)
+  int _startYear = 2026; // Default: 2026
+  
   String _searchQuery = '';
   bool _isFallbackToAll = false;
   
   List<Map<String, dynamic>> _rankingData = [];
-  double _totalPeriodSales = 0.0;
-  String _top1StoreName = '-';
-  double _top1Amount = 0.0;
+  
+  // Grand totals across ALL outlets
+  double _grandTotalM1 = 0.0;
+  double _grandTotalM2 = 0.0;
+  double _grandTotalM3 = 0.0;
+  double _grandTotalAll = 0.0;
+  double _grandAverageAll = 0.0;
+  
   int _totalStoreCount = 0;
+  String _top1StoreName = '-';
+  double _top1Average = 0.0;
 
   String _month1Name = '';
   String _month2Name = '';
@@ -54,12 +65,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final allTransactions = trProvider.transactions;
       final customers = custProvider.customers;
 
-      // 1. Filter transactions based on ERP source selection
+      // 1. Source Filter: ERP_ONLY or ALL_TRANSACTIONS
       List<model_tr.Transaction> candidateTxs = [];
       if (_erpSourceFilter == 'ERP_ONLY') {
         candidateTxs = allTransactions.where((tr) => tr.erpSyncDate != null).toList();
         if (candidateTxs.isEmpty && allTransactions.isNotEmpty) {
-          // Fallback to all transactions if no transaction has erpSyncDate marked yet
           candidateTxs = List.from(allTransactions);
           _isFallbackToAll = true;
         } else {
@@ -73,40 +83,25 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       if (candidateTxs.isEmpty) {
         setState(() {
           _rankingData = [];
-          _totalPeriodSales = 0;
+          _grandTotalM1 = 0;
+          _grandTotalM2 = 0;
+          _grandTotalM3 = 0;
+          _grandTotalAll = 0;
+          _grandAverageAll = 0;
           _totalStoreCount = 0;
           _top1StoreName = '-';
-          _top1Amount = 0;
-          _month1Name = 'Bulan 1';
-          _month2Name = 'Bulan 2';
-          _month3Name = 'Bulan 3';
+          _top1Average = 0;
         });
         return;
       }
 
-      // 2. Determine 3-month period window (Auto-detect or selected preset)
-      DateTime latestDate = candidateTxs.map((t) => t.erpSyncDate ?? t.deliveryDate ?? t.date).reduce((a, b) => a.isAfter(b) ? a : b);
+      // 2. Build 3-Month Window dates based on selected _startMonth & _startYear
+      DateTime m1Date = DateTime(_startYear, _startMonth, 1);
+      DateTime m2Date = DateTime(_startYear, _startMonth + 1, 1);
+      DateTime m3Date = DateTime(_startYear, _startMonth + 2, 1);
 
-      DateTime m3Date = DateTime(latestDate.year, latestDate.month, 1);
-      DateTime m2Date = DateTime(latestDate.year, latestDate.month - 1, 1);
-      DateTime m1Date = DateTime(latestDate.year, latestDate.month - 2, 1);
-
-      if (_selectedPeriodKey == 'MEI_JULI_2026') {
-        m1Date = DateTime(2026, 5, 1);
-        m2Date = DateTime(2026, 6, 1);
-        m3Date = DateTime(2026, 7, 1);
-      } else if (_selectedPeriodKey == 'APR_JUNI_2026') {
-        m1Date = DateTime(2026, 4, 1);
-        m2Date = DateTime(2026, 5, 1);
-        m3Date = DateTime(2026, 6, 1);
-      } else if (_selectedPeriodKey == 'MAR_MEI_2026') {
-        m1Date = DateTime(2026, 3, 1);
-        m2Date = DateTime(2026, 4, 1);
-        m3Date = DateTime(2026, 5, 1);
-      }
-
-      _month1Name = DateFormat('MMMM yyyy', 'id_ID').format(m1Date);
-      _month2Name = DateFormat('MMMM yyyy', 'id_ID').format(m2Date);
+      _month1Name = DateFormat('MMMM', 'id_ID').format(m1Date);
+      _month2Name = DateFormat('MMMM', 'id_ID').format(m2Date);
       _month3Name = DateFormat('MMMM yyyy', 'id_ID').format(m3Date);
 
       final m1Key = DateFormat('MM-yyyy').format(m1Date);
@@ -118,14 +113,13 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       for (var tr in candidateTxs) {
         final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
         final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
-        
-        // Include transactions in the 3-month period window
-        if (_selectedPeriodKey != 'ALL_DATA' &&
-            trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
+
+        // Filter transactions falling inside the selected 3-month window
+        if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
           continue;
         }
 
-        // Resolve Customer Alias and City
+        // Resolve Customer Alias
         Customer? cust;
         try {
           cust = customers.firstWhere((c) => c.id == tr.customerId);
@@ -146,83 +140,79 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           m1Key: 0.0,
           m2Key: 0.0,
           m3Key: 0.0,
-          'txCount': 0,
         });
 
-        if (storeMap[aliasName]!.containsKey(trMonthKey)) {
-          storeMap[aliasName]![trMonthKey] = (storeMap[aliasName]![trMonthKey] as double) + tr.grandTotal;
-        } else {
-          storeMap[aliasName]![m3Key] = (storeMap[aliasName]![m3Key] as double) + tr.grandTotal;
-        }
-        storeMap[aliasName]!['txCount'] = (storeMap[aliasName]!['txCount'] as int) + 1;
+        storeMap[aliasName]![trMonthKey] = (storeMap[aliasName]![trMonthKey] as double) + tr.grandTotal;
       }
 
-      final List<Map<String, dynamic>> allRankedStores = [];
-      double grandTotalAll = 0.0;
+      final List<Map<String, dynamic>> allOutlets = [];
+      double sumM1 = 0.0;
+      double sumM2 = 0.0;
+      double sumM3 = 0.0;
+      double sumTotal = 0.0;
 
       storeMap.forEach((alias, data) {
         final m1 = (data[m1Key] ?? 0.0) as double;
         final m2 = (data[m2Key] ?? 0.0) as double;
         final m3 = (data[m3Key] ?? 0.0) as double;
         final total = m1 + m2 + m3;
-        final avg = total / 3.0;
+        final average = total / 3.0;
 
-        grandTotalAll += total;
+        sumM1 += m1;
+        sumM2 += m2;
+        sumM3 += m3;
+        sumTotal += total;
 
-        allRankedStores.add({
+        allOutlets.add({
           'alias': alias,
           'city': data['city'],
           'month1': m1,
           'month2': m2,
           'month3': m3,
           'total': total,
-          'average': avg,
-          'txCount': data['txCount'],
+          'average': average,
           'isOther': false,
         });
       });
 
-      // Sort descending by total nominal sales
-      allRankedStores.sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
+      // Sort ALL outlets in descending order by average 3-month sales
+      allOutlets.sort((a, b) => (b['average'] as double).compareTo(a['average'] as double));
 
-      // Separate Top 15 and OTHER category
+      // Separate Top 15 and OTHER
       final List<Map<String, dynamic>> finalDisplayList = [];
       
-      final int topCount = allRankedStores.length < 15 ? allRankedStores.length : 15;
+      final int topCount = allOutlets.length < 15 ? allOutlets.length : 15;
       for (int i = 0; i < topCount; i++) {
-        final item = Map<String, dynamic>.from(allRankedStores[i]);
+        final item = Map<String, dynamic>.from(allOutlets[i]);
         item['rank'] = i + 1;
         finalDisplayList.add(item);
       }
 
       // If stores exceed 15, aggregate ranks 16+ into "OTHER" category
-      if (allRankedStores.length > 15) {
+      if (allOutlets.length > 15) {
         double otherM1 = 0.0;
         double otherM2 = 0.0;
         double otherM3 = 0.0;
         double otherTotal = 0.0;
-        int otherTxCount = 0;
 
-        for (int i = 15; i < allRankedStores.length; i++) {
-          final item = allRankedStores[i];
+        for (int i = 15; i < allOutlets.length; i++) {
+          final item = allOutlets[i];
           otherM1 += item['month1'] as double;
           otherM2 += item['month2'] as double;
           otherM3 += item['month3'] as double;
           otherTotal += item['total'] as double;
-          otherTxCount += item['txCount'] as int;
         }
 
-        final int otherStoreCount = allRankedStores.length - 15;
+        final int otherStoreCount = allOutlets.length - 15;
         finalDisplayList.add({
           'rank': 16,
-          'alias': 'OTHER ($otherStoreCount Toko Lainnya)',
-          'city': 'MULTIPLE CITIES',
+          'alias': 'OTHER ($otherStoreCount Toko)',
+          'city': '-',
           'month1': otherM1,
           'month2': otherM2,
           'month3': otherM3,
           'total': otherTotal,
           'average': otherTotal / 3.0,
-          'txCount': otherTxCount,
           'isOther': true,
           'otherCount': otherStoreCount,
         });
@@ -230,16 +220,29 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
       setState(() {
         _rankingData = finalDisplayList;
-        _totalPeriodSales = grandTotalAll;
-        _totalStoreCount = allRankedStores.length;
-        _top1StoreName = allRankedStores.isNotEmpty ? allRankedStores.first['alias'] : '-';
-        _top1Amount = allRankedStores.isNotEmpty ? allRankedStores.first['total'] : 0.0;
+        _grandTotalM1 = sumM1;
+        _grandTotalM2 = sumM2;
+        _grandTotalM3 = sumM3;
+        _grandTotalAll = sumTotal;
+        _grandAverageAll = sumTotal / 3.0;
+
+        _totalStoreCount = allOutlets.length;
+        _top1StoreName = allOutlets.isNotEmpty ? allOutlets.first['alias'] : '-';
+        _top1Average = allOutlets.isNotEmpty ? allOutlets.first['average'] : 0.0;
       });
     } catch (e) {
       debugPrint("Error loading ranking data: $e");
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  void _setPeriodPreset(int startMonth, int startYear) {
+    setState(() {
+      _startMonth = startMonth;
+      _startYear = startYear;
+    });
+    _loadRankingData();
   }
 
   @override
@@ -258,7 +261,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top Header Row
+          // Top Header Row (Title & Excel Style Info)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -273,24 +276,25 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                           color: const Color(0xFF0284C7).withOpacity(0.2),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.leaderboard_rounded, color: Color(0xFF38BDF8), size: 24),
+                        child: const Icon(Icons.table_chart_rounded, color: Color(0xFF38BDF8), size: 24),
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        'Ranking Kacab - Omset Laporan ERP',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                        'LAPORAN WEEKLY KACAB',
+                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Ranking Toko Peringkat 1 s/d 15 Berdasarkan ALIASTOKO & NOMINAL (Periode 3 Bulan), Peringkat 16+ Masuk Kategori OTHER',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  Text(
+                    'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
               Wrap(
                 spacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   // Filter Source (Hanya ERP vs Semua Data)
                   Container(
@@ -307,8 +311,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                         style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold),
                         icon: const Icon(Icons.tune_rounded, color: Color(0xFF38BDF8), size: 18),
                         items: const [
-                          DropdownMenuItem(value: 'ERP_ONLY', child: Text('Filter: Hanya Data Laporan ERP')),
-                          DropdownMenuItem(value: 'ALL_TRANSACTIONS', child: Text('Filter: Semua Data Transaksi')),
+                          DropdownMenuItem(value: 'ERP_ONLY', child: Text('Filter: Data Laporan ERP')),
+                          DropdownMenuItem(value: 'ALL_TRANSACTIONS', child: Text('Filter: Semua Transaksi')),
                         ],
                         onChanged: (val) {
                           if (val != null) {
@@ -322,7 +326,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                     ),
                   ),
 
-                  // Period Selector Dropdown
+                  // Preset 3-Month Range Selector
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
@@ -332,23 +336,21 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: _selectedPeriodKey,
+                        value: '${_startMonth}_$_startYear',
                         dropdownColor: const Color(0xFF1E293B),
                         style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                        icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                        icon: const Icon(Icons.date_range_rounded, color: Color(0xFF38BDF8), size: 18),
                         items: const [
-                          DropdownMenuItem(value: 'AUTO_3_MONTHS', child: Text('3 Bulan Terakhir (Otomatis Data ERP)')),
-                          DropdownMenuItem(value: 'MEI_JULI_2026', child: Text('Mei - Juli 2026')),
-                          DropdownMenuItem(value: 'APR_JUNI_2026', child: Text('April - Juni 2026')),
-                          DropdownMenuItem(value: 'MAR_MEI_2026', child: Text('Maret - Mei 2026')),
-                          DropdownMenuItem(value: 'ALL_DATA', child: Text('Semua Periode Data')),
+                          DropdownMenuItem(value: '5_2026', child: Text('Mei - Juli 2026')),
+                          DropdownMenuItem(value: '4_2026', child: Text('April - Juni 2026')),
+                          DropdownMenuItem(value: '3_2026', child: Text('Maret - Mei 2026')),
+                          DropdownMenuItem(value: '2_2026', child: Text('Februari - April 2026')),
+                          DropdownMenuItem(value: '1_2026', child: Text('Januari - Maret 2026')),
                         ],
                         onChanged: (val) {
                           if (val != null) {
-                            setState(() {
-                              _selectedPeriodKey = val;
-                            });
-                            _loadRankingData();
+                            final parts = val.split('_');
+                            _setPeriodPreset(int.parse(parts[0]), int.parse(parts[1]));
                           }
                         },
                       ),
@@ -358,7 +360,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
                     onPressed: _loadRankingData,
-                    tooltip: 'Refresh Data Ranking',
+                    tooltip: 'Refresh Data',
                   ),
                 ],
               ),
@@ -366,7 +368,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           ),
           const SizedBox(height: 12),
 
-          // Fallback Notification Banner if needed
+          // Fallback Banner
           if (_isFallbackToAll) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -381,7 +383,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Info: Transaksi belum memiliki Status "SUDAH ERP". Menampilkan data berdasarkan transaksi saat ini. Anda dapat mengupdate Status ERP transaksi di menu Histori Transaksi.',
+                      'Info: Transaksi belum di-set Status "SUDAH ERP". Menampilkan data berdasarkan transaksi saat ini. Anda dapat mengupdate Status ERP di menu Histori Transaksi.',
                       style: TextStyle(color: Colors.amberAccent, fontSize: 12),
                     ),
                   ),
@@ -391,16 +393,16 @@ class _RankingKacabViewState extends State<RankingKacabView> {
             const SizedBox(height: 12),
           ],
 
-          // Summary Stats Cards Row
+          // Summary KPI Stat Cards
           Row(
             children: [
               Expanded(
                 child: _buildStatCard(
-                  title: 'TOTAL OMSET 3 BULAN',
-                  value: currencyFormatter.format(_totalPeriodSales),
-                  subtitle: 'Periode: $_month1Name - $_month3Name',
-                  icon: Icons.payments_rounded,
-                  accentColor: const Color(0xFF38BDF8),
+                  title: 'TOTAL RATA-RATA 3 BULAN',
+                  value: currencyFormatter.format(_grandAverageAll),
+                  subtitle: 'Total Omset: ${currencyFormatter.format(_grandTotalAll)}',
+                  icon: Icons.analytics_rounded,
+                  accentColor: Colors.greenAccent,
                 ),
               ),
               const SizedBox(width: 14),
@@ -408,7 +410,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                 child: _buildStatCard(
                   title: 'TOKO PERINGKAT #1 🥇',
                   value: _top1StoreName,
-                  subtitle: 'Total Sales: ${currencyFormatter.format(_top1Amount)}',
+                  subtitle: 'Rata-rata/Bln: ${currencyFormatter.format(_top1Average)}',
                   icon: Icons.emoji_events_rounded,
                   accentColor: Colors.amberAccent,
                 ),
@@ -416,64 +418,58 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               const SizedBox(width: 14),
               Expanded(
                 child: _buildStatCard(
-                  title: 'TOTAL TOKO AKTIF',
+                  title: 'TOTAL TOKO / OUTLET',
                   value: '$_totalStoreCount Toko',
                   subtitle: _totalStoreCount > 15
-                      ? '15 Peringkat Atas + ${_totalStoreCount - 15} Kategori OTHER'
+                      ? '15 Toko Utama + ${_totalStoreCount - 15} Kategori OTHER'
                       : 'Semua Toko Masuk Peringkat Utama',
                   icon: Icons.store_rounded,
-                  accentColor: Colors.tealAccent,
+                  accentColor: const Color(0xFF38BDF8),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
 
-          // Search Bar & Info
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 42,
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Cari Nama Toko / Alias / Kota...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 20),
-                      isDense: true,
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (val) {
-                      setState(() {
-                        _searchQuery = val;
-                      });
-                    },
-                  ),
+          // Search Bar
+          SizedBox(
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Cari Nama Outlet / Toko / Kota...',
+                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                isDense: true,
+                filled: true,
+                fillColor: const Color(0xFF1E293B),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
                 ),
               ),
-            ],
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                });
+              },
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // Main Data Table Area
+          // Excel Style Data Table
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : filteredList.isEmpty
-                    ? const Center(child: Text('Belum ada data omset Laporan ERP untuk periode 3 bulan ini.', style: TextStyle(color: Color(0xFF94A3B8))))
+                    ? const Center(child: Text('Belum ada data transaksi untuk periode 3 bulan ini.', style: TextStyle(color: Color(0xFF94A3B8))))
                     : Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E293B),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
                         ),
                         child: Scrollbar(
                           thumbVisibility: true,
@@ -482,110 +478,108 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: DataTable(
-                                headingRowHeight: 48,
-                                dataRowMinHeight: 52,
-                                dataRowMaxHeight: 56,
+                                headingRowHeight: 46,
+                                dataRowMinHeight: 48,
+                                dataRowMaxHeight: 52,
                                 headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                 columns: [
-                                  const DataColumn(label: Text('RANK', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('ALIAS TOKO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('KOTA', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                  const DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                  const DataColumn(label: Text('OUTLET', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text(_month1Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text(_month2Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
                                   DataColumn(label: Text(_month3Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('TOTAL 3 BULAN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('RATA-RATA / BLN', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('% KONTRIBUSI', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                  const DataColumn(label: Text('TOTAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                  const DataColumn(label: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
                                 ],
-                                rows: List.generate(filteredList.length, (idx) {
-                                  final item = filteredList[idx];
-                                  final rank = item['rank'] as int;
-                                  final isOther = item['isOther'] == true;
-                                  final total = item['total'] as double;
-                                  final contribPercent = _totalPeriodSales > 0 ? (total / _totalPeriodSales * 100) : 0.0;
+                                rows: [
+                                  ...List.generate(filteredList.length, (idx) {
+                                    final item = filteredList[idx];
+                                    final rank = item['rank'] as int;
+                                    final isOther = item['isOther'] == true;
 
-                                  Widget rankWidget;
-                                  if (isOther) {
-                                    rankWidget = Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.purpleAccent.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.purpleAccent, width: 0.8),
-                                      ),
-                                      child: const Text(
-                                        'OTHER',
-                                        style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                      ),
-                                    );
-                                  } else {
-                                    Color badgeColor = Colors.white;
-                                    String rankLabel = '$rank';
-                                    if (rank == 1) {
-                                      badgeColor = Colors.amber;
-                                      rankLabel = '🥇 1';
-                                    } else if (rank == 2) {
-                                      badgeColor = Colors.grey.shade300;
-                                      rankLabel = '🥈 2';
-                                    } else if (rank == 3) {
-                                      badgeColor = Colors.amber.shade800;
-                                      rankLabel = '🥉 3';
+                                    Widget rankWidget;
+                                    if (isOther) {
+                                      rankWidget = Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.purpleAccent.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.purpleAccent, width: 0.8),
+                                        ),
+                                        child: const Text(
+                                          'OTHER',
+                                          style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      );
+                                    } else {
+                                      Color badgeColor = Colors.white;
+                                      String rankLabel = '$rank';
+                                      if (rank == 1) {
+                                        badgeColor = Colors.amber;
+                                        rankLabel = '🥇 1';
+                                      } else if (rank == 2) {
+                                        badgeColor = Colors.grey.shade300;
+                                        rankLabel = '🥈 2';
+                                      } else if (rank == 3) {
+                                        badgeColor = Colors.amber.shade800;
+                                        rankLabel = '🥉 3';
+                                      }
+
+                                      rankWidget = Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
+                                        ),
+                                        child: Text(
+                                          rankLabel,
+                                          style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      );
                                     }
 
-                                    rankWidget = Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
-                                      ),
-                                      child: Text(
-                                        rankLabel,
-                                        style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                                      ),
+                                    return DataRow(
+                                      color: MaterialStateProperty.resolveWith<Color?>((states) {
+                                        if (isOther) return Colors.purple.withOpacity(0.08);
+                                        if (rank == 1) return Colors.amber.withOpacity(0.05);
+                                        return idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02);
+                                      }),
+                                      cells: [
+                                        DataCell(rankWidget),
+                                        DataCell(
+                                          Text(
+                                            item['alias'],
+                                            style: TextStyle(
+                                              color: isOther ? Colors.purpleAccent : Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(Text(currencyFormatter.format(item['month1']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        DataCell(Text(currencyFormatter.format(item['month2']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        DataCell(Text(currencyFormatter.format(item['month3']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        DataCell(Text(currencyFormatter.format(item['total']), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                        DataCell(Text(currencyFormatter.format(item['average']), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                      ],
                                     );
-                                  }
+                                  }),
 
-                                  return DataRow(
-                                    color: MaterialStateProperty.resolveWith<Color?>((states) {
-                                      if (isOther) return Colors.purple.withOpacity(0.08);
-                                      if (rank == 1) return Colors.amber.withOpacity(0.05);
-                                      return idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02);
-                                    }),
+                                  // TOTAL GRANDTOTAL (SEMUA) Summary Row
+                                  DataRow(
+                                    color: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                     cells: [
-                                      DataCell(rankWidget),
-                                      DataCell(
-                                        Text(
-                                          item['alias'],
-                                          style: TextStyle(
-                                            color: isOther ? Colors.purpleAccent : Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(Text(item['city'], style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['month1']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['month2']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['month3']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['total']), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Text(currencyFormatter.format(item['average']), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0F172A),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            '${contribPercent.toStringAsFixed(1)}%',
-                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
-                                          ),
-                                        ),
-                                      ),
+                                      const DataCell(Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      const DataCell(Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(currencyFormatter.format(_grandTotalM1), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(_grandTotalM2), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(_grandTotalM3), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(_grandTotalAll), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(currencyFormatter.format(_grandAverageAll), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                     ],
-                                  );
-                                }),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -605,7 +599,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     required Color accentColor,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
@@ -619,21 +613,21 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               color: accentColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: accentColor, size: 24),
+            child: Icon(icon, color: accentColor, size: 22),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: TextStyle(color: accentColor, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: accentColor, fontSize: 15, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
