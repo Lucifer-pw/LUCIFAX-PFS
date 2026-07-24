@@ -252,9 +252,9 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Fetch ERP Summaries for reports
+  // Fetch ERP Summaries for reports (0 Reads using in-memory cached transactions)
   Future<List<Map<String, dynamic>>> getMonthlyErpSummary(String monthYear) async {
-    return await _dbService.getErpSummaries(monthYear);
+    return await _dbService.getErpSummaries(monthYear, cachedTransactions: _transactions);
   }
 
   @override

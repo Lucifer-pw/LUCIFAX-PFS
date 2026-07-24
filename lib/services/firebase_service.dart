@@ -235,7 +235,7 @@ class FirebaseService {
     } catch (e) {
       debugPrint("peekNextInvoiceNo fallback due to: $e");
       try {
-        final snap = await _db.collection('transactions').get();
+        final snap = await _db.collection('transactions').orderBy('date', descending: true).limit(20).get();
         int maxNo = (type == 'SA' ? 54 : 180);
         for (var doc in snap.docs) {
           final id = doc.id;
@@ -603,25 +603,75 @@ class FirebaseService {
     });
   }
 
-  // Get ERP summaries for a specific month - reads directly from transactions for 100% accuracy
-  Future<List<Map<String, dynamic>>> getErpSummaries(String monthYear) async {
-    final trSnap = await _db.collection('transactions').get();
-    
+  // Get ERP summaries for a specific month - reads directly from transactions for 100% accuracy (0 Reads when cached)
+  Future<List<Map<String, dynamic>>> getErpSummaries(String monthYear, {List<model_tr.Transaction>? cachedTransactions}) async {
     final Map<String, Map<String, dynamic>> customerErpMap = {};
 
-    for (var doc in trSnap.docs) {
-      final trData = doc.data();
-      final Timestamp? erpTs = trData['erpSyncDate'] as Timestamp?;
-      if (erpTs == null) continue; // EXCLUDE any transaction where status is BELUM ERP!
+    List<Map<String, dynamic>> rawTrDataList = [];
 
+    if (cachedTransactions != null && cachedTransactions.isNotEmpty) {
+      for (var tr in cachedTransactions) {
+        if (tr.erpSyncDate == null) continue;
+        final trMonthYear = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
+        if (trMonthYear != monthYear) continue;
+
+        rawTrDataList.add({
+          'id': tr.invoiceNo,
+          'customerId': tr.customerId,
+          'customerName': tr.customerName,
+          'aliasName': tr.aliasName,
+          'erpSyncDate': Timestamp.fromDate(tr.erpSyncDate!),
+          'date': Timestamp.fromDate(tr.date),
+          'grandTotal': tr.grandTotal,
+          'items': tr.items.map((i) => {
+            'productId': i.productId,
+            'productName': i.productName,
+            'qty': i.qty,
+            'weightKg': i.weightKg,
+            'subtotal': i.subtotal,
+            'isBonus': i.isBonus,
+          }).toList(),
+        });
+      }
+    } else {
+      try {
+        final trSnap = await _db.collection('transactions').get(const GetOptions(source: Source.cache));
+        if (trSnap.docs.isNotEmpty) {
+          for (var doc in trSnap.docs) {
+            final data = doc.data();
+            final Timestamp? erpTs = data['erpSyncDate'] as Timestamp?;
+            if (erpTs == null) continue;
+            final erpDate = erpTs.toDate();
+            final trMonthYear = DateFormat('MM-yyyy').format(erpDate);
+            if (trMonthYear != monthYear) continue;
+            data['id'] = doc.id;
+            rawTrDataList.add(data);
+          }
+        }
+      } catch (_) {}
+
+      if (rawTrDataList.isEmpty) {
+        final trSnap = await _db.collection('transactions').get();
+        for (var doc in trSnap.docs) {
+          final data = doc.data();
+          final Timestamp? erpTs = data['erpSyncDate'] as Timestamp?;
+          if (erpTs == null) continue;
+          final erpDate = erpTs.toDate();
+          final trMonthYear = DateFormat('MM-yyyy').format(erpDate);
+          if (trMonthYear != monthYear) continue;
+          data['id'] = doc.id;
+          rawTrDataList.add(data);
+        }
+      }
+    }
+
+    for (var trData in rawTrDataList) {
+      final Timestamp erpTs = trData['erpSyncDate'] as Timestamp;
       final erpDate = erpTs.toDate();
-      final trMonthYear = DateFormat('MM-yyyy').format(erpDate);
-      if (trMonthYear != monthYear) continue;
 
       final customerId = (trData['customerId'] ?? '').toString();
       final customerName = (trData['aliasName'] ?? trData['customerName'] ?? '').toString();
-      final invoiceNo = int.tryParse(doc.id) ?? (trData['invoiceNo'] ?? 0);
-      final grandTotal = (trData['grandTotal'] ?? 0.0).toDouble();
+      final invoiceNo = trData['id'] ?? (trData['invoiceNo'] ?? 0);
       final trDate = (trData['date'] as Timestamp?)?.toDate() ?? erpDate;
 
       final items = (trData['items'] as List<dynamic>?) ?? [];
