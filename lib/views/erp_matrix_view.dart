@@ -103,6 +103,46 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     return list;
   }
 
+  bool _checkProductMatch(
+    dynamic prod,
+    List<dynamic> allProducts,
+    String itemPId,
+    String itemPName,
+  ) {
+    final ownId = prod.id.toString().trim().toLowerCase();
+    final ownName = prod.name.toString().trim().toLowerCase();
+
+    // 1. Direct Exact ID or Exact Name Match
+    if (itemPId.isNotEmpty && itemPId == ownId) return true;
+    if (itemPName.isNotEmpty && itemPName == ownName) return true;
+    if (itemPId.isNotEmpty && itemPId == ownName) return true;
+    if (itemPName.isNotEmpty && itemPName == ownId) return true;
+
+    // 2. Cleaned Name Fallback (removing (MBG) tags and extra spaces)
+    final cleanItemName = itemPName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+    final cleanOwnName = ownName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+
+    if (cleanItemName.isNotEmpty && cleanItemName == cleanOwnName) {
+      final matches = allProducts.where((p) {
+        final pName = p.name.toString().trim().toLowerCase().replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+        return pName == cleanItemName;
+      }).toList();
+
+      if (matches.length <= 1) return true;
+
+      // If multiple products share the same clean name (e.g. MBG vs non-MBG),
+      // give priority to the primary product containing '(MBG)'.
+      dynamic primaryProd = matches.firstWhere(
+        (p) => p.name.toString().toUpperCase().contains('(MBG)'),
+        orElse: () => matches.first,
+      );
+
+      return prod.id == primaryProd.id;
+    }
+
+    return false;
+  }
+
   Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap, List<dynamic> allProducts) {
     final String ownId = prod.id.toString().trim().toLowerCase();
     final String ownName = prod.name.toString().trim().toLowerCase();
@@ -153,10 +193,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-              final isOwnMatch = (itemPId.isNotEmpty && itemPId == ownId) ||
-                                 (itemPName.isNotEmpty && itemPName == ownName) ||
-                                 (itemPId.isNotEmpty && itemPId == ownName) ||
-                                 (itemPName.isNotEmpty && itemPName == ownId);
+              final isOwnMatch = _checkProductMatch(prod, allProducts, itemPId, itemPName);
 
               final isGroupMatch = isOwnMatch ||
                                    (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
