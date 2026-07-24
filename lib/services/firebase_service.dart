@@ -549,6 +549,38 @@ class FirebaseService {
 
       // 3. EXECUTE ALL WRITES (Physical Stock Deduction / Restoration)
       if (stockShouldDecrease) {
+        final List<String> insufficientStockProducts = [];
+
+        for (var entry in totalQtyPerProduct.entries) {
+          final productId = entry.key;
+          final totalQty = entry.value;
+          final vars = variantSnaps[productId];
+          if (vars != null && vars.isNotEmpty) {
+            for (var vSnap in vars) {
+              if (vSnap.exists) {
+                final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
+                if (currentStock < totalQty) {
+                  final pName = vSnap.data()?['name'] ?? productId;
+                  insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
+                }
+              }
+            }
+          } else {
+            final prodSnap = productSnaps[productId];
+            if (prodSnap != null && prodSnap.exists) {
+              final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
+              if (currentStock < totalQty) {
+                final pName = prodSnap.data()?['name'] ?? productId;
+                insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
+              }
+            }
+          }
+        }
+
+        if (insufficientStockProducts.isNotEmpty) {
+          throw Exception("STOK_TIDAK_CUKUP:\n${insufficientStockProducts.join('\n')}");
+        }
+
         for (var entry in totalQtyPerProduct.entries) {
           final productId = entry.key;
           final totalQty = entry.value;

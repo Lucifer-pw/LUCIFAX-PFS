@@ -1015,6 +1015,68 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  void _showInsufficientStockWarningDialog(BuildContext context, String rawError) {
+    final String cleanMessage = rawError.replaceAll("Exception: ", "").replaceAll("STOK_TIDAK_CUKUP:\n", "").trim();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 26),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'TIDAK BISA UPDATE STATUS PENGIRIMAN',
+                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Stok fisik di Master Barang tidak mencukupi untuk melakukan pengiriman transaksi ini:',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                ),
+                child: Text(
+                  cleanMessage,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 13, height: 1.4, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Harap perbarui stok di menu Master Barang / Input Stok terlebih dahulu!',
+                style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF334155)),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Update delivery status (DIKIRIM / PENDING) & delivery date dialog
   void _showUpdateDeliveryStatusDialog(model_tr.Transaction tr) {
     String currentDeliveryStatus = tr.status; // 'DIKIRIM', 'PENDING'
@@ -1121,9 +1183,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
-                        );
+                        final errStr = e.toString();
+                        if (errStr.contains("STOK_TIDAK_CUKUP")) {
+                          _showInsufficientStockWarningDialog(context, errStr);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
                       }
                     }
                   },
