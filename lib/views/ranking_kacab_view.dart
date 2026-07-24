@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/customer_provider.dart';
 import '../models/customer.dart';
+import '../models/transaction.dart' as model_tr;
 
 class RankingKacabView extends StatefulWidget {
   const RankingKacabView({super.key});
@@ -17,8 +18,10 @@ class _RankingKacabViewState extends State<RankingKacabView> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = false;
-  String _selectedPeriodKey = '3_MONTHS_RECENT'; // Default: 3 Bulan Terakhir
+  String _erpSourceFilter = 'ERP_ONLY'; // 'ERP_ONLY' or 'ALL_TRANSACTIONS'
+  String _selectedPeriodKey = 'AUTO_3_MONTHS'; // Auto-detect or specific preset
   String _searchQuery = '';
+  bool _isFallbackToAll = false;
   
   List<Map<String, dynamic>> _rankingData = [];
   double _totalPeriodSales = 0.0;
@@ -48,15 +51,46 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final trProvider = Provider.of<TransactionProvider>(context, listen: false);
       final custProvider = Provider.of<CustomerProvider>(context, listen: false);
       
-      final transactions = trProvider.transactions;
+      final allTransactions = trProvider.transactions;
       final customers = custProvider.customers;
 
-      DateTime now = DateTime.now();
-      DateTime m3Date = DateTime(now.year, now.month, 1);
-      DateTime m2Date = DateTime(now.year, now.month - 1, 1);
-      DateTime m1Date = DateTime(now.year, now.month - 2, 1);
+      // 1. Filter transactions based on ERP source selection
+      List<model_tr.Transaction> candidateTxs = [];
+      if (_erpSourceFilter == 'ERP_ONLY') {
+        candidateTxs = allTransactions.where((tr) => tr.erpSyncDate != null).toList();
+        if (candidateTxs.isEmpty && allTransactions.isNotEmpty) {
+          // Fallback to all transactions if no transaction has erpSyncDate marked yet
+          candidateTxs = List.from(allTransactions);
+          _isFallbackToAll = true;
+        } else {
+          _isFallbackToAll = false;
+        }
+      } else {
+        candidateTxs = List.from(allTransactions);
+        _isFallbackToAll = false;
+      }
 
-      // Period Presets
+      if (candidateTxs.isEmpty) {
+        setState(() {
+          _rankingData = [];
+          _totalPeriodSales = 0;
+          _totalStoreCount = 0;
+          _top1StoreName = '-';
+          _top1Amount = 0;
+          _month1Name = 'Bulan 1';
+          _month2Name = 'Bulan 2';
+          _month3Name = 'Bulan 3';
+        });
+        return;
+      }
+
+      // 2. Determine 3-month period window (Auto-detect or selected preset)
+      DateTime latestDate = candidateTxs.map((t) => t.erpSyncDate ?? t.deliveryDate ?? t.date).reduce((a, b) => a.isAfter(b) ? a : b);
+
+      DateTime m3Date = DateTime(latestDate.year, latestDate.month, 1);
+      DateTime m2Date = DateTime(latestDate.year, latestDate.month - 1, 1);
+      DateTime m1Date = DateTime(latestDate.year, latestDate.month - 2, 1);
+
       if (_selectedPeriodKey == 'MEI_JULI_2026') {
         m1Date = DateTime(2026, 5, 1);
         m2Date = DateTime(2026, 6, 1);
@@ -81,11 +115,13 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
       final Map<String, Map<String, dynamic>> storeMap = {};
 
-      for (var tr in transactions) {
-        final trMonthKey = DateFormat('MM-yyyy').format(tr.date);
+      for (var tr in candidateTxs) {
+        final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
+        final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
         
-        // Filter transactions within the 3-month window
-        if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
+        // Include transactions in the 3-month period window
+        if (_selectedPeriodKey != 'ALL_DATA' &&
+            trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
           continue;
         }
 
@@ -113,7 +149,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           'txCount': 0,
         });
 
-        storeMap[aliasName]![trMonthKey] = (storeMap[aliasName]![trMonthKey] as double) + tr.grandTotal;
+        if (storeMap[aliasName]!.containsKey(trMonthKey)) {
+          storeMap[aliasName]![trMonthKey] = (storeMap[aliasName]![trMonthKey] as double) + tr.grandTotal;
+        } else {
+          storeMap[aliasName]![m3Key] = (storeMap[aliasName]![m3Key] as double) + tr.grandTotal;
+        }
         storeMap[aliasName]!['txCount'] = (storeMap[aliasName]!['txCount'] as int) + 1;
       }
 
@@ -121,9 +161,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       double grandTotalAll = 0.0;
 
       storeMap.forEach((alias, data) {
-        final m1 = data[m1Key] as double;
-        final m2 = data[m2Key] as double;
-        final m3 = data[m3Key] as double;
+        final m1 = (data[m1Key] ?? 0.0) as double;
+        final m2 = (data[m2Key] ?? 0.0) as double;
+        final m3 = (data[m3Key] ?? 0.0) as double;
         final total = m1 + m2 + m3;
         final avg = total / 3.0;
 
@@ -249,8 +289,39 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   ),
                 ],
               ),
-              Row(
+              Wrap(
+                spacing: 10,
                 children: [
+                  // Filter Source (Hanya ERP vs Semua Data)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF0284C7)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _erpSourceFilter,
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold),
+                        icon: const Icon(Icons.tune_rounded, color: Color(0xFF38BDF8), size: 18),
+                        items: const [
+                          DropdownMenuItem(value: 'ERP_ONLY', child: Text('Filter: Hanya Data Laporan ERP')),
+                          DropdownMenuItem(value: 'ALL_TRANSACTIONS', child: Text('Filter: Semua Data Transaksi')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _erpSourceFilter = val;
+                            });
+                            _loadRankingData();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+
                   // Period Selector Dropdown
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -266,10 +337,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                         style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                         icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
                         items: const [
-                          DropdownMenuItem(value: '3_MONTHS_RECENT', child: Text('3 Bulan Terakhir (Dynamic)')),
+                          DropdownMenuItem(value: 'AUTO_3_MONTHS', child: Text('3 Bulan Terakhir (Otomatis Data ERP)')),
                           DropdownMenuItem(value: 'MEI_JULI_2026', child: Text('Mei - Juli 2026')),
                           DropdownMenuItem(value: 'APR_JUNI_2026', child: Text('April - Juni 2026')),
                           DropdownMenuItem(value: 'MAR_MEI_2026', child: Text('Maret - Mei 2026')),
+                          DropdownMenuItem(value: 'ALL_DATA', child: Text('Semua Periode Data')),
                         ],
                         onChanged: (val) {
                           if (val != null) {
@@ -282,7 +354,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
                     onPressed: _loadRankingData,
@@ -292,7 +364,32 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          // Fallback Notification Banner if needed
+          if (_isFallbackToAll) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.withOpacity(0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: Colors.amber, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Info: Transaksi belum memiliki Status "SUDAH ERP". Menampilkan data berdasarkan transaksi saat ini. Anda dapat mengupdate Status ERP transaksi di menu Histori Transaksi.',
+                      style: TextStyle(color: Colors.amberAccent, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Summary Stats Cards Row
           Row(
@@ -330,7 +427,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Search Bar & Info
           Row(
