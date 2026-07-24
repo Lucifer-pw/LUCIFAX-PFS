@@ -474,33 +474,35 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 });
                               },
                             ),
-                            if (selectedProduct != null) ...[
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Harga Master: ${_rupiahFormatter.format(selectedProduct!.price)}',
-                                    style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  selectedProduct != null
+                                      ? 'Harga Master: ${_rupiahFormatter.format(selectedProduct!.price)}'
+                                      : 'Harga Master: Rp 0',
+                                  style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11),
+                                ),
+                                Text(
+                                  selectedProduct != null
+                                      ? 'Stok: ${selectedProduct!.stock.toStringAsFixed(0)} pcs'
+                                      : 'Stok: -',
+                                  style: TextStyle(
+                                    color: (selectedProduct != null && selectedProduct!.stock <= 0) ? Colors.redAccent : Colors.greenAccent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
                                   ),
-                                  Text(
-                                    'Stok: ${selectedProduct!.stock.toStringAsFixed(0)} pcs',
-                                    style: TextStyle(
-                                      color: selectedProduct!.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: priceController,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                                decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: priceController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
+                            ),
                             const SizedBox(height: 12),
                             Row(
                               children: [
