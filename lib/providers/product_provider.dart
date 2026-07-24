@@ -22,27 +22,7 @@ class ProductProvider extends ChangeNotifier {
         _isLoading = true;
         notifyListeners();
         _subscription = _dbService.streamProducts().listen((productList) {
-          final Map<String, double> kodeIndukStockMap = {};
-          for (var p in productList) {
-            if (p.kodeInduk.isNotEmpty) {
-              final key = p.kodeInduk;
-              final currentMax = kodeIndukStockMap[key] ?? 0.0;
-              if (p.stock > currentMax) {
-                kodeIndukStockMap[key] = p.stock;
-              }
-            }
-          }
-
-          final List<Product> syncedList = [];
-          for (var p in productList) {
-            if (p.kodeInduk.isNotEmpty && kodeIndukStockMap.containsKey(p.kodeInduk)) {
-              syncedList.add(p.copyWith(stock: kodeIndukStockMap[p.kodeInduk]));
-            } else {
-              syncedList.add(p);
-            }
-          }
-
-          _products = syncedList;
+          _products = productList;
           _isLoading = false;
           notifyListeners();
         }, onError: (error) {
