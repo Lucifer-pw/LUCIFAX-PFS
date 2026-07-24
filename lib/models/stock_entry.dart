@@ -9,6 +9,8 @@ class StockEntry {
   final String monthYear; // Format: "MM-yyyy"
   final int weekNumber; // 1, 2, 3, 4, 5
   final double qty;
+  final double? stockBefore;
+  final double? stockAfter;
   final DateTime? createdAt;
 
   StockEntry({
@@ -20,6 +22,8 @@ class StockEntry {
     required this.monthYear,
     required this.weekNumber,
     required this.qty,
+    this.stockBefore,
+    this.stockAfter,
     this.createdAt,
   });
 
@@ -49,6 +53,8 @@ class StockEntry {
       monthYear: data['monthYear'] ?? '',
       weekNumber: (data['weekNumber'] is num) ? (data['weekNumber'] as num).toInt() : 1,
       qty: (data['qty'] is num) ? (data['qty'] as num).toDouble() : 0.0,
+      stockBefore: (data['stockBefore'] is num) ? (data['stockBefore'] as num).toDouble() : null,
+      stockAfter: (data['stockAfter'] is num) ? (data['stockAfter'] as num).toDouble() : null,
       createdAt: parsedCreatedAt,
     );
   }
@@ -62,6 +68,8 @@ class StockEntry {
       'monthYear': monthYear,
       'weekNumber': weekNumber,
       'qty': qty,
+      if (stockBefore != null) 'stockBefore': stockBefore,
+      if (stockAfter != null) 'stockAfter': stockAfter,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }
@@ -75,6 +83,8 @@ class StockEntry {
     String? monthYear,
     int? weekNumber,
     double? qty,
+    double? stockBefore,
+    double? stockAfter,
     DateTime? createdAt,
   }) {
     return StockEntry(
@@ -86,6 +96,8 @@ class StockEntry {
       monthYear: monthYear ?? this.monthYear,
       weekNumber: weekNumber ?? this.weekNumber,
       qty: qty ?? this.qty,
+      stockBefore: stockBefore ?? this.stockBefore,
+      stockAfter: stockAfter ?? this.stockAfter,
       createdAt: createdAt ?? this.createdAt,
     );
   }

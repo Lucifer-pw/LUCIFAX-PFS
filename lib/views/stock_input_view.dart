@@ -81,6 +81,8 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
     }
 
     final monthYear = DateFormat('MM-yyyy').format(_selectedDate);
+    final stockBefore = _selectedProduct!.stock;
+    final stockAfter = stockBefore + qty;
 
     final entry = StockEntry(
       id: '',
@@ -91,6 +93,8 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
       monthYear: monthYear,
       weekNumber: _selectedWeek,
       qty: qty,
+      stockBefore: stockBefore,
+      stockAfter: stockAfter,
     );
 
     final stockProvider = Provider.of<StockProvider>(context, listen: false);
@@ -886,6 +890,40 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                             '${dateFormatter.format(entry.date)} • Periode: ${entry.monthYear}',
                                             style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                                           ),
+                                          if (entry.stockBefore != null) ...[
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF1E293B),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: const Color(0xFF334155)),
+                                                  ),
+                                                  child: Text(
+                                                    'Stok Sebelum: ${entry.stockBefore!.toInt()} Pcs',
+                                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                const Icon(Icons.arrow_forward_rounded, color: Color(0xFF64748B), size: 12),
+                                                const SizedBox(width: 4),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.greenAccent.withOpacity(0.12),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                                                  ),
+                                                  child: Text(
+                                                    'Stok Sesudah: ${(entry.stockAfter ?? (entry.stockBefore! + entry.qty)).toInt()} Pcs',
+                                                    style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ),
