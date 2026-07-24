@@ -1,15 +1,25 @@
 import 'dart:math';
 
 /// Data point for K-Means Clustering in Stock Opname Analysis
+/// Tema Skripsi: Mengidentifikasi Penyebab Ketidaksesuaian Stok Opname
+///              terhadap Stok Fisik pada Data Transaksi Penjualan Frozen Food
 class KMeansPoint {
   final String productId;
   final String productName;
   final String kodeInduk;
-  final double delayDays;       // X1: Delay hari pengiriman vs ERP
-  final double totalQtySold;     // X2: Total volume penjualan + sample (Pcs)
-  final double crossMonthLagQty; // X3: Volume barang dikirim fisik tapi ERP beda bulan (Pcs)
-  final double discrepancyGap;   // X4: Selisih Stok Opname (Pcs)
-  final double opnameStock;      // Physical stock in Master Barang (Pcs)
+
+  // === 4 Variabel Clustering (X1–X4) ===
+  final double delayDays;         // X1: Rata-rata delay hari pengiriman fisik vs tanggal invoice ERP
+  final double barangKeluarERP;   // X2: Total barang keluar yang DILAPORKAN ke ERP pada periode (by date invoice)
+  final double crossMonthLagQty;  // X3: Volume barang lag lintas bulan (dikirim fisik bulan lain, dilaporkan bulan ini)
+  final double selisihOpname;     // X4: Selisih = Stok Opname ERP - Stok Fisik (Master Barang)
+
+  // === Field Tambahan untuk Transparansi Tabel Rekonsiliasi ===
+  final double stokAwal;          // Stok Awal Periode (dari monthly_stock_initial)
+  final double barangMasuk;       // Total Barang Masuk (dari stock_entries / Input Stok Mingguan)
+  final double barangKeluarFisik; // Total barang keluar FISIK pada bulan itu (by deliveryDate)
+  final double stokOpnameERP;     // = Stok Awal + Barang Masuk - Barang Keluar ERP
+  final double stokFisik;         // Stok Fisik Asli (prod.stock dari Master Barang)
 
   int clusterIndex;
   double distanceToCentroid;
@@ -19,16 +29,20 @@ class KMeansPoint {
     required this.productName,
     required this.kodeInduk,
     required this.delayDays,
-    required this.totalQtySold,
+    required this.barangKeluarERP,
     required this.crossMonthLagQty,
-    required this.discrepancyGap,
-    this.opnameStock = 0.0,
+    required this.selisihOpname,
+    this.stokAwal = 0.0,
+    this.barangMasuk = 0.0,
+    this.barangKeluarFisik = 0.0,
+    this.stokOpnameERP = 0.0,
+    this.stokFisik = 0.0,
     this.clusterIndex = -1,
     this.distanceToCentroid = 0.0,
   });
 
   /// Vector representation [X1, X2, X3, X4]
-  List<double> toVector() => [delayDays, totalQtySold, crossMonthLagQty, discrepancyGap];
+  List<double> toVector() => [delayDays, barangKeluarERP, crossMonthLagQty, selisihOpname];
 
   /// Normalized vector for equal feature weighting
   List<double> toNormalizedVector(List<double> minValues, List<double> maxValues) {
@@ -69,13 +83,13 @@ class KMeansResult {
 
 class ClusterSummary {
   final int clusterIndex;
-  final String label; // e.g. "Risiko Tinggi (Reporting Lag)", "Risiko Sedang", "Risiko Rendah"
+  final String label;
   final String colorHex;
   final int productCount;
   final double avgDelayDays;
-  final double avgTotalSold;
+  final double avgBarangKeluarERP;
   final double avgLagQty;
-  final double avgDiscrepancyGap;
+  final double avgSelisihOpname;
   final String mainCauseDescription;
   final String recommendation;
 
@@ -85,9 +99,9 @@ class ClusterSummary {
     required this.colorHex,
     required this.productCount,
     required this.avgDelayDays,
-    required this.avgTotalSold,
+    required this.avgBarangKeluarERP,
     required this.avgLagQty,
-    required this.avgDiscrepancyGap,
+    required this.avgSelisihOpname,
     required this.mainCauseDescription,
     required this.recommendation,
   });
@@ -352,6 +366,7 @@ class KMeansService {
   }
 
   /// Generate Scientific Interpretation per Cluster
+  /// Tema: Identifikasi Penyebab Ketidaksesuaian Stok Opname vs Stok Fisik
   static List<ClusterSummary> _buildClusterSummaries(List<KMeansPoint> points, List<List<double>> centroids, int k) {
     final List<ClusterSummary> summaries = [];
 
@@ -369,15 +384,15 @@ class KMeansService {
     for (int i = 0; i < k; i++) {
       final cPoints = grouped[i] ?? [];
       double sumDelay = 0;
-      double sumSold = 0;
+      double sumKeluarERP = 0;
       double sumLag = 0;
-      double sumDisc = 0;
+      double sumSelisih = 0;
 
       for (var p in cPoints) {
         sumDelay += p.delayDays;
-        sumSold += p.totalQtySold;
+        sumKeluarERP += p.barangKeluarERP;
         sumLag += p.crossMonthLagQty;
-        sumDisc += p.discrepancyGap;
+        sumSelisih += p.selisihOpname;
       }
 
       final count = cPoints.length;
@@ -385,17 +400,17 @@ class KMeansService {
         'index': i.toDouble(),
         'count': count.toDouble(),
         'avgDelay': count > 0 ? sumDelay / count : 0.0,
-        'avgSold': count > 0 ? sumSold / count : 0.0,
+        'avgKeluarERP': count > 0 ? sumKeluarERP / count : 0.0,
         'avgLag': count > 0 ? sumLag / count : 0.0,
-        'avgDisc': count > 0 ? sumDisc / count : 0.0,
+        'avgSelisih': count > 0 ? sumSelisih / count : 0.0,
       });
     }
 
-    // Rank clusters by avgLag & avgDelay to assign meaningful labels
+    // Rank clusters by combined risk score (avgLag weight + avgDelay + avgSelisih absolute)
     final sortedByRisk = List<Map<String, double>>.from(clusterStats);
     sortedByRisk.sort((a, b) {
-      final scoreA = a['avgLag']! * 2 + a['avgDelay']!;
-      final scoreB = b['avgLag']! * 2 + b['avgDelay']!;
+      final scoreA = a['avgLag']! * 2 + a['avgDelay']! + a['avgSelisih']!.abs();
+      final scoreB = b['avgLag']! * 2 + b['avgDelay']! + b['avgSelisih']!.abs();
       return scoreB.compareTo(scoreA); // Highest risk first
     });
 
@@ -403,6 +418,7 @@ class KMeansService {
       final stats = clusterStats[i];
       final cIdx = i;
       final rankIndex = sortedByRisk.indexWhere((s) => s['index'] == cIdx.toDouble());
+      final avgSelisih = stats['avgSelisih']!;
 
       String label;
       String colorHex;
@@ -410,21 +426,24 @@ class KMeansService {
       String recommendation;
 
       if (rankIndex == 0 && k >= 2) {
-        label = 'Cluster $cIdx: Risiko Tinggi (Reporting Lag ERP)';
+        label = 'Cluster $cIdx: Risiko Tinggi (Keterlambatan Pelaporan ERP)';
         colorHex = '#F87171'; // Red
-        causeDesc = 'Produk di cluster ini memiliki jeda hari pengiriman fisik vs ERP paling tinggi dan volume penundaan laporan lintas bulan yang signifikan. Hal ini menjadi penyebab utama ketidaksesuaian stok opname.';
-        recommendation = 'Lakukan percepatan input invoice ERP untuk pengiriman H-3 akhir bulan dan audit khusus mingguan pada varian produk ini.';
+        if (avgSelisih > 0) {
+          causeDesc = 'Produk di cluster ini memiliki selisih stok opname PLUS (Stok Opname ERP > Stok Fisik) — menunjukkan ada PO/invoice yang barang fisiknya sudah keluar tetapi BELUM DILAPORKAN ke ERP. Rata-rata delay pengiriman vs ERP tertinggi dan volume lag lintas bulan paling signifikan.';
+        } else {
+          causeDesc = 'Produk di cluster ini memiliki selisih stok opname MINUS (Stok Opname ERP < Stok Fisik) — menunjukkan ada PO/invoice dari bulan sebelumnya yang BARU DILAPORKAN ke ERP bulan ini, sehingga Barang Keluar ERP membengkak melebihi barang keluar fisik aktual.';
+        }
+        recommendation = 'Lakukan percepatan input invoice ERP maksimal H+1 setelah pengiriman fisik. Audit khusus mingguan pada varian produk ini. Hindari menumpuk invoice lintas bulan.';
       } else if (rankIndex == k - 1 && k >= 2) {
-        label = 'Cluster $cIdx: Risiko Rendah (Stok Akurat & Synchronized)';
+        label = 'Cluster $cIdx: Risiko Rendah (Stok Akurat & Sinkron)';
         colorHex = '#4ADE80'; // Green
-        causeDesc = 'Produk di cluster ini memiliki pencatatan ERP yang real-time dengan tanggal kirim fisik. Selisih stok opname mendekati 0%.';
-        recommendation = 'Pertahankan SOP penginputan ERP H-0/H+1 yang sudah berjalan baik pada kelompok barang ini.';
+        causeDesc = 'Produk di cluster ini memiliki pencatatan ERP yang sinkron dengan pengiriman fisik. Selisih antara Stok Opname ERP dan Stok Fisik (Master Barang) mendekati 0. Barang Keluar Fisik ≈ Barang Keluar ERP.';
+        recommendation = 'Pertahankan SOP penginputan ERP H-0/H+1 yang sudah berjalan baik pada kelompok barang ini sebagai standar acuan.';
       } else {
-        label = 'Cluster $cIdx: Risiko Sedang (Month-End Cut-Off)';
+        label = 'Cluster $cIdx: Risiko Sedang (Jeda Cut-Off Akhir Bulan)';
         colorHex = '#FBBF24'; // Amber
-        colorHex = '#FBBF24';
-        causeDesc = 'Produk di cluster ini mengalami selisih stok sementara akibat jeda waktu cut-off transaksi di 1-2 hari menjelang pergantian bulan.';
-        recommendation = 'Terapkan batas waktu cut-off penginputan invoice bulanan pada tanggal 30/31 pukul 23:59 WIB.';
+        causeDesc = 'Produk di cluster ini mengalami selisih stok opname sementara akibat jeda waktu cut-off transaksi menjelang pergantian bulan. Sebagian PO dikirim fisik di akhir bulan lalu, dilaporkan ke ERP di awal bulan berikutnya.';
+        recommendation = 'Terapkan batas waktu cut-off penginputan invoice bulanan pada tanggal 30/31 pukul 23:59 WIB. Pastikan PO akhir bulan langsung diinput ke ERP.';
       }
 
       summaries.add(ClusterSummary(
@@ -433,9 +452,9 @@ class KMeansService {
         colorHex: colorHex,
         productCount: stats['count']!.toInt(),
         avgDelayDays: stats['avgDelay']!,
-        avgTotalSold: stats['avgSold']!,
+        avgBarangKeluarERP: stats['avgKeluarERP']!,
         avgLagQty: stats['avgLag']!,
-        avgDiscrepancyGap: stats['avgDisc']!,
+        avgSelisihOpname: stats['avgSelisih']!,
         mainCauseDescription: causeDesc,
         recommendation: recommendation,
       ));

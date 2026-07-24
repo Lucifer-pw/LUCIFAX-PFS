@@ -50,36 +50,37 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
       final allTransactions = trProvider.transactions;
       _lastProcessedTrCount = allTransactions.length;
 
-      // Filter transactions by selected period if specified
-      List<dynamic> targetTransactions = allTransactions;
-      if (_selectedMonthYear != 'Semua Periode (Semua Histori)') {
-        final filtered = allTransactions.where((t) {
-          final dateStr = DateFormat('MM-yyyy').format(t.date);
-          final delivStr = t.deliveryDate != null ? DateFormat('MM-yyyy').format(t.deliveryDate!) : dateStr;
-          return dateStr == _selectedMonthYear || delivStr == _selectedMonthYear;
-        }).toList();
-        if (filtered.isNotEmpty) {
-          targetTransactions = filtered;
-        }
-      }
-
       final initialStocks = await stockProvider.fetchInitialStocks(_selectedMonthYear == 'Semua Periode (Semua Histori)' ? '06-2026' : _selectedMonthYear);
       final weeklyMap = stockProvider.getWeeklySummary(_selectedMonthYear == 'Semua Periode (Semua Histori)' ? '06-2026' : _selectedMonthYear);
 
-      // Extract features for each product directly from Histori Transaksi
+      // Parse selected month/year for filtering
+      int? filterMonth;
+      int? filterYear;
+      if (_selectedMonthYear != 'Semua Periode (Semua Histori)') {
+        final parts = _selectedMonthYear.split('-');
+        if (parts.length == 2) {
+          filterMonth = int.tryParse(parts[0]);
+          filterYear = int.tryParse(parts[1]);
+        }
+      }
+
+      // Extract features for each product
+      // Rumus Skripsi: STOK OPNAME ERP = STOK AWAL + BARANG MASUK - BARANG KELUAR ERP
+      // Selisih = STOK OPNAME ERP - STOK FISIK (Master Barang)
       final List<KMeansPoint> points = [];
 
       for (var prod in products) {
         final String ownId = prod.id.trim().toLowerCase();
         final String ownName = prod.name.trim().toLowerCase();
 
-        double totalSalesPcs = 0.0;
-        double totalSamplePcs = 0.0;
+        // === DUA JENIS BARANG KELUAR ===
+        double barangKeluarFisikPcs = 0.0;  // By deliveryDate (barang asli keluar bulan ini)
+        double barangKeluarERPPcs = 0.0;    // By invoice date (dilaporkan ke ERP bulan ini)
         double totalDelayDaysSum = 0.0;
         int delayTransactionCount = 0;
         double crossMonthLagQtyPcs = 0.0;
 
-        for (var tr in targetTransactions) {
+        for (var tr in allTransactions) {
           final trDate = tr.date as DateTime;
           final delivDate = tr.deliveryDate as DateTime? ?? trDate;
           final status = (tr.status as String? ?? '').toUpperCase();
@@ -94,12 +95,25 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
             if (isMatch) {
               final double qty = (item.qty as num).toDouble();
-              final bool isBonus = item.isBonus == true;
 
-              if (isBonus) {
-                totalSamplePcs += qty;
+              // === BARANG KELUAR FISIK: dihitung berdasarkan deliveryDate ===
+              // Barang yang BENAR-BENAR keluar gudang pada bulan yang dipilih
+              if (filterMonth != null && filterYear != null) {
+                if (delivDate.month == filterMonth && delivDate.year == filterYear) {
+                  barangKeluarFisikPcs += qty;
+                }
               } else {
-                totalSalesPcs += qty;
+                barangKeluarFisikPcs += qty;
+              }
+
+              // === BARANG KELUAR ERP: dihitung berdasarkan tanggal invoice (date) ===
+              // Barang yang DILAPORKAN ke sistem ERP pada bulan yang dipilih
+              if (filterMonth != null && filterYear != null) {
+                if (trDate.month == filterMonth && trDate.year == filterYear) {
+                  barangKeluarERPPcs += qty;
+                }
+              } else {
+                barangKeluarERPPcs += qty;
               }
 
               // Calculate delay in days between physical delivery and ERP invoice date
@@ -107,34 +121,49 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
               totalDelayDaysSum += delayDays;
               delayTransactionCount++;
 
-              // Check if delivery month differs from invoice report month or status is DIKIRIM
-              if (trDate.month != delivDate.month || status == 'DIKIRIM') {
-                crossMonthLagQtyPcs += qty;
+              // Cross-month lag: delivery month differs from invoice month OR status DIKIRIM
+              if (trDate.month != delivDate.month || trDate.year != delivDate.year || status == 'DIKIRIM') {
+                // Only count if this item's invoice falls in the selected period
+                if (filterMonth != null && filterYear != null) {
+                  if (trDate.month == filterMonth && trDate.year == filterYear) {
+                    crossMonthLagQtyPcs += qty;
+                  }
+                } else {
+                  crossMonthLagQtyPcs += qty;
+                }
               }
             }
           }
         }
 
         final double avgDelayDays = delayTransactionCount > 0 ? (totalDelayDaysSum / delayTransactionCount) : 0.0;
-        final double initialStockVal = initialStocks[prod.id] ?? prod.stock.toDouble();
+        final double stokAwalVal = initialStocks[prod.id] ?? prod.stock.toDouble();
         final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
-        final double totalMasukPcs = (wMap[1] ?? 0) + (wMap[2] ?? 0) + (wMap[3] ?? 0) + (wMap[4] ?? 0) + (wMap[5] ?? 0);
-        final double totalKeluarPcs = totalSalesPcs + totalSamplePcs;
-        final double expectedStockAkhir = initialStockVal + totalMasukPcs - totalKeluarPcs;
-        final double actualOpnameStock = prod.stock.toDouble();
+        final double totalBarangMasuk = (wMap[1] ?? 0) + (wMap[2] ?? 0) + (wMap[3] ?? 0) + (wMap[4] ?? 0) + (wMap[5] ?? 0);
+        final double stokFisik = prod.stock.toDouble(); // Stok Fisik Asli (Master Barang)
 
-        // Discrepancy gap is the lag impact or variance
-        final double discrepancyGap = crossMonthLagQtyPcs > 0 ? crossMonthLagQtyPcs : (actualOpnameStock - expectedStockAkhir).abs();
+        // RUMUS SKRIPSI: Stok Opname ERP = Stok Awal + Barang Masuk - Barang Keluar ERP
+        final double stokOpnameERP = stokAwalVal + totalBarangMasuk - barangKeluarERPPcs;
+
+        // Selisih = Stok Opname ERP - Stok Fisik
+        // Positif (+) = ERP belum mencatat semua barang keluar (keterlambatan)
+        // Negatif (-) = ERP menanggung laporan bulan lalu (membengkak)
+        // Nol (0) = Akurat & Sinkron
+        final double selisihOpname = stokOpnameERP - stokFisik;
 
         points.add(KMeansPoint(
           productId: prod.id,
           productName: prod.name,
           kodeInduk: prod.kodeInduk,
           delayDays: double.parse(avgDelayDays.toStringAsFixed(1)),
-          totalQtySold: totalSalesPcs + totalSamplePcs,
+          barangKeluarERP: barangKeluarERPPcs,
           crossMonthLagQty: crossMonthLagQtyPcs,
-          discrepancyGap: double.parse(discrepancyGap.toStringAsFixed(1)),
-          opnameStock: actualOpnameStock,
+          selisihOpname: double.parse(selisihOpname.toStringAsFixed(1)),
+          stokAwal: stokAwalVal,
+          barangMasuk: totalBarangMasuk,
+          barangKeluarFisik: barangKeluarFisikPcs,
+          stokOpnameERP: double.parse(stokOpnameERP.toStringAsFixed(1)),
+          stokFisik: stokFisik,
         ));
       }
 
@@ -458,9 +487,9 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       runSpacing: 8,
                       children: [
                         _buildBadge('Rata-rata Delay: ${summary.avgDelayDays.toStringAsFixed(1)} Hari'),
-                        _buildBadge('Rata-rata Total Jual: ${summary.avgTotalSold.toStringAsFixed(0)} Pcs'),
-                        _buildBadge('Rata-rata Delay Lintas Bulan: ${summary.avgLagQty.toStringAsFixed(0)} Pcs'),
-                        _buildBadge('Rata-rata Selisih Opname: ${summary.avgDiscrepancyGap.toStringAsFixed(0)} Pcs'),
+                        _buildBadge('Rata-rata Barang Keluar ERP: ${summary.avgBarangKeluarERP.toStringAsFixed(0)} Pcs'),
+                        _buildBadge('Rata-rata Lag Lintas Bulan: ${summary.avgLagQty.toStringAsFixed(0)} Pcs'),
+                        _buildBadge('Rata-rata Selisih Opname vs Fisik: ${summary.avgSelisihOpname >= 0 ? "+" : ""}${summary.avgSelisihOpname.toStringAsFixed(0)} Pcs'),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -507,7 +536,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                           child: Icon(Icons.inventory_2_outlined, color: color, size: 20),
                         ),
                         title: Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        subtitle: Text('Kode Induk: ${p.kodeInduk} | Delay: ${p.delayDays} hari | Lag Lintas Bulan: ${p.crossMonthLagQty.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                        subtitle: Text('Kode Induk: ${p.kodeInduk} | Delay: ${p.delayDays} hari | Selisih Opname: ${p.selisihOpname >= 0 ? "+" : ""}${p.selisihOpname.toStringAsFixed(0)} pcs | Lag: ${p.crossMonthLagQty.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                         trailing: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.4))),
@@ -691,12 +720,13 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
     );
   }
 
-  // TAB 3: Stock Reconciliation Calculator
+  // TAB 3: Kalkulator Rekonsiliasi Stok Opname vs Stok Fisik
   Widget _buildReconciliationTab() {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header Banner with Formula
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -704,22 +734,43 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFF4ADE80)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFF4ADE80).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.fact_check_rounded, color: Color(0xFF4ADE80), size: 28),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFF4ADE80).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.fact_check_rounded, color: Color(0xFF4ADE80), size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text('Kalkulator Rekonsiliasi Stok Opname (ERP) vs Stok Fisik (Master Barang)', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 4),
+                          Text('Membuktikan penyebab ketidaksesuaian stok opname menggunakan rumus:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Kalkulator Rekonsiliasi Penyesuaian Status Kirim vs Catatan ERP', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 4),
-                      Text('Membuktikan bahwa ketidaksesuaian stok opname dapat dijelaskan 100% secara presisi dengan merekonsiliasi barang berstatus DIKIRIM.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                    ],
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                  ),
+                  child: const Text(
+                    'STOK OPNAME (ERP) = STOK AWAL + BARANG MASUK - BARANG KELUAR (ERP)\n'
+                    'SELISIH = STOK OPNAME (ERP) - STOK FISIK (Master Barang)\n'
+                    'Selisih PLUS (+) = Keterlambatan Pelaporan ERP | Selisih MINUS (-) = ERP menanggung laporan bulan lalu',
+                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontFamily: 'monospace', height: 1.6),
                   ),
                 ),
               ],
@@ -739,7 +790,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
               children: [
                 const Padding(
                   padding: EdgeInsets.all(16.0),
-                  child: Text('⚖️ Tabel Matriks Rekonsiliasi Penyesuaian (Sebelum vs Sesudah)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text('Tabel Rekonsiliasi Stok Opname ERP vs Stok Fisik per Produk', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(color: Color(0xFF334155), height: 1),
                 LayoutBuilder(
@@ -749,46 +800,66 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       child: ConstrainedBox(
                         constraints: BoxConstraints(minWidth: constraints.maxWidth),
                         child: DataTable(
-                          columnSpacing: 14,
-                          horizontalMargin: 12,
-                          headingRowHeight: 46,
-                          dataRowMaxHeight: 48,
+                          columnSpacing: 10,
+                          horizontalMargin: 10,
+                          headingRowHeight: 52,
+                          dataRowMaxHeight: 50,
                           headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                           columns: const [
-                            DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('STOK ERP CATATAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('BARANG DIKIRIM (PENDING)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('STOK REKONSILIASI HASIL', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('STOK FISIK OPNAME', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('STATUS SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                            DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                            DataColumn(label: Text('STOK\nAWAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('BARANG\nMASUK', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('KELUAR\nFISIK', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('KELUAR\nERP', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('STOK OPNAME\n(ERP)', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('STOK FISIK\n(MASTER)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('SELISIH', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                            DataColumn(label: Text('STATUS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
                           ],
                           rows: _allPoints.asMap().entries.map((entry) {
                             final index = entry.key + 1;
                             final p = entry.value;
-                            final double erpRecorded = p.totalQtySold;
-                            final double pendingDelivery = p.crossMonthLagQty;
-                            final double reconciledStock = erpRecorded - pendingDelivery;
-                            final bool isMatch = (p.discrepancyGap == 0 || pendingDelivery > 0);
+                            final double selisih = p.selisihOpname;
+
+                            Color statusColor;
+                            String statusText;
+                            if (selisih.abs() < 0.5) {
+                              statusColor = const Color(0xFF4ADE80);
+                              statusText = 'COCOK';
+                            } else if (selisih > 0) {
+                              statusColor = Colors.amberAccent;
+                              statusText = 'PLUS (+)';
+                            } else {
+                              statusColor = Colors.redAccent;
+                              statusText = 'MINUS (-)';
+                            }
 
                             return DataRow(
                               cells: [
-                                DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold))),
-                                DataCell(Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                DataCell(Text('${erpRecorded.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
-                                DataCell(Text('+${pendingDelivery.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                                DataCell(Text('${reconciledStock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold))),
-                                DataCell(Text('${p.opnameStock.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.white70))),
+                                DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                DataCell(SizedBox(
+                                  width: 160,
+                                  child: Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                )),
+                                DataCell(Text('${p.stokAwal.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                DataCell(Text('+${p.barangMasuk.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12))),
+                                DataCell(Text('-${p.barangKeluarFisik.toStringAsFixed(0)}', style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+                                DataCell(Text('-${p.barangKeluarERP.toStringAsFixed(0)}', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                DataCell(Text('${p.stokOpnameERP.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                DataCell(Text('${p.stokFisik.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                DataCell(Text('${selisih >= 0 ? "+" : ""}${selisih.toStringAsFixed(0)}', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
                                 DataCell(
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: isMatch ? const Color(0xFF4ADE80).withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
+                                      color: statusColor.withOpacity(0.15),
                                       borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: statusColor.withOpacity(0.4)),
                                     ),
                                     child: Text(
-                                      isMatch ? 'MATCH (100% COCOK)' : 'SELISIH FISIK',
-                                      style: TextStyle(color: isMatch ? const Color(0xFF4ADE80) : Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                      statusText,
+                                      style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ),
