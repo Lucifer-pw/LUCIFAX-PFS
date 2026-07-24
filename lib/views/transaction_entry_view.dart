@@ -926,7 +926,7 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
           if (mounted && !_focusNode.hasFocus) {
             _hideOverlay();
           }
-        });
+        }).catchError((_) {});
       }
     });
   }
@@ -970,11 +970,16 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
         }).toList();
       }
     });
-    _overlayEntry?.markNeedsBuild();
+    if (_overlayEntry != null && _overlayEntry!.mounted) {
+      try {
+        _overlayEntry!.markNeedsBuild();
+      } catch (_) {}
+    }
   }
 
   void _showOverlay() {
     _hideOverlay();
+    if (!mounted) return;
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
@@ -1032,12 +1037,20 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
       ),
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    try {
+      Overlay.of(context).insert(_overlayEntry!);
+    } catch (_) {}
   }
 
   void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+    if (_overlayEntry != null) {
+      try {
+        if (_overlayEntry!.mounted) {
+          _overlayEntry?.remove();
+        }
+      } catch (_) {}
+      _overlayEntry = null;
+    }
   }
 
   @override
@@ -1131,7 +1144,7 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
           if (mounted && !_focusNode.hasFocus) {
             _hideOverlay();
           }
-        });
+        }).catchError((_) {});
       }
     });
   }
@@ -1168,11 +1181,16 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
         }).toList();
       }
     });
-    _overlayEntry?.markNeedsBuild();
+    if (_overlayEntry != null && _overlayEntry!.mounted) {
+      try {
+        _overlayEntry!.markNeedsBuild();
+      } catch (_) {}
+    }
   }
 
   void _showOverlay() {
     _hideOverlay();
+    if (!mounted) return;
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
@@ -1230,12 +1248,20 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
       ),
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    try {
+      Overlay.of(context).insert(_overlayEntry!);
+    } catch (_) {}
   }
 
   void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+    if (_overlayEntry != null) {
+      try {
+        if (_overlayEntry!.mounted) {
+          _overlayEntry?.remove();
+        }
+      } catch (_) {}
+      _overlayEntry = null;
+    }
   }
 
   @override

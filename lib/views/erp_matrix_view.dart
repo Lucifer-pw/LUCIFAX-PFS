@@ -1652,7 +1652,7 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
           if (mounted && !_focusNode.hasFocus) {
             _hideOverlay();
           }
-        });
+        }).catchError((_) {});
       }
     });
   }
@@ -1695,11 +1695,16 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
           ..sort((a, b) => a.displayName.compareTo(b.displayName));
       }
     });
-    _overlayEntry?.markNeedsBuild();
+    if (_overlayEntry != null && _overlayEntry!.mounted) {
+      try {
+        _overlayEntry!.markNeedsBuild();
+      } catch (_) {}
+    }
   }
 
   void _showOverlay() {
     _hideOverlay();
+    if (!mounted) return;
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
@@ -1775,12 +1780,20 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
       ),
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    try {
+      Overlay.of(context).insert(_overlayEntry!);
+    } catch (_) {}
   }
 
   void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+    if (_overlayEntry != null) {
+      try {
+        if (_overlayEntry!.mounted) {
+          _overlayEntry?.remove();
+        }
+      } catch (_) {}
+      _overlayEntry = null;
+    }
   }
 
   @override
