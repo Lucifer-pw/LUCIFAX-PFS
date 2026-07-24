@@ -27,7 +27,15 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   KMeansResult? _trainingResult;
   List<KMeansPoint> _testingPredictions = [];
 
+  String _poAuditProductFilter = 'Semua Produk';
+  final TextEditingController _poAuditSearchController = TextEditingController();
   int _lastProcessedTrCount = -1;
+
+  @override
+  void dispose() {
+    _poAuditSearchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -338,6 +346,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
               _buildTabButton(1, Icons.model_training_rounded, 'Data Training & Testing (Dosen)'),
               _buildTabButton(2, Icons.fact_check_rounded, 'Kalkulator Rekonsiliasi Stok'),
               _buildTabButton(3, Icons.timer_outlined, 'Aging Delay Pengiriman'),
+              _buildTabButton(4, Icons.receipt_long_rounded, 'Audit PO Penyebab Selisih ERP'),
             ],
           ),
           const SizedBox(height: 20),
@@ -352,7 +361,9 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                         ? _buildTrainingTestingTab()
                         : _selectedTab == 2
                             ? _buildReconciliationTab()
-                            : _buildAgingDelayTab(),
+                            : _selectedTab == 3
+                                ? _buildAgingDelayTab()
+                                : _buildPODiscrepancyAuditTab(),
           ),
         ],
       ),
@@ -1094,6 +1105,385 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
         children: [
           Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
           Text(val, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  // TAB 5: Audit Detail PO / Invoice Penyebab Selisih Stok Opname
+  Widget _buildPODiscrepancyAuditTab() {
+    final trProvider = Provider.of<TransactionProvider>(context);
+    final productProvider = Provider.of<ProductProvider>(context);
+    final products = productProvider.products;
+    final allTransactions = trProvider.transactions;
+
+    int? filterMonth;
+    int? filterYear;
+    if (_selectedMonthYear != 'Semua Periode (Semua Histori)') {
+      final parts = _selectedMonthYear.split('-');
+      if (parts.length == 2) {
+        filterMonth = int.tryParse(parts[0]);
+        filterYear = int.tryParse(parts[1]);
+      }
+    }
+
+    // Filter POs that cause discrepancy
+    final List<Map<String, dynamic>> discrepancyPOs = [];
+
+    for (var tr in allTransactions) {
+      final trDate = tr.date as DateTime;
+      final delivDate = tr.deliveryDate as DateTime? ?? trDate;
+      final status = (tr.status as String? ?? '').toUpperCase();
+
+      final bool isPendingDelivery = (status == 'DIKIRIM');
+      final bool isCrossMonth = (trDate.month != delivDate.month || trDate.year != delivDate.year);
+
+      if (!isPendingDelivery && !isCrossMonth) continue;
+
+      // Check period match
+      bool isTargetPeriod = false;
+      if (filterMonth != null && filterYear != null) {
+        final bool delivMatch = (delivDate.month == filterMonth && delivDate.year == filterYear);
+        final bool invoiceMatch = (trDate.month == filterMonth && trDate.year == filterYear);
+        if (delivMatch || invoiceMatch) {
+          isTargetPeriod = true;
+        }
+      } else {
+        isTargetPeriod = true;
+      }
+
+      if (!isTargetPeriod) continue;
+
+      // Calculate total qty for this PO
+      double poQtySum = 0;
+      for (var item in tr.items) {
+        poQtySum += (item.qty as num).toDouble();
+      }
+
+      // Determine Category Cause
+      String causeCategory;
+      Color causeColor;
+      if (isPendingDelivery) {
+        causeCategory = 'BELUM DIINPUT KE ERP (Status: DIKIRIM)';
+        causeColor = Colors.amberAccent;
+      } else if (isCrossMonth) {
+        causeCategory = 'LATE REPORTING LINTAS BULAN (Kirim: ${DateFormat('MM-yyyy').format(delivDate)} → Invoice: ${DateFormat('MM-yyyy').format(trDate)})';
+        causeColor = Colors.redAccent;
+      } else {
+        causeCategory = 'PENDING CUT-OFF AKHIR BULAN';
+        causeColor = const Color(0xFF38BDF8);
+      }
+
+      discrepancyPOs.add({
+        'transaction': tr,
+        'delivDate': delivDate,
+        'invoiceDate': trDate,
+        'status': status,
+        'causeCategory': causeCategory,
+        'causeColor': causeColor,
+        'totalQty': poQtySum,
+        'isPendingDelivery': isPendingDelivery,
+        'isCrossMonth': isCrossMonth,
+      });
+    }
+
+    // Filter by Product Dropdown
+    List<Map<String, dynamic>> filteredPOs = discrepancyPOs;
+    if (_poAuditProductFilter != 'Semua Produk') {
+      filteredPOs = filteredPOs.where((map) {
+        final tr = map['transaction'];
+        return tr.items.any((it) =>
+            it.productId == _poAuditProductFilter ||
+            it.productName.toLowerCase().contains(_poAuditProductFilter.toLowerCase()));
+      }).toList();
+    }
+
+    // Filter by Search Text
+    final searchQuery = _poAuditSearchController.text.trim().toLowerCase();
+    if (searchQuery.isNotEmpty) {
+      filteredPOs = filteredPOs.where((map) {
+        final tr = map['transaction'];
+        final inv = tr.invoiceNo.toLowerCase();
+        final cust = tr.customerName.toLowerCase();
+        final alias = tr.aliasName.toLowerCase();
+        final items = tr.items.map((i) => i.productName.toLowerCase()).join(' ');
+        return inv.contains(searchQuery) || cust.contains(searchQuery) || alias.contains(searchQuery) || items.contains(searchQuery);
+      }).toList();
+    }
+
+    // Sort by deliveryDate descending (newest first)
+    filteredPOs.sort((a, b) => (b['delivDate'] as DateTime).compareTo(a['delivDate'] as DateTime));
+
+    // Stats
+    final double totalPendingQty = filteredPOs.fold(0.0, (sum, item) => sum + (item['totalQty'] as double));
+    final int pendingDeliveryCount = filteredPOs.where((item) => item['isPendingDelivery'] == true).length;
+    final int crossMonthCount = filteredPOs.where((item) => item['isCrossMonth'] == true).length;
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF43F5E)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFFF43F5E).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFF43F5E), size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text('Audit Detail PO (Invoice) Penyebab Selisih Stok Opname', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 4),
+                          Text('Menampilkan rincian nota transaksi spesifik yang barang fisiknya sudah keluar tetapi belum/terlambat diinput ke Laporan ERP.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: [
+                    _buildMetricBadge('Total PO Penyebab Selisih', '${filteredPOs.length} Nota', const Color(0xFFF43F5E)),
+                    _buildMetricBadge('Total Qty Barang Delay', '${totalPendingQty.toStringAsFixed(0)} pcs', const Color(0xFFFB7185)),
+                    _buildMetricBadge('Belum Diinput (Status DIKIRIM)', '$pendingDeliveryCount Nota', Colors.amberAccent),
+                    _buildMetricBadge('Late Reporting Lintas Bulan', '$crossMonthCount Nota', Colors.orangeAccent),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Filters Card: Product Dropdown & Search Input
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF334155)),
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // Product Filter Dropdown
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: products.any((p) => p.name == _poAuditProductFilter || p.id == _poAuditProductFilter)
+                              ? _poAuditProductFilter
+                              : 'Semua Produk',
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                          items: [
+                            const DropdownMenuItem(value: 'Semua Produk', child: Text('Semua Produk (Semua Barang)')),
+                            ...products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _poAuditProductFilter = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Search Bar
+                SizedBox(
+                  width: 300,
+                  child: TextField(
+                    controller: _poAuditSearchController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Cari No. PO, Pelanggan, atau Produk...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 18),
+                      suffixIcon: _poAuditSearchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.white54, size: 16),
+                              onPressed: () {
+                                _poAuditSearchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Audit Table
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF334155)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('🧾 Daftar Nota PO/Invoice Spesifik yang Menyebabkan Ketidaksesuaian Stok ERP', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                const Divider(color: Color(0xFF334155), height: 1),
+                filteredPOs.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(36.0),
+                        child: Center(
+                          child: Text('✅ Tidak ditemukan nota PO penyebab selisih untuk filter ini.', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w500, fontSize: 15)),
+                        ),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                              child: DataTable(
+                                columnSpacing: 10,
+                                horizontalMargin: 10,
+                                headingRowHeight: 52,
+                                dataRowMaxHeight: 56,
+                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                columns: const [
+                                  DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                  DataColumn(label: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                  DataColumn(label: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                  DataColumn(label: Text('TGL KIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                  DataColumn(label: Text('TGL INVOICE ERP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                  DataColumn(label: Text('RINCIAN BARANG (ITEM & QTY)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                  DataColumn(label: Text('TOTAL QTY', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
+                                  DataColumn(label: Text('KATEGORI PENYEBAB SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                ],
+                                rows: filteredPOs.asMap().entries.map((entry) {
+                                  final index = entry.key + 1;
+                                  final map = entry.value;
+                                  final tr = map['transaction'];
+                                  final delivDate = map['delivDate'] as DateTime;
+                                  final invoiceDate = map['invoiceDate'] as DateTime;
+                                  final causeCategory = map['causeCategory'] as String;
+                                  final causeColor = map['causeColor'] as Color;
+                                  final isPending = map['isPendingDelivery'] as bool;
+                                  final double totalQty = map['totalQty'] as double;
+
+                                  final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                      ? tr.aliasName
+                                      : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
+
+                                  final itemsSummary = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      DataCell(
+                                        Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                            Text(tr.type.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                                          ],
+                                        ),
+                                      ),
+                                      DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      DataCell(Text(
+                                        isPending ? 'BELUM DIINPUT' : DateFormat('dd-MM-yyyy').format(invoiceDate),
+                                        style: TextStyle(color: isPending ? Colors.redAccent : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                      )),
+                                      DataCell(
+                                        SizedBox(
+                                          width: 220,
+                                          child: Text(itemsSummary, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                                        ),
+                                      ),
+                                      DataCell(Text('${totalQty.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: causeColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: causeColor.withOpacity(0.4)),
+                                          ),
+                                          child: Text(
+                                            causeCategory,
+                                            style: TextStyle(color: causeColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricBadge(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label: ', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
         ],
       ),
     );
