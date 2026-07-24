@@ -163,20 +163,16 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
               final itemKodeInduk = (itemMap['kodeInduk'] ?? itemMap['kode_Induk'] ?? '').toString().trim().toLowerCase();
 
-              final cleanItemName = itemPName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-              final cleanOwnName = ownName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-
               final isExactMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
                                    (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
 
               final isKodeIndukMatch = (itemKodeInduk.isNotEmpty && groupKodeInduk.contains(itemKodeInduk)) ||
                                        (itemPId.isNotEmpty && (groupIds.contains(itemPId) || groupKodeInduk.contains(itemPId))) ||
-                                       (itemPName.isNotEmpty && groupNames.contains(itemPName)) ||
-                                       (cleanItemName.isNotEmpty && cleanItemName == cleanOwnName);
+                                       (itemPName.isNotEmpty && groupNames.contains(itemPName));
 
               final isGroupMatch = isExactMatch || isKodeIndukMatch;
 
-              // Primary group item (MBG item) consolidates all sales matching its kodeInduk group
+              // Primary group item consolidates all sales matching its kodeInduk group
               final isOwnMatch = isExactMatch || (isPrimaryGroupItem && isKodeIndukMatch);
 
               final qty = (itemMap['qty'] ?? 0.0).toDouble();
