@@ -46,12 +46,20 @@ class AuthProvider extends ChangeNotifier {
     if (uid == null) return;
 
     // Send immediate presence update
-    _authService.updateUserPresence(uid, true);
+    try {
+      _authService.updateUserPresence(uid, true);
+    } catch (e) {
+      debugPrint("Presence update error: $e");
+    }
 
     // Heartbeat every 25 seconds
-    _presenceTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+    _presenceTimer = Timer.periodic(const Duration(seconds: 25), (_) async {
       if (_currentUser != null) {
-        _authService.updateUserPresence(_currentUser!.uid, true);
+        try {
+          await _authService.updateUserPresence(_currentUser!.uid, true);
+        } catch (e) {
+          debugPrint("Presence heartbeat error: $e");
+        }
       }
     });
   }

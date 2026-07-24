@@ -1,3 +1,5 @@
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -16,15 +18,21 @@ import 'views/shell_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Suppress unhandled Web async Future exceptions from rendering red banner overlay
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint("Caught unhandled async error: $error");
+    return true;
+  };
   
   // Initialize Firebase with generated platform options
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    } catch (e) {
-      debugPrint("Firebase initialization warning: $e");
-    }
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint("Firebase initialization warning: $e");
+  }
 
     runApp(
       MultiProvider(
