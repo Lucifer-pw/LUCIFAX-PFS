@@ -496,6 +496,75 @@ class FirebaseService {
     });
   }
 
+  Future<List<DocumentSnapshot<Map<String, dynamic>>>> _resolveProductSnapshots(
+    Transaction transaction,
+    String productId,
+    String productName,
+  ) async {
+    final List<DocumentSnapshot<Map<String, dynamic>>> resolvedSnaps = [];
+    final Set<String> processedDocIds = {};
+
+    final cleanId = productId.trim();
+    final cleanName = productName.trim();
+
+    // 1. Direct lookup by ID
+    if (cleanId.isNotEmpty) {
+      final directRef = _db.collection('products').doc(cleanId);
+      final directSnap = await transaction.get(directRef);
+      if (directSnap.exists) {
+        resolvedSnaps.add(directSnap);
+        processedDocIds.add(directSnap.id);
+      }
+    }
+
+    // 2. Fallback scan if direct lookup failed
+    if (resolvedSnaps.isEmpty) {
+      final allProdsQuery = await _db.collection('products').get();
+      final pIdLower = cleanId.toLowerCase();
+      final pNameLower = cleanName.toLowerCase();
+
+      for (var d in allProdsQuery.docs) {
+        final dIdLower = d.id.trim().toLowerCase();
+        final dNameLower = (d.data()['name'] ?? '').toString().trim().toLowerCase();
+        final dKodeIndukLower = (d.data()['kodeInduk'] ?? '').toString().trim().toLowerCase();
+
+        if ((pIdLower.isNotEmpty && (dIdLower == pIdLower || dKodeIndukLower == pIdLower)) ||
+            (pNameLower.isNotEmpty && dNameLower == pNameLower)) {
+          final tSnap = await transaction.get(d.reference);
+          if (tSnap.exists && !processedDocIds.contains(tSnap.id)) {
+            resolvedSnaps.add(tSnap);
+            processedDocIds.add(tSnap.id);
+          }
+        }
+      }
+    }
+
+    // 3. Sibling products matching kodeInduk
+    final List<DocumentSnapshot<Map<String, dynamic>>> siblingSnaps = [];
+    for (var mainSnap in resolvedSnaps) {
+      final kInduk = (mainSnap.data()?['kodeInduk'] ?? '').toString().trim();
+      final targetKodeInduk = kInduk.isNotEmpty ? kInduk : mainSnap.id;
+
+      final siblingQuery = await _db
+          .collection('products')
+          .where('kodeInduk', isEqualTo: targetKodeInduk)
+          .get();
+
+      for (var sDoc in siblingQuery.docs) {
+        if (!processedDocIds.contains(sDoc.id)) {
+          final sSnap = await transaction.get(sDoc.reference);
+          if (sSnap.exists) {
+            siblingSnaps.add(sSnap);
+            processedDocIds.add(sSnap.id);
+          }
+        }
+      }
+    }
+
+    resolvedSnaps.addAll(siblingSnaps);
+    return resolvedSnaps;
+  }
+
   // Update delivery status (DIKIRIM / PENDING) and deliveryDate with automatic stock deduction/restoration
   Future<void> updateTransactionDeliveryStatus(
     dynamic invoiceNo,
@@ -517,27 +586,12 @@ class FirebaseService {
       bool stockShouldIncrease = (oldStatus == 'DIKIRIM' && newStatus != 'DIKIRIM');
 
       // Read product snapshots for all items and their variants
-      final Map<String, DocumentSnapshot<Map<String, dynamic>>> productSnaps = {};
       final Map<String, List<DocumentSnapshot<Map<String, dynamic>>>> variantSnaps = {};
 
       if (stockShouldDecrease || stockShouldIncrease) {
         for (var item in oldTr.items) {
-          final prodRef = _db.collection('products').doc(item.productId);
-          final snap = await transaction.get(prodRef);
-          productSnaps[item.productId] = snap;
-
-          if (snap.exists) {
-            final parentKodeInduk = snap.data()?['kodeInduk'] ?? item.productId;
-            final query = await _db
-                .collection('products')
-                .where('kodeInduk', isEqualTo: parentKodeInduk)
-                .get();
-            final List<DocumentSnapshot<Map<String, dynamic>>> list = [];
-            for (var doc in query.docs) {
-              list.add(await transaction.get(doc.reference));
-            }
-            variantSnaps[item.productId] = list;
-          }
+          final snaps = await _resolveProductSnapshots(transaction, item.productId, item.productName);
+          variantSnaps[item.productId] = snaps;
         }
       }
 
@@ -554,23 +608,12 @@ class FirebaseService {
         for (var entry in totalQtyPerProduct.entries) {
           final productId = entry.key;
           final totalQty = entry.value;
-          final vars = variantSnaps[productId];
-          if (vars != null && vars.isNotEmpty) {
-            for (var vSnap in vars) {
-              if (vSnap.exists) {
-                final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                if (currentStock < totalQty) {
-                  final pName = vSnap.data()?['name'] ?? productId;
-                  insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
-                }
-              }
-            }
-          } else {
-            final prodSnap = productSnaps[productId];
-            if (prodSnap != null && prodSnap.exists) {
-              final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
+          final vars = variantSnaps[productId] ?? [];
+          for (var vSnap in vars) {
+            if (vSnap.exists) {
+              final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
               if (currentStock < totalQty) {
-                final pName = prodSnap.data()?['name'] ?? productId;
+                final pName = vSnap.data()?['name'] ?? productId;
                 insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
               }
             }
@@ -584,19 +627,11 @@ class FirebaseService {
         for (var entry in totalQtyPerProduct.entries) {
           final productId = entry.key;
           final totalQty = entry.value;
-          final vars = variantSnaps[productId];
-          if (vars != null) {
-            for (var vSnap in vars) {
-              if (vSnap.exists) {
-                final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock - totalQty});
-              }
-            }
-          } else {
-            final prodSnap = productSnaps[productId];
-            if (prodSnap != null && prodSnap.exists) {
-              final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock - totalQty});
+          final vars = variantSnaps[productId] ?? [];
+          for (var vSnap in vars) {
+            if (vSnap.exists) {
+              final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
+              transaction.update(vSnap.reference, {'stock': currentStock - totalQty});
             }
           }
         }
@@ -604,19 +639,11 @@ class FirebaseService {
         for (var entry in totalQtyPerProduct.entries) {
           final productId = entry.key;
           final totalQty = entry.value;
-          final vars = variantSnaps[productId];
-          if (vars != null) {
-            for (var vSnap in vars) {
-              if (vSnap.exists) {
-                final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock + totalQty});
-              }
-            }
-          } else {
-            final prodSnap = productSnaps[productId];
-            if (prodSnap != null && prodSnap.exists) {
-              final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock + totalQty});
+          final vars = variantSnaps[productId] ?? [];
+          for (var vSnap in vars) {
+            if (vSnap.exists) {
+              final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
+              transaction.update(vSnap.reference, {'stock': currentStock + totalQty});
             }
           }
         }
