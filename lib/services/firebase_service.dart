@@ -591,6 +591,37 @@ class FirebaseService {
       }
     }
 
+    // 2. Aggregate qty per productId
+    final Map<String, double> totalQtyPerProduct = {};
+    for (var item in initTr.items) {
+      totalQtyPerProduct[item.productId] = (totalQtyPerProduct[item.productId] ?? 0.0) + item.qty;
+    }
+
+    // PRE-CHECK PHYSICAL STOCK SUFFICIENCY BEFORE TRANSACTION (Ensures pure Dart Exception, clean UI modal)
+    if (stockShouldDecrease) {
+      final List<String> insufficientStockProducts = [];
+
+      for (var entry in totalQtyPerProduct.entries) {
+        final productId = entry.key;
+        final totalQty = entry.value;
+        final refs = productRefsMap[productId] ?? [];
+        for (var ref in refs) {
+          final pSnap = await ref.get();
+          if (pSnap.exists) {
+            final currentStock = (pSnap.data()?['stock'] ?? 0.0).toDouble();
+            if (currentStock < totalQty) {
+              final pName = pSnap.data()?['name'] ?? productId;
+              insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
+            }
+          }
+        }
+      }
+
+      if (insufficientStockProducts.isNotEmpty) {
+        throw Exception("STOK_TIDAK_CUKUP:\n${insufficientStockProducts.join('\n')}");
+      }
+    }
+
     await _db.runTransaction((transaction) async {
       final snap = await transaction.get(docRef);
       if (!snap.exists) {
@@ -611,34 +642,7 @@ class FirebaseService {
         }
       }
 
-      // Aggregate qty per productId
-      final Map<String, double> totalQtyPerProduct = {};
-      for (var item in initTr.items) {
-        totalQtyPerProduct[item.productId] = (totalQtyPerProduct[item.productId] ?? 0.0) + item.qty;
-      }
-
       if (stockShouldDecrease) {
-        final List<String> insufficientStockProducts = [];
-
-        for (var entry in totalQtyPerProduct.entries) {
-          final productId = entry.key;
-          final totalQty = entry.value;
-          final vars = variantSnaps[productId] ?? [];
-          for (var vSnap in vars) {
-            if (vSnap.exists) {
-              final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-              if (currentStock < totalQty) {
-                final pName = vSnap.data()?['name'] ?? productId;
-                insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
-              }
-            }
-          }
-        }
-
-        if (insufficientStockProducts.isNotEmpty) {
-          throw Exception("STOK_TIDAK_CUKUP:\n${insufficientStockProducts.join('\n')}");
-        }
-
         for (var entry in totalQtyPerProduct.entries) {
           final productId = entry.key;
           final totalQty = entry.value;

@@ -1183,7 +1183,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        final errStr = e.toString();
+                        String errStr = e.toString();
+                        try {
+                          final dyn = e as dynamic;
+                          if (dyn.error != null) {
+                            errStr += " ${dyn.error}";
+                          }
+                          if (dyn.message != null) {
+                            errStr += " ${dyn.message}";
+                          }
+                        } catch (_) {}
+
                         if (errStr.contains("STOK_TIDAK_CUKUP")) {
                           _showInsufficientStockWarningDialog(context, errStr);
                         } else {
