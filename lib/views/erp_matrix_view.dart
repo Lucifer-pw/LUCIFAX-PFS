@@ -153,10 +153,15 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-              final isOwnMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
-                                 (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
+              final cleanItemName = itemPName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+              final cleanOwnName = ownName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
 
-              final isGroupMatch = (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
+              final isOwnMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
+                                 (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId)) ||
+                                 (cleanItemName.isNotEmpty && cleanItemName == cleanOwnName);
+
+              final isGroupMatch = isOwnMatch ||
+                                   (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
                                    (itemPName.isNotEmpty && groupNames.contains(itemPName));
 
               final qty = (itemMap['qty'] ?? 0.0).toDouble();
