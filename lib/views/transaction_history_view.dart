@@ -14,6 +14,7 @@ import '../providers/product_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/print_service.dart';
 import '../services/import_service.dart';
+import 'transaction_entry_view.dart';
 
 class TransactionHistoryView extends StatefulWidget {
   const TransactionHistoryView({super.key});
@@ -298,6 +299,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     Product? selectedProduct;
     final qtyController = TextEditingController(text: '1');
     final discountController = TextEditingController(text: '0');
+    final priceController = TextEditingController();
+    bool isBonus = false;
 
     showDialog(
       context: context,
@@ -323,32 +326,35 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               }
 
               final discount = double.tryParse(discountController.text) ?? 0.0;
+              final customPrice = double.tryParse(priceController.text);
+              final finalPrice = isBonus ? 0.0 : (customPrice ?? selectedProduct!.price);
 
-              final existingIndex = editedItems.indexWhere((item) => item.productId == selectedProduct!.id);
+              final existingIndex = editedItems.indexWhere((item) => item.productId == selectedProduct!.id && item.isBonus == isBonus);
               if (existingIndex != -1) {
                 final currentQty = editedItems[existingIndex].qty;
                 final newQty = currentQty + qty;
-                final subtotal = newQty * selectedProduct!.price * (1 - discount / 100);
+                final subtotal = isBonus ? 0.0 : newQty * finalPrice * (1 - discount / 100);
 
                 setDialogState(() {
                   editedItems[existingIndex] = model_tr.TransactionItem(
                     productId: selectedProduct!.id,
                     productName: selectedProduct!.name,
-                    price: selectedProduct!.price,
+                    price: finalPrice,
                     qty: newQty,
-                    discountPercent: discount,
+                    discountPercent: isBonus ? 0 : discount,
                     subtotal: subtotal,
                     sizeGrams: selectedProduct!.sizeGrams,
+                    isBonus: isBonus,
                   );
                 });
               } else {
-                if (editedItems.length >= 10) {
+                if (editedItems.length >= 14) {
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
                       backgroundColor: const Color(0xFF1E293B),
                       title: const Text('Batas Item Terpenuhi', style: TextStyle(color: Colors.white)),
-                      content: const Text('Batas Maksimal 10 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!', style: TextStyle(color: Color(0xFF94A3B8))),
+                      content: const Text('Batas Maksimal 14 item produk berbeda per lembar invoice ( Continuous Form ) tercapai!', style: TextStyle(color: Color(0xFF94A3B8))),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
@@ -360,17 +366,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   return;
                 }
 
-                final subtotal = qty * selectedProduct!.price * (1 - discount / 100);
+                final subtotal = isBonus ? 0.0 : qty * finalPrice * (1 - discount / 100);
                 setDialogState(() {
                   editedItems.add(
                     model_tr.TransactionItem(
                       productId: selectedProduct!.id,
                       productName: selectedProduct!.name,
-                      price: selectedProduct!.price,
+                      price: finalPrice,
                       qty: qty,
-                      discountPercent: discount,
+                      discountPercent: isBonus ? 0 : discount,
                       subtotal: subtotal,
                       sizeGrams: selectedProduct!.sizeGrams,
+                      isBonus: isBonus,
                     ),
                   );
                 });
@@ -381,6 +388,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 selectedProduct = null;
                 qtyController.text = '1';
                 discountController.text = '0';
+                priceController.clear();
+                isBonus = false;
               });
             }
 
@@ -388,7 +397,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               backgroundColor: const Color(0xFF1E293B),
               title: Text('Edit Transaksi #${tr.invoiceNo}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               content: SizedBox(
-                width: 950,
+                width: 980,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -401,23 +410,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           children: [
                             const Text('Data Transaksi:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                             const SizedBox(height: 10),
-                            DropdownButtonFormField<Customer>(
-                              value: selectedCustomer,
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                              decoration: _buildInputDecoration(hint: 'Pilih Pelanggan'),
-                              items: customers.map((c) {
-                                return DropdownMenuItem<Customer>(
-                                  value: c,
-                                  child: Text(c.displayName, style: const TextStyle(fontSize: 12)),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
+                            SearchableCustomerField(
+                              selectedCustomer: selectedCustomer,
+                              customers: customers,
+                              onSelected: (c) {
                                 setDialogState(() {
-                                  selectedCustomer = val;
+                                  selectedCustomer = c;
                                 });
                               },
                             ),
+                            if (selectedCustomer != null) ...[
+                              const SizedBox(height: 8),
+                              _buildDetailRow('ID Customer', selectedCustomer!.id),
+                              _buildDetailRow('Alamat', selectedCustomer!.address),
+                              _buildDetailRow('Kota/Provinsi', '${selectedCustomer!.city}, ${selectedCustomer!.province}'),
+                            ],
                             const SizedBox(height: 12),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
@@ -451,30 +458,47 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             const SizedBox(height: 16),
                             const Divider(color: Color(0xFF334155)),
                             const SizedBox(height: 10),
-                            const Text('Tambah Produk:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            const Text('Pilih & Tambah Produk:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                             const SizedBox(height: 10),
-                            DropdownButtonFormField<Product>(
-                              value: selectedProduct,
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                              decoration: _buildInputDecoration(hint: 'Pilih Produk'),
-                              items: products.map((p) {
-                                return DropdownMenuItem<Product>(
-                                  value: p,
-                                  child: Text(p.name, style: const TextStyle(fontSize: 12)),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
+                            SearchableProductField(
+                              selectedProduct: selectedProduct,
+                              products: products,
+                              onSelected: (p) {
                                 setDialogState(() {
-                                  selectedProduct = val;
+                                  selectedProduct = p;
+                                  if (p != null) {
+                                    priceController.text = p.price.toStringAsFixed(0);
+                                  } else {
+                                    priceController.clear();
+                                  }
                                 });
                               },
                             ),
                             if (selectedProduct != null) ...[
                               const SizedBox(height: 8),
-                              Text(
-                                'Harga: ${_rupiahFormatter.format(selectedProduct!.price)} | Stok: ${selectedProduct!.stock.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Harga Master: ${_rupiahFormatter.format(selectedProduct!.price)}',
+                                    style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
+                                  Text(
+                                    'Stok: ${selectedProduct!.stock.toStringAsFixed(0)} pcs',
+                                    style: TextStyle(
+                                      color: selectedProduct!.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: priceController,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
                               ),
                             ],
                             const SizedBox(height: 12),
@@ -485,7 +509,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     controller: qtyController,
                                     keyboardType: TextInputType.number,
                                     style: const TextStyle(color: Colors.white, fontSize: 12),
-                                    decoration: _buildInputDecoration(hint: 'Qty (Pcs)'),
+                                    decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -494,19 +518,62 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     controller: discountController,
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     style: const TextStyle(color: Colors.white, fontSize: 12),
-                                    decoration: _buildInputDecoration(hint: 'Disc %'),
+                                    decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
+                            GestureDetector(
+                              onTap: () {
+                                setDialogState(() {
+                                  isBonus = !isBonus;
+                                  if (isBonus) {
+                                    priceController.text = '0';
+                                    discountController.text = '0';
+                                  } else if (selectedProduct != null) {
+                                    priceController.text = selectedProduct!.price.toStringAsFixed(0);
+                                    discountController.text = '0';
+                                  }
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isBonus ? Colors.green.withOpacity(0.15) : const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isBonus ? Colors.greenAccent : const Color(0xFF334155),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isBonus ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                                      color: isBonus ? Colors.greenAccent : const Color(0xFF64748B),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'BONUS (Gratis / Harga Rp 0)',
+                                      style: TextStyle(
+                                        color: isBonus ? Colors.greenAccent : const Color(0xFF94A3B8),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
                             ElevatedButton.icon(
                               onPressed: addItem,
                               icon: const Icon(Icons.add_rounded, size: 16),
-                              label: const Text('Tambah Produk', style: TextStyle(fontSize: 12)),
+                              label: Text(isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice', style: const TextStyle(fontSize: 12)),
                               style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(40),
-                                backgroundColor: const Color(0xFF0284C7),
+                                minimumSize: const Size.fromHeight(42),
+                                backgroundColor: isBonus ? Colors.green[700] : const Color(0xFF0284C7),
                               ),
                             ),
                           ],
@@ -525,9 +592,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             children: [
                               const Text('Daftar Item:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                               Text(
-                                '${editedItems.length} / 10 Item',
+                                '${editedItems.length} / 14 Item',
                                 style: TextStyle(
-                                  color: editedItems.length >= 10 ? Colors.redAccent : const Color(0xFF38BDF8),
+                                  color: editedItems.length >= 14 ? Colors.redAccent : const Color(0xFF38BDF8),
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -575,7 +642,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                       icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
                                                       onPressed: () {
                                                         setDialogState(() {
-                                                          editedItems.removeWhere((i) => i.productId == item.productId);
+                                                          editedItems.removeWhere((i) => i.productId == item.productId && i.isBonus == item.isBonus);
                                                         });
                                                       },
                                                     ),
