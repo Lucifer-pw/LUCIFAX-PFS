@@ -1091,45 +1091,60 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: const Color(0xFF334155)),
                     ),
-                    child: isMobile
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (tr.note.isNotEmpty) ...[
+                          const Row(
                             children: [
+                              Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
+                              SizedBox(width: 6),
                               Text(
-                                'Catatan: ${tr.note.isNotEmpty ? tr.note : "-"}',
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('GRAND TOTAL:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                                  Text(
-                                    _rupiahFormatter.format(tr.grandTotal),
-                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Catatan: ${tr.note.isNotEmpty ? tr.note : "-"}',
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                              ),
-                              Row(
-                                children: [
-                                  const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  Text(
-                                    _rupiahFormatter.format(tr.grandTotal),
-                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
-                                  ),
-                                ],
+                                'Catatan / Keterangan:',
+                                style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B).withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF334155).withOpacity(0.5)),
+                            ),
+                            child: SelectableText(
+                              tr.note,
+                              style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (tr.note.isEmpty)
+                              const Text(
+                                'Catatan: -',
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic),
+                              )
+                            else
+                              const Spacer(),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text(
+                                  _rupiahFormatter.format(tr.grandTotal),
+                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
