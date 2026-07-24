@@ -214,22 +214,47 @@ class FirebaseService {
   }
 
   Future<String> peekNextInvoiceNo({String type = 'PO'}) async {
-    if (type == 'SA') {
-      final counterRef = _db.collection('counters').doc('sample_transactions');
-      final snap = await counterRef.get();
-      int current = 54;
-      if (snap.exists) {
-        current = snap.data()?['lastSaNo'] ?? 54;
+    try {
+      if (type == 'SA') {
+        final counterRef = _db.collection('counters').doc('sample_transactions');
+        final snap = await counterRef.get();
+        int current = 54;
+        if (snap.exists) {
+          current = snap.data()?['lastSaNo'] ?? 54;
+        }
+        return 'SA${current + 1}';
+      } else {
+        final counterRef = _db.collection('counters').doc('transactions');
+        final snap = await counterRef.get();
+        int current = 180;
+        if (snap.exists) {
+          current = snap.data()?['lastInvoiceNo'] ?? current;
+        }
+        return '${current + 1}';
       }
-      return 'SA${current + 1}';
-    } else {
-      final counterRef = _db.collection('counters').doc('transactions');
-      final snap = await counterRef.get();
-      int current = 180;
-      if (snap.exists) {
-        current = snap.data()?['lastInvoiceNo'] ?? current;
+    } catch (e) {
+      debugPrint("peekNextInvoiceNo fallback due to: $e");
+      try {
+        final snap = await _db.collection('transactions').get();
+        int maxNo = (type == 'SA' ? 54 : 180);
+        for (var doc in snap.docs) {
+          final id = doc.id;
+          if (type == 'SA') {
+            if (id.startsWith('SA')) {
+              final numPart = int.tryParse(id.replaceAll('SA', '')) ?? 0;
+              if (numPart > maxNo) maxNo = numPart;
+            }
+          } else {
+            final numPart = int.tryParse(id) ?? 0;
+            if (numPart > maxNo) maxNo = numPart;
+          }
+        }
+        final next = maxNo + 1;
+        return type == 'SA' ? 'SA$next' : '$next';
+      } catch (_) {
+        final nowTs = DateTime.now().millisecondsSinceEpoch % 10000;
+        return type == 'SA' ? 'SA$nowTs' : '$nowTs';
       }
-      return '${current + 1}';
     }
   }
 
@@ -260,32 +285,42 @@ class FirebaseService {
         }
         docId = clean;
       } else {
-        final saCounterRef = _db.collection('counters').doc('sample_transactions');
-        int nextSa = await _db.runTransaction<int>((transaction) async {
-          final snap = await transaction.get(saCounterRef);
-          int current = 54;
-          if (snap.exists) {
-            current = snap.data()?['lastSaNo'] ?? 54;
-          }
-          final next = current + 1;
-          transaction.set(saCounterRef, {'lastSaNo': next});
-          return next;
-        });
-        docId = 'SA$nextSa';
+        try {
+          final saCounterRef = _db.collection('counters').doc('sample_transactions');
+          int nextSa = await _db.runTransaction<int>((transaction) async {
+            final snap = await transaction.get(saCounterRef);
+            int current = 54;
+            if (snap.exists) {
+              current = snap.data()?['lastSaNo'] ?? 54;
+            }
+            final next = current + 1;
+            transaction.set(saCounterRef, {'lastSaNo': next});
+            return next;
+          });
+          docId = 'SA$nextSa';
+        } catch (e) {
+          debugPrint("SA counter transaction error: $e, using fallback");
+          docId = await peekNextInvoiceNo(type: 'SA');
+        }
       }
     } else {
-      final counterRef = _db.collection('counters').doc('transactions');
-      int nextNo = await _db.runTransaction<int>((transaction) async {
-        final counterSnapshot = await transaction.get(counterRef);
-        int currentNo = 180;
-        if (counterSnapshot.exists) {
-          currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
-        }
-        final next = currentNo + 1;
-        transaction.set(counterRef, {'lastInvoiceNo': next});
-        return next;
-      });
-      docId = nextNo.toString();
+      try {
+        final counterRef = _db.collection('counters').doc('transactions');
+        int nextNo = await _db.runTransaction<int>((transaction) async {
+          final counterSnapshot = await transaction.get(counterRef);
+          int currentNo = 180;
+          if (counterSnapshot.exists) {
+            currentNo = counterSnapshot.data()?['lastInvoiceNo'] ?? currentNo;
+          }
+          final next = currentNo + 1;
+          transaction.set(counterRef, {'lastInvoiceNo': next});
+          return next;
+        });
+        docId = nextNo.toString();
+      } catch (e) {
+        debugPrint("PO counter transaction error: $e, using fallback");
+        docId = await peekNextInvoiceNo(type: 'PO');
+      }
     }
 
     final trDoc = model_tr.Transaction(
