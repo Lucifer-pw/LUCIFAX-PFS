@@ -12,6 +12,25 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
+  <!-- Intercept & Suppress JS Unhandled Rejection Red Overlay Banner -->
+  <script>
+    window.addEventListener('unhandledrejection', function(event) {
+      console.warn('Intercepted unhandled JS rejection:', event.reason);
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+      return true;
+    }, true);
+
+    window.addEventListener('error', function(event) {
+      console.warn('Intercepted unhandled JS error:', event.error);
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+      return true;
+    }, true);
+  </script>
+
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">

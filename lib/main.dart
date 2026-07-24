@@ -21,16 +21,10 @@ final globalErrorNotifier = ValueNotifier<String?>(null);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Suppress unhandled Web async Future exceptions and capture error details
+  // Suppress unhandled Web async Future exceptions
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint("Caught unhandled async error: $error\n$stack");
-    globalErrorNotifier.value = "Async Exception: $error\n\nStack:\n$stack";
+    debugPrint("Caught unhandled async error: $error");
     return true;
-  };
-
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    globalErrorNotifier.value = "Framework Exception: ${details.exception}\n\nStack:\n${details.stack}";
   };
   
   // Initialize Firebase with generated platform options
