@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/customer_provider.dart';
 import '../models/customer.dart';
-import '../models/transaction.dart' as model_tr;
+import '../services/firebase_service.dart';
 
 class RankingKacabView extends StatefulWidget {
   const RankingKacabView({super.key});
@@ -64,38 +64,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       
       final allTransactions = trProvider.transactions;
       final customers = custProvider.customers;
+      final FirebaseService dbService = FirebaseService();
 
-      // 1. Source Filter: ERP_ONLY or ALL_TRANSACTIONS
-      List<model_tr.Transaction> candidateTxs = [];
-      if (_erpSourceFilter == 'ERP_ONLY') {
-        candidateTxs = allTransactions.where((tr) => tr.erpSyncDate != null).toList();
-        if (candidateTxs.isEmpty && allTransactions.isNotEmpty) {
-          candidateTxs = List.from(allTransactions);
-          _isFallbackToAll = true;
-        } else {
-          _isFallbackToAll = false;
-        }
-      } else {
-        candidateTxs = List.from(allTransactions);
-        _isFallbackToAll = false;
-      }
-
-      if (candidateTxs.isEmpty) {
-        setState(() {
-          _rankingData = [];
-          _grandTotalM1 = 0;
-          _grandTotalM2 = 0;
-          _grandTotalM3 = 0;
-          _grandTotalAll = 0;
-          _grandAverageAll = 0;
-          _totalStoreCount = 0;
-          _top1StoreName = '-';
-          _top1Average = 0;
-        });
-        return;
-      }
-
-      // 2. Build 3-Month Window dates based on selected _startMonth & _startYear
+      // 1. Build 3-Month Window dates based on selected _startMonth & _startYear
       DateTime m1Date = DateTime(_startYear, _startMonth, 1);
       DateTime m2Date = DateTime(_startYear, _startMonth + 1, 1);
       DateTime m3Date = DateTime(_startYear, _startMonth + 2, 1);
@@ -108,41 +79,105 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final m2Key = DateFormat('MM-yyyy').format(m2Date);
       final m3Key = DateFormat('MM-yyyy').format(m3Date);
 
+      // 2. Fetch ERP Summaries for each month (same data source as Stok ERP & Opname Cabang)
+      final m1Records = await dbService.getErpSummaries(m1Key, cachedTransactions: allTransactions);
+      final m2Records = await dbService.getErpSummaries(m2Key, cachedTransactions: allTransactions);
+      final m3Records = await dbService.getErpSummaries(m3Key, cachedTransactions: allTransactions);
+
       final Map<String, Map<String, dynamic>> storeMap = {};
+      bool usedErpSummaries = false;
 
-      for (var tr in candidateTxs) {
-        final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
-        final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
+      if (_erpSourceFilter == 'ERP_ONLY' && (m1Records.isNotEmpty || m2Records.isNotEmpty || m3Records.isNotEmpty)) {
+        usedErpSummaries = true;
+        _isFallbackToAll = false;
 
-        // Filter transactions falling inside the selected 3-month window
-        if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
-          continue;
+        void processErpMonthRecords(List<Map<String, dynamic>> records, String mKey) {
+          for (var rec in records) {
+            final customerId = (rec['customerId'] ?? '').toString();
+            Customer? cust;
+            try {
+              cust = customers.firstWhere((c) => c.id == customerId);
+            } catch (_) {}
+
+            String aliasName = (cust != null && cust.aliasName.isNotEmpty)
+                ? cust.aliasName
+                : (rec['aliasName'] ?? rec['customerName'] ?? 'TOKO TANPA NAMA').toString();
+            if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
+
+            String city = (cust != null && cust.city.isNotEmpty)
+                ? cust.city
+                : (rec['city'] ?? '-').toString();
+
+            double income = (rec['totalIncome'] ?? 0.0).toDouble();
+
+            storeMap.putIfAbsent(aliasName, () => {
+              'alias': aliasName,
+              'city': city,
+              'm1': 0.0,
+              'm2': 0.0,
+              'm3': 0.0,
+            });
+
+            if (mKey == m1Key) {
+              storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + income;
+            } else if (mKey == m2Key) {
+              storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + income;
+            } else if (mKey == m3Key) {
+              storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + income;
+            }
+          }
         }
 
-        // Resolve Customer Alias
-        Customer? cust;
-        try {
-          cust = customers.firstWhere((c) => c.id == tr.customerId);
-        } catch (_) {}
+        processErpMonthRecords(m1Records, m1Key);
+        processErpMonthRecords(m2Records, m2Key);
+        processErpMonthRecords(m3Records, m3Key);
+      }
 
-        String aliasName = (cust != null && cust.aliasName.isNotEmpty)
-            ? cust.aliasName
-            : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
-        if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
+      if (!usedErpSummaries) {
+        if (_erpSourceFilter == 'ERP_ONLY') {
+          _isFallbackToAll = true;
+        } else {
+          _isFallbackToAll = false;
+        }
 
-        String city = (cust != null && cust.city.isNotEmpty)
-            ? cust.city
-            : (tr.city.isNotEmpty ? tr.city : '-');
+        for (var tr in allTransactions) {
+          final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
+          final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
 
-        storeMap.putIfAbsent(aliasName, () => {
-          'alias': aliasName,
-          'city': city,
-          m1Key: 0.0,
-          m2Key: 0.0,
-          m3Key: 0.0,
-        });
+          if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
+            continue;
+          }
 
-        storeMap[aliasName]![trMonthKey] = (storeMap[aliasName]![trMonthKey] as double) + tr.grandTotal;
+          Customer? cust;
+          try {
+            cust = customers.firstWhere((c) => c.id == tr.customerId);
+          } catch (_) {}
+
+          String aliasName = (cust != null && cust.aliasName.isNotEmpty)
+              ? cust.aliasName
+              : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
+          if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
+
+          String city = (cust != null && cust.city.isNotEmpty)
+              ? cust.city
+              : (tr.city.isNotEmpty ? tr.city : '-');
+
+          storeMap.putIfAbsent(aliasName, () => {
+            'alias': aliasName,
+            'city': city,
+            'm1': 0.0,
+            'm2': 0.0,
+            'm3': 0.0,
+          });
+
+          if (trMonthKey == m1Key) {
+            storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + tr.grandTotal;
+          } else if (trMonthKey == m2Key) {
+            storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + tr.grandTotal;
+          } else if (trMonthKey == m3Key) {
+            storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + tr.grandTotal;
+          }
+        }
       }
 
       final List<Map<String, dynamic>> allOutlets = [];
@@ -152,9 +187,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       double sumTotal = 0.0;
 
       storeMap.forEach((alias, data) {
-        final m1 = (data[m1Key] ?? 0.0) as double;
-        final m2 = (data[m2Key] ?? 0.0) as double;
-        final m3 = (data[m3Key] ?? 0.0) as double;
+        final m1 = (data['m1'] ?? 0.0) as double;
+        final m2 = (data['m2'] ?? 0.0) as double;
+        final m3 = (data['m3'] ?? 0.0) as double;
         final total = m1 + m2 + m3;
         final average = total / 3.0;
 
