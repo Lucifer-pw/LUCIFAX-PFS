@@ -233,6 +233,31 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     };
   }
 
+  Map<int, double> _getGroupWeeklyMap(dynamic prod, Map weeklyMap, List<dynamic> allProducts) {
+    final String ownId = prod.id.toString().trim().toLowerCase();
+    final String currentKodeInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
+        ? prod.kodeInduk.toString().trim().toLowerCase()
+        : ownId;
+
+    final siblingProducts = allProducts.where((p) {
+      final k = (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty)
+          ? p.kodeInduk.toString().trim().toLowerCase()
+          : p.id.toString().trim().toLowerCase();
+      return k == currentKodeInduk;
+    }).toList();
+
+    final Map<int, double> groupWMap = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+    for (var p in siblingProducts) {
+      final pWMap = weeklyMap[p.id];
+      if (pWMap != null) {
+        for (int w = 1; w <= 5; w++) {
+          groupWMap[w] = (groupWMap[w] ?? 0.0) + (pWMap[w] ?? 0.0);
+        }
+      }
+    }
+    return groupWMap;
+  }
+
   Future<void> _printPdfErp() async {
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final stockProvider = Provider.of<StockProvider>(context, listen: false);
@@ -269,7 +294,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 ],
                 data: List.generate(products.length, (idx) {
                   final prod = products[idx];
-                  final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+                  final wMap = _getGroupWeeklyMap(prod, weeklyMap, products);
                   final stats = _calculateProductStats(prod, wMap, products);
 
                   final fmt = _showPcs ? 0 : 2;
@@ -411,7 +436,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         }
       }
 
-      final wMap = prevWeeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+      final wMap = _getGroupWeeklyMap(prod, prevWeeklyMap, products);
       final m1 = wMap[1] ?? 0.0;
       final m2 = wMap[2] ?? 0.0;
       final m3 = wMap[3] ?? 0.0;
@@ -1110,7 +1135,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     ],
                     rows: List.generate(filteredProducts.length, (idx) {
                       final prod = filteredProducts[idx];
-                      final wMap = weeklyMap[prod.id] ?? {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+                      final wMap = _getGroupWeeklyMap(prod, weeklyMap, products);
                       final stats = _calculateProductStats(prod, wMap, products);
 
                       final fmt = _showPcs ? 0 : 2;
