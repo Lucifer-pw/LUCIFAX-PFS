@@ -2870,16 +2870,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
-  InputDecoration _buildInputDecoration({required String hint}) {
+  InputDecoration _buildInputDecoration({required String hint, IconData? icon}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
       filled: true,
       fillColor: const Color(0xFF0F172A),
+      prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF38BDF8), size: 18) : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
         borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10.0),
+        borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
       ),
     );
   }
