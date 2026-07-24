@@ -230,6 +230,14 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   Future<void> updateErpStatus(dynamic invoiceNo, DateTime? erpSyncDate) async {
+    final trIndex = _transactions.indexWhere((t) => t.invoiceNo.toString() == invoiceNo.toString());
+    if (trIndex != -1) {
+      final tr = _transactions[trIndex];
+      final status = (tr.status ?? '').toUpperCase();
+      if (status != 'DIKIRIM') {
+        throw Exception("Transaksi #${tr.invoiceNo} belum berstatus DIKIRIM (Masih $status). Lakukan pengiriman fisik terlebih dahulu!");
+      }
+    }
     await _dbService.updateTransactionErpStatus(invoiceNo, erpSyncDate);
     notifyListeners();
   }

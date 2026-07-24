@@ -1242,6 +1242,56 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Update ERP sync date dialog
   void _showUpdateErpStatusDialog(model_tr.Transaction tr) {
+    final String deliveryStatus = (tr.status ?? '').toUpperCase();
+    final bool isSent = (deliveryStatus == 'DIKIRIM');
+
+    if (!isSent) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 28),
+              SizedBox(width: 10),
+              Text('Tidak Bisa Update ERP', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Transaksi #${tr.invoiceNo} belum berstatus DIKIRIM (Status saat ini: $deliveryStatus).',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amberAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                ),
+                child: const Text(
+                  'Aturan Sistem: Barang harus berstatus DIKIRIM (fisik barang sudah keluar gudang) terlebih dahulu sebelum dapat di-input / di-update ke Laporan ERP.',
+                  style: TextStyle(color: Colors.amberAccent, fontSize: 12, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Mengerti', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     bool hasSync = tr.erpSyncDate != null;
     DateTime? currentSyncDate = tr.erpSyncDate ?? DateTime.now();
 
@@ -2066,26 +2116,30 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   ),
                                                   DataCell(
                                                     Center(
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                        decoration: BoxDecoration(
-                                                          color: tr.erpSyncDate != null
-                                                              ? Colors.amberAccent.withOpacity(0.15)
-                                                              : Colors.white10,
-                                                          borderRadius: BorderRadius.circular(12),
-                                                          border: Border.all(
-                                                            color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white24,
-                                                            width: 0.5,
+                                                      child: InkWell(
+                                                        onTap: () => _showUpdateErpStatusDialog(tr),
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                          decoration: BoxDecoration(
+                                                            color: tr.erpSyncDate != null
+                                                                ? Colors.amberAccent.withOpacity(0.15)
+                                                                : Colors.white10,
+                                                            borderRadius: BorderRadius.circular(12),
+                                                            border: Border.all(
+                                                              color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white24,
+                                                              width: 0.5,
+                                                            ),
                                                           ),
-                                                        ),
-                                                        child: Text(
-                                                          tr.erpSyncDate != null
-                                                              ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)
-                                                              : 'BELUM ERP',
-                                                          style: TextStyle(
-                                                            color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white54,
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.bold,
+                                                          child: Text(
+                                                            tr.erpSyncDate != null
+                                                                ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)
+                                                                : 'BELUM ERP',
+                                                            style: TextStyle(
+                                                              color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white54,
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
