@@ -1415,6 +1415,8 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                   final isPending = map['isPendingDelivery'] as bool;
                                   final double totalQty = map['totalQty'] as double;
 
+                                  final String invoiceNo = tr.invoiceNo;
+                                  final String statusTransfer = (tr.statusTransfer != null && tr.statusTransfer.isNotEmpty) ? tr.statusTransfer : 'UNPAID';
                                   final String displayCustomer = tr.aliasName.trim().isNotEmpty
                                       ? tr.aliasName
                                       : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
@@ -1429,8 +1431,15 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                            Text(tr.type.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                                            Text(invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                            Text(
+                                              statusTransfer.toUpperCase(),
+                                              style: TextStyle(
+                                                color: statusTransfer.toUpperCase() == 'PAID' ? const Color(0xFF4ADE80) : Colors.amberAccent,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),
