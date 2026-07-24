@@ -89,20 +89,22 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
         double crossMonthLagQtyPcs = 0.0;
 
         for (var tr in allTransactions) {
-          final trDate = tr.date as DateTime;
-          final delivDate = tr.deliveryDate as DateTime? ?? trDate;
-          final status = (tr.status as String? ?? '').toUpperCase();
+          final delivDate = tr.deliveryDate ?? tr.date;
+          final DateTime? erpSyncDate = tr.erpSyncDate;
+          final erpDate = erpSyncDate ?? tr.date;
+          final status = (tr.status ?? '').toUpperCase();
+          final bool hasSync = (erpSyncDate != null);
 
           for (var item in tr.items) {
-            final itemId = (item.productId as String? ?? '').trim().toLowerCase();
-            final itemName = (item.productName as String? ?? '').trim().toLowerCase();
+            final itemId = item.productId.trim().toLowerCase();
+            final itemName = item.productName.trim().toLowerCase();
 
             // Flexible product matching by ID, exact Name, or substring
             final bool isMatch = (itemId.isNotEmpty && (itemId == ownId || itemId == ownName)) ||
                                  (itemName.isNotEmpty && (itemName == ownName || itemName == ownId || itemName.contains(ownName) || ownName.contains(itemName)));
 
             if (isMatch) {
-              final double qty = (item.qty as num).toDouble();
+              final double qty = item.qty;
 
               // === BARANG KELUAR FISIK: dihitung berdasarkan deliveryDate ===
               // Barang yang BENAR-BENAR keluar gudang pada bulan yang dipilih
@@ -114,26 +116,31 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                 barangKeluarFisikPcs += qty;
               }
 
-              // === BARANG KELUAR ERP: dihitung berdasarkan tanggal invoice (date) ===
+              // === BARANG KELUAR ERP: dihitung berdasarkan erpDate jika sudah diinput ke ERP ===
               // Barang yang DILAPORKAN ke sistem ERP pada bulan yang dipilih
-              if (filterMonth != null && filterYear != null) {
-                if (trDate.month == filterMonth && trDate.year == filterYear) {
+              if (hasSync || status != 'DIKIRIM') {
+                if (filterMonth != null && filterYear != null) {
+                  if (erpDate.month == filterMonth && erpDate.year == filterYear) {
+                    barangKeluarERPPcs += qty;
+                  }
+                } else {
                   barangKeluarERPPcs += qty;
                 }
-              } else {
-                barangKeluarERPPcs += qty;
               }
 
-              // Calculate delay in days between physical delivery and ERP invoice date
-              final delayDays = trDate.difference(delivDate).inDays.abs().toDouble();
+              // Calculate delay in days between physical delivery and ERP input date
+              final delayDays = erpDate.difference(delivDate).inDays.abs().toDouble();
               totalDelayDaysSum += delayDays;
               delayTransactionCount++;
 
-              // Cross-month lag: delivery month differs from invoice month OR status DIKIRIM
-              if (trDate.month != delivDate.month || trDate.year != delivDate.year || status == 'DIKIRIM') {
-                // Only count if this item's invoice falls in the selected period
+              // Cross-month lag or pending ERP
+              final bool isPendingERP = (!hasSync && status == 'DIKIRIM');
+              final bool isCrossMonth = hasSync && (erpDate.month != delivDate.month || erpDate.year != delivDate.year);
+
+              if (isPendingERP || isCrossMonth) {
                 if (filterMonth != null && filterYear != null) {
-                  if (trDate.month == filterMonth && trDate.year == filterYear) {
+                  if ((erpDate.month == filterMonth && erpDate.year == filterYear) ||
+                      (delivDate.month == filterMonth && delivDate.year == filterYear)) {
                     crossMonthLagQtyPcs += qty;
                   }
                 } else {
@@ -1136,21 +1143,23 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
     final List<Map<String, dynamic>> discrepancyPOs = [];
 
     for (var tr in allTransactions) {
-      final trDate = tr.date as DateTime;
-      final delivDate = tr.deliveryDate as DateTime? ?? trDate;
-      final status = (tr.status as String? ?? '').toUpperCase();
+      final delivDate = tr.deliveryDate ?? tr.date;
+      final DateTime? erpSyncDate = tr.erpSyncDate;
+      final erpDate = erpSyncDate ?? tr.date;
+      final status = (tr.status ?? '').toUpperCase();
 
-      final bool isPendingDelivery = (status == 'DIKIRIM');
-      final bool isCrossMonth = (trDate.month != delivDate.month || trDate.year != delivDate.year);
+      final bool hasBeenInputToERP = (erpSyncDate != null);
+      final bool isPendingERP = (!hasBeenInputToERP && status == 'DIKIRIM');
+      final bool isCrossMonth = hasBeenInputToERP && (erpDate.month != delivDate.month || erpDate.year != delivDate.year);
 
-      if (!isPendingDelivery && !isCrossMonth) continue;
+      if (!isPendingERP && !isCrossMonth) continue;
 
       // Check period match
       bool isTargetPeriod = false;
       if (filterMonth != null && filterYear != null) {
         final bool delivMatch = (delivDate.month == filterMonth && delivDate.year == filterYear);
-        final bool invoiceMatch = (trDate.month == filterMonth && trDate.year == filterYear);
-        if (delivMatch || invoiceMatch) {
+        final bool erpMatch = (erpDate.month == filterMonth && erpDate.year == filterYear);
+        if (delivMatch || erpMatch) {
           isTargetPeriod = true;
         }
       } else {
@@ -1162,32 +1171,34 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
       // Calculate total qty for this PO
       double poQtySum = 0;
       for (var item in tr.items) {
-        poQtySum += (item.qty as num).toDouble();
+        poQtySum += item.qty;
       }
 
-      // Determine Category Cause
+      // Determine Category Cause & Display Date
       String causeCategory;
       Color causeColor;
-      if (isPendingDelivery) {
+      String erpDateDisplay;
+
+      if (isPendingERP) {
         causeCategory = 'BELUM DIINPUT KE ERP (Status: DIKIRIM)';
         causeColor = Colors.amberAccent;
-      } else if (isCrossMonth) {
-        causeCategory = 'LATE REPORTING LINTAS BULAN (Kirim: ${DateFormat('MM-yyyy').format(delivDate)} → Invoice: ${DateFormat('MM-yyyy').format(trDate)})';
-        causeColor = Colors.redAccent;
+        erpDateDisplay = 'BELUM DIINPUT';
       } else {
-        causeCategory = 'PENDING CUT-OFF AKHIR BULAN';
-        causeColor = const Color(0xFF38BDF8);
+        causeCategory = 'LATE REPORTING LINTAS BULAN (Kirim: ${DateFormat('MM-yyyy').format(delivDate)} → ERP: ${DateFormat('MM-yyyy').format(erpDate)})';
+        causeColor = Colors.redAccent;
+        erpDateDisplay = DateFormat('dd-MM-yyyy').format(erpDate);
       }
 
       discrepancyPOs.add({
         'transaction': tr,
         'delivDate': delivDate,
-        'invoiceDate': trDate,
+        'erpDate': erpDate,
+        'erpDateDisplay': erpDateDisplay,
         'status': status,
         'causeCategory': causeCategory,
         'causeColor': causeColor,
         'totalQty': poQtySum,
-        'isPendingDelivery': isPendingDelivery,
+        'isPendingDelivery': isPendingERP,
         'isCrossMonth': isCrossMonth,
       });
     }
@@ -1409,7 +1420,6 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                   final map = entry.value;
                                   final tr = map['transaction'];
                                   final delivDate = map['delivDate'] as DateTime;
-                                  final invoiceDate = map['invoiceDate'] as DateTime;
                                   final causeCategory = map['causeCategory'] as String;
                                   final causeColor = map['causeColor'] as Color;
                                   final isPending = map['isPendingDelivery'] as bool;
@@ -1446,7 +1456,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                                       DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12))),
                                       DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                                       DataCell(Text(
-                                        isPending ? 'BELUM DIINPUT' : DateFormat('dd-MM-yyyy').format(invoiceDate),
+                                        map['erpDateDisplay'] as String,
                                         style: TextStyle(color: isPending ? Colors.redAccent : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                                       )),
                                       DataCell(
