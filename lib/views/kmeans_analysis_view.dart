@@ -223,7 +223,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
     }
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -231,26 +231,26 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
           Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 12,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   Row(
                     children: [
-                      Icon(Icons.hub_rounded, color: Color(0xFF38BDF8), size: 28),
-                      SizedBox(width: 10),
+                      Icon(Icons.hub_rounded, color: Color(0xFF38BDF8), size: 24),
+                      SizedBox(width: 8),
                       Text(
                         'K-Means Clustering & Opname Analysis',
-                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  SizedBox(height: 4),
+                  SizedBox(height: 2),
                   Text(
                     'Identifikasi Penyebab Ketidaksesuaian Stok Opname & Evaluasi Model Data Mining (Skripsi)',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 ],
               ),
@@ -337,19 +337,24 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
           ),
           const SizedBox(height: 20),
 
-          // Tab Bar Navigation
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _buildTabButton(0, Icons.pie_chart_outline_rounded, 'Hasil Clustering & Identifikasi'),
-              _buildTabButton(1, Icons.model_training_rounded, 'Data Training & Testing (Dosen)'),
-              _buildTabButton(2, Icons.fact_check_rounded, 'Kalkulator Rekonsiliasi Stok'),
-              _buildTabButton(3, Icons.timer_outlined, 'Aging Delay Pengiriman'),
-              _buildTabButton(4, Icons.receipt_long_rounded, 'Audit PO Penyebab Selisih ERP'),
-            ],
+          // Tab Bar Navigation (Single Row Horizontal Scroll)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildTabButton(0, Icons.pie_chart_outline_rounded, 'Hasil Clustering & Identifikasi'),
+                const SizedBox(width: 8),
+                _buildTabButton(1, Icons.model_training_rounded, 'Data Training & Testing (Dosen)'),
+                const SizedBox(width: 8),
+                _buildTabButton(2, Icons.fact_check_rounded, 'Kalkulator Rekonsiliasi Stok'),
+                const SizedBox(width: 8),
+                _buildTabButton(3, Icons.timer_outlined, 'Aging Delay Pengiriman'),
+                const SizedBox(width: 8),
+                _buildTabButton(4, Icons.receipt_long_rounded, 'Audit PO Penyebab Selisih ERP'),
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
 
           // Body Content
           Expanded(
@@ -374,13 +379,13 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
     final isSelected = _selectedTab == index;
     return InkWell(
       onTap: () => setState(() => _selectedTab = index),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155),
           ),
@@ -388,14 +393,14 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
-            const SizedBox(width: 8),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 14,
+                fontSize: 12,
               ),
             ),
           ],
@@ -1223,12 +1228,12 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header Card
+          // Header Card (Compact)
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFF43F5E)),
             ),
             child: Column(
@@ -1237,27 +1242,27 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: const Color(0xFFF43F5E).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFF43F5E), size: 28),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: const Color(0xFFF43F5E).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFF43F5E), size: 22),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
-                          Text('Audit Detail PO (Invoice) Penyebab Selisih Stok Opname', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 4),
-                          Text('Menampilkan rincian nota transaksi spesifik yang barang fisiknya sudah keluar tetapi belum/terlambat diinput ke Laporan ERP.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                          Text('Audit Detail PO (Invoice) Penyebab Selisih Stok Opname', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 2),
+                          Text('Menampilkan rincian nota transaksi spesifik yang barang fisiknya sudah keluar tetapi belum/terlambat diinput ke Laporan ERP.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
+                  spacing: 10,
+                  runSpacing: 6,
                   children: [
                     _buildMetricBadge('Total PO Penyebab Selisih', '${filteredPOs.length} Nota', const Color(0xFFF43F5E)),
                     _buildMetricBadge('Total Qty Barang Delay', '${totalPendingQty.toStringAsFixed(0)} pcs', const Color(0xFFFB7185)),
@@ -1268,34 +1273,34 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
-          // Filters Card: Product Dropdown & Search Input
+          // Filters Card: Product Dropdown & Search Input (Compact)
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFF334155)),
             ),
             child: Wrap(
-              spacing: 16,
-              runSpacing: 12,
+              spacing: 14,
+              runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // Product Filter Dropdown
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 20),
+                    const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
+                    const SizedBox(width: 6),
+                    const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(width: 8),
-                    const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0F172A),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFF334155)),
                       ),
                       child: DropdownButtonHideUnderline(
@@ -1304,7 +1309,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                               ? _poAuditProductFilter
                               : 'Semua Produk',
                           dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                           items: [
                             const DropdownMenuItem(value: 'Semua Produk', child: Text('Semua Produk (Semua Barang)')),
                             ...products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
@@ -1322,29 +1327,30 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
                 // Search Bar
                 SizedBox(
-                  width: 300,
+                  width: 280,
+                  height: 36,
                   child: TextField(
                     controller: _poAuditSearchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                     decoration: InputDecoration(
                       hintText: 'Cari No. PO, Pelanggan, atau Produk...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 18),
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 16),
                       suffixIcon: _poAuditSearchController.text.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear, color: Colors.white54, size: 16),
+                              icon: const Icon(Icons.clear, color: Colors.white54, size: 14),
                               onPressed: () {
                                 _poAuditSearchController.clear();
                                 setState(() {});
                               },
                             )
                           : null,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
                       filled: true,
                       fillColor: const Color(0xFF0F172A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
@@ -1352,21 +1358,21 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
-          // Audit Table
+          // Audit Table Container (Compact Header)
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFF334155)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('🧾 Daftar Nota PO/Invoice Spesifik yang Menyebabkan Ketidaksesuaian Stok ERP', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                  child: Text('🧾 Daftar Nota PO/Invoice Spesifik yang Menyebabkan Ketidaksesuaian Stok ERP', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(color: Color(0xFF334155), height: 1),
                 filteredPOs.isEmpty
@@ -1473,17 +1479,17 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
   Widget _buildMetricBadge(String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+          Text('$label: ', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
         ],
       ),
     );
