@@ -14,6 +14,7 @@ import '../providers/product_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/print_service.dart';
 import '../services/import_service.dart';
+import '../services/firebase_service.dart';
 import 'package:printing/printing.dart';
 import 'transaction_entry_view.dart';
 
@@ -1194,6 +1195,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               ),
             ] else ...[
               OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showMoveInvoiceItemsDialog(tr);
+                },
+                icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
+                label: const Text('Pindah / Gabung Item', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.cyanAccent),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
                 onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
                 icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                 label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
@@ -1672,6 +1687,453 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     }
                   },
                   child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Move or merge items from source invoice to target invoice
+  void _showMoveInvoiceItemsDialog(model_tr.Transaction sourceTr) {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final allTxs = trProvider.transactions;
+    final otherTxs = allTxs.where((t) => t.invoiceNo.toString() != sourceTr.invoiceNo.toString()).toList();
+
+    if (otherTxs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada invoice lain sebagai tujuan pemindahan.'), backgroundColor: Colors.orangeAccent),
+      );
+      return;
+    }
+
+    final Set<int> selectedIndices = {};
+    final Map<int, TextEditingController> qtyControllers = {};
+    final Map<int, TextEditingController> discControllers = {};
+
+    for (int i = 0; i < sourceTr.items.length; i++) {
+      final item = sourceTr.items[i];
+      qtyControllers[i] = TextEditingController(text: item.qty.toString());
+      discControllers[i] = TextEditingController(text: item.discountPercent.toStringAsFixed(1));
+    }
+
+    model_tr.Transaction? selectedTargetTr = otherTxs.first;
+    String targetSearchQuery = '';
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredTargets = otherTxs.where((t) {
+              if (targetSearchQuery.trim().isEmpty) return true;
+              final q = targetSearchQuery.toLowerCase();
+              final invNo = '#${t.invoiceNo}'.toLowerCase();
+              final cust = t.customerName.toLowerCase();
+              final alias = t.aliasName.toLowerCase();
+              return invNo.contains(q) || cust.contains(q) || alias.contains(q);
+            }).toList();
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.cyanAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pindah / Gabung Item Invoice #${sourceTr.invoiceNo}',
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Asal Toko: ${sourceTr.aliasName.isNotEmpty ? sourceTr.aliasName : sourceTr.customerName}',
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 650,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Notice Banner
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: Colors.cyanAccent, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Fitur ini memindahkan rincian produk (Qty & Custom Diskon) ke Invoice Tujuan tanpa mempengaruhi stok gudang.',
+                                style: TextStyle(color: Colors.cyanAccent, fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Section 1: Item Selection
+                      const Text(
+                        '1. Pilih Produk & Atur Qty / Diskon Yang Dipindah:',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Column(
+                          children: List.generate(sourceTr.items.length, (index) {
+                            final item = sourceTr.items[index];
+                            final isChecked = selectedIndices.contains(index);
+
+                            return Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                border: index < sourceTr.items.length - 1
+                                    ? const Border(bottom: BorderSide(color: Color(0xFF334155)))
+                                    : null,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Checkbox(
+                                        value: isChecked,
+                                        activeColor: Colors.cyanAccent,
+                                        checkColor: Colors.black,
+                                        onChanged: (val) {
+                                          setDialogState(() {
+                                            if (val == true) {
+                                              selectedIndices.add(index);
+                                            } else {
+                                              selectedIndices.remove(index);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.productName,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                            Text(
+                                              'Harga Satuan: ${_rupiahFormatter.format(item.price)} | Qty Invoice Asal: ${item.qty} Pcs',
+                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  // Inputs if item is checked
+                                  if (isChecked) ...[
+                                    const SizedBox(height: 8),
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 40.0),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextField(
+                                              controller: qtyControllers[index],
+                                              keyboardType: TextInputType.number,
+                                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                                              decoration: InputDecoration(
+                                                labelText: 'Qty Dipindah (Pcs)',
+                                                labelStyle: const TextStyle(color: Colors.cyanAccent, fontSize: 11),
+                                                isDense: true,
+                                                filled: true,
+                                                fillColor: const Color(0xFF1E293B),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: TextField(
+                                              controller: discControllers[index],
+                                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                                              decoration: InputDecoration(
+                                                labelText: 'Custom Diskon (%)',
+                                                labelStyle: const TextStyle(color: Colors.amberAccent, fontSize: 11),
+                                                isDense: true,
+                                                filled: true,
+                                                fillColor: const Color(0xFF1E293B),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Section 2: Target Invoice Selection
+                      const Text(
+                        '2. Pilih No Invoice Tujuan (Target Merge):',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Target Search Field
+                      TextField(
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText: 'Cari No Invoice Tujuan / Nama Toko / Alias...',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                          isDense: true,
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onChanged: (val) {
+                          setDialogState(() {
+                            targetSearchQuery = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Target Invoice Dropdown
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF38BDF8)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<model_tr.Transaction>(
+                            value: (selectedTargetTr != null && filteredTargets.contains(selectedTargetTr))
+                                ? selectedTargetTr
+                                : (filteredTargets.isNotEmpty ? filteredTargets.first : null),
+                            dropdownColor: const Color(0xFF1E293B),
+                            isExpanded: true,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            items: filteredTargets.map((tr) {
+                              final alias = tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName;
+                              return DropdownMenuItem<model_tr.Transaction>(
+                                value: tr,
+                                child: Text(
+                                  '#${tr.invoiceNo} - $alias (${tr.city}) - Total: ${_rupiahFormatter.format(tr.grandTotal)}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() {
+                                  selectedTargetTr = val;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+                ElevatedButton.icon(
+                  icon: isSaving
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.swap_horiz_rounded, size: 18, color: Colors.black),
+                  label: Text(
+                    isSaving ? 'Memindahkan...' : 'Pindahkan Item Sekarang',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.cyanAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (selectedIndices.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Silakan pilih minimal 1 item untuk dipindahkan.'), backgroundColor: Colors.orangeAccent),
+                            );
+                            return;
+                          }
+
+                          final target = selectedTargetTr ?? (filteredTargets.isNotEmpty ? filteredTargets.first : null);
+                          if (target == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Silakan pilih Invoice Tujuan terlebih dahulu.'), backgroundColor: Colors.orangeAccent),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => isSaving = true);
+
+                          try {
+                            final List<model_tr.TransactionItem> newSourceItems = List.from(sourceTr.items);
+                            final List<model_tr.TransactionItem> newTargetItems = List.from(target.items);
+
+                            // Process moving selected items
+                            final List<int> sortedIndices = selectedIndices.toList()..sort((a, b) => b.compareTo(a));
+
+                            for (int idx in sortedIndices) {
+                              final origItem = sourceTr.items[idx];
+                              final double moveQty = double.tryParse(qtyControllers[idx]?.text ?? '') ?? origItem.qty;
+                              final double customDisc = double.tryParse(discControllers[idx]?.text ?? '') ?? origItem.discountPercent;
+
+                              if (moveQty <= 0) continue;
+
+                              final double validMoveQty = moveQty > origItem.qty ? origItem.qty : moveQty;
+                              final double remainingQty = origItem.qty - validMoveQty;
+
+                              if (remainingQty > 0) {
+                                final double newSubtotal = remainingQty * origItem.price * (1 - origItem.discountPercent / 100);
+                                newSourceItems[idx] = model_tr.TransactionItem(
+                                  productId: origItem.productId,
+                                  productName: origItem.productName,
+                                  price: origItem.price,
+                                  qty: remainingQty,
+                                  discountPercent: origItem.discountPercent,
+                                  subtotal: newSubtotal,
+                                  sizeGrams: origItem.sizeGrams,
+                                  isBonus: origItem.isBonus,
+                                );
+                              } else {
+                                newSourceItems.removeAt(idx);
+                              }
+
+                              // Add item to target invoice with custom Qty & Custom Discount
+                              final double targetItemSubtotal = validMoveQty * origItem.price * (1 - customDisc / 100);
+                              newTargetItems.add(
+                                model_tr.TransactionItem(
+                                  productId: origItem.productId,
+                                  productName: origItem.productName,
+                                  price: origItem.price,
+                                  qty: validMoveQty,
+                                  discountPercent: customDisc,
+                                  subtotal: targetItemSubtotal,
+                                  sizeGrams: origItem.sizeGrams,
+                                  isBonus: origItem.isBonus,
+                                ),
+                              );
+                            }
+
+                            // Recalculate Grand Totals
+                            final double newSourceTotal = newSourceItems.fold(0.0, (sum, i) => sum + i.subtotal);
+                            final double newTargetTotal = newTargetItems.fold(0.0, (sum, i) => sum + i.subtotal);
+
+                            final updatedSourceTr = model_tr.Transaction(
+                              invoiceNo: sourceTr.invoiceNo,
+                              customerId: sourceTr.customerId,
+                              customerName: sourceTr.customerName,
+                              aliasName: sourceTr.aliasName,
+                              date: sourceTr.date,
+                              deliveryDate: sourceTr.deliveryDate,
+                              city: sourceTr.city,
+                              province: sourceTr.province,
+                              country: sourceTr.country,
+                              items: newSourceItems,
+                              grandTotal: newSourceTotal,
+                              note: sourceTr.note,
+                              status: sourceTr.status,
+                              statusTransfer: sourceTr.statusTransfer,
+                              transferDate: sourceTr.transferDate,
+                              erpSyncDate: sourceTr.erpSyncDate,
+                              createdBy: sourceTr.createdBy,
+                              createdAt: sourceTr.createdAt,
+                            );
+
+                            final updatedTargetTr = model_tr.Transaction(
+                              invoiceNo: target.invoiceNo,
+                              customerId: target.customerId,
+                              customerName: target.customerName,
+                              aliasName: target.aliasName,
+                              date: target.date,
+                              deliveryDate: target.deliveryDate,
+                              city: target.city,
+                              province: target.province,
+                              country: target.country,
+                              items: newTargetItems,
+                              grandTotal: newTargetTotal,
+                              note: target.note,
+                              status: target.status,
+                              statusTransfer: target.statusTransfer,
+                              transferDate: target.transferDate,
+                              erpSyncDate: target.erpSyncDate,
+                              createdBy: target.createdBy,
+                              createdAt: target.createdAt,
+                            );
+
+                            final FirebaseService dbService = FirebaseService();
+                            await dbService.moveInvoiceItems(
+                              sourceTr: updatedSourceTr,
+                              targetTr: updatedTargetTr,
+                            );
+
+                            if (mounted) {
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('🎉 Berhasil memindahkan item dari Invoice #${sourceTr.invoiceNo} ke Invoice #${target.invoiceNo}!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal memindahkan item: $e'), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                          }
+                        },
                 ),
               ],
             );
@@ -2460,6 +2922,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         onSelected: (action) {
                                                           if (action == 'detail') {
                                                             _showDetailDialog(tr);
+                                                          } else if (action == 'move_items') {
+                                                            _showMoveInvoiceItemsDialog(tr);
                                                           } else if (action == 'delivery') {
                                                             _showUpdateDeliveryStatusDialog(tr);
                                                           } else if (action == 'payment') {
@@ -2496,6 +2960,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                             ),
                                                           ),
                                                           if (!isKacab) ...[
+                                                            const PopupMenuItem(
+                                                              value: 'move_items',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Pindah / Gabung Item Invoice', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                ],
+                                                              ),
+                                                            ),
                                                             const PopupMenuItem(
                                                               value: 'delivery',
                                                               child: Row(

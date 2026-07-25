@@ -898,6 +898,18 @@ class FirebaseService {
     }
   }
 
+  // Move items between two invoices without affecting stock (status DIKIRIM)
+  Future<void> moveInvoiceItems({
+    required model_tr.Transaction sourceTr,
+    required model_tr.Transaction targetTr,
+  }) async {
+    final sourceRef = _db.collection('transactions').doc(sourceTr.invoiceNo.toString());
+    final targetRef = _db.collection('transactions').doc(targetTr.invoiceNo.toString());
+
+    await sourceRef.set(sourceTr.toMap(), SetOptions(merge: true));
+    await targetRef.set(targetTr.toMap(), SetOptions(merge: true));
+  }
+
   // Update existing transaction with stock and ERP summary updates
   Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
     final docRef = _db.collection('transactions').doc(updatedTr.invoiceNo.toString());
