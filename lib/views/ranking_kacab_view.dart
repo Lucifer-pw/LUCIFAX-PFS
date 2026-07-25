@@ -19,7 +19,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
   bool _isLoading = false;
   String _erpSourceFilter = 'ERP_ONLY'; // 'ERP_ONLY' or 'ALL_TRANSACTIONS'
   
-  // Selected 3-Month Range Start (Month & Year) — default auto-set di initState
+  // Selected 3-Month Range Start (Month & Year)
   int _startMonth = 5;
   int _startYear = 2026;
   
@@ -60,42 +60,61 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     super.dispose();
   }
 
-  /// Set default period: 3 bulan terakhir berdasarkan bulan saat ini
-  /// Misal Juli 2026 → default Mei-Juli 2026 (_startMonth=5, _startYear=2026)
+  /// Set default period: 3 bulan terakhir berdasarkan tanggal saat ini
   void _initDefaultPeriod() {
     final now = DateTime.now();
-    // Start month = 2 bulan sebelum bulan saat ini
-    DateTime startDate = DateTime(now.year, now.month - 2, 1);
-    _startMonth = startDate.month;
-    _startYear = startDate.year;
+    int m = now.month - 2;
+    int y = now.year;
+    if (m <= 0) {
+      m += 12;
+      y -= 1;
+    }
+    _startMonth = m;
+    _startYear = y;
   }
 
-  /// Generate daftar periode 3 bulan secara dinamis dari bulan saat ini mundur ke Jan 2025
+  /// Generate daftar periode 3 bulan secara dinamis dari tahun 2024 s/d 6 bulan ke depan
   void _buildPeriodItems() {
     final items = <Map<String, dynamic>>[];
     final now = DateTime.now();
     
-    // Mulai dari 2 bulan sebelum bulan saat ini (agar range mencakup bulan ini)
-    // Contoh: Juli 2026 → mulai dari Mei 2026 (Mei-Juli 2026)
-    DateTime cursor = DateTime(now.year, now.month - 2, 1);
-    final DateTime earliest = DateTime(2025, 1, 1); // Batas paling awal: Januari 2025
+    // Mulai dari 6 bulan ke depan hingga Januari 2024
+    DateTime cursor = DateTime(now.year, now.month + 6, 1);
+    final DateTime earliest = DateTime(2024, 1, 1);
+
+    final Set<String> addedValues = {};
 
     while (!cursor.isBefore(earliest)) {
       final m1 = cursor;
-      // m2 is between m1 and m3 (not displayed in label)
       final m3 = DateTime(cursor.year, cursor.month + 2, 1);
 
-      final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
-      // m2 label not displayed (only m1 - m3 range shown)
-      final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
+      final val = '${m1.month}_${m1.year}';
+      if (!addedValues.contains(val)) {
+        addedValues.add(val);
+        final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
+        final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
 
-      items.add({
-        'value': '${m1.month}_${m1.year}',
-        'label': '$m1Label - $m3Label',
-      });
+        items.add({
+          'value': val,
+          'label': '$m1Label - $m3Label',
+        });
+      }
 
       // Mundur 1 bulan
       cursor = DateTime(cursor.year, cursor.month - 1, 1);
+    }
+
+    // Pastikan _startMonth & _startYear terpilih SELALU ada dalam daftar dropdown
+    final currentVal = '${_startMonth}_$_startYear';
+    if (!addedValues.contains(currentVal)) {
+      final m1 = DateTime(_startYear, _startMonth, 1);
+      final m3 = DateTime(_startYear, _startMonth + 2, 1);
+      final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
+      final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
+      items.insert(0, {
+        'value': currentVal,
+        'label': '$m1Label - $m3Label',
+      });
     }
 
     _periodItems = items;
@@ -185,7 +204,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       // Sort ALL outlets in descending order by average 3-month sales
       allOutlets.sort((a, b) => (b['average'] as double).compareTo(a['average'] as double));
 
-      // Assign rank ke SEMUA outlet (tanpa batasan Top 15 / OTHER)
+      // Assign rank ke SEMUA outlet
       for (int i = 0; i < allOutlets.length; i++) {
         allOutlets[i]['rank'] = i + 1;
       }
@@ -226,12 +245,12 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
     String aliasName = (cust != null && cust.aliasName.isNotEmpty)
         ? cust.aliasName
-        : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
+        : (tr.aliasName != null && tr.aliasName.isNotEmpty ? tr.aliasName : (tr.customerName ?? 'TOKO TANPA NAMA'));
     if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
 
     String city = (cust != null && cust.city.isNotEmpty)
         ? cust.city
-        : (tr.city.isNotEmpty ? tr.city : '-');
+        : (tr.city != null && tr.city.isNotEmpty ? tr.city : '-');
 
     storeMap.putIfAbsent(aliasName, () => {
       'alias': aliasName,
@@ -241,12 +260,14 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       'm3': 0.0,
     });
 
+    double grandTotal = (tr.grandTotal ?? 0.0).toDouble();
+
     if (trMonthKey == m1Key) {
-      storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + tr.grandTotal;
+      storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + grandTotal;
     } else if (trMonthKey == m2Key) {
-      storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + tr.grandTotal;
+      storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + grandTotal;
     } else if (trMonthKey == m3Key) {
-      storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + tr.grandTotal;
+      storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + grandTotal;
     }
   }
 
@@ -260,7 +281,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     String m3Key,
   ) {
     for (var tr in allTransactions) {
-      final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
+      final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date ?? DateTime.now();
       final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
 
       if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
@@ -289,6 +310,16 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final city = (item['city'] as String).toLowerCase();
       return alias.contains(q) || city.contains(q);
     }).toList();
+
+    // Pastikan _periodItems tidak kosong & value dropdown selalu valid
+    if (_periodItems.isEmpty) {
+      _buildPeriodItems();
+    }
+    final String targetVal = '${_startMonth}_$_startYear';
+    final bool valueExists = _periodItems.any((item) => item['value'] == targetVal);
+    final String? dropdownValue = valueExists 
+        ? targetVal 
+        : (_periodItems.isNotEmpty ? _periodItems.first['value'] as String : null);
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -361,35 +392,36 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   ),
 
                   // Dynamic 3-Month Range Selector
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: '${_startMonth}_$_startYear',
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                        icon: const Icon(Icons.date_range_rounded, color: Color(0xFF38BDF8), size: 18),
-                        menuMaxHeight: 400,
-                        items: _periodItems.map<DropdownMenuItem<String>>((item) {
-                          return DropdownMenuItem<String>(
-                            value: item['value'] as String,
-                            child: Text(item['label'] as String),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            final parts = val.split('_');
-                            _setPeriodPreset(int.parse(parts[0]), int.parse(parts[1]));
-                          }
-                        },
+                  if (_periodItems.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: dropdownValue,
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          icon: const Icon(Icons.date_range_rounded, color: Color(0xFF38BDF8), size: 18),
+                          menuMaxHeight: 400,
+                          items: _periodItems.map<DropdownMenuItem<String>>((item) {
+                            return DropdownMenuItem<String>(
+                              value: item['value'] as String,
+                              child: Text(item['label'] as String),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              final parts = val.split('_');
+                              _setPeriodPreset(int.parse(parts[0]), int.parse(parts[1]));
+                            }
+                          },
+                        ),
                       ),
                     ),
-                  ),
 
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
@@ -563,7 +595,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                         DataCell(rankWidget),
                                         DataCell(
                                           Text(
-                                            item['alias'],
+                                            item['alias'] ?? '-',
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
@@ -571,11 +603,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                             ),
                                           ),
                                         ),
-                                        DataCell(Text(currencyFormatter.format(item['month1']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                        DataCell(Text(currencyFormatter.format(item['month2']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                        DataCell(Text(currencyFormatter.format(item['month3']), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                        DataCell(Text(currencyFormatter.format(item['total']), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                        DataCell(Text(currencyFormatter.format(item['average']), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                        DataCell(Text(currencyFormatter.format(item['month1'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        DataCell(Text(currencyFormatter.format(item['month2'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        DataCell(Text(currencyFormatter.format(item['month3'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        DataCell(Text(currencyFormatter.format(item['total'] ?? 0.0), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                        DataCell(Text(currencyFormatter.format(item['average'] ?? 0.0), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                       ],
                                     );
                                   }),
