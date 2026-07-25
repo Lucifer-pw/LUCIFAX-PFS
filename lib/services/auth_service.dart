@@ -21,11 +21,37 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null) return null;
 
-    final doc = await _db.collection('users').doc(user.uid).get();
-    if (doc.exists) {
+    DocumentSnapshot<Map<String, dynamic>>? doc;
+    try {
+      doc = await _db.collection('users').doc(user.uid).get();
+    } catch (e) {
+      try {
+        doc = await _db.collection('users').doc(user.uid).get(const GetOptions(source: Source.cache));
+      } catch (_) {}
+    }
+
+    if (doc != null && doc.exists && doc.data() != null) {
       return UserProfile.fromMap(doc.data()!, user.uid);
     }
-    return null;
+
+    // Default fallback if server is limited
+    String role = 'cashier';
+    String displayName = 'Kasir';
+    final email = user.email ?? '';
+    if (email.contains('admin')) {
+      role = 'developer';
+      displayName = 'Developer';
+    } else if (email.contains('kacab')) {
+      role = 'kacab';
+      displayName = 'Kepala Cabang';
+    }
+
+    return UserProfile(
+      uid: user.uid,
+      username: email.split('@').first,
+      name: displayName,
+      role: role,
+    );
   }
 
   // Sign In using mapped email/password
@@ -41,16 +67,27 @@ class AuthService {
       throw Exception("Gagal melakukan login. User null.");
     }
 
-    // Retrieve or create UserProfile in Firestore
+    // Retrieve or create UserProfile in Firestore with cache and quota fallback
     final docRef = _db.collection('users').doc(user.uid);
-    final doc = await docRef.get();
+    DocumentSnapshot<Map<String, dynamic>>? doc;
 
-    await recordUserLogin(user.uid);
+    try {
+      doc = await docRef.get();
+    } catch (e) {
+      debugPrint("Primary Firestore user read failed, attempting cache: $e");
+      try {
+        doc = await docRef.get(const GetOptions(source: Source.cache));
+      } catch (_) {}
+    }
 
-    if (doc.exists) {
+    try {
+      await recordUserLogin(user.uid);
+    } catch (_) {}
+
+    if (doc != null && doc.exists && doc.data() != null) {
       return UserProfile.fromMap(doc.data()!, user.uid);
     } else {
-      // Setup default fallback profiles if not pre-seeded
+      // Setup default fallback profiles if not pre-seeded or server quota limited
       String role = 'cashier';
       String displayName = 'Kasir';
       final cleanUsername = username.trim().toLowerCase();
@@ -58,23 +95,20 @@ class AuthService {
       if (cleanUsername == 'admin') {
         role = 'developer';
         displayName = 'Developer';
-      } else if (cleanUsername == 'kacab' || cleanUsername == 'manager') {
+      } else if (cleanUsername.startsWith('kacab') || cleanUsername.contains('manager')) {
         role = 'kacab';
-        displayName = 'Kepala Sales';
-      } else if (cleanUsername == 'setiawan') {
-        role = 'cashier';
-        displayName = 'Setiawan';
+        displayName = 'Kepala Cabang';
+      } else if (cleanUsername.startsWith('spv') || cleanUsername.contains('supervisor')) {
+        role = 'supervisor';
+        displayName = 'Supervisor';
       }
 
-      final profile = UserProfile(
+      return UserProfile(
         uid: user.uid,
-        username: cleanUsername,
+        username: username,
         name: displayName,
         role: role,
       );
-
-      await docRef.set(profile.toMap());
-      return profile;
     }
   }
 
