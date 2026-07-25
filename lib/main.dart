@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
@@ -36,18 +35,6 @@ void main() async {
   } catch (e) {
     debugPrint("Firebase initialization warning: $e");
   }
-
-  // Non-blocking Firestore Web settings configuration
-  Future.microtask(() {
-    try {
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-      );
-    } catch (e) {
-      debugPrint("Firestore persistence setting note: $e");
-    }
-  });
 
   runApp(
     MultiProvider(
