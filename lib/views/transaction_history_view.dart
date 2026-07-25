@@ -1523,7 +1523,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'Mohon tunggu sebentar, sedang menyinkronkan dengan database Firestore',
+                            'Mohon tunggu sebentar, sedang menyinkronkan data...',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                           ),

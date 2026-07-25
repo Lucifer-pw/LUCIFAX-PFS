@@ -29,6 +29,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
   String _searchQuery = '';
   TabController? _tabController;
   String _historyFilterMonthYear = DateFormat('MM-yyyy').format(DateTime.now());
+  bool _isSavingStock = false;
 
   @override
   void initState() {
@@ -65,6 +66,8 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
   }
 
   void _saveStockInput() async {
+    if (_isSavingStock) return;
+
     if (_selectedProduct == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pilih Nama Barang terlebih dahulu!'), backgroundColor: Colors.orange),
@@ -80,37 +83,49 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
       return;
     }
 
-    final monthYear = DateFormat('MM-yyyy').format(_selectedDate);
-    final stockBefore = _selectedProduct!.stock;
-    final stockAfter = stockBefore + qty;
+    setState(() {
+      _isSavingStock = true;
+    });
 
-    final entry = StockEntry(
-      id: '',
-      productId: _selectedProduct!.id,
-      productName: _selectedProduct!.name,
-      price: _selectedProduct!.price,
-      date: _selectedDate,
-      monthYear: monthYear,
-      weekNumber: _selectedWeek,
-      qty: qty,
-      stockBefore: stockBefore,
-      stockAfter: stockAfter,
-    );
+    try {
+      final monthYear = DateFormat('MM-yyyy').format(_selectedDate);
+      final stockBefore = _selectedProduct!.stock;
+      final stockAfter = stockBefore + qty;
 
-    final stockProvider = Provider.of<StockProvider>(context, listen: false);
-    final productProvider = Provider.of<ProductProvider>(context, listen: false);
-
-    final success = await stockProvider.saveStockEntry(entry);
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Stok ${_selectedProduct!.name} (Minggu $_selectedWeek) +${qty.toInt()} Pcs berhasil disimpan!'),
-          backgroundColor: Colors.teal,
-          behavior: SnackBarBehavior.floating,
-        ),
+      final entry = StockEntry(
+        id: '',
+        productId: _selectedProduct!.id,
+        productName: _selectedProduct!.name,
+        price: _selectedProduct!.price,
+        date: _selectedDate,
+        monthYear: monthYear,
+        weekNumber: _selectedWeek,
+        qty: qty,
+        stockBefore: stockBefore,
+        stockAfter: stockAfter,
       );
-      _stockInputController.clear();
-      productProvider.fetchProducts();
+
+      final stockProvider = Provider.of<StockProvider>(context, listen: false);
+      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+
+      final success = await stockProvider.saveStockEntry(entry);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Stok ${_selectedProduct!.name} (Minggu $_selectedWeek) +${qty.toInt()} Pcs berhasil disimpan!'),
+            backgroundColor: Colors.teal,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _stockInputController.clear();
+        await productProvider.fetchProducts();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingStock = false;
+        });
+      }
     }
   }
 
@@ -385,14 +400,27 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF38BDF8),
-                                foregroundColor: Colors.black,
+                                backgroundColor: _isSavingStock ? const Color(0xFF334155) : const Color(0xFF38BDF8),
+                                foregroundColor: _isSavingStock ? Colors.white70 : Colors.black,
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
-                              onPressed: _saveStockInput,
-                              icon: const Icon(Icons.save_rounded, color: Colors.black),
-                              label: const Text('Simpan Stok Masuk', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                              onPressed: _isSavingStock ? null : _saveStockInput,
+                              icon: _isSavingStock
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF38BDF8)),
+                                    )
+                                  : const Icon(Icons.save_rounded, color: Colors.black),
+                              label: Text(
+                                _isSavingStock ? 'Memproses Simpan Stok...' : 'Simpan Stok Masuk',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isSavingStock ? Colors.white : Colors.black,
+                                ),
+                              ),
                             ),
                           ),
                         ],
