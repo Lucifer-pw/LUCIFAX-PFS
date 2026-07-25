@@ -31,7 +31,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   String _statusFilter = "SEMUA"; // SEMUA, PAID, UNPAID, DIKIRIM, PENDING
   String _monthFilter = "SEMUA"; // SEMUA or "07-2026", "06-2026", etc.
   String _productFilter = "SEMUA"; // SEMUA or selected product name
-  bool _showRightSummaryPanel = true;
+  bool _showRightSummaryPanel = false;
   String _summaryProductSearch = "";
 
   // Pagination & Debounce State
@@ -2722,9 +2722,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   setState(() {
                     _monthFilter = val;
                     _currentPage = 1;
-                    if (val != "SEMUA") {
-                      _showRightSummaryPanel = true;
-                    }
                   });
                 }
               },
