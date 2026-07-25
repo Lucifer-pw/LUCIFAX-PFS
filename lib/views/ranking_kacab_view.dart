@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/customer_provider.dart';
 import '../models/customer.dart';
@@ -274,6 +279,189 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
   }
 
+  /// Export data ranking ke format CSV / Excel
+  Future<void> _exportToExcel(
+    List<Map<String, dynamic>> filteredList,
+    Map<String, dynamic> computed,
+  ) async {
+    try {
+      final StringBuffer csv = StringBuffer();
+      // UTF-8 BOM for Microsoft Excel compatibility
+      csv.write('\uFEFF');
+
+      // CSV Header
+      csv.writeln('"NO","OUTLET","$_month1Name","$_month2Name","$_month3Name","TOTAL","RATA-RATA 3 BULAN"');
+
+      // Data Rows
+      for (final item in filteredList) {
+        final rank = item['rank'];
+        final alias = item['alias'].toString().replaceAll('"', '""');
+        final m1 = _currency.format(_parseNum(item['month1'])).replaceAll('"', '""');
+        final m2 = _currency.format(_parseNum(item['month2'])).replaceAll('"', '""');
+        final m3 = _currency.format(_parseNum(item['month3'])).replaceAll('"', '""');
+        final total = _currency.format(_parseNum(item['total'])).replaceAll('"', '""');
+        final avg = _currency.format(_parseNum(item['average'])).replaceAll('"', '""');
+
+        csv.writeln('"$rank","$alias","$m1","$m2","$m3","$total","$avg"');
+      }
+
+      // Grand Total Row
+      final gM1 = _currency.format(_parseNum(computed['gM1'])).replaceAll('"', '""');
+      final gM2 = _currency.format(_parseNum(computed['gM2'])).replaceAll('"', '""');
+      final gM3 = _currency.format(_parseNum(computed['gM3'])).replaceAll('"', '""');
+      final gTotal = _currency.format(_parseNum(computed['gTotal'])).replaceAll('"', '""');
+      final gAvg = _currency.format(_parseNum(computed['gAverage'])).replaceAll('"', '""');
+
+      csv.writeln('"TOTAL","TOTAL GRANDTOTAL (SEMUA)","$gM1","$gM2","$gM3","$gTotal","$gAvg"');
+
+      final bytes = Uint8List.fromList(utf8.encode(csv.toString()));
+      final fileName = 'Ranking_Kacab_Jateng_${_month1Name}_$_month3Name.csv'.replaceAll(' ', '_');
+
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal export Excel: $e')),
+        );
+      }
+    }
+  }
+
+  /// Cetak Laporan PDF Ranking Kacab
+  Future<void> _printPdf(
+    List<Map<String, dynamic>> filteredList,
+    Map<String, dynamic> computed,
+  ) async {
+    try {
+      final doc = pw.Document();
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          build: (pw.Context context) {
+            return [
+              // Header Title
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'LAPORAN WEEKLY KACAB',
+                        style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
+                        style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('LUCIFAX PFS JATENG', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Tanggal Cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(thickness: 1, color: PdfColors.grey400),
+              pw.SizedBox(height: 10),
+
+              // KPI Stats Box
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('TOTAL RATA-RATA 3 BULAN', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+                        pw.Text(_currency.format(_parseNum(computed['gAverage'])), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
+                      ],
+                    ),
+                  ),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('TOKO PERINGKAT #1', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+                        pw.Text(computed['top1Name'].toString(), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.amber800)),
+                      ],
+                    ),
+                  ),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('TOTAL OUTLET', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+                        pw.Text('${computed['storeCount']} Toko', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 14),
+
+              // Ranking Table
+              pw.TableHelper.fromTextArray(
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+                headerHeight: 24,
+                cellHeight: 20,
+                headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
+                cellStyle: const pw.TextStyle(fontSize: 8),
+                cellAlignment: pw.Alignment.centerLeft,
+                headers: ['NO', 'OUTLET', _month1Name.toUpperCase(), _month2Name.toUpperCase(), _month3Name.toUpperCase(), 'TOTAL', 'RATA-RATA 3 BULAN'],
+                data: [
+                  ...filteredList.map((item) => [
+                    '${item['rank']}',
+                    item['alias'].toString(),
+                    _currency.format(_parseNum(item['month1'])),
+                    _currency.format(_parseNum(item['month2'])),
+                    _currency.format(_parseNum(item['month3'])),
+                    _currency.format(_parseNum(item['total'])),
+                    _currency.format(_parseNum(item['average'])),
+                  ]),
+                  [
+                    'TOTAL',
+                    'TOTAL GRANDTOTAL (SEMUA)',
+                    _currency.format(_parseNum(computed['gM1'])),
+                    _currency.format(_parseNum(computed['gM2'])),
+                    _currency.format(_parseNum(computed['gM3'])),
+                    _currency.format(_parseNum(computed['gTotal'])),
+                    _currency.format(_parseNum(computed['gAverage'])),
+                  ],
+                ],
+              ),
+            ];
+          },
+        ),
+      );
+
+      final fileName = 'Laporan_Ranking_Kacab_${_month1Name}_$_month3Name.pdf'.replaceAll(' ', '_');
+      await Printing.layoutPdf(
+        onLayout: (format) async => doc.save(),
+        name: fileName,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak PDF: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Listen to providers so view updates automatically when data arrives
@@ -334,7 +522,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                 ],
               ),
 
-              // Actions Header (Filter & Period Selector)
+              // Actions Header (Filter, Range, Export Excel, Cetak PDF, Refresh)
               Wrap(
                 spacing: 10,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -392,6 +580,32 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                         ),
                       ),
                     ),
+
+                  // Tombol Export Excel
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: filtered.isEmpty ? null : () => _exportToExcel(filtered, computed),
+                    icon: const Icon(Icons.table_view_rounded, size: 18),
+                    label: const Text('Export Excel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
+
+                  // Tombol Cetak PDF
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0284C7),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: filtered.isEmpty ? null : () => _printPdf(filtered, computed),
+                    icon: const Icon(Icons.print_rounded, size: 18),
+                    label: const Text('Cetak PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
 
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
