@@ -33,16 +33,21 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    // Enable Cloud Firestore Offline Persistence & Unlimited Local Cache
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-    );
-    debugPrint("Firestore Offline Persistence & Cache successfully configured.");
   } catch (e) {
     debugPrint("Firebase initialization warning: $e");
   }
+
+  // Non-blocking Firestore Web settings configuration
+  Future.microtask(() {
+    try {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+    } catch (e) {
+      debugPrint("Firestore persistence setting note: $e");
+    }
+  });
 
   runApp(
     MultiProvider(
