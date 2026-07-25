@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -279,49 +279,62 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
   }
 
-  /// Export data ranking ke format CSV / Excel
+  /// Export data ranking ke format file Excel (.xlsx) murni
   Future<void> _exportToExcel(
     List<Map<String, dynamic>> filteredList,
     Map<String, dynamic> computed,
   ) async {
     try {
-      final StringBuffer csv = StringBuffer();
-      // UTF-8 BOM for Microsoft Excel compatibility
-      csv.write('\uFEFF');
+      var excel = Excel.createExcel();
+      Sheet sheetObject = excel['Ranking Kacab'];
+      excel.setDefaultSheet('Ranking Kacab');
 
-      // CSV Header
-      csv.writeln('"NO","OUTLET","$_month1Name","$_month2Name","$_month3Name","TOTAL","RATA-RATA 3 BULAN"');
+      // Add Header Row
+      sheetObject.appendRow([
+        TextCellValue('NO'),
+        TextCellValue('OUTLET'),
+        TextCellValue(_month1Name),
+        TextCellValue(_month2Name),
+        TextCellValue(_month3Name),
+        TextCellValue('TOTAL'),
+        TextCellValue('RATA-RATA 3 BULAN'),
+      ]);
 
-      // Data Rows
+      // Add Data Rows
       for (final item in filteredList) {
-        final rank = item['rank'];
-        final alias = item['alias'].toString().replaceAll('"', '""');
-        final m1 = _currency.format(_parseNum(item['month1'])).replaceAll('"', '""');
-        final m2 = _currency.format(_parseNum(item['month2'])).replaceAll('"', '""');
-        final m3 = _currency.format(_parseNum(item['month3'])).replaceAll('"', '""');
-        final total = _currency.format(_parseNum(item['total'])).replaceAll('"', '""');
-        final avg = _currency.format(_parseNum(item['average'])).replaceAll('"', '""');
-
-        csv.writeln('"$rank","$alias","$m1","$m2","$m3","$total","$avg"');
+        sheetObject.appendRow([
+          IntCellValue((item['rank'] as num).toInt()),
+          TextCellValue(item['alias'].toString()),
+          DoubleCellValue(_parseNum(item['month1'])),
+          DoubleCellValue(_parseNum(item['month2'])),
+          DoubleCellValue(_parseNum(item['month3'])),
+          DoubleCellValue(_parseNum(item['total'])),
+          DoubleCellValue(_parseNum(item['average'])),
+        ]);
       }
 
-      // Grand Total Row
-      final gM1 = _currency.format(_parseNum(computed['gM1'])).replaceAll('"', '""');
-      final gM2 = _currency.format(_parseNum(computed['gM2'])).replaceAll('"', '""');
-      final gM3 = _currency.format(_parseNum(computed['gM3'])).replaceAll('"', '""');
-      final gTotal = _currency.format(_parseNum(computed['gTotal'])).replaceAll('"', '""');
-      final gAvg = _currency.format(_parseNum(computed['gAverage'])).replaceAll('"', '""');
+      // Add Summary Row
+      sheetObject.appendRow([
+        TextCellValue('TOTAL'),
+        TextCellValue('TOTAL GRANDTOTAL (SEMUA)'),
+        DoubleCellValue(_parseNum(computed['gM1'])),
+        DoubleCellValue(_parseNum(computed['gM2'])),
+        DoubleCellValue(_parseNum(computed['gM3'])),
+        DoubleCellValue(_parseNum(computed['gTotal'])),
+        DoubleCellValue(_parseNum(computed['gAverage'])),
+      ]);
 
-      csv.writeln('"TOTAL","TOTAL GRANDTOTAL (SEMUA)","$gM1","$gM2","$gM3","$gTotal","$gAvg"');
+      List<int>? fileBytes = excel.save();
+      if (fileBytes != null) {
+        final bytes = Uint8List.fromList(fileBytes);
+        final fileName = 'Laporan_Kacab_Periode_${_month1Name}_$_month3Name.xlsx'.replaceAll(' ', '_');
 
-      final bytes = Uint8List.fromList(utf8.encode(csv.toString()));
-      final fileName = 'Ranking_Kacab_Jateng_${_month1Name}_$_month3Name.csv'.replaceAll(' ', '_');
-
-      await Printing.sharePdf(bytes: bytes, filename: fileName);
+        await Printing.sharePdf(bytes: bytes, filename: fileName);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal export Excel: $e')),
+          SnackBar(content: Text('Gagal export Excel (.xlsx): $e')),
         );
       }
     }
