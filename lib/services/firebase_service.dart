@@ -459,6 +459,9 @@ class FirebaseService {
         throw Exception("Transaksi tidak ditemukan!");
       }
       final oldTr = model_tr.Transaction.fromMap(snap.data()!, snap.id);
+      if (oldTr.status == 'DIPINDAH' || oldTr.items.isEmpty || oldTr.note.startsWith('DIPINDAH')) {
+        throw Exception("Invoice berstatus DIPINDAH tidak dapat di-update ke ERP. Hanya Invoice Tujuan yang disinkronkan ke ERP.");
+      }
       final oldSyncDate = oldTr.erpSyncDate;
 
       final String? oldMonthYear = oldSyncDate != null ? DateFormat('MM-yyyy').format(oldSyncDate) : null;

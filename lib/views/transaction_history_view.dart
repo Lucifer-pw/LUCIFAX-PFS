@@ -1595,6 +1595,48 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return;
     }
 
+    if (tr.status == 'DIPINDAH' || tr.items.isEmpty || tr.note.startsWith('DIPINDAH')) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.block_rounded, color: Colors.purpleAccent, size: 24),
+              SizedBox(width: 8),
+              Text('Status ERP Dikunci', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purpleAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
+                ),
+                child: const Text(
+                  'Invoice ini berstatus DIPINDAH / digabung ke invoice lain, sehingga TIDAK DAPAT disinkronkan ke ERP.\n\nHanya Invoice Tujuan yang disinkronkan ke Laporan ERP.',
+                  style: TextStyle(color: Colors.purpleAccent, fontSize: 12, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Mengerti', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     bool hasSync = tr.erpSyncDate != null;
     DateTime? currentSyncDate = tr.erpSyncDate ?? DateTime.now();
 
@@ -2064,9 +2106,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               );
                             }
 
-                            // Recalculate Grand Totals
+                             // Recalculate Grand Totals
                             final double newSourceTotal = newSourceItems.fold(0.0, (sum, i) => sum + i.subtotal);
                             final double newTargetTotal = newTargetItems.fold(0.0, (sum, i) => sum + i.subtotal);
+
+                            final bool allItemsMoved = newSourceItems.isEmpty;
+                            final String newSourceStatus = allItemsMoved ? 'DIPINDAH' : sourceTr.status;
+                            final String newSourceNote = allItemsMoved
+                                ? 'DIPINDAH KE INVOICE #${target.invoiceNo}'
+                                : (sourceTr.note.contains('Sebagian item dipindah')
+                                    ? sourceTr.note
+                                    : '${sourceTr.note} (Sebagian item dipindah ke Invoice #${target.invoiceNo})').trim();
+                            final DateTime? newSourceErpSyncDate = allItemsMoved ? null : sourceTr.erpSyncDate;
 
                             final updatedSourceTr = model_tr.Transaction(
                               invoiceNo: sourceTr.invoiceNo,
@@ -2080,11 +2131,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               country: sourceTr.country,
                               items: newSourceItems,
                               grandTotal: newSourceTotal,
-                              note: sourceTr.note,
-                              status: sourceTr.status,
+                              note: newSourceNote,
+                              status: newSourceStatus,
                               statusTransfer: sourceTr.statusTransfer,
                               transferDate: sourceTr.transferDate,
-                              erpSyncDate: sourceTr.erpSyncDate,
+                              erpSyncDate: newSourceErpSyncDate,
                               createdBy: sourceTr.createdBy,
                               createdAt: sourceTr.createdAt,
                             );
@@ -2839,17 +2890,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         decoration: BoxDecoration(
                                                           color: tr.status == 'DIKIRIM'
                                                               ? Colors.greenAccent.withOpacity(0.15)
-                                                              : Colors.orangeAccent.withOpacity(0.15),
+                                                              : (tr.status == 'DIPINDAH'
+                                                                  ? Colors.purpleAccent.withOpacity(0.15)
+                                                                  : Colors.orangeAccent.withOpacity(0.15)),
                                                           borderRadius: BorderRadius.circular(12),
                                                           border: Border.all(
-                                                            color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                            color: tr.status == 'DIKIRIM'
+                                                                ? Colors.greenAccent
+                                                                : (tr.status == 'DIPINDAH' ? Colors.purpleAccent : Colors.orangeAccent),
                                                             width: 0.5,
                                                           ),
                                                         ),
                                                         child: Text(
                                                           tr.status,
                                                           style: TextStyle(
-                                                            color: tr.status == 'DIKIRIM' ? Colors.greenAccent : Colors.orangeAccent,
+                                                            color: tr.status == 'DIKIRIM'
+                                                                ? Colors.greenAccent
+                                                                : (tr.status == 'DIPINDAH' ? Colors.purpleAccent : Colors.orangeAccent),
                                                             fontSize: 10,
                                                             fontWeight: FontWeight.bold,
                                                           ),
@@ -2890,21 +2947,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         child: Container(
                                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                                           decoration: BoxDecoration(
-                                                            color: tr.erpSyncDate != null
-                                                                ? Colors.amberAccent.withOpacity(0.15)
-                                                                : Colors.white10,
+                                                            color: tr.status == 'DIPINDAH'
+                                                                ? Colors.purpleAccent.withOpacity(0.15)
+                                                                : (tr.erpSyncDate != null
+                                                                    ? Colors.amberAccent.withOpacity(0.15)
+                                                                    : Colors.white10),
                                                             borderRadius: BorderRadius.circular(12),
                                                             border: Border.all(
-                                                              color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white24,
+                                                              color: tr.status == 'DIPINDAH'
+                                                                  ? Colors.purpleAccent
+                                                                  : (tr.erpSyncDate != null ? Colors.amberAccent : Colors.white24),
                                                               width: 0.5,
                                                             ),
                                                           ),
                                                           child: Text(
-                                                            tr.erpSyncDate != null
-                                                                ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)
-                                                                : 'BELUM ERP',
+                                                            tr.status == 'DIPINDAH'
+                                                                ? 'DIPINDAH'
+                                                                : (tr.erpSyncDate != null
+                                                                    ? DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)
+                                                                    : 'BELUM ERP'),
                                                             style: TextStyle(
-                                                              color: tr.erpSyncDate != null ? Colors.amberAccent : Colors.white54,
+                                                              color: tr.status == 'DIPINDAH'
+                                                                  ? Colors.purpleAccent
+                                                                  : (tr.erpSyncDate != null ? Colors.amberAccent : Colors.white54),
                                                               fontSize: 10,
                                                               fontWeight: FontWeight.bold,
                                                             ),
