@@ -51,7 +51,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     super.initState();
     _initDefaultPeriod();
     _buildPeriodItems();
-    _loadRankingData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRankingData();
+    });
   }
 
   @override
@@ -71,6 +73,14 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
     _startMonth = m;
     _startYear = y;
+
+    DateTime m1Date = DateTime(_startYear, _startMonth, 1);
+    DateTime m2Date = DateTime(_startYear, _startMonth + 1, 1);
+    DateTime m3Date = DateTime(_startYear, _startMonth + 2, 1);
+
+    _month1Name = DateFormat('MMMM', 'id_ID').format(m1Date);
+    _month2Name = DateFormat('MMMM', 'id_ID').format(m2Date);
+    _month3Name = DateFormat('MMMM yyyy', 'id_ID').format(m3Date);
   }
 
   /// Generate daftar periode 3 bulan secara dinamis dari tahun 2024 s/d 6 bulan ke depan
@@ -122,6 +132,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
   /// Load ranking data dari transaksi di memori (0 Firestore Reads)
   Future<void> _loadRankingData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final trProvider = Provider.of<TransactionProvider>(context, listen: false);
@@ -209,22 +220,26 @@ class _RankingKacabViewState extends State<RankingKacabView> {
         allOutlets[i]['rank'] = i + 1;
       }
 
-      setState(() {
-        _rankingData = allOutlets;
-        _grandTotalM1 = sumM1;
-        _grandTotalM2 = sumM2;
-        _grandTotalM3 = sumM3;
-        _grandTotalAll = sumTotal;
-        _grandAverageAll = sumTotal / 3.0;
+      if (mounted) {
+        setState(() {
+          _rankingData = allOutlets;
+          _grandTotalM1 = sumM1;
+          _grandTotalM2 = sumM2;
+          _grandTotalM3 = sumM3;
+          _grandTotalAll = sumTotal;
+          _grandAverageAll = sumTotal / 3.0;
 
-        _totalStoreCount = allOutlets.length;
-        _top1StoreName = allOutlets.isNotEmpty ? allOutlets.first['alias'] : '-';
-        _top1Average = allOutlets.isNotEmpty ? allOutlets.first['average'] : 0.0;
-      });
+          _totalStoreCount = allOutlets.length;
+          _top1StoreName = allOutlets.isNotEmpty ? allOutlets.first['alias'] : '-';
+          _top1Average = allOutlets.isNotEmpty ? allOutlets.first['average'] : 0.0;
+        });
+      }
     } catch (e) {
       debugPrint("Error loading ranking data: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -535,98 +550,95 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.white.withOpacity(0.08)),
                         ),
-                        child: Scrollbar(
-                          thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
                           child: SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                headingRowHeight: 46,
-                                dataRowMinHeight: 48,
-                                dataRowMaxHeight: 52,
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                columns: [
-                                  const DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('OUTLET', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text(_month1Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text(_month2Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text(_month3Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('TOTAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                  const DataColumn(label: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
-                                ],
-                                rows: [
-                                  ...List.generate(filteredList.length, (idx) {
-                                    final item = filteredList[idx];
-                                    final rank = item['rank'] as int;
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              headingRowHeight: 46,
+                              dataRowMinHeight: 48,
+                              dataRowMaxHeight: 52,
+                              headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                              columns: [
+                                const DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                const DataColumn(label: Text('OUTLET', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text(_month1Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text(_month2Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text(_month3Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
+                                const DataColumn(label: Text('TOTAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                const DataColumn(label: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
+                              ],
+                              rows: [
+                                ...List.generate(filteredList.length, (idx) {
+                                  final item = filteredList[idx];
+                                  final rank = item['rank'] as int;
 
-                                    Color badgeColor = Colors.white;
-                                    String rankLabel = '$rank';
-                                    if (rank == 1) {
-                                      badgeColor = Colors.amber;
-                                      rankLabel = '🥇 1';
-                                    } else if (rank == 2) {
-                                      badgeColor = Colors.grey.shade300;
-                                      rankLabel = '🥈 2';
-                                    } else if (rank == 3) {
-                                      badgeColor = Colors.amber.shade800;
-                                      rankLabel = '🥉 3';
-                                    }
+                                  Color badgeColor = Colors.white;
+                                  String rankLabel = '$rank';
+                                  if (rank == 1) {
+                                    badgeColor = Colors.amber;
+                                    rankLabel = '🥇 1';
+                                  } else if (rank == 2) {
+                                    badgeColor = Colors.grey.shade300;
+                                    rankLabel = '🥈 2';
+                                  } else if (rank == 3) {
+                                    badgeColor = Colors.amber.shade800;
+                                    rankLabel = '🥉 3';
+                                  }
 
-                                    final rankWidget = Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
-                                      ),
-                                      child: Text(
-                                        rankLabel,
-                                        style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                                      ),
-                                    );
+                                  final rankWidget = Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
+                                    ),
+                                    child: Text(
+                                      rankLabel,
+                                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  );
 
-                                    return DataRow(
-                                      color: MaterialStateProperty.resolveWith<Color?>((states) {
-                                        if (rank == 1) return Colors.amber.withOpacity(0.05);
-                                        return idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02);
-                                      }),
-                                      cells: [
-                                        DataCell(rankWidget),
-                                        DataCell(
-                                          Text(
-                                            item['alias'] ?? '-',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
+                                  return DataRow(
+                                    color: MaterialStateProperty.resolveWith<Color?>((states) {
+                                      if (rank == 1) return Colors.amber.withOpacity(0.05);
+                                      return idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02);
+                                    }),
+                                    cells: [
+                                      DataCell(rankWidget),
+                                      DataCell(
+                                        Text(
+                                          item['alias'] ?? '-',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
                                           ),
                                         ),
-                                        DataCell(Text(currencyFormatter.format(item['month1'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                        DataCell(Text(currencyFormatter.format(item['month2'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                        DataCell(Text(currencyFormatter.format(item['month3'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                        DataCell(Text(currencyFormatter.format(item['total'] ?? 0.0), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                        DataCell(Text(currencyFormatter.format(item['average'] ?? 0.0), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                      ],
-                                    );
-                                  }),
-
-                                  // TOTAL GRANDTOTAL (SEMUA) Summary Row
-                                  DataRow(
-                                    color: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                    cells: [
-                                      const DataCell(Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      const DataCell(Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Text(currencyFormatter.format(_grandTotalM1), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(_grandTotalM2), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(_grandTotalM3), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(_grandTotalAll), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Text(currencyFormatter.format(_grandAverageAll), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                      ),
+                                      DataCell(Text(currencyFormatter.format(item['month1'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(item['month2'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(item['month3'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(item['total'] ?? 0.0), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(currencyFormatter.format(item['average'] ?? 0.0), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                     ],
-                                  ),
-                                ],
-                              ),
+                                  );
+                                }),
+
+                                // TOTAL GRANDTOTAL (SEMUA) Summary Row
+                                DataRow(
+                                  color: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                  cells: [
+                                    const DataCell(Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    const DataCell(Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                    DataCell(Text(currencyFormatter.format(_grandTotalM1), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(currencyFormatter.format(_grandTotalM2), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(currencyFormatter.format(_grandTotalM3), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(currencyFormatter.format(_grandTotalAll), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                    DataCell(Text(currencyFormatter.format(_grandAverageAll), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ),
