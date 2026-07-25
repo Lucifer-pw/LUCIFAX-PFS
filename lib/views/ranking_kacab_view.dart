@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/customer_provider.dart';
 import '../models/customer.dart';
+import '../models/transaction.dart' as model_tr;
 
 class RankingKacabView extends StatefulWidget {
   const RankingKacabView({super.key});
@@ -13,44 +14,42 @@ class RankingKacabView extends StatefulWidget {
 }
 
 class _RankingKacabViewState extends State<RankingKacabView> {
-  final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = false;
   String _erpSourceFilter = 'ERP_ONLY'; // 'ERP_ONLY' or 'ALL_TRANSACTIONS'
-  
-  // Selected 3-Month Range Start (Month & Year)
+
+  // Selected 3-Month Range Start
   int _startMonth = 5;
   int _startYear = 2026;
-  
+
   String _searchQuery = '';
   bool _isFallbackToAll = false;
-  
+
   List<Map<String, dynamic>> _rankingData = [];
-  
+
   // Grand totals across ALL outlets
   double _grandTotalM1 = 0.0;
   double _grandTotalM2 = 0.0;
   double _grandTotalM3 = 0.0;
   double _grandTotalAll = 0.0;
   double _grandAverageAll = 0.0;
-  
+
   int _totalStoreCount = 0;
   String _top1StoreName = '-';
   double _top1Average = 0.0;
 
-  String _month1Name = '';
-  String _month2Name = '';
-  String _month3Name = '';
+  String _month1Name = 'Mei';
+  String _month2Name = 'Juni';
+  String _month3Name = 'Juli 2026';
 
-  // Dynamic period dropdown items
-  List<Map<String, dynamic>> _periodItems = [];
+  List<Map<String, String>> _periodOptions = [];
 
   @override
   void initState() {
     super.initState();
-    _initDefaultPeriod();
-    _buildPeriodItems();
+    _initPeriod();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadRankingData();
     });
@@ -62,8 +61,13 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     super.dispose();
   }
 
-  /// Set default period: 3 bulan terakhir berdasarkan tanggal saat ini
-  void _initDefaultPeriod() {
+  double _parseNum(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  void _initPeriod() {
     final now = DateTime.now();
     int m = now.month - 2;
     int y = now.year;
@@ -74,134 +78,122 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     _startMonth = m;
     _startYear = y;
 
-    DateTime m1Date = DateTime(_startYear, _startMonth, 1);
-    DateTime m2Date = DateTime(_startYear, _startMonth + 1, 1);
-    DateTime m3Date = DateTime(_startYear, _startMonth + 2, 1);
+    _updateMonthNames();
+    _buildPeriodOptions();
+  }
+
+  void _updateMonthNames() {
+    final m1Date = DateTime(_startYear, _startMonth, 1);
+    final m2Date = DateTime(_startYear, _startMonth + 1, 1);
+    final m3Date = DateTime(_startYear, _startMonth + 2, 1);
 
     _month1Name = DateFormat('MMMM', 'id_ID').format(m1Date);
     _month2Name = DateFormat('MMMM', 'id_ID').format(m2Date);
     _month3Name = DateFormat('MMMM yyyy', 'id_ID').format(m3Date);
   }
 
-  /// Generate daftar periode 3 bulan secara dinamis dari tahun 2024 s/d 6 bulan ke depan
-  void _buildPeriodItems() {
-    final items = <Map<String, dynamic>>[];
+  void _buildPeriodOptions() {
+    final List<Map<String, String>> options = [];
     final now = DateTime.now();
-    
-    // Mulai dari 6 bulan ke depan hingga Januari 2024
+
+    // From 6 months ahead down to Jan 2024
     DateTime cursor = DateTime(now.year, now.month + 6, 1);
-    final DateTime earliest = DateTime(2024, 1, 1);
+    final DateTime limit = DateTime(2024, 1, 1);
+    final Set<String> seen = {};
 
-    final Set<String> addedValues = {};
-
-    while (!cursor.isBefore(earliest)) {
+    while (!cursor.isBefore(limit)) {
       final m1 = cursor;
       final m3 = DateTime(cursor.year, cursor.month + 2, 1);
+      final key = '${m1.month}_${m1.year}';
 
-      final val = '${m1.month}_${m1.year}';
-      if (!addedValues.contains(val)) {
-        addedValues.add(val);
+      if (!seen.contains(key)) {
+        seen.add(key);
         final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
         final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
-
-        items.add({
-          'value': val,
+        options.add({
+          'value': key,
           'label': '$m1Label - $m3Label',
         });
       }
 
-      // Mundur 1 bulan
       cursor = DateTime(cursor.year, cursor.month - 1, 1);
     }
 
-    // Pastikan _startMonth & _startYear terpilih SELALU ada dalam daftar dropdown
-    final currentVal = '${_startMonth}_$_startYear';
-    if (!addedValues.contains(currentVal)) {
+    final selectedKey = '${_startMonth}_$_startYear';
+    if (!seen.contains(selectedKey)) {
       final m1 = DateTime(_startYear, _startMonth, 1);
       final m3 = DateTime(_startYear, _startMonth + 2, 1);
       final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
       final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
-      items.insert(0, {
-        'value': currentVal,
+      options.insert(0, {
+        'value': selectedKey,
         'label': '$m1Label - $m3Label',
       });
     }
 
-    _periodItems = items;
+    _periodOptions = options;
   }
 
-  /// Load ranking data dari transaksi di memori (0 Firestore Reads)
   Future<void> _loadRankingData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+
     try {
       final trProvider = Provider.of<TransactionProvider>(context, listen: false);
       final custProvider = Provider.of<CustomerProvider>(context, listen: false);
-      
-      final allTransactions = trProvider.transactions;
-      final customers = custProvider.customers;
 
-      // 1. Build 3-Month Window dates based on selected _startMonth & _startYear
-      DateTime m1Date = DateTime(_startYear, _startMonth, 1);
-      DateTime m2Date = DateTime(_startYear, _startMonth + 1, 1);
-      DateTime m3Date = DateTime(_startYear, _startMonth + 2, 1);
+      final List<model_tr.Transaction> allTr = trProvider.transactions;
+      final List<Customer> customers = custProvider.customers;
 
-      _month1Name = DateFormat('MMMM', 'id_ID').format(m1Date);
-      _month2Name = DateFormat('MMMM', 'id_ID').format(m2Date);
-      _month3Name = DateFormat('MMMM yyyy', 'id_ID').format(m3Date);
+      _updateMonthNames();
+
+      final m1Date = DateTime(_startYear, _startMonth, 1);
+      final m2Date = DateTime(_startYear, _startMonth + 1, 1);
+      final m3Date = DateTime(_startYear, _startMonth + 2, 1);
 
       final m1Key = DateFormat('MM-yyyy').format(m1Date);
       final m2Key = DateFormat('MM-yyyy').format(m2Date);
       final m3Key = DateFormat('MM-yyyy').format(m3Date);
 
-      // 2. Filter transaksi langsung dari memori (0 Reads!)
       final Map<String, Map<String, dynamic>> storeMap = {};
       _isFallbackToAll = false;
 
       if (_erpSourceFilter == 'ERP_ONLY') {
-        // Filter hanya transaksi yang SUDAH masuk ERP (erpSyncDate != null)
-        final erpTransactions = allTransactions.where((tr) {
+        final erpTr = allTr.where((tr) {
           if (tr.erpSyncDate == null) return false;
-          final trMonthKey = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
-          return trMonthKey == m1Key || trMonthKey == m2Key || trMonthKey == m3Key;
+          final key = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
+          return key == m1Key || key == m2Key || key == m3Key;
         }).toList();
 
-        if (erpTransactions.isEmpty) {
-          // Tidak ada transaksi ERP → fallback ke semua transaksi
+        if (erpTr.isEmpty) {
           _isFallbackToAll = true;
-          _processAllTransactions(allTransactions, customers, storeMap, m1Key, m2Key, m3Key);
+          _aggregateTransactions(allTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: false);
         } else {
-          // Proses transaksi ERP
-          for (var tr in erpTransactions) {
-            final trMonthKey = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
-            _addToStoreMap(tr, customers, storeMap, trMonthKey, m1Key, m2Key, m3Key);
-          }
+          _aggregateTransactions(erpTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: true);
         }
       } else {
-        // ALL_TRANSACTIONS: Gunakan semua transaksi
-        _processAllTransactions(allTransactions, customers, storeMap, m1Key, m2Key, m3Key);
+        _aggregateTransactions(allTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: false);
       }
 
-      // 3. Build ranking list dari storeMap — TANPA batasan, tampilkan SEMUA outlet
-      final List<Map<String, dynamic>> allOutlets = [];
-      double sumM1 = 0.0;
-      double sumM2 = 0.0;
-      double sumM3 = 0.0;
-      double sumTotal = 0.0;
+      final List<Map<String, dynamic>> outlets = [];
+      double gM1 = 0.0;
+      double gM2 = 0.0;
+      double gM3 = 0.0;
+      double gTotal = 0.0;
 
       storeMap.forEach((alias, data) {
-        final m1 = ((data['m1'] ?? 0.0) as num).toDouble();
-        final m2 = ((data['m2'] ?? 0.0) as num).toDouble();
-        final m3 = ((data['m3'] ?? 0.0) as num).toDouble();
+        final m1 = _parseNum(data['m1']);
+        final m2 = _parseNum(data['m2']);
+        final m3 = _parseNum(data['m3']);
         final total = m1 + m2 + m3;
         final average = total / 3.0;
 
-        sumM1 += m1;
-        sumM2 += m2;
-        sumM3 += m3;
-        sumTotal += total;
+        gM1 += m1;
+        gM2 += m2;
+        gM3 += m3;
+        gTotal += total;
 
-        allOutlets.add({
+        outlets.add({
           'alias': alias,
           'city': (data['city'] ?? '-').toString(),
           'month1': m1,
@@ -212,30 +204,30 @@ class _RankingKacabViewState extends State<RankingKacabView> {
         });
       });
 
-      // Sort ALL outlets in descending order by average 3-month sales
-      allOutlets.sort((a, b) => ((b['average'] ?? 0.0) as num).compareTo((a['average'] ?? 0.0) as num));
+      // Sort descending by 3-month average
+      outlets.sort((a, b) => _parseNum(b['average']).compareTo(_parseNum(a['average'])));
 
-      // Assign rank ke SEMUA outlet
-      for (int i = 0; i < allOutlets.length; i++) {
-        allOutlets[i]['rank'] = i + 1;
+      // Assign rank to ALL outlets (no limit)
+      for (int i = 0; i < outlets.length; i++) {
+        outlets[i]['rank'] = i + 1;
       }
 
       if (mounted) {
         setState(() {
-          _rankingData = allOutlets;
-          _grandTotalM1 = sumM1;
-          _grandTotalM2 = sumM2;
-          _grandTotalM3 = sumM3;
-          _grandTotalAll = sumTotal;
-          _grandAverageAll = sumTotal / 3.0;
+          _rankingData = outlets;
+          _grandTotalM1 = gM1;
+          _grandTotalM2 = gM2;
+          _grandTotalM3 = gM3;
+          _grandTotalAll = gTotal;
+          _grandAverageAll = gTotal / 3.0;
 
-          _totalStoreCount = allOutlets.length;
-          _top1StoreName = allOutlets.isNotEmpty ? (allOutlets.first['alias'] ?? '-').toString() : '-';
-          _top1Average = allOutlets.isNotEmpty ? ((allOutlets.first['average'] ?? 0.0) as num).toDouble() : 0.0;
+          _totalStoreCount = outlets.length;
+          _top1StoreName = outlets.isNotEmpty ? outlets.first['alias'].toString() : '-';
+          _top1Average = outlets.isNotEmpty ? _parseNum(outlets.first['average']) : 0.0;
         });
       }
     } catch (e, stack) {
-      debugPrint("Error loading ranking data: $e\n$stack");
+      debugPrint("Error loading ranking kacab data: $e\n$stack");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -243,143 +235,89 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
   }
 
-  /// Helper: Tambahkan transaksi ke storeMap berdasarkan aliasName
-  void _addToStoreMap(
-    dynamic tr,
-    List<Customer> customers,
-    Map<String, Map<String, dynamic>> storeMap,
-    String trMonthKey,
-    String m1Key,
-    String m2Key,
-    String m3Key,
-  ) {
-    Customer? cust;
-    try {
-      cust = customers.firstWhere((c) => c.id == tr.customerId);
-    } catch (_) {}
-
-    String aliasName = (cust != null && cust.aliasName.isNotEmpty)
-        ? cust.aliasName
-        : (tr.aliasName != null && tr.aliasName.toString().isNotEmpty ? tr.aliasName.toString() : ((tr.customerName ?? 'TOKO TANPA NAMA').toString()));
-    if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
-
-    String city = (cust != null && cust.city.isNotEmpty)
-        ? cust.city
-        : (tr.city != null && tr.city.toString().isNotEmpty ? tr.city.toString() : '-');
-
-    storeMap.putIfAbsent(aliasName, () => {
-      'alias': aliasName,
-      'city': city,
-      'm1': 0.0,
-      'm2': 0.0,
-      'm3': 0.0,
-    });
-
-    double grandTotal = ((tr.grandTotal ?? 0.0) as num).toDouble();
-
-    if (trMonthKey == m1Key) {
-      storeMap[aliasName]!['m1'] = ((storeMap[aliasName]!['m1'] ?? 0.0) as num).toDouble() + grandTotal;
-    } else if (trMonthKey == m2Key) {
-      storeMap[aliasName]!['m2'] = ((storeMap[aliasName]!['m2'] ?? 0.0) as num).toDouble() + grandTotal;
-    } else if (trMonthKey == m3Key) {
-      storeMap[aliasName]!['m3'] = ((storeMap[aliasName]!['m3'] ?? 0.0) as num).toDouble() + grandTotal;
-    }
-  }
-
-  /// Helper: Proses semua transaksi (fallback / mode ALL_TRANSACTIONS)
-  void _processAllTransactions(
-    List<dynamic> allTransactions,
+  void _aggregateTransactions(
+    List<model_tr.Transaction> transactions,
     List<Customer> customers,
     Map<String, Map<String, dynamic>> storeMap,
     String m1Key,
     String m2Key,
-    String m3Key,
-  ) {
-    for (var tr in allTransactions) {
-      final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date ?? DateTime.now();
-      final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
+    String m3Key, {
+    required bool isErpOnly,
+  }) {
+    for (final tr in transactions) {
+      final DateTime? dateToUse = isErpOnly ? tr.erpSyncDate : (tr.erpSyncDate ?? tr.deliveryDate ?? tr.date);
+      if (dateToUse == null) continue;
 
-      if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
-        continue;
+      final key = DateFormat('MM-yyyy').format(dateToUse);
+      if (key != m1Key && key != m2Key && key != m3Key) continue;
+
+      Customer? cust;
+      try {
+        cust = customers.firstWhere((c) => c.id == tr.customerId);
+      } catch (_) {}
+
+      String aliasName = (cust != null && cust.aliasName.trim().isNotEmpty)
+          ? cust.aliasName.trim()
+          : (tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : (tr.customerName.trim().isNotEmpty ? tr.customerName.trim() : 'TOKO TANPA NAMA'));
+      if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
+
+      String city = (cust != null && cust.city.trim().isNotEmpty)
+          ? cust.city.trim()
+          : (tr.city.trim().isNotEmpty ? tr.city.trim() : '-');
+
+      storeMap.putIfAbsent(aliasName, () => {
+        'alias': aliasName,
+        'city': city,
+        'm1': 0.0,
+        'm2': 0.0,
+        'm3': 0.0,
+      });
+
+      final double amount = tr.grandTotal;
+
+      if (key == m1Key) {
+        storeMap[aliasName]!['m1'] = _parseNum(storeMap[aliasName]!['m1']) + amount;
+      } else if (key == m2Key) {
+        storeMap[aliasName]!['m2'] = _parseNum(storeMap[aliasName]!['m2']) + amount;
+      } else if (key == m3Key) {
+        storeMap[aliasName]!['m3'] = _parseNum(storeMap[aliasName]!['m3']) + amount;
       }
-
-      _addToStoreMap(tr, customers, storeMap, trMonthKey, m1Key, m2Key, m3Key);
     }
   }
 
-  void _setPeriodPreset(int startMonth, int startYear) {
-    setState(() {
-      _startMonth = startMonth;
-      _startYear = startYear;
-    });
-    _loadRankingData();
+  void _onPeriodChanged(String? val) {
+    if (val == null) return;
+    final parts = val.split('_');
+    if (parts.length == 2) {
+      setState(() {
+        _startMonth = int.tryParse(parts[0]) ?? _startMonth;
+        _startYear = int.tryParse(parts[1]) ?? _startYear;
+      });
+      _loadRankingData();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    try {
-      return _buildContent(context);
-    } catch (e, stack) {
-      debugPrint("RankingKacabView render error: $e\n$stack");
-      return Container(
-        color: const Color(0xFF0F172A),
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.redAccent),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
-                const SizedBox(height: 16),
-                const Text(
-                  'Terjadi Kesalahan Tampilan Ranking Kacab',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                SelectableText(
-                  '$e\n\n$stack',
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-  Widget _buildContent(BuildContext context) {
-    // Search filtering
-    final filteredList = _rankingData.where((item) {
+    final filtered = _rankingData.where((item) {
       if (_searchQuery.trim().isEmpty) return true;
       final q = _searchQuery.toLowerCase();
-      final alias = (item['alias'] ?? '').toString().toLowerCase();
-      final city = (item['city'] ?? '').toString().toLowerCase();
+      final alias = item['alias'].toString().toLowerCase();
+      final city = item['city'].toString().toLowerCase();
       return alias.contains(q) || city.contains(q);
     }).toList();
 
-    // Pastikan _periodItems tidak kosong & value dropdown selalu valid
-    if (_periodItems.isEmpty) {
-      _buildPeriodItems();
-    }
-    final String targetVal = '${_startMonth}_$_startYear';
-    final bool valueExists = _periodItems.any((item) => item['value'] == targetVal);
-    final String? dropdownValue = valueExists 
-        ? targetVal 
-        : (_periodItems.isNotEmpty ? _periodItems.first['value'] as String : null);
+    final selectedKey = '${_startMonth}_$_startYear';
+    final hasKey = _periodOptions.any((opt) => opt['value'] == selectedKey);
+    final dropdownValue = hasKey ? selectedKey : (_periodOptions.isNotEmpty ? _periodOptions.first['value'] : null);
 
-    return Padding(
+    return Container(
+      color: const Color(0xFF0F172A),
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top Header Row (Title & Excel Style Info)
+          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -399,22 +337,24 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                       const SizedBox(width: 12),
                       const Text(
                         'LAPORAN WEEKLY KACAB',
-                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 14, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
+
+              // Actions Header (Filter & Period Selector)
               Wrap(
                 spacing: 10,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  // Filter Source (Hanya ERP vs Semua Data)
+                  // Filter Source Dropdown
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
@@ -434,9 +374,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                         ],
                         onChanged: (val) {
                           if (val != null) {
-                            setState(() {
-                              _erpSourceFilter = val;
-                            });
+                            setState(() => _erpSourceFilter = val);
                             _loadRankingData();
                           }
                         },
@@ -444,8 +382,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                     ),
                   ),
 
-                  // Dynamic 3-Month Range Selector
-                  if (_periodItems.isNotEmpty)
+                  // 3-Month Range Selector
+                  if (_periodOptions.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                       decoration: BoxDecoration(
@@ -460,18 +398,13 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                           style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                           icon: const Icon(Icons.date_range_rounded, color: Color(0xFF38BDF8), size: 18),
                           menuMaxHeight: 400,
-                          items: _periodItems.map<DropdownMenuItem<String>>((item) {
+                          items: _periodOptions.map((opt) {
                             return DropdownMenuItem<String>(
-                              value: (item['value'] ?? '').toString(),
-                              child: Text((item['label'] ?? '').toString()),
+                              value: opt['value']!,
+                              child: Text(opt['label']!),
                             );
                           }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              final parts = val.split('_');
-                              _setPeriodPreset(int.parse(parts[0]), int.parse(parts[1]));
-                            }
-                          },
+                          onChanged: _onPeriodChanged,
                         ),
                       ),
                     ),
@@ -487,7 +420,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           ),
           const SizedBox(height: 12),
 
-          // Fallback Banner
+          // Fallback Alert Banner
           if (_isFallbackToAll) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -502,7 +435,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Info: Transaksi belum di-set Status "SUDAH ERP" untuk periode ini. Menampilkan data berdasarkan semua transaksi. Anda dapat mengupdate Status ERP di menu Histori Transaksi.',
+                      'Info: Transaksi belum di-set Status "SUDAH ERP" untuk periode ini. Menampilkan data berdasarkan semua transaksi.',
                       style: TextStyle(color: Colors.amberAccent, fontSize: 12),
                     ),
                   ),
@@ -512,43 +445,43 @@ class _RankingKacabViewState extends State<RankingKacabView> {
             const SizedBox(height: 12),
           ],
 
-          // Summary KPI Stat Cards
+          // KPI Cards Row
           Row(
             children: [
               Expanded(
-                child: _buildStatCard(
+                child: _buildKpiCard(
                   title: 'TOTAL RATA-RATA 3 BULAN',
-                  value: currencyFormatter.format(_grandAverageAll),
-                  subtitle: 'Total Omset: ${currencyFormatter.format(_grandTotalAll)}',
+                  value: _currency.format(_grandAverageAll),
+                  subtitle: 'Total Omset: ${_currency.format(_grandTotalAll)}',
                   icon: Icons.analytics_rounded,
-                  accentColor: Colors.greenAccent,
+                  color: Colors.greenAccent,
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: _buildStatCard(
+                child: _buildKpiCard(
                   title: 'TOKO PERINGKAT #1 🥇',
                   value: _top1StoreName,
-                  subtitle: 'Rata-rata/Bln: ${currencyFormatter.format(_top1Average)}',
+                  subtitle: 'Rata-rata/Bln: ${_currency.format(_top1Average)}',
                   icon: Icons.emoji_events_rounded,
-                  accentColor: Colors.amberAccent,
+                  color: Colors.amberAccent,
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: _buildStatCard(
+                child: _buildKpiCard(
                   title: 'TOTAL TOKO / OUTLET',
                   value: '$_totalStoreCount Toko',
                   subtitle: 'Semua Toko Masuk Peringkat',
                   icon: Icons.store_rounded,
-                  accentColor: const Color(0xFF38BDF8),
+                  color: const Color(0xFF38BDF8),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
 
-          // Search Bar
+          // Search Input Bar
           SizedBox(
             height: 40,
             child: TextField(
@@ -566,27 +499,27 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                });
-              },
+              onChanged: (val) => setState(() => _searchQuery = val),
             ),
           ),
           const SizedBox(height: 12),
 
-          // Excel Style Data Table
+          // Ranking Data Table Area
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filteredList.isEmpty
-                    ? const Center(child: Text('Belum ada data transaksi untuk periode 3 bulan ini.', style: TextStyle(color: Color(0xFF94A3B8))))
+                : filtered.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Belum ada data transaksi untuk periode 3 bulan ini.',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                        ),
+                      )
                     : Container(
-                        width: double.infinity,
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E293B),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                          border: Border.all(color: Colors.white10),
                         ),
                         child: SingleChildScrollView(
                           scrollDirection: Axis.vertical,
@@ -607,9 +540,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                 const DataColumn(label: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
                               ],
                               rows: [
-                                ...List.generate(filteredList.length, (idx) {
-                                  final item = filteredList[idx];
-                                  final rank = ((item['rank'] ?? (idx + 1)) as num).toInt();
+                                ...List.generate(filtered.length, (idx) {
+                                  final item = filtered[idx];
+                                  final int rank = (item['rank'] as num).toInt();
 
                                   Color badgeColor = Colors.white;
                                   String rankLabel = '$rank';
@@ -646,7 +579,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                       DataCell(rankWidget),
                                       DataCell(
                                         Text(
-                                          (item['alias'] ?? '-').toString(),
+                                          item['alias'].toString(),
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.bold,
@@ -654,26 +587,26 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                           ),
                                         ),
                                       ),
-                                      DataCell(Text(currencyFormatter.format(((item['month1'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(((item['month2'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(((item['month3'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(((item['total'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Text(currencyFormatter.format(((item['average'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(_currency.format(_parseNum(item['month1'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(_currency.format(_parseNum(item['month2'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(_currency.format(_parseNum(item['month3'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(_currency.format(_parseNum(item['total'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(_currency.format(_parseNum(item['average'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                     ],
                                   );
                                 }),
 
-                                // TOTAL GRANDTOTAL (SEMUA) Summary Row
+                                // TOTAL SUMMARY ROW
                                 DataRow(
                                   color: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                   cells: [
                                     const DataCell(Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                                     const DataCell(Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                    DataCell(Text(currencyFormatter.format(_grandTotalM1), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(currencyFormatter.format(_grandTotalM2), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(currencyFormatter.format(_grandTotalM3), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(currencyFormatter.format(_grandTotalAll), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                    DataCell(Text(currencyFormatter.format(_grandAverageAll), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                    DataCell(Text(_currency.format(_grandTotalM1), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(_currency.format(_grandTotalM2), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(_currency.format(_grandTotalM3), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(_currency.format(_grandTotalAll), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                    DataCell(Text(_currency.format(_grandAverageAll), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                   ],
                                 ),
                               ],
@@ -687,29 +620,29 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     );
   }
 
-  Widget _buildStatCard({
+  Widget _buildKpiCard({
     required String title,
     required String value,
     required String subtitle,
     required IconData icon,
-    required Color accentColor,
+    required Color color,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accentColor.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.15),
+              color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: accentColor, size: 22),
+            child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -723,7 +656,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: TextStyle(color: accentColor, fontSize: 15, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
