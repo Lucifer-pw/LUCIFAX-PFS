@@ -47,8 +47,35 @@ app.*.map.json
 *.xlsx
 *.txt
 *.pdf
+*.csv
+*.db
+*.sqlite
 /PDF_Transaksi/
 /laporan/
 /new/
 /Update/
 /LAPORAN PEKALONGAN/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.crt
+*.pfx
+*.p12
+
+# Firebase & Cloud Service Accounts / Admin Keys
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
+*secret*.json
+secrets/
+
+# Android & iOS Keys / Credentials
+key.properties
+*.jks
+*.keystore
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
