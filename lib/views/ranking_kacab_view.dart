@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/customer_provider.dart';
 import '../models/customer.dart';
-import '../services/firebase_service.dart';
 
 class RankingKacabView extends StatefulWidget {
   const RankingKacabView({super.key});
@@ -20,9 +19,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
   bool _isLoading = false;
   String _erpSourceFilter = 'ERP_ONLY'; // 'ERP_ONLY' or 'ALL_TRANSACTIONS'
   
-  // Selected 3-Month Range Start (Month & Year)
-  int _startMonth = 5; // Default: Mei (5)
-  int _startYear = 2026; // Default: 2026
+  // Selected 3-Month Range Start (Month & Year) — default auto-set di initState
+  int _startMonth = 5;
+  int _startYear = 2026;
   
   String _searchQuery = '';
   bool _isFallbackToAll = false;
@@ -44,9 +43,14 @@ class _RankingKacabViewState extends State<RankingKacabView> {
   String _month2Name = '';
   String _month3Name = '';
 
+  // Dynamic period dropdown items
+  List<Map<String, dynamic>> _periodItems = [];
+
   @override
   void initState() {
     super.initState();
+    _initDefaultPeriod();
+    _buildPeriodItems();
     _loadRankingData();
   }
 
@@ -56,6 +60,48 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     super.dispose();
   }
 
+  /// Set default period: 3 bulan terakhir berdasarkan bulan saat ini
+  /// Misal Juli 2026 → default Mei-Juli 2026 (_startMonth=5, _startYear=2026)
+  void _initDefaultPeriod() {
+    final now = DateTime.now();
+    // Start month = 2 bulan sebelum bulan saat ini
+    DateTime startDate = DateTime(now.year, now.month - 2, 1);
+    _startMonth = startDate.month;
+    _startYear = startDate.year;
+  }
+
+  /// Generate daftar periode 3 bulan secara dinamis dari bulan saat ini mundur ke Jan 2025
+  void _buildPeriodItems() {
+    final items = <Map<String, dynamic>>[];
+    final now = DateTime.now();
+    
+    // Mulai dari 2 bulan sebelum bulan saat ini (agar range mencakup bulan ini)
+    // Contoh: Juli 2026 → mulai dari Mei 2026 (Mei-Juli 2026)
+    DateTime cursor = DateTime(now.year, now.month - 2, 1);
+    final DateTime earliest = DateTime(2025, 1, 1); // Batas paling awal: Januari 2025
+
+    while (!cursor.isBefore(earliest)) {
+      final m1 = cursor;
+      // m2 is between m1 and m3 (not displayed in label)
+      final m3 = DateTime(cursor.year, cursor.month + 2, 1);
+
+      final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
+      // m2 label not displayed (only m1 - m3 range shown)
+      final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
+
+      items.add({
+        'value': '${m1.month}_${m1.year}',
+        'label': '$m1Label - $m3Label',
+      });
+
+      // Mundur 1 bulan
+      cursor = DateTime(cursor.year, cursor.month - 1, 1);
+    }
+
+    _periodItems = items;
+  }
+
+  /// Load ranking data dari transaksi di memori (0 Firestore Reads)
   Future<void> _loadRankingData() async {
     setState(() => _isLoading = true);
     try {
@@ -64,7 +110,6 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       
       final allTransactions = trProvider.transactions;
       final customers = custProvider.customers;
-      final FirebaseService dbService = FirebaseService();
 
       // 1. Build 3-Month Window dates based on selected _startMonth & _startYear
       DateTime m1Date = DateTime(_startYear, _startMonth, 1);
@@ -79,107 +124,35 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final m2Key = DateFormat('MM-yyyy').format(m2Date);
       final m3Key = DateFormat('MM-yyyy').format(m3Date);
 
-      // 2. Fetch ERP Summaries for each month (same data source as Stok ERP & Opname Cabang)
-      final m1Records = await dbService.getErpSummaries(m1Key, cachedTransactions: allTransactions);
-      final m2Records = await dbService.getErpSummaries(m2Key, cachedTransactions: allTransactions);
-      final m3Records = await dbService.getErpSummaries(m3Key, cachedTransactions: allTransactions);
-
+      // 2. Filter transaksi langsung dari memori (0 Reads!)
       final Map<String, Map<String, dynamic>> storeMap = {};
-      bool usedErpSummaries = false;
+      _isFallbackToAll = false;
 
-      if (_erpSourceFilter == 'ERP_ONLY' && (m1Records.isNotEmpty || m2Records.isNotEmpty || m3Records.isNotEmpty)) {
-        usedErpSummaries = true;
-        _isFallbackToAll = false;
+      if (_erpSourceFilter == 'ERP_ONLY') {
+        // Filter hanya transaksi yang SUDAH masuk ERP (erpSyncDate != null)
+        final erpTransactions = allTransactions.where((tr) {
+          if (tr.erpSyncDate == null) return false;
+          final trMonthKey = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
+          return trMonthKey == m1Key || trMonthKey == m2Key || trMonthKey == m3Key;
+        }).toList();
 
-        void processErpMonthRecords(List<Map<String, dynamic>> records, String mKey) {
-          for (var rec in records) {
-            final customerId = (rec['customerId'] ?? '').toString();
-            Customer? cust;
-            try {
-              cust = customers.firstWhere((c) => c.id == customerId);
-            } catch (_) {}
-
-            String aliasName = (cust != null && cust.aliasName.isNotEmpty)
-                ? cust.aliasName
-                : (rec['aliasName'] ?? rec['customerName'] ?? 'TOKO TANPA NAMA').toString();
-            if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
-
-            String city = (cust != null && cust.city.isNotEmpty)
-                ? cust.city
-                : (rec['city'] ?? '-').toString();
-
-            double income = (rec['totalIncome'] ?? 0.0).toDouble();
-
-            storeMap.putIfAbsent(aliasName, () => {
-              'alias': aliasName,
-              'city': city,
-              'm1': 0.0,
-              'm2': 0.0,
-              'm3': 0.0,
-            });
-
-            if (mKey == m1Key) {
-              storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + income;
-            } else if (mKey == m2Key) {
-              storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + income;
-            } else if (mKey == m3Key) {
-              storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + income;
-            }
-          }
-        }
-
-        processErpMonthRecords(m1Records, m1Key);
-        processErpMonthRecords(m2Records, m2Key);
-        processErpMonthRecords(m3Records, m3Key);
-      }
-
-      if (!usedErpSummaries) {
-        if (_erpSourceFilter == 'ERP_ONLY') {
+        if (erpTransactions.isEmpty) {
+          // Tidak ada transaksi ERP → fallback ke semua transaksi
           _isFallbackToAll = true;
+          _processAllTransactions(allTransactions, customers, storeMap, m1Key, m2Key, m3Key);
         } else {
-          _isFallbackToAll = false;
-        }
-
-        for (var tr in allTransactions) {
-          final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
-          final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
-
-          if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
-            continue;
-          }
-
-          Customer? cust;
-          try {
-            cust = customers.firstWhere((c) => c.id == tr.customerId);
-          } catch (_) {}
-
-          String aliasName = (cust != null && cust.aliasName.isNotEmpty)
-              ? cust.aliasName
-              : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
-          if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
-
-          String city = (cust != null && cust.city.isNotEmpty)
-              ? cust.city
-              : (tr.city.isNotEmpty ? tr.city : '-');
-
-          storeMap.putIfAbsent(aliasName, () => {
-            'alias': aliasName,
-            'city': city,
-            'm1': 0.0,
-            'm2': 0.0,
-            'm3': 0.0,
-          });
-
-          if (trMonthKey == m1Key) {
-            storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + tr.grandTotal;
-          } else if (trMonthKey == m2Key) {
-            storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + tr.grandTotal;
-          } else if (trMonthKey == m3Key) {
-            storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + tr.grandTotal;
+          // Proses transaksi ERP
+          for (var tr in erpTransactions) {
+            final trMonthKey = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
+            _addToStoreMap(tr, customers, storeMap, trMonthKey, m1Key, m2Key, m3Key);
           }
         }
+      } else {
+        // ALL_TRANSACTIONS: Gunakan semua transaksi
+        _processAllTransactions(allTransactions, customers, storeMap, m1Key, m2Key, m3Key);
       }
 
+      // 3. Build ranking list dari storeMap — TANPA batasan, tampilkan SEMUA outlet
       final List<Map<String, dynamic>> allOutlets = [];
       double sumM1 = 0.0;
       double sumM2 = 0.0;
@@ -206,55 +179,19 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           'month3': m3,
           'total': total,
           'average': average,
-          'isOther': false,
         });
       });
 
       // Sort ALL outlets in descending order by average 3-month sales
       allOutlets.sort((a, b) => (b['average'] as double).compareTo(a['average'] as double));
 
-      // Separate Top 15 and OTHER
-      final List<Map<String, dynamic>> finalDisplayList = [];
-      
-      final int topCount = allOutlets.length < 15 ? allOutlets.length : 15;
-      for (int i = 0; i < topCount; i++) {
-        final item = Map<String, dynamic>.from(allOutlets[i]);
-        item['rank'] = i + 1;
-        finalDisplayList.add(item);
-      }
-
-      // If stores exceed 15, aggregate ranks 16+ into "OTHER" category
-      if (allOutlets.length > 15) {
-        double otherM1 = 0.0;
-        double otherM2 = 0.0;
-        double otherM3 = 0.0;
-        double otherTotal = 0.0;
-
-        for (int i = 15; i < allOutlets.length; i++) {
-          final item = allOutlets[i];
-          otherM1 += item['month1'] as double;
-          otherM2 += item['month2'] as double;
-          otherM3 += item['month3'] as double;
-          otherTotal += item['total'] as double;
-        }
-
-        final int otherStoreCount = allOutlets.length - 15;
-        finalDisplayList.add({
-          'rank': 16,
-          'alias': 'OTHER ($otherStoreCount Toko)',
-          'city': '-',
-          'month1': otherM1,
-          'month2': otherM2,
-          'month3': otherM3,
-          'total': otherTotal,
-          'average': otherTotal / 3.0,
-          'isOther': true,
-          'otherCount': otherStoreCount,
-        });
+      // Assign rank ke SEMUA outlet (tanpa batasan Top 15 / OTHER)
+      for (int i = 0; i < allOutlets.length; i++) {
+        allOutlets[i]['rank'] = i + 1;
       }
 
       setState(() {
-        _rankingData = finalDisplayList;
+        _rankingData = allOutlets;
         _grandTotalM1 = sumM1;
         _grandTotalM2 = sumM2;
         _grandTotalM3 = sumM3;
@@ -269,6 +206,68 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       debugPrint("Error loading ranking data: $e");
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// Helper: Tambahkan transaksi ke storeMap berdasarkan aliasName
+  void _addToStoreMap(
+    dynamic tr,
+    List<Customer> customers,
+    Map<String, Map<String, dynamic>> storeMap,
+    String trMonthKey,
+    String m1Key,
+    String m2Key,
+    String m3Key,
+  ) {
+    Customer? cust;
+    try {
+      cust = customers.firstWhere((c) => c.id == tr.customerId);
+    } catch (_) {}
+
+    String aliasName = (cust != null && cust.aliasName.isNotEmpty)
+        ? cust.aliasName
+        : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
+    if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
+
+    String city = (cust != null && cust.city.isNotEmpty)
+        ? cust.city
+        : (tr.city.isNotEmpty ? tr.city : '-');
+
+    storeMap.putIfAbsent(aliasName, () => {
+      'alias': aliasName,
+      'city': city,
+      'm1': 0.0,
+      'm2': 0.0,
+      'm3': 0.0,
+    });
+
+    if (trMonthKey == m1Key) {
+      storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + tr.grandTotal;
+    } else if (trMonthKey == m2Key) {
+      storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + tr.grandTotal;
+    } else if (trMonthKey == m3Key) {
+      storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + tr.grandTotal;
+    }
+  }
+
+  /// Helper: Proses semua transaksi (fallback / mode ALL_TRANSACTIONS)
+  void _processAllTransactions(
+    List<dynamic> allTransactions,
+    List<Customer> customers,
+    Map<String, Map<String, dynamic>> storeMap,
+    String m1Key,
+    String m2Key,
+    String m3Key,
+  ) {
+    for (var tr in allTransactions) {
+      final DateTime effectiveDate = tr.erpSyncDate ?? tr.deliveryDate ?? tr.date;
+      final trMonthKey = DateFormat('MM-yyyy').format(effectiveDate);
+
+      if (trMonthKey != m1Key && trMonthKey != m2Key && trMonthKey != m3Key) {
+        continue;
+      }
+
+      _addToStoreMap(tr, customers, storeMap, trMonthKey, m1Key, m2Key, m3Key);
     }
   }
 
@@ -361,7 +360,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                     ),
                   ),
 
-                  // Preset 3-Month Range Selector
+                  // Dynamic 3-Month Range Selector
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
@@ -375,13 +374,13 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                         dropdownColor: const Color(0xFF1E293B),
                         style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                         icon: const Icon(Icons.date_range_rounded, color: Color(0xFF38BDF8), size: 18),
-                        items: const [
-                          DropdownMenuItem(value: '5_2026', child: Text('Mei - Juli 2026')),
-                          DropdownMenuItem(value: '4_2026', child: Text('April - Juni 2026')),
-                          DropdownMenuItem(value: '3_2026', child: Text('Maret - Mei 2026')),
-                          DropdownMenuItem(value: '2_2026', child: Text('Februari - April 2026')),
-                          DropdownMenuItem(value: '1_2026', child: Text('Januari - Maret 2026')),
-                        ],
+                        menuMaxHeight: 400,
+                        items: _periodItems.map<DropdownMenuItem<String>>((item) {
+                          return DropdownMenuItem<String>(
+                            value: item['value'] as String,
+                            child: Text(item['label'] as String),
+                          );
+                        }).toList(),
                         onChanged: (val) {
                           if (val != null) {
                             final parts = val.split('_');
@@ -418,7 +417,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Info: Transaksi belum di-set Status "SUDAH ERP". Menampilkan data berdasarkan transaksi saat ini. Anda dapat mengupdate Status ERP di menu Histori Transaksi.',
+                      'Info: Transaksi belum di-set Status "SUDAH ERP" untuk periode ini. Menampilkan data berdasarkan semua transaksi. Anda dapat mengupdate Status ERP di menu Histori Transaksi.',
                       style: TextStyle(color: Colors.amberAccent, fontSize: 12),
                     ),
                   ),
@@ -455,9 +454,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                 child: _buildStatCard(
                   title: 'TOTAL TOKO / OUTLET',
                   value: '$_totalStoreCount Toko',
-                  subtitle: _totalStoreCount > 15
-                      ? '15 Toko Utama + ${_totalStoreCount - 15} Kategori OTHER'
-                      : 'Semua Toko Masuk Peringkat Utama',
+                  subtitle: 'Semua Toko Masuk Peringkat',
                   icon: Icons.store_rounded,
                   accentColor: const Color(0xFF38BDF8),
                 ),
@@ -530,53 +527,35 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                   ...List.generate(filteredList.length, (idx) {
                                     final item = filteredList[idx];
                                     final rank = item['rank'] as int;
-                                    final isOther = item['isOther'] == true;
 
-                                    Widget rankWidget;
-                                    if (isOther) {
-                                      rankWidget = Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: Colors.purpleAccent.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: Colors.purpleAccent, width: 0.8),
-                                        ),
-                                        child: const Text(
-                                          'OTHER',
-                                          style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                      );
-                                    } else {
-                                      Color badgeColor = Colors.white;
-                                      String rankLabel = '$rank';
-                                      if (rank == 1) {
-                                        badgeColor = Colors.amber;
-                                        rankLabel = '🥇 1';
-                                      } else if (rank == 2) {
-                                        badgeColor = Colors.grey.shade300;
-                                        rankLabel = '🥈 2';
-                                      } else if (rank == 3) {
-                                        badgeColor = Colors.amber.shade800;
-                                        rankLabel = '🥉 3';
-                                      }
-
-                                      rankWidget = Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
-                                        ),
-                                        child: Text(
-                                          rankLabel,
-                                          style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                      );
+                                    Color badgeColor = Colors.white;
+                                    String rankLabel = '$rank';
+                                    if (rank == 1) {
+                                      badgeColor = Colors.amber;
+                                      rankLabel = '🥇 1';
+                                    } else if (rank == 2) {
+                                      badgeColor = Colors.grey.shade300;
+                                      rankLabel = '🥈 2';
+                                    } else if (rank == 3) {
+                                      badgeColor = Colors.amber.shade800;
+                                      rankLabel = '🥉 3';
                                     }
+
+                                    final rankWidget = Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
+                                      ),
+                                      child: Text(
+                                        rankLabel,
+                                        style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                      ),
+                                    );
 
                                     return DataRow(
                                       color: MaterialStateProperty.resolveWith<Color?>((states) {
-                                        if (isOther) return Colors.purple.withOpacity(0.08);
                                         if (rank == 1) return Colors.amber.withOpacity(0.05);
                                         return idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02);
                                       }),
@@ -585,8 +564,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                         DataCell(
                                           Text(
                                             item['alias'],
-                                            style: TextStyle(
-                                              color: isOther ? Colors.purpleAccent : Colors.white,
+                                            style: const TextStyle(
+                                              color: Colors.white,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,
                                             ),
