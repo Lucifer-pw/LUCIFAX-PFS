@@ -985,6 +985,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Show detailed item list in dialog
   void _showDetailDialog(model_tr.Transaction tr) {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
+    final isKacab = user?.isKacab ?? false;
     final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
     final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
     final isMobile = MediaQuery.of(context).size.width < 600;
@@ -1297,22 +1299,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 children: [
                   Row(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showEditTransactionDialog(tr);
-                          },
-                          icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
-                          label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFD97706),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      if (!isKacab) ...[
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _showEditTransactionDialog(tr);
+                            },
+                            icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
+                            label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD97706),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
@@ -1352,34 +1356,36 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ],
               )
             ] else ...[
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showEditTransactionDialog(tr);
-                },
-                icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
-                label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD97706),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              if (!isKacab) ...[
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showEditTransactionDialog(tr);
+                  },
+                  icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
+                  label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showMoveInvoiceItemsDialog(tr);
-                },
-                icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
-                label: const Text('Pindah / Gabung Item', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showMoveInvoiceItemsDialog(tr);
+                  },
+                  icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
+                  label: const Text('Pindah / Gabung Item', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
+                const SizedBox(width: 8),
+              ],
               OutlinedButton.icon(
                 onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
                 icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
