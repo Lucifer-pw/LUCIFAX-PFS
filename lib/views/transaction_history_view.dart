@@ -1024,119 +1024,119 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           ),
           content: SizedBox(
             width: isMobile ? double.maxFinite : 900,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Information Header Box
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: Column(
-                      children: [
-                        if (isMobile) ...[
-                          _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!),
-                          const SizedBox(height: 6),
-                          _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}'),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
-                              Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          const Divider(color: Color(0xFF1E293B)),
-                          const SizedBox(height: 6),
-                          _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date)),
-                          const SizedBox(height: 6),
-                          _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'),
-                          if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
-                            const SizedBox(height: 6),
-                            _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Information Header Box
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF334155)),
+                  ),
+                  child: Column(
+                    children: [
+                      if (isMobile) ...[
+                        _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!),
+                        const SizedBox(height: 6),
+                        _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}'),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
+                            Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
                           ],
-                          if (tr.erpSyncDate != null) ...[
-                            const SizedBox(height: 6),
-                            _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)),
+                        ),
+                        const SizedBox(height: 10),
+                        const Divider(color: Color(0xFF1E293B)),
+                        const SizedBox(height: 6),
+                        _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date)),
+                        const SizedBox(height: 6),
+                        _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'),
+                        if (tr.statusTransfer == 'PAID' && tr.transferDate != null) ...[
+                          const SizedBox(height: 6),
+                          _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)),
+                        ],
+                        if (tr.erpSyncDate != null) ...[
+                          const SizedBox(height: 6),
+                          _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)),
+                        ],
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(child: _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
                           ],
-                        ] else ...[
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!)),
-                              const SizedBox(width: 16),
-                              Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
-                              const SizedBox(width: 16),
-                              Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          const Divider(color: Color(0xFF1E293B)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date))),
-                              const SizedBox(width: 16),
-                              Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
-                            ],
-                          ),
-                          if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
-                                  Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)))
-                                else
-                                  const Spacer(),
-                                const SizedBox(width: 16),
-                                if (tr.erpSyncDate != null)
-                                  Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)))
-                                else
-                                  const Spacer(),
-                              ],
-                            ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
                           ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Divider(color: Color(0xFF1E293B)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date))),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
+                          ],
+                        ),
+                        if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
+                                Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)))
+                              else
+                                const Spacer(),
+                              const SizedBox(width: 16),
+                              if (tr.erpSyncDate != null)
+                                Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)))
+                              else
+                                const Spacer(),
+                            ],
+                          ),
                         ],
                       ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-                  
-                  // Section Label with Item Counter Badge
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Daftar Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${tr.items.length} Item',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                ),
 
-                  // Table Container with Clip, Scrollbar, and 100% Full Width Alignment
-                  Container(
+                const SizedBox(height: 12),
+                
+                // Section Label with Item Counter Badge
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Daftar Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${tr.items.length} Item',
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Table Container with Internal Scroll (ONLY THIS TABLE SCROLLS!)
+                Flexible(
+                  child: Container(
                     width: double.infinity,
-                    constraints: BoxConstraints(maxHeight: isMobile ? 320 : 420),
+                    constraints: BoxConstraints(maxHeight: isMobile ? 260 : 320),
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: const Color(0xFF0F172A),
@@ -1147,7 +1147,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       thumbVisibility: true,
                       child: SingleChildScrollView(
                         scrollDirection: Axis.vertical,
-                        padding: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.only(bottom: 10),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             return SingleChildScrollView(
@@ -1219,74 +1219,74 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       ),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-                  // Bottom Summary Footer (Catatan & Highlighted GRAND TOTAL)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (tr.note.isNotEmpty) ...[
-                          const Row(
-                            children: [
-                              Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                'Catatan / Keterangan:',
-                                style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B).withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF334155).withOpacity(0.5)),
-                            ),
-                            child: SelectableText(
-                              tr.note,
-                              style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                        ],
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Bottom Summary Footer (Catatan & Highlighted GRAND TOTAL) - PINNED AT BOTTOM!
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF334155)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (tr.note.isNotEmpty) ...[
+                        const Row(
                           children: [
-                            if (tr.note.isEmpty)
-                              const Text(
-                                'Catatan: -',
-                                style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic),
-                              )
-                            else
-                              const Spacer(),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                                Text(
-                                  _rupiahFormatter.format(tr.grandTotal),
-                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
-                                ),
-                              ],
+                            Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Catatan / Keterangan:',
+                              style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B).withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF334155).withOpacity(0.5)),
+                          ),
+                          child: SelectableText(
+                            tr.note,
+                            style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
                       ],
-                    ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (tr.note.isEmpty)
+                            const Text(
+                              'Catatan: -',
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            const Spacer(),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(
+                                _rupiahFormatter.format(tr.grandTotal),
+                                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           actions: [
@@ -1297,6 +1297,22 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 children: [
                   Row(
                     children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _showEditTransactionDialog(tr);
+                          },
+                          icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
+                          label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD97706),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
@@ -1309,7 +1325,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: false),
@@ -1332,6 +1352,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ],
               )
             ] else ...[
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showEditTransactionDialog(tr);
+                },
+                icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
+                label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);

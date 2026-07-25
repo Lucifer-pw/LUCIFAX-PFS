@@ -573,11 +573,15 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               // Add to Cart Button
               ElevatedButton.icon(
                 onPressed: () => _addItemToCart(trProvider),
-                icon: const Icon(Icons.add_rounded),
-                label: Text(_isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice'),
+                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                label: Text(
+                  _isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                ),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   backgroundColor: _isBonus ? Colors.green[700] : const Color(0xFF0284C7),
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
