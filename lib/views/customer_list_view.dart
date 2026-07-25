@@ -557,7 +557,6 @@ class _CustomerListViewState extends State<CustomerListView> {
                               ),
                             ),
                           ),
-                        ),
               ),
             ),
           ],

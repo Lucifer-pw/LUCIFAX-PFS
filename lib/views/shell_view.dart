@@ -415,7 +415,10 @@ class _ShellViewState extends State<ShellView> {
           Expanded(
             child: Container(
               color: const Color(0xFF0F172A),
-              child: navItems[_currentIndex]['widget'],
+              child: IndexedStack(
+                index: _currentIndex,
+                children: navItems.map<Widget>((item) => item['widget'] as Widget).toList(),
+              ),
             ),
           ),
         ],
