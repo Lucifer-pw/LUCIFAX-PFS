@@ -303,6 +303,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final discountController = TextEditingController(text: '0');
     final priceController = TextEditingController();
     bool isBonus = false;
+    int? editingItemIndex;
 
     showDialog(
       context: context,
@@ -310,6 +311,43 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             double grandTotal = editedItems.fold(0.0, (sum, item) => sum + item.subtotal);
+
+            void selectItemForEditing(int index) {
+              final item = editedItems[index];
+              Product? foundProduct;
+              try {
+                foundProduct = products.firstWhere((p) => p.id == item.productId);
+              } catch (_) {
+                foundProduct = Product(
+                  id: item.productId,
+                  name: item.productName,
+                  sizeGrams: item.sizeGrams,
+                  price: item.price,
+                  stock: 0,
+                  isiKarton: 0,
+                );
+              }
+
+              setDialogState(() {
+                editingItemIndex = index;
+                selectedProduct = foundProduct;
+                priceController.text = item.price.toStringAsFixed(0);
+                qtyController.text = item.qty.toStringAsFixed(0);
+                discountController.text = item.discountPercent.toStringAsFixed(1);
+                isBonus = item.isBonus;
+              });
+            }
+
+            void cancelItemEditing() {
+              setDialogState(() {
+                editingItemIndex = null;
+                selectedProduct = null;
+                qtyController.text = '1';
+                discountController.text = '0';
+                priceController.clear();
+                isBonus = false;
+              });
+            }
 
             void addItem() {
               if (selectedProduct == null) {
@@ -330,12 +368,36 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               final discount = double.tryParse(discountController.text) ?? 0.0;
               final customPrice = double.tryParse(priceController.text);
               final finalPrice = isBonus ? 0.0 : (customPrice ?? selectedProduct!.price);
+              final subtotal = isBonus ? 0.0 : qty * finalPrice * (1 - discount / 100);
+
+              if (editingItemIndex != null && editingItemIndex! < editedItems.length) {
+                // Update existing item
+                setDialogState(() {
+                  editedItems[editingItemIndex!] = model_tr.TransactionItem(
+                    productId: selectedProduct!.id,
+                    productName: selectedProduct!.name,
+                    price: finalPrice,
+                    qty: qty,
+                    discountPercent: isBonus ? 0 : discount,
+                    subtotal: subtotal,
+                    sizeGrams: selectedProduct!.sizeGrams,
+                    isBonus: isBonus,
+                  );
+                  editingItemIndex = null;
+                  selectedProduct = null;
+                  qtyController.text = '1';
+                  discountController.text = '0';
+                  priceController.clear();
+                  isBonus = false;
+                });
+                return;
+              }
 
               final existingIndex = editedItems.indexWhere((item) => item.productId == selectedProduct!.id && item.isBonus == isBonus);
               if (existingIndex != -1) {
                 final currentQty = editedItems[existingIndex].qty;
                 final newQty = currentQty + qty;
-                final subtotal = isBonus ? 0.0 : newQty * finalPrice * (1 - discount / 100);
+                final newSubtotal = isBonus ? 0.0 : newQty * finalPrice * (1 - discount / 100);
 
                 setDialogState(() {
                   editedItems[existingIndex] = model_tr.TransactionItem(
@@ -344,7 +406,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     price: finalPrice,
                     qty: newQty,
                     discountPercent: isBonus ? 0 : discount,
-                    subtotal: subtotal,
+                    subtotal: newSubtotal,
                     sizeGrams: selectedProduct!.sizeGrams,
                     isBonus: isBonus,
                   );
@@ -368,7 +430,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   return;
                 }
 
-                final subtotal = isBonus ? 0.0 : qty * finalPrice * (1 - discount / 100);
                 setDialogState(() {
                   editedItems.add(
                     model_tr.TransactionItem(
@@ -386,13 +447,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               }
 
               // Clear product picker inputs
-              setDialogState(() {
-                selectedProduct = null;
-                qtyController.text = '1';
-                discountController.text = '0';
-                priceController.clear();
-                isBonus = false;
-              });
+              cancelItemEditing();
             }
 
             return AlertDialog(
@@ -570,16 +625,50 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 14),
-                            ElevatedButton.icon(
-                              onPressed: addItem,
-                              icon: const Icon(Icons.add_rounded, size: 16),
-                              label: Text(isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice', style: const TextStyle(fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(42),
-                                backgroundColor: isBonus ? Colors.green[700] : const Color(0xFF0284C7),
-                              ),
-                            ),
+                             const SizedBox(height: 14),
+                             if (editingItemIndex != null) ...[
+                               Container(
+                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                 decoration: BoxDecoration(
+                                   color: Colors.amberAccent.withOpacity(0.15),
+                                   borderRadius: BorderRadius.circular(8),
+                                   border: Border.all(color: Colors.amberAccent),
+                                 ),
+                                 child: Row(
+                                   children: [
+                                     const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 16),
+                                     const SizedBox(width: 6),
+                                     Expanded(
+                                       child: Text(
+                                         'Sedang Mengedit Item #${editingItemIndex! + 1}',
+                                         style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                       ),
+                                     ),
+                                     InkWell(
+                                       onTap: cancelItemEditing,
+                                       child: const Text('Batal Edit', style: TextStyle(color: Colors.white, fontSize: 11, decoration: TextDecoration.underline)),
+                                     ),
+                                   ],
+                                 ),
+                               ),
+                               const SizedBox(height: 8),
+                             ],
+                             ElevatedButton.icon(
+                               onPressed: addItem,
+                               icon: Icon(editingItemIndex != null ? Icons.save_rounded : Icons.add_rounded, size: 16),
+                               label: Text(
+                                 editingItemIndex != null
+                                     ? 'Simpan Perubahan Item'
+                                     : (isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice'),
+                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                               ),
+                               style: ElevatedButton.styleFrom(
+                                 minimumSize: const Size.fromHeight(42),
+                                 backgroundColor: editingItemIndex != null
+                                     ? Colors.amber[800]
+                                     : (isBonus ? Colors.green[700] : const Color(0xFF0284C7)),
+                               ),
+                             ),
                           ],
                         ),
                       ),
@@ -617,11 +706,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   : SingleChildScrollView(
                                       child: Table(
                                         columnWidths: const {
-                                          0: FlexColumnWidth(2.5),
-                                          1: FlexColumnWidth(0.8),
+                                          0: FlexColumnWidth(2.3),
+                                          1: FlexColumnWidth(0.7),
                                           2: FlexColumnWidth(1.2),
                                           3: FlexColumnWidth(1.2),
-                                          4: FlexColumnWidth(0.6),
+                                          4: FlexColumnWidth(0.9),
                                         },
                                         children: [
                                           TableRow(
@@ -631,28 +720,66 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                               _buildTableCell('Harga', isHeader: true, align: TextAlign.right),
                                               _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
-                                              _buildTableCell('', isHeader: true),
+                                              _buildTableCell('Aksi', isHeader: true, align: TextAlign.center),
                                             ],
                                           ),
-                                          ...editedItems.map((item) => TableRow(
-                                                children: [
-                                                  _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
-                                                  _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                                  _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
-                                                  _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
-                                                  Padding(
-                                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                                    child: IconButton(
-                                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                                      onPressed: () {
-                                                        setDialogState(() {
-                                                          editedItems.removeWhere((i) => i.productId == item.productId && i.isBonus == item.isBonus);
-                                                        });
-                                                      },
-                                                    ),
+                                          ...editedItems.asMap().entries.map((entry) {
+                                            final index = entry.key;
+                                            final item = entry.value;
+                                            final isEditing = (editingItemIndex == index);
+
+                                            return TableRow(
+                                              decoration: BoxDecoration(
+                                                color: isEditing ? Colors.amber.withOpacity(0.15) : null,
+                                              ),
+                                              children: [
+                                                InkWell(
+                                                  onTap: () => selectItemForEditing(index),
+                                                  child: _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                                ),
+                                                InkWell(
+                                                  onTap: () => selectItemForEditing(index),
+                                                  child: _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                                ),
+                                                InkWell(
+                                                  onTap: () => selectItemForEditing(index),
+                                                  child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                                ),
+                                                InkWell(
+                                                  onTap: () => selectItemForEditing(index),
+                                                  child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                                ),
+                                                Padding(
+                                                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      IconButton(
+                                                        icon: Icon(Icons.edit_outlined, color: isEditing ? Colors.amberAccent : Colors.cyanAccent, size: 16),
+                                                        tooltip: 'Edit Item Ini',
+                                                        onPressed: () => selectItemForEditing(index),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                                        tooltip: 'Hapus Item',
+                                                        onPressed: () {
+                                                          setDialogState(() {
+                                                            if (editingItemIndex == index) {
+                                                              cancelItemEditing();
+                                                            } else if (editingItemIndex != null && editingItemIndex! > index) {
+                                                              editingItemIndex = editingItemIndex! - 1;
+                                                            }
+                                                            editedItems.removeAt(index);
+                                                          });
+                                                        },
+                                                      ),
+                                                    ],
                                                   ),
-                                                ],
-                                              )),
+                                                ),
+                                              ],
+                                            );
+                                          }),
                                         ],
                                       ),
                                     ),
