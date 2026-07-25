@@ -628,25 +628,36 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                              const SizedBox(height: 14),
                              if (editingItemIndex != null) ...[
                                Container(
-                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                  decoration: BoxDecoration(
-                                   color: Colors.amberAccent.withOpacity(0.15),
+                                   color: const Color(0xFF451A03),
                                    borderRadius: BorderRadius.circular(8),
-                                   border: Border.all(color: Colors.amberAccent),
+                                   border: Border.all(color: Colors.amberAccent, width: 1.5),
                                  ),
                                  child: Row(
                                    children: [
-                                     const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 16),
-                                     const SizedBox(width: 6),
+                                     const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 18),
+                                     const SizedBox(width: 8),
                                      Expanded(
                                        child: Text(
                                          'Sedang Mengedit Item #${editingItemIndex! + 1}',
-                                         style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                         style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.w900),
                                        ),
                                      ),
                                      InkWell(
                                        onTap: cancelItemEditing,
-                                       child: const Text('Batal Edit', style: TextStyle(color: Colors.white, fontSize: 11, decoration: TextDecoration.underline)),
+                                       child: Container(
+                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                         decoration: BoxDecoration(
+                                           color: Colors.red[900],
+                                           borderRadius: BorderRadius.circular(6),
+                                           border: Border.all(color: Colors.redAccent),
+                                         ),
+                                         child: const Text(
+                                           '✕ Batal Edit',
+                                           style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                         ),
+                                       ),
                                      ),
                                    ],
                                  ),
@@ -655,17 +666,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                              ],
                              ElevatedButton.icon(
                                onPressed: addItem,
-                               icon: Icon(editingItemIndex != null ? Icons.save_rounded : Icons.add_rounded, size: 16),
+                               icon: Icon(editingItemIndex != null ? Icons.save_rounded : Icons.add_rounded, size: 18, color: Colors.white),
                                label: Text(
                                  editingItemIndex != null
                                      ? 'Simpan Perubahan Item'
                                      : (isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice'),
-                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                 style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
                                ),
                                style: ElevatedButton.styleFrom(
-                                 minimumSize: const Size.fromHeight(42),
+                                 minimumSize: const Size.fromHeight(44),
                                  backgroundColor: editingItemIndex != null
-                                     ? Colors.amber[800]
+                                     ? const Color(0xFFD97706)
                                      : (isBonus ? Colors.green[700] : const Color(0xFF0284C7)),
                                ),
                              ),
@@ -805,7 +816,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -1316,10 +1327,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Tutup', style: TextStyle(color: Color(0xFF64748B))),
+                    child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
-              ),
+              )
             ] else ...[
               OutlinedButton.icon(
                 onPressed: () {
@@ -1329,7 +1340,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
                 label: const Text('Pindah / Gabung Item', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.cyanAccent),
+                  side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -1340,7 +1351,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                 label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.redAccent),
+                  side: const BorderSide(color: Colors.redAccent, width: 1.5),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -1359,7 +1370,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               const SizedBox(width: 8),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Tutup', style: TextStyle(color: Color(0xFF64748B))),
+                child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ],
           ],
@@ -1520,7 +1531,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -1644,7 +1655,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -1839,7 +1850,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -2333,20 +2344,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
-              title: Text('Cetak Invoice #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
+              title: Text('Cetak Invoice #${tr.invoiceNo}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Pilih opsi tanggal pengiriman untuk dicetak pada invoice PDF:',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                    style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
                   ),
                   const SizedBox(height: 12),
                   RadioListTile<int>(
                     title: Text(
                       'Gunakan Tanggal Awal (${tr.deliveryDate != null ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'})',
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     value: 1,
                     groupValue: selectedOption,
@@ -2362,7 +2373,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   RadioListTile<int>(
                     title: const Text(
                       'Input Tanggal Kirim Baru',
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     value: 2,
                     groupValue: selectedOption,
@@ -2384,7 +2395,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           Expanded(
                             child: Text(
                               'Tanggal Kirim: ${DateFormat('dd MMMM yyyy').format(chosenDate)}',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                           ),
                           ElevatedButton.icon(
@@ -2401,9 +2412,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 });
                               }
                             },
-                            icon: const Icon(Icons.date_range_rounded, size: 14),
-                            label: const Text('Pilih', style: TextStyle(fontSize: 12)),
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF334155)),
+                            icon: const Icon(Icons.date_range_rounded, size: 14, color: Colors.white),
+                            label: const Text('Pilih', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            ),
                           ),
                         ],
                       ),
@@ -2414,12 +2428,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-                  label: const Text('Cetak PDF'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16, color: Colors.white),
+                  label: const Text('Cetak PDF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                   onPressed: () async {
                     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
                     Navigator.pop(context);
@@ -2497,7 +2514,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+              child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
