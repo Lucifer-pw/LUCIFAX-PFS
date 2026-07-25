@@ -14,10 +14,9 @@ class RankingKacabView extends StatefulWidget {
 }
 
 class _RankingKacabViewState extends State<RankingKacabView> {
-  final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  final _currency = NumberFormat.currency(symbol: 'Rp ', decimalDigits: 0);
   final TextEditingController _searchController = TextEditingController();
 
-  bool _isLoading = false;
   String _erpSourceFilter = 'ERP_ONLY'; // 'ERP_ONLY' or 'ALL_TRANSACTIONS'
 
   // Selected 3-Month Range Start
@@ -25,20 +24,6 @@ class _RankingKacabViewState extends State<RankingKacabView> {
   int _startYear = 2026;
 
   String _searchQuery = '';
-  bool _isFallbackToAll = false;
-
-  List<Map<String, dynamic>> _rankingData = [];
-
-  // Grand totals across ALL outlets
-  double _grandTotalM1 = 0.0;
-  double _grandTotalM2 = 0.0;
-  double _grandTotalM3 = 0.0;
-  double _grandTotalAll = 0.0;
-  double _grandAverageAll = 0.0;
-
-  int _totalStoreCount = 0;
-  String _top1StoreName = '-';
-  double _top1Average = 0.0;
 
   String _month1Name = 'Mei';
   String _month2Name = 'Juni';
@@ -46,13 +31,22 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
   List<Map<String, String>> _periodOptions = [];
 
+  static const List<String> _monthNamesIndo = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+
+  String _getMonthName(int month) {
+    if (month >= 1 && month <= 12) {
+      return _monthNamesIndo[month - 1];
+    }
+    return '';
+  }
+
   @override
   void initState() {
     super.initState();
     _initPeriod();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadRankingData();
-    });
   }
 
   @override
@@ -87,9 +81,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     final m2Date = DateTime(_startYear, _startMonth + 1, 1);
     final m3Date = DateTime(_startYear, _startMonth + 2, 1);
 
-    _month1Name = DateFormat('MMMM', 'id_ID').format(m1Date);
-    _month2Name = DateFormat('MMMM', 'id_ID').format(m2Date);
-    _month3Name = DateFormat('MMMM yyyy', 'id_ID').format(m3Date);
+    _month1Name = _getMonthName(m1Date.month);
+    _month2Name = _getMonthName(m2Date.month);
+    _month3Name = '${_getMonthName(m3Date.month)} ${m3Date.year}';
   }
 
   void _buildPeriodOptions() {
@@ -108,8 +102,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
       if (!seen.contains(key)) {
         seen.add(key);
-        final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
-        final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
+        final m1Label = _getMonthName(m1.month);
+        final m3Label = '${_getMonthName(m3.month)} ${m3.year}';
         options.add({
           'value': key,
           'label': '$m1Label - $m3Label',
@@ -123,8 +117,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     if (!seen.contains(selectedKey)) {
       final m1 = DateTime(_startYear, _startMonth, 1);
       final m3 = DateTime(_startYear, _startMonth + 2, 1);
-      final m1Label = DateFormat('MMMM', 'id_ID').format(m1);
-      final m3Label = DateFormat('MMMM yyyy', 'id_ID').format(m3);
+      final m1Label = _getMonthName(m1.month);
+      final m3Label = '${_getMonthName(m3.month)} ${m3.year}';
       options.insert(0, {
         'value': selectedKey,
         'label': '$m1Label - $m3Label',
@@ -134,105 +128,89 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     _periodOptions = options;
   }
 
-  Future<void> _loadRankingData() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  Map<String, dynamic> _computeRankingData(
+    List<model_tr.Transaction> allTr,
+    List<Customer> customers,
+  ) {
+    _updateMonthNames();
 
-    try {
-      final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-      final custProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final m1Date = DateTime(_startYear, _startMonth, 1);
+    final m2Date = DateTime(_startYear, _startMonth + 1, 1);
+    final m3Date = DateTime(_startYear, _startMonth + 2, 1);
 
-      final List<model_tr.Transaction> allTr = trProvider.transactions;
-      final List<Customer> customers = custProvider.customers;
+    final m1Key = DateFormat('MM-yyyy').format(m1Date);
+    final m2Key = DateFormat('MM-yyyy').format(m2Date);
+    final m3Key = DateFormat('MM-yyyy').format(m3Date);
 
-      _updateMonthNames();
+    final Map<String, Map<String, dynamic>> storeMap = {};
+    bool isFallback = false;
 
-      final m1Date = DateTime(_startYear, _startMonth, 1);
-      final m2Date = DateTime(_startYear, _startMonth + 1, 1);
-      final m3Date = DateTime(_startYear, _startMonth + 2, 1);
+    if (_erpSourceFilter == 'ERP_ONLY') {
+      final erpTr = allTr.where((tr) {
+        if (tr.erpSyncDate == null) return false;
+        final key = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
+        return key == m1Key || key == m2Key || key == m3Key;
+      }).toList();
 
-      final m1Key = DateFormat('MM-yyyy').format(m1Date);
-      final m2Key = DateFormat('MM-yyyy').format(m2Date);
-      final m3Key = DateFormat('MM-yyyy').format(m3Date);
-
-      final Map<String, Map<String, dynamic>> storeMap = {};
-      _isFallbackToAll = false;
-
-      if (_erpSourceFilter == 'ERP_ONLY') {
-        final erpTr = allTr.where((tr) {
-          if (tr.erpSyncDate == null) return false;
-          final key = DateFormat('MM-yyyy').format(tr.erpSyncDate!);
-          return key == m1Key || key == m2Key || key == m3Key;
-        }).toList();
-
-        if (erpTr.isEmpty) {
-          _isFallbackToAll = true;
-          _aggregateTransactions(allTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: false);
-        } else {
-          _aggregateTransactions(erpTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: true);
-        }
-      } else {
+      if (erpTr.isEmpty) {
+        isFallback = true;
         _aggregateTransactions(allTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: false);
+      } else {
+        _aggregateTransactions(erpTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: true);
       }
-
-      final List<Map<String, dynamic>> outlets = [];
-      double gM1 = 0.0;
-      double gM2 = 0.0;
-      double gM3 = 0.0;
-      double gTotal = 0.0;
-
-      storeMap.forEach((alias, data) {
-        final m1 = _parseNum(data['m1']);
-        final m2 = _parseNum(data['m2']);
-        final m3 = _parseNum(data['m3']);
-        final total = m1 + m2 + m3;
-        final average = total / 3.0;
-
-        gM1 += m1;
-        gM2 += m2;
-        gM3 += m3;
-        gTotal += total;
-
-        outlets.add({
-          'alias': alias,
-          'city': (data['city'] ?? '-').toString(),
-          'month1': m1,
-          'month2': m2,
-          'month3': m3,
-          'total': total,
-          'average': average,
-        });
-      });
-
-      // Sort descending by 3-month average
-      outlets.sort((a, b) => _parseNum(b['average']).compareTo(_parseNum(a['average'])));
-
-      // Assign rank to ALL outlets (no limit)
-      for (int i = 0; i < outlets.length; i++) {
-        outlets[i]['rank'] = i + 1;
-      }
-
-      if (mounted) {
-        setState(() {
-          _rankingData = outlets;
-          _grandTotalM1 = gM1;
-          _grandTotalM2 = gM2;
-          _grandTotalM3 = gM3;
-          _grandTotalAll = gTotal;
-          _grandAverageAll = gTotal / 3.0;
-
-          _totalStoreCount = outlets.length;
-          _top1StoreName = outlets.isNotEmpty ? outlets.first['alias'].toString() : '-';
-          _top1Average = outlets.isNotEmpty ? _parseNum(outlets.first['average']) : 0.0;
-        });
-      }
-    } catch (e, stack) {
-      debugPrint("Error loading ranking kacab data: $e\n$stack");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    } else {
+      _aggregateTransactions(allTr, customers, storeMap, m1Key, m2Key, m3Key, isErpOnly: false);
     }
+
+    final List<Map<String, dynamic>> outlets = [];
+    double gM1 = 0.0;
+    double gM2 = 0.0;
+    double gM3 = 0.0;
+    double gTotal = 0.0;
+
+    storeMap.forEach((alias, data) {
+      final m1 = _parseNum(data['m1']);
+      final m2 = _parseNum(data['m2']);
+      final m3 = _parseNum(data['m3']);
+      final total = m1 + m2 + m3;
+      final average = total / 3.0;
+
+      gM1 += m1;
+      gM2 += m2;
+      gM3 += m3;
+      gTotal += total;
+
+      outlets.add({
+        'alias': alias,
+        'city': (data['city'] ?? '-').toString(),
+        'month1': m1,
+        'month2': m2,
+        'month3': m3,
+        'total': total,
+        'average': average,
+      });
+    });
+
+    // Sort descending by 3-month average
+    outlets.sort((a, b) => _parseNum(b['average']).compareTo(_parseNum(a['average'])));
+
+    // Assign rank to ALL outlets (no limit)
+    for (int i = 0; i < outlets.length; i++) {
+      outlets[i]['rank'] = i + 1;
+    }
+
+    return {
+      'outlets': outlets,
+      'gM1': gM1,
+      'gM2': gM2,
+      'gM3': gM3,
+      'gTotal': gTotal,
+      'gAverage': gTotal / 3.0,
+      'storeCount': outlets.length,
+      'top1Name': outlets.isNotEmpty ? outlets.first['alias'].toString() : '-',
+      'top1Average': outlets.isNotEmpty ? _parseNum(outlets.first['average']) : 0.0,
+      'isFallback': isFallback,
+    };
   }
 
   void _aggregateTransactions(
@@ -293,13 +271,20 @@ class _RankingKacabViewState extends State<RankingKacabView> {
         _startMonth = int.tryParse(parts[0]) ?? _startMonth;
         _startYear = int.tryParse(parts[1]) ?? _startYear;
       });
-      _loadRankingData();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _rankingData.where((item) {
+    // Listen to providers so view updates automatically when data arrives
+    final trProvider = Provider.of<TransactionProvider>(context);
+    final custProvider = Provider.of<CustomerProvider>(context);
+
+    final computed = _computeRankingData(trProvider.transactions, custProvider.customers);
+    final List<Map<String, dynamic>> rankingData = computed['outlets'] as List<Map<String, dynamic>>;
+    final bool isFallbackToAll = computed['isFallback'] as bool;
+
+    final filtered = rankingData.where((item) {
       if (_searchQuery.trim().isEmpty) return true;
       final q = _searchQuery.toLowerCase();
       final alias = item['alias'].toString().toLowerCase();
@@ -375,7 +360,6 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _erpSourceFilter = val);
-                            _loadRankingData();
                           }
                         },
                       ),
@@ -411,7 +395,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
-                    onPressed: _loadRankingData,
+                    onPressed: () => setState(() {}),
                     tooltip: 'Refresh Data',
                   ),
                 ],
@@ -421,7 +405,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           const SizedBox(height: 12),
 
           // Fallback Alert Banner
-          if (_isFallbackToAll) ...[
+          if (isFallbackToAll) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -451,8 +435,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               Expanded(
                 child: _buildKpiCard(
                   title: 'TOTAL RATA-RATA 3 BULAN',
-                  value: _currency.format(_grandAverageAll),
-                  subtitle: 'Total Omset: ${_currency.format(_grandTotalAll)}',
+                  value: _currency.format(_parseNum(computed['gAverage'])),
+                  subtitle: 'Total Omset: ${_currency.format(_parseNum(computed['gTotal']))}',
                   icon: Icons.analytics_rounded,
                   color: Colors.greenAccent,
                 ),
@@ -461,8 +445,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               Expanded(
                 child: _buildKpiCard(
                   title: 'TOKO PERINGKAT #1 🥇',
-                  value: _top1StoreName,
-                  subtitle: 'Rata-rata/Bln: ${_currency.format(_top1Average)}',
+                  value: computed['top1Name'].toString(),
+                  subtitle: 'Rata-rata/Bln: ${_currency.format(_parseNum(computed['top1Average']))}',
                   icon: Icons.emoji_events_rounded,
                   color: Colors.amberAccent,
                 ),
@@ -471,7 +455,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
               Expanded(
                 child: _buildKpiCard(
                   title: 'TOTAL TOKO / OUTLET',
-                  value: '$_totalStoreCount Toko',
+                  value: '${computed['storeCount']} Toko',
                   subtitle: 'Semua Toko Masuk Peringkat',
                   icon: Icons.store_rounded,
                   color: const Color(0xFF38BDF8),
@@ -506,7 +490,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
           // Ranking Data Table Area
           Expanded(
-            child: _isLoading
+            child: trProvider.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : filtered.isEmpty
                     ? const Center(
@@ -602,11 +586,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                   cells: [
                                     const DataCell(Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                                     const DataCell(Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                    DataCell(Text(_currency.format(_grandTotalM1), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(_currency.format(_grandTotalM2), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(_currency.format(_grandTotalM3), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(_currency.format(_grandTotalAll), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                    DataCell(Text(_currency.format(_grandAverageAll), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                    DataCell(Text(_currency.format(_parseNum(computed['gM1'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(_currency.format(_parseNum(computed['gM2'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(_currency.format(_parseNum(computed['gM3'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataCell(Text(_currency.format(_parseNum(computed['gTotal'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                    DataCell(Text(_currency.format(_parseNum(computed['gAverage'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                   ],
                                 ),
                               ],
