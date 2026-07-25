@@ -490,22 +490,18 @@ class _CustomerListViewState extends State<CustomerListView> {
                                         DataCell(Text(c.country.isNotEmpty ? c.country : 'INDONESIA', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
                                         DataCell(Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white, fontSize: 11))),
                                         DataCell(
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              IconButton(
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(),
-                                                icon: const Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 16),
-                                                onPressed: () => _showCustomerDialog(c),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              IconButton(
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(),
-                                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
-                                                onPressed: () {
-                                                // Confirm delete
+                                          PopupMenuButton<String>(
+                                            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
+                                            color: const Color(0xFF1E293B),
+                                            tooltip: 'Menu Aksi',
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                              side: const BorderSide(color: Color(0xFF334155)),
+                                            ),
+                                            onSelected: (value) {
+                                              if (value == 'edit') {
+                                                _showCustomerDialog(c);
+                                              } else if (value == 'delete') {
                                                 showDialog(
                                                   context: context,
                                                   builder: (context) => AlertDialog(
@@ -523,19 +519,41 @@ class _CustomerListViewState extends State<CustomerListView> {
                                                           await customerProvider.deleteCustomer(c.id);
                                                           if (context.mounted) Navigator.pop(context);
                                                         },
-                                                        child: const Text('Hapus'),
+                                                        child: const Text('Hapus', style: TextStyle(color: Colors.white)),
                                                       ),
                                                     ],
                                                   ),
                                                 );
-                                              },
-                                            ),
-                                          ],
+                                              }
+                                            },
+                                            itemBuilder: (context) => [
+                                              const PopupMenuItem(
+                                                value: 'edit',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 18),
+                                                    SizedBox(width: 10),
+                                                    Text('Edit Pelanggan', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                    SizedBox(width: 10),
+                                                    Text('Hapus Pelanggan', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
                           ),

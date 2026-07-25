@@ -600,51 +600,72 @@ class _ProductListViewState extends State<ProductListView> {
                                         DataCell(Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white))),
                                         DataCell(Text('${p.sizeGrams.toStringAsFixed(0)} G', style: const TextStyle(color: Colors.white))),
                                         DataCell(
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              IconButton(
-                                                icon: const Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 20),
-                                                tooltip: 'Edit Barang',
-                                                onPressed: () => _showProductDialog(p),
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                                tooltip: 'Hapus Barang',
-                                                onPressed: () {
-                                                  showDialog(
-                                                    context: context,
-                                                    builder: (context) => AlertDialog(
-                                                      backgroundColor: const Color(0xFF1E293B),
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                                      title: const Text('Hapus Produk', style: TextStyle(color: Colors.white)),
-                                                      content: Text('Apakah Anda yakin ingin menghapus "${p.name}" (${p.id})?', style: const TextStyle(color: Color(0xFF94A3B8))),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () => Navigator.pop(context),
-                                                          child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-                                                        ),
-                                                        ElevatedButton(
-                                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                                          onPressed: () async {
-                                                            await productProvider.deleteProduct(p.id);
-                                                            if (context.mounted) {
-                                                              Navigator.pop(context);
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(content: Text('Barang "${p.name}" telah dihapus.'), backgroundColor: Colors.redAccent),
-                                                              );
-                                                            }
-                                                          },
-                                                          child: const Text('Hapus', style: TextStyle(color: Colors.white)),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+                                           PopupMenuButton<String>(
+                                             icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
+                                             color: const Color(0xFF1E293B),
+                                             tooltip: 'Menu Aksi',
+                                             shape: RoundedRectangleBorder(
+                                               borderRadius: BorderRadius.circular(10),
+                                               side: const BorderSide(color: Color(0xFF334155)),
+                                             ),
+                                             onSelected: (value) {
+                                               if (value == 'edit') {
+                                                 _showProductDialog(p);
+                                               } else if (value == 'delete') {
+                                                 showDialog(
+                                                   context: context,
+                                                   builder: (context) => AlertDialog(
+                                                     backgroundColor: const Color(0xFF1E293B),
+                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                     title: const Text('Hapus Produk', style: TextStyle(color: Colors.white)),
+                                                     content: Text('Apakah Anda yakin ingin menghapus "${p.name}" (${p.id})?', style: const TextStyle(color: Color(0xFF94A3B8))),
+                                                     actions: [
+                                                       TextButton(
+                                                         onPressed: () => Navigator.pop(context),
+                                                         child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                                                       ),
+                                                       ElevatedButton(
+                                                         style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                         onPressed: () async {
+                                                           await productProvider.deleteProduct(p.id);
+                                                           if (context.mounted) {
+                                                             Navigator.pop(context);
+                                                             ScaffoldMessenger.of(context).showSnackBar(
+                                                               SnackBar(content: Text('Barang "${p.name}" telah dihapus.'), backgroundColor: Colors.redAccent),
+                                                             );
+                                                           }
+                                                         },
+                                                         child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 );
+                                               }
+                                             },
+                                             itemBuilder: (context) => [
+                                               const PopupMenuItem(
+                                                 value: 'edit',
+                                                 child: Row(
+                                                   children: [
+                                                     Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 18),
+                                                     SizedBox(width: 10),
+                                                     Text('Edit Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                   ],
+                                                 ),
+                                               ),
+                                               const PopupMenuItem(
+                                                 value: 'delete',
+                                                 child: Row(
+                                                   children: [
+                                                     Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                     SizedBox(width: 10),
+                                                     Text('Hapus Barang', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                                   ],
+                                                 ),
+                                               ),
+                                             ],
+                                           ),
+                                         ),
                                       ],
                                     );
                                   }).toList(),
