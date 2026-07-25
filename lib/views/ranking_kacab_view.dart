@@ -190,9 +190,9 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       double sumTotal = 0.0;
 
       storeMap.forEach((alias, data) {
-        final m1 = (data['m1'] ?? 0.0) as double;
-        final m2 = (data['m2'] ?? 0.0) as double;
-        final m3 = (data['m3'] ?? 0.0) as double;
+        final m1 = ((data['m1'] ?? 0.0) as num).toDouble();
+        final m2 = ((data['m2'] ?? 0.0) as num).toDouble();
+        final m3 = ((data['m3'] ?? 0.0) as num).toDouble();
         final total = m1 + m2 + m3;
         final average = total / 3.0;
 
@@ -203,7 +203,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
         allOutlets.add({
           'alias': alias,
-          'city': data['city'],
+          'city': (data['city'] ?? '-').toString(),
           'month1': m1,
           'month2': m2,
           'month3': m3,
@@ -213,7 +213,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       });
 
       // Sort ALL outlets in descending order by average 3-month sales
-      allOutlets.sort((a, b) => (b['average'] as double).compareTo(a['average'] as double));
+      allOutlets.sort((a, b) => ((b['average'] ?? 0.0) as num).compareTo((a['average'] ?? 0.0) as num));
 
       // Assign rank ke SEMUA outlet
       for (int i = 0; i < allOutlets.length; i++) {
@@ -230,12 +230,12 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           _grandAverageAll = sumTotal / 3.0;
 
           _totalStoreCount = allOutlets.length;
-          _top1StoreName = allOutlets.isNotEmpty ? allOutlets.first['alias'] : '-';
-          _top1Average = allOutlets.isNotEmpty ? allOutlets.first['average'] : 0.0;
+          _top1StoreName = allOutlets.isNotEmpty ? (allOutlets.first['alias'] ?? '-').toString() : '-';
+          _top1Average = allOutlets.isNotEmpty ? ((allOutlets.first['average'] ?? 0.0) as num).toDouble() : 0.0;
         });
       }
-    } catch (e) {
-      debugPrint("Error loading ranking data: $e");
+    } catch (e, stack) {
+      debugPrint("Error loading ranking data: $e\n$stack");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -260,12 +260,12 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
     String aliasName = (cust != null && cust.aliasName.isNotEmpty)
         ? cust.aliasName
-        : (tr.aliasName != null && tr.aliasName.isNotEmpty ? tr.aliasName : (tr.customerName ?? 'TOKO TANPA NAMA'));
+        : (tr.aliasName != null && tr.aliasName.toString().isNotEmpty ? tr.aliasName.toString() : ((tr.customerName ?? 'TOKO TANPA NAMA').toString()));
     if (aliasName.isEmpty) aliasName = 'TOKO TANPA NAMA';
 
     String city = (cust != null && cust.city.isNotEmpty)
         ? cust.city
-        : (tr.city != null && tr.city.isNotEmpty ? tr.city : '-');
+        : (tr.city != null && tr.city.toString().isNotEmpty ? tr.city.toString() : '-');
 
     storeMap.putIfAbsent(aliasName, () => {
       'alias': aliasName,
@@ -275,14 +275,14 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       'm3': 0.0,
     });
 
-    double grandTotal = (tr.grandTotal ?? 0.0).toDouble();
+    double grandTotal = ((tr.grandTotal ?? 0.0) as num).toDouble();
 
     if (trMonthKey == m1Key) {
-      storeMap[aliasName]!['m1'] = (storeMap[aliasName]!['m1'] as double) + grandTotal;
+      storeMap[aliasName]!['m1'] = ((storeMap[aliasName]!['m1'] ?? 0.0) as num).toDouble() + grandTotal;
     } else if (trMonthKey == m2Key) {
-      storeMap[aliasName]!['m2'] = (storeMap[aliasName]!['m2'] as double) + grandTotal;
+      storeMap[aliasName]!['m2'] = ((storeMap[aliasName]!['m2'] ?? 0.0) as num).toDouble() + grandTotal;
     } else if (trMonthKey == m3Key) {
-      storeMap[aliasName]!['m3'] = (storeMap[aliasName]!['m3'] as double) + grandTotal;
+      storeMap[aliasName]!['m3'] = ((storeMap[aliasName]!['m3'] ?? 0.0) as num).toDouble() + grandTotal;
     }
   }
 
@@ -317,12 +317,50 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
   @override
   Widget build(BuildContext context) {
+    try {
+      return _buildContent(context);
+    } catch (e, stack) {
+      debugPrint("RankingKacabView render error: $e\n$stack");
+      return Container(
+        color: const Color(0xFF0F172A),
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.redAccent),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+                const SizedBox(height: 16),
+                const Text(
+                  'Terjadi Kesalahan Tampilan Ranking Kacab',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                SelectableText(
+                  '$e\n\n$stack',
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildContent(BuildContext context) {
     // Search filtering
     final filteredList = _rankingData.where((item) {
       if (_searchQuery.trim().isEmpty) return true;
       final q = _searchQuery.toLowerCase();
-      final alias = (item['alias'] as String).toLowerCase();
-      final city = (item['city'] as String).toLowerCase();
+      final alias = (item['alias'] ?? '').toString().toLowerCase();
+      final city = (item['city'] ?? '').toString().toLowerCase();
       return alias.contains(q) || city.contains(q);
     }).toList();
 
@@ -424,8 +462,8 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                           menuMaxHeight: 400,
                           items: _periodItems.map<DropdownMenuItem<String>>((item) {
                             return DropdownMenuItem<String>(
-                              value: item['value'] as String,
-                              child: Text(item['label'] as String),
+                              value: (item['value'] ?? '').toString(),
+                              child: Text((item['label'] ?? '').toString()),
                             );
                           }).toList(),
                           onChanged: (val) {
@@ -571,7 +609,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                               rows: [
                                 ...List.generate(filteredList.length, (idx) {
                                   final item = filteredList[idx];
-                                  final rank = item['rank'] as int;
+                                  final rank = ((item['rank'] ?? (idx + 1)) as num).toInt();
 
                                   Color badgeColor = Colors.white;
                                   String rankLabel = '$rank';
@@ -608,7 +646,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                       DataCell(rankWidget),
                                       DataCell(
                                         Text(
-                                          item['alias'] ?? '-',
+                                          (item['alias'] ?? '-').toString(),
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.bold,
@@ -616,11 +654,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                                           ),
                                         ),
                                       ),
-                                      DataCell(Text(currencyFormatter.format(item['month1'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['month2'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['month3'] ?? 0.0), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(currencyFormatter.format(item['total'] ?? 0.0), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Text(currencyFormatter.format(item['average'] ?? 0.0), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(currencyFormatter.format(((item['month1'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(((item['month2'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(((item['month3'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                      DataCell(Text(currencyFormatter.format(((item['total'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Text(currencyFormatter.format(((item['average'] ?? 0.0) as num).toDouble()), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                     ],
                                   );
                                 }),
