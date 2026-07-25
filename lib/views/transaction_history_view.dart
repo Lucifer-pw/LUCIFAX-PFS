@@ -1485,9 +1485,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   void _showUpdateDeliveryStatusDialog(model_tr.Transaction tr) {
     String currentDeliveryStatus = tr.status; // 'DIKIRIM', 'PENDING'
     DateTime currentDeliveryDate = tr.deliveryDate ?? DateTime.now();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -1498,117 +1500,171 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Pilih Status Barang Delivered & Tanggal Dikirim:',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: currentDeliveryStatus,
-                    dropdownColor: const Color(0xFF1E293B),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Status Pengiriman'),
-                    items: const [
-                      DropdownMenuItem(value: 'DIKIRIM', child: Text('DIKIRIM (Stok Berkurang)')),
-                      DropdownMenuItem(value: 'PENDING', child: Text('PENDING (Belum Dikirim)')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() {
-                          currentDeliveryStatus = val;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Tanggal Dikirim:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                    subtitle: Text(
-                      DateFormat('dd MMMM yyyy').format(currentDeliveryDate),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                    onTap: () async {
-                      final pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: currentDeliveryDate,
-                        firstDate: DateTime(2025),
-                        lastDate: DateTime(2030),
-                      );
-                      if (pickedDate != null) {
-                        setDialogState(() {
-                          currentDeliveryDate = pickedDate;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
+                  if (isSubmitting) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: Color(0xFF38BDF8)),
+                          const SizedBox(height: 16),
+                          Text(
                             currentDeliveryStatus == 'DIKIRIM'
-                                ? 'Status DIKIRIM akan otomatis mengurangi stok barang pada database produk.'
-                                : 'Status PENDING mengembalikan stok barang ke database produk.',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                ? 'Memproses Potong Stok & Update Status DIKIRIM...'
+                                : 'Memproses Mengembalikan Stok & Update Status PENDING...',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Mohon tunggu sebentar, sedang menyinkronkan dengan database Firestore',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    const Text(
+                      'Pilih Status Barang Delivered & Tanggal Dikirim:',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: currentDeliveryStatus,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _buildInputDecoration(hint: 'Status Pengiriman'),
+                      items: const [
+                        DropdownMenuItem(value: 'DIKIRIM', child: Text('DIKIRIM (Stok Berkurang)')),
+                        DropdownMenuItem(value: 'PENDING', child: Text('PENDING (Belum Dikirim)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            currentDeliveryStatus = val;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Tanggal Dikirim:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                      subtitle: Text(
+                        DateFormat('dd MMMM yyyy').format(currentDeliveryDate),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                      onTap: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: currentDeliveryDate,
+                          firstDate: DateTime(2025),
+                          lastDate: DateTime(2030),
+                        );
+                        if (pickedDate != null) {
+                          setDialogState(() {
+                            currentDeliveryDate = pickedDate;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              currentDeliveryStatus == 'DIKIRIM'
+                                  ? 'Status DIKIRIM akan otomatis mengurangi stok barang pada database produk.'
+                                  : 'Status PENDING mengembalikan stok barang ke database produk.',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  onPressed: () async {
-                    try {
-                      final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-                      await trProvider.updateDeliveryStatus(tr.invoiceNo, currentDeliveryStatus, currentDeliveryDate);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Status pengiriman & stok berhasil diperbarui.'), backgroundColor: Colors.teal),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        String errStr = e.toString();
-                        try {
-                          final dyn = e as dynamic;
-                          if (dyn.error != null) {
-                            errStr += " ${dyn.error}";
-                          }
-                          if (dyn.message != null) {
-                            errStr += " ${dyn.message}";
-                          }
-                        } catch (_) {}
+                if (!isSubmitting)
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSubmitting ? Colors.grey[800] : const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            isSubmitting = true;
+                          });
+                          try {
+                            final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+                            await trProvider.updateDeliveryStatus(tr.invoiceNo, currentDeliveryStatus, currentDeliveryDate);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('✅ Status pengiriman & stok berhasil diperbarui!'), backgroundColor: Colors.teal),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSubmitting = false;
+                            });
+                            if (context.mounted) {
+                              String errStr = e.toString();
+                              try {
+                                final dyn = e as dynamic;
+                                if (dyn.error != null) {
+                                  errStr += " ${dyn.error}";
+                                }
+                                if (dyn.message != null) {
+                                  errStr += " ${dyn.message}";
+                                }
+                              } catch (_) {}
 
-                        if (errStr.contains("STOK_TIDAK_CUKUP")) {
-                          _showInsufficientStockWarningDialog(context, errStr);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
-                          );
-                        }
-                      }
-                    }
-                  },
-                  child: const Text('Simpan'),
+                              if (errStr.contains("STOK_TIDAK_CUKUP")) {
+                                _showInsufficientStockWarningDialog(context, errStr);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
+                                );
+                              }
+                            }
+                          }
+                        },
+                  icon: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+                  label: Text(
+                    isSubmitting ? 'Memproses...' : 'Simpan',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
@@ -1622,9 +1678,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   void _showUpdateStatusDialog(model_tr.Transaction tr) {
     String currentStatus = tr.statusTransfer;
     DateTime? currentTransferDate = tr.transferDate ?? DateTime.now();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -1634,84 +1692,144 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<String>(
-                    value: currentStatus,
-                    dropdownColor: const Color(0xFF1E293B),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Status Transfer'),
-                    items: const [
-                      DropdownMenuItem(value: 'UNPAID', child: Text('UNPAID (Belum Bayar)')),
-                      DropdownMenuItem(value: 'PAID', child: Text('PAID (Lunas)')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() {
-                          currentStatus = val;
-                        });
-                      }
-                    },
-                  ),
-                  if (currentStatus == 'PAID') ...[
-                    const SizedBox(height: 16),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Tanggal Transfer / Dibayar:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                      subtitle: Text(
-                        DateFormat('dd MMMM yyyy HH:mm').format(currentTransferDate!),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  if (isSubmitting) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
                       ),
-                      trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: currentTransferDate ?? DateTime.now(),
-                          firstDate: DateTime(2025),
-                          lastDate: DateTime(2030),
-                        );
-                        if (pickedDate != null) {
-                          if (context.mounted) {
-                            final pickedTime = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(currentTransferDate!),
-                            );
-                            if (pickedTime != null) {
-                              setDialogState(() {
-                                currentTransferDate = DateTime(
-                                  pickedDate.year,
-                                  pickedDate.month,
-                                  pickedDate.day,
-                                  pickedTime.hour,
-                                  pickedTime.minute,
-                                );
-                              });
-                            }
-                          }
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: Color(0xFF38BDF8)),
+                          SizedBox(height: 16),
+                          Text(
+                            'Memproses Update Status Pembayaran...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Mohon tunggu sebentar, sedang menyinkronkan data dengan server',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    DropdownButtonFormField<String>(
+                      value: currentStatus,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _buildInputDecoration(hint: 'Status Transfer'),
+                      items: const [
+                        DropdownMenuItem(value: 'UNPAID', child: Text('UNPAID (Belum Bayar)')),
+                        DropdownMenuItem(value: 'PAID', child: Text('PAID (Lunas)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            currentStatus = val;
+                          });
                         }
                       },
                     ),
+                    if (currentStatus == 'PAID') ...[
+                      const SizedBox(height: 16),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Tanggal Transfer / Dibayar:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        subtitle: Text(
+                          DateFormat('dd MMMM yyyy HH:mm').format(currentTransferDate!),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                        onTap: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: currentTransferDate ?? DateTime.now(),
+                            firstDate: DateTime(2025),
+                            lastDate: DateTime(2030),
+                          );
+                          if (pickedDate != null) {
+                            if (context.mounted) {
+                              final pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(currentTransferDate!),
+                              );
+                              if (pickedTime != null) {
+                                setDialogState(() {
+                                  currentTransferDate = DateTime(
+                                    pickedDate.year,
+                                    pickedDate.month,
+                                    pickedDate.day,
+                                    pickedTime.hour,
+                                    pickedTime.minute,
+                                  );
+                                });
+                              }
+                            }
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ],
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  onPressed: () async {
-                    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-                    final dateVal = currentStatus == 'PAID' ? currentTransferDate : null;
-                    
-                    await trProvider.updatePaymentStatus(tr.invoiceNo, currentStatus, dateVal);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Status pembayaran berhasil diperbarui.'), backgroundColor: Colors.teal),
-                      );
-                    }
-                  },
-                  child: const Text('Simpan'),
+                if (!isSubmitting)
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSubmitting ? Colors.grey[800] : const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            isSubmitting = true;
+                          });
+                          try {
+                            final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+                            final dateVal = currentStatus == 'PAID' ? currentTransferDate : null;
+                            
+                            await trProvider.updatePaymentStatus(tr.invoiceNo, currentStatus, dateVal);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('✅ Status pembayaran berhasil diperbarui!'), backgroundColor: Colors.teal),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSubmitting = false;
+                            });
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                          }
+                        },
+                  icon: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+                  label: Text(
+                    isSubmitting ? 'Memproses...' : 'Simpan',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
@@ -1817,9 +1935,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
     bool hasSync = tr.erpSyncDate != null;
     DateTime? currentSyncDate = tr.erpSyncDate ?? DateTime.now();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -1829,84 +1949,144 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<bool>(
-                    value: hasSync,
-                    dropdownColor: const Color(0xFF1E293B),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _buildInputDecoration(hint: 'Status Sync ERP'),
-                    items: const [
-                      DropdownMenuItem(value: false, child: Text('BELUM ERP (Kosong)')),
-                      DropdownMenuItem(value: true, child: Text('SUDAH ERP (Masuk ERP)')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() {
-                          hasSync = val;
-                        });
-                      }
-                    },
-                  ),
-                  if (hasSync) ...[
-                    const SizedBox(height: 16),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Tanggal Masuk ERP:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                      subtitle: Text(
-                        DateFormat('dd MMMM yyyy HH:mm').format(currentSyncDate!),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  if (isSubmitting) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
                       ),
-                      trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: currentSyncDate ?? DateTime.now(),
-                          firstDate: DateTime(2025),
-                          lastDate: DateTime(2030),
-                        );
-                        if (pickedDate != null) {
-                          if (context.mounted) {
-                            final pickedTime = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(currentSyncDate!),
-                            );
-                            if (pickedTime != null) {
-                              setDialogState(() {
-                                currentSyncDate = DateTime(
-                                  pickedDate.year,
-                                  pickedDate.month,
-                                  pickedDate.day,
-                                  pickedTime.hour,
-                                  pickedTime.minute,
-                                );
-                              });
-                            }
-                          }
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: Color(0xFF38BDF8)),
+                          SizedBox(height: 16),
+                          Text(
+                            'Memproses Update Status ERP...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Mohon tunggu sebentar, sedang menyinkronkan data dengan server',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    DropdownButtonFormField<bool>(
+                      value: hasSync,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _buildInputDecoration(hint: 'Status Sync ERP'),
+                      items: const [
+                        DropdownMenuItem(value: false, child: Text('BELUM ERP (Kosong)')),
+                        DropdownMenuItem(value: true, child: Text('SUDAH ERP (Masuk ERP)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            hasSync = val;
+                          });
                         }
                       },
                     ),
+                    if (hasSync) ...[
+                      const SizedBox(height: 16),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Tanggal Masuk ERP:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        subtitle: Text(
+                          DateFormat('dd MMMM yyyy HH:mm').format(currentSyncDate!),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                        onTap: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: currentSyncDate ?? DateTime.now(),
+                            firstDate: DateTime(2025),
+                            lastDate: DateTime(2030),
+                          );
+                          if (pickedDate != null) {
+                            if (context.mounted) {
+                              final pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(currentSyncDate!),
+                              );
+                              if (pickedTime != null) {
+                                setDialogState(() {
+                                  currentSyncDate = DateTime(
+                                    pickedDate.year,
+                                    pickedDate.month,
+                                    pickedDate.day,
+                                    pickedTime.hour,
+                                    pickedTime.minute,
+                                  );
+                                });
+                              }
+                            }
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ],
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  onPressed: () async {
-                    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-                    final dateVal = hasSync ? currentSyncDate : null;
-                    
-                    await trProvider.updateErpStatus(tr.invoiceNo, dateVal);
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Status ERP berhasil diperbarui.'), backgroundColor: Colors.teal),
-                      );
-                    }
-                  },
-                  child: const Text('Simpan'),
+                if (!isSubmitting)
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSubmitting ? Colors.grey[800] : const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            isSubmitting = true;
+                          });
+                          try {
+                            final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+                            final dateVal = hasSync ? currentSyncDate : null;
+                            
+                            await trProvider.updateErpStatus(tr.invoiceNo, dateVal);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('✅ Status ERP berhasil diperbarui!'), backgroundColor: Colors.teal),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSubmitting = false;
+                            });
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal mengupdate status ERP: $e'), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                          }
+                        },
+                  icon: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+                  label: Text(
+                    isSubmitting ? 'Memproses...' : 'Simpan',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
