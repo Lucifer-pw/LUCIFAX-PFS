@@ -73,6 +73,11 @@ class AuthProvider extends ChangeNotifier {
     return _authService.getUsersStream();
   }
 
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   Future<void> signIn(String username, String password) async {
     _isLoading = true;
     _errorMessage = null;

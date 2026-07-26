@@ -88,94 +88,67 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  void _showErrorAlert(String message) {
+    setState(() {
+      _errorMessage = message;
+    });
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   Future<void> _handleSubmit() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+
     setState(() {
       _errorMessage = null;
     });
 
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    authProvider.clearError();
 
-    // Validate empty fields with inline banner + SnackBar
+    // Validate empty fields
     if (username.isEmpty && password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Username dan Password tidak boleh kosong!';
-      });
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('Username dan Password tidak boleh kosong!', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          backgroundColor: Colors.orangeAccent,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      _showErrorAlert('Username dan Password tidak boleh kosong!');
       _formKey.currentState!.validate();
       return;
     }
 
     if (username.isEmpty) {
-      setState(() {
-        _errorMessage = 'Username tidak boleh kosong!';
-      });
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.person_off_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('Username tidak boleh kosong!', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          backgroundColor: Colors.orangeAccent,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      _showErrorAlert('Username tidak boleh kosong!');
       _formKey.currentState!.validate();
       return;
     }
 
     if (password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Password tidak boleh kosong!';
-      });
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.lock_open_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('Password tidak boleh kosong!', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          backgroundColor: Colors.orangeAccent,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      _showErrorAlert('Password tidak boleh kosong!');
       _formKey.currentState!.validate();
       return;
     }
 
     if (_formKey.currentState!.validate()) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       try {
-        await authProvider.signIn(
-          _usernameController.text,
-          _passwordController.text,
-        );
+        await authProvider.signIn(username, password);
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -183,61 +156,24 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
             MaterialPageRoute(builder: (context) => const ShellView()),
           );
         }
-      } on FirebaseAuthException catch (e) {
-        String msg = "Username atau Password yang Anda masukkan salah.";
-        if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+      } catch (e) {
+        String msg = "Username atau Password yang Anda masukkan salah. Silakan periksa kembali!";
+        final errStr = e.toString().toLowerCase();
+
+        if (errStr.contains('wrong-password') || errStr.contains('invalid-credential') || errStr.contains('invalid_login_credentials')) {
           msg = "Password yang Anda masukkan salah. Silakan periksa kembali!";
-        } else if (e.code == 'user-not-found') {
+        } else if (errStr.contains('user-not-found')) {
           msg = "Username / Akun tidak terdaftar di sistem!";
-        } else if (e.code == 'too-many-requests') {
+        } else if (errStr.contains('too-many-requests')) {
           msg = "Terlalu banyak percobaan login gagal. Silakan tunggu beberapa saat.";
         }
 
         if (mounted) {
-          setState(() {
-            _errorMessage = msg;
-          });
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold))),
-                ],
-              ),
-              backgroundColor: Colors.redAccent,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          final msg = authProvider.errorMessage ?? "Password atau Username salah. Silakan coba lagi!";
-          setState(() {
-            _errorMessage = msg;
-          });
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold))),
-                ],
-              ),
-              backgroundColor: Colors.redAccent,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-              duration: const Duration(seconds: 4),
-            ),
-          );
+          _showErrorAlert(msg);
         }
       }
+    } else {
+      _showErrorAlert('Silakan periksa kembali Username dan Password Anda!');
     }
   }
 
@@ -436,37 +372,46 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                               const SizedBox(height: 24.0),
 
                               // Error Message Banner
-                              if (_errorMessage != null) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          _errorMessage!,
-                                          style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
-                                        ),
+                              Builder(
+                                builder: (context) {
+                                  final displayError = _errorMessage ?? authProvider.errorMessage;
+                                  if (displayError == null || displayError.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16.0),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.redAccent.withOpacity(0.18),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: Colors.redAccent, width: 1.2),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 16.0),
-                              ],
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 22),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              displayError,
+                                              style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
 
                               // Username Input Field
                               TextFormField(
                                 controller: _usernameController,
                                 style: const TextStyle(color: Colors.white, fontSize: 14),
                                 onChanged: (_) {
-                                  if (_errorMessage != null) {
+                                  if (_errorMessage != null || authProvider.errorMessage != null) {
                                     setState(() => _errorMessage = null);
+                                    authProvider.clearError();
                                   }
                                 },
                                 decoration: InputDecoration(
@@ -500,8 +445,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                                 obscureText: _obscureText,
                                 style: const TextStyle(color: Colors.white, fontSize: 14),
                                 onChanged: (_) {
-                                  if (_errorMessage != null) {
+                                  if (_errorMessage != null || authProvider.errorMessage != null) {
                                     setState(() => _errorMessage = null);
+                                    authProvider.clearError();
                                   }
                                 },
                                 decoration: InputDecoration(
