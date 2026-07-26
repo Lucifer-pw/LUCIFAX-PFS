@@ -26,12 +26,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   // Focus mode state: 0 = none, 1 = username focused, 2 = password focused
   int _focusMode = 0;
 
-  // Hero & School Fish Smooth Position & Angle Physics (Organic U-Turn Arcs)
+  // Hero & School Fish Smooth Position & 3D Mirror Flip Physics
   double _heroCurrentX = -1.0;
   double _heroCurrentY = -1.0;
   List<Offset> _bgFishPos = [];
-  List<double> _bgFishAngles = [];
-  List<double> _bgTargetAngles = [];
+  List<int> _bgFishDirs = [];
+  List<double> _bgFishScales = [];
   List<double> _nextTurnTimes = [];
   double _lastTimeSec = 0.0;
 
@@ -315,15 +315,15 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                   }
                 }
 
-                // 2. Calculate Position & Movement for Background Fish School (Organic U-Turn Arcs)
+                // 2. Calculate Position & Movement for Background Fish School (Smooth 3D Mirror Flips)
                 final bgCount = OceanFeedingFrenzyPainter._fishList.length;
                 if (_bgFishPos.length != bgCount) {
                   _bgFishPos = List.generate(bgCount, (i) {
                     final f = OceanFeedingFrenzyPainter._fishList[i];
                     return Offset(f.initialXPercent * width, f.yPercent * height);
                   });
-                  _bgFishAngles = List.generate(bgCount, (i) => OceanFeedingFrenzyPainter._fishList[i].direction == 1 ? 0.0 : pi);
-                  _bgTargetAngles = List.from(_bgFishAngles);
+                  _bgFishDirs = List.generate(bgCount, (i) => OceanFeedingFrenzyPainter._fishList[i].direction);
+                  _bgFishScales = List.generate(bgCount, (i) => OceanFeedingFrenzyPainter._fishList[i].direction == 1 ? -1.0 : 1.0);
                   _nextTurnTimes = List.generate(bgCount, (i) => nowSec + 5.0 + i * 2.2);
                 }
 
@@ -346,30 +346,36 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
 
                     final deltaX = nextX - currentPos.dx;
-                    final deltaY = nextY - currentPos.dy;
-                    _bgFishAngles[i] = atan2(deltaY, deltaX);
-                    _bgTargetAngles[i] = _bgFishAngles[i];
+                    if (deltaX > 0.15) {
+                      _bgFishDirs[i] = 1;
+                    } else if (deltaX < -0.15) {
+                      _bgFishDirs[i] = -1;
+                    }
+
+                    // Lerp scaleX for smooth 3D mirror flip
+                    final targetScaleX = (_bgFishDirs[i] == 1) ? -1.0 : 1.0;
+                    _bgFishScales[i] += (targetScaleX - _bgFishScales[i]) * (1.0 - exp(-dt * 8.0));
 
                     newBgPos.add(Offset(nextX, nextY));
                   } else {
-                    // Organic Ambient Swimming with Smooth 180-degree U-Turn Arcs
-                    final isNearRightEdge = currentPos.dx > width * 0.86 && _bgTargetAngles[i] == 0.0;
-                    final isNearLeftEdge = currentPos.dx < width * 0.14 && _bgTargetAngles[i] == pi;
+                    // Organic Ambient Swimming with Smooth 3D Mirror Flips (No upside-down fish!)
+                    final isNearRightEdge = currentPos.dx > width * 0.86 && _bgFishDirs[i] == 1;
+                    final isNearLeftEdge = currentPos.dx < width * 0.14 && _bgFishDirs[i] == -1;
                     final isTimerDue = nowSec > _nextTurnTimes[i];
 
                     if (isNearRightEdge || isNearLeftEdge || isTimerDue) {
-                      _bgTargetAngles[i] = (_bgTargetAngles[i] == 0.0) ? pi : 0.0;
+                      _bgFishDirs[i] = (_bgFishDirs[i] == 1) ? -1 : 1;
                       _nextTurnTimes[i] = nowSec + 7.0 + ((i * 3.1) % 9.0);
                     }
 
-                    // Smoothly rotate heading angle towards target angle (creates a graceful U-turn curve in the water!)
-                    final angleDiff = _bgTargetAngles[i] - _bgFishAngles[i];
-                    _bgFishAngles[i] += angleDiff * (1.0 - exp(-dt * 3.2));
+                    // Lerp scaleX for smooth 3D mirror flip
+                    final targetScaleX = (_bgFishDirs[i] == 1) ? -1.0 : 1.0;
+                    _bgFishScales[i] += (targetScaleX - _bgFishScales[i]) * (1.0 - exp(-dt * 6.0));
 
-                    // Move along current heading vector
+                    // Move along linear direction
                     final moveSpeed = f.speed * 1.15;
-                    final vx = cos(_bgFishAngles[i]) * moveSpeed;
-                    final vy = sin(_bgFishAngles[i]) * moveSpeed * 0.35 + sin(nowSec * 2.2 + i * 1.5) * 5.0;
+                    final vx = _bgFishDirs[i] * moveSpeed;
+                    final vy = sin(nowSec * 2.2 + i * 1.5) * 5.0;
 
                     double nextX = currentPos.dx + vx * dt;
                     double nextY = currentPos.dy + vy * dt;
@@ -383,12 +389,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     final margin = f.size * 3.5;
                     if (nextX > width + margin) {
                       nextX = -margin;
-                      _bgFishAngles[i] = 0.0;
-                      _bgTargetAngles[i] = 0.0;
+                      _bgFishDirs[i] = 1;
+                      _bgFishScales[i] = -1.0;
                     } else if (nextX < -margin) {
                       nextX = width + margin;
-                      _bgFishAngles[i] = pi;
-                      _bgTargetAngles[i] = pi;
+                      _bgFishDirs[i] = -1;
+                      _bgFishScales[i] = 1.0;
                     }
 
                     newBgPos.add(Offset(nextX, nextY));
@@ -405,7 +411,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     heroX: _heroCurrentX,
                     heroY: _heroCurrentY,
                     bgFishPos: _bgFishPos,
-                    bgFishAngles: _bgFishAngles,
+                    bgFishScales: _bgFishScales,
                   ),
                 );
               },
@@ -749,7 +755,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   final double heroX; // Smooth lerped X position
   final double heroY; // Smooth lerped Y position
   final List<Offset> bgFishPos; // Smooth lerped school fish positions
-  final List<double> bgFishAngles; // Smooth heading angles in radians (U-turn arcs!)
+  final List<double> bgFishScales; // Smooth lerped scaleX (-1.0 for right, 1.0 for left)
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
@@ -759,7 +765,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     this.heroX = 0.0,
     this.heroY = 0.0,
     this.bgFishPos = const [],
-    this.bgFishAngles = const [],
+    this.bgFishScales = const [],
   });
 
   // Procedural background fish data with realistic sizes, speeds, and species
@@ -843,15 +849,16 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
     }
 
-    // 5. Swimming Background Fish School (Dynamic Ambient U-Turns & Orbiting)
+    // 5. Swimming Background Fish School (Smooth 3D Mirror Flips)
     if (bgFishPos.isNotEmpty) {
       for (int i = 0; i < _fishList.length && i < bgFishPos.length; i++) {
         final f = _fishList[i];
         final pos = bgFishPos[i];
-        final headingAngle = (i < bgFishAngles.length) ? bgFishAngles[i] : (f.direction == 1 ? 0.0 : pi);
+        final scaleX = (i < bgFishScales.length) ? bgFishScales[i] : (f.direction == 1 ? -1.0 : 1.0);
         final verticalBob = sin(timeSec * 2.5 + i * 2.0) * 4.0;
+        final rot = focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.06 : sin(timeSec * 2.0 + i) * 0.03;
         final img = (f.imageIndex < fishImages.length) ? fishImages[f.imageIndex] : null;
-        _drawFish(canvas, pos, f.size, headingAngle, f.color, verticalBob, img, timeWagPhase: i * 1.5);
+        _drawFish(canvas, pos, f.size, scaleX, f.color, verticalBob, rot, img, timeWagPhase: i * 1.5);
       }
     }
 
@@ -867,12 +874,14 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     final posX = heroX + sin(timeSec * 2.5) * 8;
     final posY = heroY;
 
-    double headingAngle = 0.0;
+    double scaleX = -1.0;
+    double rotation = 0.0;
     double verticalBob = sin(timeSec * 3.5) * 5.0;
 
     if (focusMode == 1) {
       // Username focused: Approaching curiously from left facing right
-      headingAngle = sin(timeSec * 4.0) * 0.12;
+      scaleX = -1.0;
+      rotation = sin(timeSec * 4.0) * 0.12;
 
       // Curious bubbles near fish head
       final bubblePaint = Paint()
@@ -886,11 +895,11 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       }
     } else if (focusMode == 2) {
       // Password focused: Peeking right of Login Card facing left
-      headingAngle = pi;
+      scaleX = 1.0;
       if (isObscured) {
-        headingAngle += -0.18 + sin(timeSec * 3.0) * 0.08;
+        rotation = -0.18 + sin(timeSec * 3.0) * 0.08;
       } else {
-        headingAngle += 0.45 + sin(timeSec * 8.0) * 0.15;
+        rotation = 0.45 + sin(timeSec * 8.0) * 0.15;
 
         // Burst of surprised bubbles
         final bubblePaint = Paint()
@@ -905,11 +914,12 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       }
     } else {
       // Unfocused ambient
-      headingAngle = 0.0;
+      scaleX = -1.0;
+      rotation = 0.0;
     }
 
     final heroImg = fishImages.isNotEmpty ? fishImages[0] : null;
-    _drawFish(canvas, Offset(posX, posY), heroSize, headingAngle, heroColor, verticalBob, heroImg, timeWagPhase: 0.0);
+    _drawFish(canvas, Offset(posX, posY), heroSize, scaleX, heroColor, verticalBob, rotation, heroImg, timeWagPhase: 0.0);
   }
 
   void _drawSeaweed(Canvas canvas, Size size) {
@@ -947,16 +957,17 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     }
   }
 
-  void _drawFish(Canvas canvas, Offset center, double size, double headingAngle, Color color, double verticalBob, ui.Image? img, {double timeWagPhase = 0.0}) {
+  void _drawFish(Canvas canvas, Offset center, double size, double scaleX, Color color, double verticalBob, double rotation, ui.Image? img, {double timeWagPhase = 0.0}) {
     canvas.save();
     canvas.translate(center.dx, center.dy + verticalBob);
 
-    // Rotate canvas by fish heading angle!
-    canvas.rotate(headingAngle);
+    if (rotation != 0.0) {
+      canvas.rotate(rotation);
+    }
 
-    // Source fish PNG faces LEFT.
-    // Flip horizontally so 0 rad points RIGHT!
-    canvas.scale(-1, 1);
+    // 🪞 Smooth Horizontal 3D Mirror Flip (-1.0 = facing right, 1.0 = facing left)
+    // Fish ALWAYS stays upright (dorsal fin UP, belly DOWN)!
+    canvas.scale(scaleX, 1.0);
 
     // 🐟 Realist Tail Wagging Oscillation (Dynamic Skew & Pitch transform)
     final tailWag = sin(timeSec * 8.0 + timeWagPhase) * 0.08;
