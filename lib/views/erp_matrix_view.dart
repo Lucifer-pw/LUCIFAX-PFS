@@ -796,96 +796,121 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 children: const [
                   Text(
                     'Stok ERP & Opname Cabang',
-                    style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: 4),
+                  SizedBox(height: 2),
                   Text(
                     'Monitoring Pergerakan Stok Awal, Influx Masuk Mingguan (M1-M5), & Saldo Akhir',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 ],
               ),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E293B),
-                      foregroundColor: const Color(0xFF38BDF8),
-                      side: const BorderSide(color: Color(0xFF38BDF8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: _showSetInitialStockDialog,
-                    icon: const Icon(Icons.edit_note_rounded, size: 18),
-                    label: const Text('Set Stok Awal Bulan', style: TextStyle(fontWeight: FontWeight.bold)),
+              // 3-Dots Popup Menu Button for ERP Actions
+              PopupMenuButton<String>(
+                tooltip: 'Menu Fitur ERP',
+                color: const Color(0xFF1E293B),
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFF334155)),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF38BDF8)),
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E293B),
-                      foregroundColor: Colors.greenAccent,
-                      side: const BorderSide(color: Colors.greenAccent),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: _copyPrevMonthStockAkhir,
-                    icon: const Icon(Icons.history_toggle_off_rounded, size: 18),
-                    label: const Text('Salin Stok Akhir Bulan Lalu', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 20),
+                      SizedBox(width: 6),
+                      Text(
+                        'Aksi ERP',
+                        style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ],
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E293B),
-                      foregroundColor: Colors.amberAccent,
-                      side: const BorderSide(color: Colors.amberAccent),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onSelected: (val) {
+                  if (val == 'set_initial') _showSetInitialStockDialog();
+                  if (val == 'copy_prev') _copyPrevMonthStockAkhir();
+                  if (val == 'refresh') {
+                    productProvider.fetchProducts();
+                    _loadErpData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Data berhasil di-refresh!'), backgroundColor: Colors.teal),
+                    );
+                  }
+                  if (val == 'print_pdf') _printPdfErp();
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem<String>(
+                    value: 'set_initial',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8), size: 18),
+                        SizedBox(width: 10),
+                        Text('Set Stok Awal Bulan', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
                     ),
-                    onPressed: () {
-                      productProvider.fetchProducts();
-                      _loadErpData();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Data berhasil di-refresh!'), backgroundColor: Colors.teal),
-                      );
-                    },
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Refresh Data', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF38BDF8),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  const PopupMenuItem<String>(
+                    value: 'copy_prev',
+                    child: Row(
+                      children: [
+                        Icon(Icons.history_toggle_off_rounded, color: Colors.greenAccent, size: 18),
+                        SizedBox(width: 10),
+                        Text('Salin Stok Akhir Bulan Lalu', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
                     ),
-                    onPressed: _printPdfErp,
-                    icon: const Icon(Icons.print_rounded, size: 18),
-                    label: const Text('Cetak ERP PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'refresh',
+                    child: Row(
+                      children: [
+                        Icon(Icons.refresh_rounded, color: Colors.amberAccent, size: 18),
+                        SizedBox(width: 10),
+                        Text('Refresh Data', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(height: 1),
+                  const PopupMenuItem<String>(
+                    value: 'print_pdf',
+                    child: Row(
+                      children: [
+                        Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 18),
+                        SizedBox(width: 10),
+                        Text('Cetak ERP PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
           // Control Bar: Periode, Customer Filter, Pcs/Kg Toggle
           Container(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8)),
-                const SizedBox(width: 8),
-                const Text('Periode:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14)),
-                const SizedBox(width: 8),
+                const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                const SizedBox(width: 6),
+                const Text('Periode:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                const SizedBox(width: 6),
                 DropdownButton<String>(
                   value: _selectedMonthYear,
                   dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   underline: const SizedBox(),
                   items: _getMonthOptions().map((m) {
                     return DropdownMenuItem<String>(value: m, child: Text(m));
@@ -897,33 +922,33 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     }
                   },
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 16),
 
-                const Icon(Icons.store_rounded, color: Color(0xFF38BDF8)),
-                const SizedBox(width: 8),
-                const Text('Outlet/Customer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14)),
-                const SizedBox(width: 8),
+                const Icon(Icons.store_rounded, color: Color(0xFF38BDF8), size: 18),
+                const SizedBox(width: 6),
+                const Text('Outlet/Customer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                const SizedBox(width: 6),
                 SearchableCustomerFilter(
                   selectedCustomer: _selectedCustomer,
                   customers: customerProvider.customers,
                   onSelected: (val) => setState(() => _selectedCustomer = val),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 14),
 
                 // Product Search
                 SizedBox(
-                  width: 180,
+                  width: 170,
                   child: TextField(
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                     decoration: InputDecoration(
                       isDense: true,
                       hintText: 'Cari barang...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
                       filled: true,
                       fillColor: const Color(0xFF0F172A),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   ),
@@ -932,7 +957,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
                 // Toggle Pcs vs Kg
                 Container(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(8),
@@ -942,24 +967,24 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                       ElevatedButton(
                         onPressed: () => setState(() => _showPcs = true),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                           backgroundColor: _showPcs ? const Color(0xFF0284C7) : Colors.transparent,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
-                        child: const Text('PCS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: const Text('PCS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                       ElevatedButton(
                         onPressed: () => setState(() => _showPcs = false),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                           backgroundColor: !_showPcs ? const Color(0xFF0284C7) : Colors.transparent,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
-                        child: const Text('KG', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: const Text('KG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -967,35 +992,35 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
           // Tab selector: Stok Matrix vs Detail Invoice
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
-            padding: const EdgeInsets.all(4),
+            padding: const EdgeInsets.all(3),
             child: Row(
               children: [
                 Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _activeTab = 0),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(vertical: 7),
                       decoration: BoxDecoration(
                         color: _activeTab == 0 ? const Color(0xFF0284C7) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(7),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.table_chart_rounded, size: 18, color: _activeTab == 0 ? Colors.white : const Color(0xFF64748B)),
-                          const SizedBox(width: 8),
+                          Icon(Icons.table_chart_rounded, size: 16, color: _activeTab == 0 ? Colors.white : const Color(0xFF64748B)),
+                          const SizedBox(width: 6),
                           Text('Stok Matrix', style: TextStyle(
                             color: _activeTab == 0 ? Colors.white : const Color(0xFF64748B),
-                            fontWeight: FontWeight.bold, fontSize: 13,
+                            fontWeight: FontWeight.bold, fontSize: 12.5,
                           )),
                         ],
                       ),
@@ -1006,31 +1031,31 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                   child: GestureDetector(
                     onTap: () => setState(() => _activeTab = 1),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(vertical: 7),
                       decoration: BoxDecoration(
                         color: _activeTab == 1 ? const Color(0xFF0284C7) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(7),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.receipt_long_rounded, size: 18, color: _activeTab == 1 ? Colors.white : const Color(0xFF64748B)),
-                          const SizedBox(width: 8),
+                          Icon(Icons.receipt_long_rounded, size: 16, color: _activeTab == 1 ? Colors.white : const Color(0xFF64748B)),
+                          const SizedBox(width: 6),
                           Text('Detail Invoice ERP', style: TextStyle(
                             color: _activeTab == 1 ? Colors.white : const Color(0xFF64748B),
-                            fontWeight: FontWeight.bold, fontSize: 13,
+                            fontWeight: FontWeight.bold, fontSize: 12.5,
                           )),
                           if (_erpRecords.isNotEmpty)
                             Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
                               decoration: BoxDecoration(
                                 color: _activeTab == 1 ? Colors.white.withOpacity(0.2) : const Color(0xFF334155),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 '${_getTotalInvoiceCount()}',
-                                style: TextStyle(color: _activeTab == 1 ? Colors.white : const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: _activeTab == 1 ? Colors.white : const Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.bold),
                               ),
                             ),
                         ],
@@ -1041,7 +1066,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
           // Main Content Area
           Expanded(
