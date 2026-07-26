@@ -2,9 +2,157 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read/write all documents
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    // ═══════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ═══════════════════════════════════════════════════
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
+    
+    function isDeveloper() {
+      return request.auth != null && getUserRole() == 'developer';
+    }
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 1. USERS — Profil user & presence
+    // ═══════════════════════════════════════════════════
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      
+      allow update: if isAuthenticated() && (
+        isDeveloper() ||
+        (request.auth.uid == userId 
+         && !request.resource.data.diff(resource.data)
+             .affectedKeys().hasAny(['role']))
+      );
+      
+      allow create: if isDeveloper();
+      allow delete: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 2. PRODUCTS — Master produk & stok
+    // ═══════════════════════════════════════════════════
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 3. CUSTOMERS — Master pelanggan
+    // ═══════════════════════════════════════════════════
+    match /customers/{customerId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 4. TRANSACTIONS — Transaksi penjualan
+    // ═══════════════════════════════════════════════════
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 5. COUNTERS — Auto-increment nomor invoice
+    // ═══════════════════════════════════════════════════
+    match /counters/{counterId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 6. ERP_SUMMARY — Ringkasan ERP bulanan
+    // ═══════════════════════════════════════════════════
+    match /erp_summary/{summaryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 7. RETURNS — Retur produk (DEVELOPER ONLY)
+    // ═══════════════════════════════════════════════════
+    match /returns/{returnId} {
+      allow read: if isAuthenticated();
+      allow create: if isDeveloper();
+      allow update, delete: if false;
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 8. STAFF — Data pegawai
+    // ═══════════════════════════════════════════════════
+    match /staff/{staffId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 9. ATTENDANCE — Absensi pegawai
+    // ═══════════════════════════════════════════════════
+    match /attendance/{recordId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 10. SETTINGS — Pengaturan app (DEVELOPER ONLY)
+    // ═══════════════════════════════════════════════════
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 11. STOCK_ENTRIES — Catatan stok masuk/keluar
+    // ═══════════════════════════════════════════════════
+    match /stock_entries/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 12. MONTHLY_STOCK_INITIAL — Stok awal bulanan
+    // ═══════════════════════════════════════════════════
+    match /monthly_stock_initial/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 13. RECEIVABLES — Kartu piutang toko
+    // ═══════════════════════════════════════════════════
+    match /receivables/{receivableId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // CATCH-ALL: Blokir collection lain
+    // ═══════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
   }
 }
