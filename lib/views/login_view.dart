@@ -27,7 +27,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // Feeding Frenzy Ocean Background Animation Controller
+  // Ocean Ticker Controller for 60 FPS continuous rendering
   late AnimationController _oceanController;
 
   @override
@@ -65,10 +65,10 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic),
     );
 
-    // 3. Feeding Frenzy Continuous Ocean Animation Controller (60 FPS loop)
+    // 3. Feeding Frenzy Ocean Render Loop (Continuous ticker)
     _oceanController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 10),
+      duration: const Duration(seconds: 1),
     )..repeat();
 
     _entranceController.forward();
@@ -188,7 +188,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
               builder: (context, child) {
                 return CustomPaint(
                   painter: OceanFeedingFrenzyPainter(
-                    progress: _oceanController.value,
+                    timeSec: DateTime.now().millisecondsSinceEpoch / 1000.0,
                   ),
                 );
               },
@@ -521,31 +521,32 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   }
 }
 
-/// 🎨 CustomPainter for high-performance Feeding Frenzy Animated Ocean
+/// 🎨 CustomPainter for high-performance Seamless Feeding Frenzy Animated Ocean
 class OceanFeedingFrenzyPainter extends CustomPainter {
-  final double progress; // 0.0 to 1.0 continuous animation loop
+  final double timeSec; // Continuous epoch time in seconds (never resets!)
 
-  OceanFeedingFrenzyPainter({required this.progress});
+  OceanFeedingFrenzyPainter({required this.timeSec});
 
-  // Fixed procedural fish data for high FPS deterministic animation
+  // Fixed procedural fish data
   static final List<_FishData> _fishList = [
-    _FishData(yPercent: 0.15, speed: 0.8, size: 24, direction: 1, color: const Color(0xFF38BDF8), initialX: 0.05),
-    _FishData(yPercent: 0.28, speed: 1.2, size: 18, direction: -1, color: const Color(0xFFF59E0B), initialX: 0.85),
-    _FishData(yPercent: 0.42, speed: 0.6, size: 32, direction: 1, color: const Color(0xFF10B981), initialX: 0.35),
-    _FishData(yPercent: 0.58, speed: 1.4, size: 16, direction: -1, color: const Color(0xFFEC4899), initialX: 0.70),
-    _FishData(yPercent: 0.72, speed: 0.9, size: 28, direction: 1, color: const Color(0xFFA855F7), initialX: 0.15),
-    _FishData(yPercent: 0.84, speed: 1.1, size: 22, direction: -1, color: const Color(0xFF06B6D4), initialX: 0.50),
-    _FishData(yPercent: 0.22, speed: 1.5, size: 14, direction: 1, color: const Color(0xFFF43F5E), initialX: 0.60),
-    _FishData(yPercent: 0.65, speed: 0.7, size: 36, direction: -1, color: const Color(0xFFEAB308), initialX: 0.90),
+    _FishData(yPercent: 0.14, speed: 45.0, size: 24, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05),
+    _FishData(yPercent: 0.26, speed: 65.0, size: 18, direction: -1, color: const Color(0xFFF59E0B), initialXPercent: 0.85),
+    _FishData(yPercent: 0.38, speed: 35.0, size: 34, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35),
+    _FishData(yPercent: 0.52, speed: 75.0, size: 16, direction: -1, color: const Color(0xFFEC4899), initialXPercent: 0.70),
+    _FishData(yPercent: 0.68, speed: 50.0, size: 28, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15),
+    _FishData(yPercent: 0.82, speed: 60.0, size: 22, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50),
+    _FishData(yPercent: 0.20, speed: 85.0, size: 14, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60),
+    _FishData(yPercent: 0.62, speed: 40.0, size: 38, direction: -1, color: const Color(0xFFEAB308), initialXPercent: 0.90),
   ];
 
   // Fixed procedural bubbles
-  static final List<_BubbleData> _bubbles = List.generate(35, (index) {
+  static final List<_BubbleData> _bubbles = List.generate(40, (index) {
     final random = Random(index * 7);
     return _BubbleData(
       xPercent: random.nextDouble(),
-      speed: 0.3 + random.nextDouble() * 0.7,
-      radius: 2.0 + random.nextDouble() * 5.0,
+      yOffsetPercent: random.nextDouble(),
+      speed: 30.0 + random.nextDouble() * 50.0,
+      radius: 2.0 + random.nextDouble() * 5.5,
       phaseShift: random.nextDouble() * pi * 2,
     );
   });
@@ -575,7 +576,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
 
     for (int i = 0; i < 5; i++) {
       final rayPath = Path();
-      final rayX = (width * 0.15 * i) + sin(progress * pi * 2 + i) * 20;
+      final rayX = (width * 0.15 * i) + sin(timeSec * 0.8 + i) * 25;
       rayPath.moveTo(rayX, 0);
       rayPath.lineTo(rayX + 80, 0);
       rayPath.lineTo(rayX + 180, height);
@@ -587,36 +588,43 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     // 3. Swaying Seaweed at Seabed Bottom
     _drawSeaweed(canvas, size);
 
-    // 4. Floating Animated Bubbles
+    // 4. Floating Animated Bubbles (Endless Wrap Off-screen)
     final bubblePaint = Paint()
-      ..color = const Color(0xFF38BDF8).withOpacity(0.3)
+      ..color = const Color(0xFF38BDF8).withOpacity(0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     final bubbleFill = Paint()
-      ..color = const Color(0xFF38BDF8).withOpacity(0.08)
+      ..color = const Color(0xFF38BDF8).withOpacity(0.09)
       ..style = PaintingStyle.fill;
 
+    final totalBubbleTravel = height + 60.0;
     for (var b in _bubbles) {
-      final floatY = ((1.0 - (progress * b.speed + b.phaseShift) % 1.0)) * (height + 40) - 20;
-      final wobbleX = (b.xPercent * width) + sin(progress * pi * 4 + b.phaseShift) * 12;
+      final rawY = (b.yOffsetPercent * height + timeSec * b.speed) % totalBubbleTravel;
+      final floatY = height + 30.0 - rawY; // Moves upward naturally
+      final wobbleX = (b.xPercent * width) + sin(timeSec * 2.0 + b.phaseShift) * 14;
 
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubbleFill);
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
     }
 
-    // 5. Swimming Fish (Feeding Frenzy Animation)
+    // 5. Swimming Fish (Seamless Endless Wrap Off-screen)
     for (var f in _fishList) {
-      final totalTravel = width + f.size * 4;
+      final totalTravel = width + f.size * 6;
+      final distance = timeSec * f.speed;
+      final rawDistance = (f.initialXPercent * width + distance) % totalTravel;
+
       double posX;
       if (f.direction == 1) {
-        posX = ((f.initialX * width + progress * totalTravel * f.speed) % totalTravel) - f.size * 2;
+        // Left to Right
+        posX = rawDistance - f.size * 3;
       } else {
-        posX = width + f.size * 2 - ((f.initialX * width + progress * totalTravel * f.speed) % totalTravel);
+        // Right to Left
+        posX = width + f.size * 3 - rawDistance;
       }
 
-      final posY = f.yPercent * height + sin(progress * pi * 4 + f.initialX * 10) * 10;
-      final tailWag = sin(progress * pi * 20 + f.initialX * 5) * 8;
+      final posY = f.yPercent * height + sin(timeSec * 1.5 + f.initialXPercent * 10) * 12;
+      final tailWag = sin(timeSec * 12.0 + f.initialXPercent * 5) * 8;
 
       _drawFish(canvas, Offset(posX, posY), f.size, f.direction, f.color, tailWag);
     }
@@ -643,7 +651,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       final path = Path();
       path.moveTo(baseX, size.height);
 
-      final sway = sin(progress * pi * 2 + i) * 18.0;
+      final sway = sin(timeSec * 1.2 + i) * 20.0;
       path.cubicTo(
         baseX + sway * 0.5,
         size.height - height * 0.33,
@@ -671,7 +679,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final glowPaint = Paint()
-      ..color = color.withOpacity(0.25)
+      ..color = color.withOpacity(0.3)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
     // Fish Body Path
@@ -681,7 +689,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     bodyPath.cubicTo(-size * 0.4, size * 0.5, size * 0.5, size * 0.65, size * 1.2, 0); // Lower Body
     bodyPath.close();
 
-    // Tail Fin Path (Swinging with tailWag)
+    // Tail Fin Path (Swinging naturally)
     final tailPath = Path();
     tailPath.moveTo(-size * 0.7, 0);
     tailPath.lineTo(-size * 1.4, -size * 0.5 + tailWag * 0.4);
@@ -705,7 +713,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant OceanFeedingFrenzyPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.timeSec != timeSec;
   }
 }
 
@@ -715,7 +723,7 @@ class _FishData {
   final double size;
   final int direction; // 1 for right, -1 for left
   final Color color;
-  final double initialX;
+  final double initialXPercent;
 
   _FishData({
     required this.yPercent,
@@ -723,18 +731,20 @@ class _FishData {
     required this.size,
     required this.direction,
     required this.color,
-    required this.initialX,
+    required this.initialXPercent,
   });
 }
 
 class _BubbleData {
   final double xPercent;
+  final double yOffsetPercent;
   final double speed;
   final double radius;
   final double phaseShift;
 
   _BubbleData({
     required this.xPercent,
+    required this.yOffsetPercent,
     required this.speed,
     required this.radius,
     required this.phaseShift,
