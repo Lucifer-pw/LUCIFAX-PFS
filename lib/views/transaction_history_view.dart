@@ -2722,6 +2722,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   }
 
   void _showReturnProductDialog(model_tr.Transaction tr) {
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
+    if (user == null || !user.isDeveloper) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Akses Ditolak: Fitur Retur Produk hanya dapat diakses oleh role Developer.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     if (tr.status != 'DIKIRIM') {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2786,6 +2797,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
     final createdBy = user?.uid ?? 'system';
     final isKacab = user?.isKacab ?? false;
+    final isDeveloper = user?.isDeveloper ?? false;
 
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final Set<String> allProductsSet = {};
@@ -3423,7 +3435,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                               ],
                                                             ),
                                                           ),
-                                                          if (tr.status == 'DIKIRIM') ...[
+                                                          if (tr.status == 'DIKIRIM' && isDeveloper) ...[
                                                             const PopupMenuItem(
                                                               value: 'return_product',
                                                               child: Row(
