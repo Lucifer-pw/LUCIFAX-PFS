@@ -96,11 +96,15 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    // Validate empty fields with SnackBar notifications
+    // Validate empty fields with inline banner + SnackBar
     if (username.isEmpty && password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Username dan Password tidak boleh kosong!';
+      });
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
+        SnackBar(
+          content: const Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
@@ -109,7 +113,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
           ),
           backgroundColor: Colors.orangeAccent,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 3),
+          margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+          duration: const Duration(seconds: 3),
         ),
       );
       _formKey.currentState!.validate();
@@ -117,9 +122,13 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     }
 
     if (username.isEmpty) {
+      setState(() {
+        _errorMessage = 'Username tidak boleh kosong!';
+      });
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
+        SnackBar(
+          content: const Row(
             children: [
               Icon(Icons.person_off_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
@@ -128,7 +137,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
           ),
           backgroundColor: Colors.orangeAccent,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 3),
+          margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+          duration: const Duration(seconds: 3),
         ),
       );
       _formKey.currentState!.validate();
@@ -136,9 +146,13 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     }
 
     if (password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Password tidak boleh kosong!';
+      });
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
+        SnackBar(
+          content: const Row(
             children: [
               Icon(Icons.lock_open_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
@@ -147,7 +161,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
           ),
           backgroundColor: Colors.orangeAccent,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 3),
+          margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+          duration: const Duration(seconds: 3),
         ),
       );
       _formKey.currentState!.validate();
@@ -182,6 +197,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
           setState(() {
             _errorMessage = msg;
           });
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -193,6 +209,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
               ),
               backgroundColor: Colors.redAccent,
               behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
               duration: const Duration(seconds: 4),
             ),
           );
@@ -203,6 +220,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
           setState(() {
             _errorMessage = msg;
           });
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -214,6 +232,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
               ),
               backgroundColor: Colors.redAccent,
               behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
               duration: const Duration(seconds: 4),
             ),
           );
