@@ -26,6 +26,11 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   // Focus mode state: 0 = none, 1 = username focused, 2 = password focused
   int _focusMode = 0;
 
+  // Hero Fish Smooth Position Physics (No instant blinking, 100% fluid swimming)
+  double _heroCurrentX = -1.0;
+  double _heroCurrentY = -1.0;
+  double _lastTimeSec = 0.0;
+
   // Animation Controllers
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -234,12 +239,62 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
             child: AnimatedBuilder(
               animation: _oceanController,
               builder: (context, child) {
+                final nowSec = DateTime.now().millisecondsSinceEpoch / 1000.0;
+                final dt = (_lastTimeSec == 0.0) ? 0.016 : (nowSec - _lastTimeSec).clamp(0.001, 0.1);
+                _lastTimeSec = nowSec;
+
+                final screenSize = MediaQuery.of(context).size;
+                final width = screenSize.width;
+                final height = screenSize.height;
+
+                double targetX;
+                double targetY;
+
+                if (_focusMode == 1) {
+                  // Username focused: approach left of login card
+                  final cardCenterX = width * 0.5;
+                  final cardLeftEdge = (cardCenterX - 215).clamp(20.0, width);
+                  targetX = cardLeftEdge - 45;
+                  targetY = height * 0.44;
+                } else if (_focusMode == 2) {
+                  // Password focused: peek right of login card
+                  final cardCenterX = width * 0.5;
+                  final cardRightEdge = (cardCenterX + 215).clamp(20.0, width - 60);
+                  if (_obscureText) {
+                    targetX = cardRightEdge + 35;
+                    targetY = height * 0.50;
+                  } else {
+                    targetX = cardRightEdge + 75;
+                    targetY = height * 0.56;
+                  }
+                } else {
+                  // Unfocused ambient: swim across screen
+                  final heroSize = 60.0;
+                  final totalTravel = width + heroSize * 6;
+                  final distance = nowSec * 55.0;
+                  final rawDistance = (0.25 * width + distance) % totalTravel;
+                  targetX = rawDistance - heroSize * 3;
+                  targetY = height * 0.48;
+                }
+
+                if (_heroCurrentX < 0) {
+                  _heroCurrentX = targetX;
+                  _heroCurrentY = targetY;
+                } else {
+                  // Smooth swimming lerp glide physics (No instant blinking!)
+                  final lerpFactor = 1.0 - exp(-dt * 4.8);
+                  _heroCurrentX += (targetX - _heroCurrentX) * lerpFactor;
+                  _heroCurrentY += (targetY - _heroCurrentY) * lerpFactor;
+                }
+
                 return CustomPaint(
                   painter: OceanFeedingFrenzyPainter(
-                    timeSec: DateTime.now().millisecondsSinceEpoch / 1000.0,
+                    timeSec: nowSec,
                     fishImage: _fishUiImage,
                     focusMode: _focusMode,
                     isObscured: _obscureText,
+                    heroX: _heroCurrentX,
+                    heroY: _heroCurrentY,
                   ),
                 );
               },
@@ -580,12 +635,16 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   final ui.Image? fishImage; // Decoded Feeding Frenzy fish PNG
   final int focusMode; // 0 = none, 1 = username focused, 2 = password focused
   final bool isObscured; // true = password hidden, false = password shown
+  final double heroX; // Smooth lerped X position
+  final double heroY; // Smooth lerped Y position
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
     this.fishImage,
     this.focusMode = 0,
     this.isObscured = true,
+    this.heroX = 0.0,
+    this.heroY = 0.0,
   });
 
   // Procedural background fish data with varied sizes and speeds
@@ -690,28 +749,23 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   }
 
   void _drawInteractiveHeroFish(Canvas canvas, Size size) {
-    final width = size.width;
-    final height = size.height;
     final heroSize = 60.0;
     final heroColor = const Color(0xFF38BDF8);
 
-    double posX;
-    double posY;
+    // Use smoothly lerped base coordinates (no instant blinking!)
+    final posX = heroX + sin(timeSec * 2.5) * 10;
+    final posY = heroY;
+
     int direction;
     double rotation = 0.0;
-    double verticalBob = 0.0;
+    double verticalBob = sin(timeSec * 3.5) * 6.0;
 
     if (focusMode == 1) {
-      // 1. USERNAME FOCUSED: Hero fish approaches the Login Card with curious wiggling
-      final cardCenterX = width * 0.5;
-      final cardLeftEdge = (cardCenterX - 215).clamp(20.0, width);
-      posX = cardLeftEdge - 45 + sin(timeSec * 2.5) * 15;
-      posY = height * 0.44 + sin(timeSec * 3.5) * 8;
+      // 1. USERNAME FOCUSED: Approaching curiosly
       direction = 1; // Face towards the card (right)
       rotation = sin(timeSec * 4.0) * 0.12; // Curious wiggle
-      verticalBob = sin(timeSec * 5.0) * 4;
 
-      // Draw curious bubbles near fish head
+      // Curious bubbles near fish head
       final bubblePaint = Paint()
         ..color = const Color(0xFF38BDF8).withOpacity(0.6)
         ..style = PaintingStyle.stroke
@@ -722,24 +776,12 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
         canvas.drawCircle(Offset(bX, bY), 3.0 + i, bubblePaint);
       }
     } else if (focusMode == 2) {
-      // 2. PASSWORD FOCUSED: Hero fish peeks from behind the right edge of Login Card
-      final cardCenterX = width * 0.5;
-      final cardRightEdge = (cardCenterX + 215).clamp(20.0, width - 60);
-
+      // 2. PASSWORD FOCUSED: Peeking right of Login Card
+      direction = -1; // Face left towards the card
       if (isObscured) {
-        // Password Hidden: Curious Peeking
-        posX = cardRightEdge + 35 + sin(timeSec * 2.0) * 8;
-        posY = height * 0.52 + sin(timeSec * 4.0) * 6;
-        direction = -1; // Face left towards the card
         rotation = -0.18 + sin(timeSec * 3.0) * 0.08; // Peek tilt angle
-        verticalBob = sin(timeSec * 4.5) * 6;
       } else {
-        // Password Shown: Shy & Surprised!
-        posX = cardRightEdge + 75 + sin(timeSec * 6.0) * 12;
-        posY = height * 0.56 + sin(timeSec * 5.0) * 10;
-        direction = -1;
         rotation = 0.45 + sin(timeSec * 8.0) * 0.15; // Shy tilt backwards
-        verticalBob = sin(timeSec * 6.0) * 8;
 
         // Burst of surprised bubbles
         final bubblePaint = Paint()
@@ -753,15 +795,9 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
         }
       }
     } else {
-      // 0. UNFOCUSED / AMBIENT MODE: Hero fish swims freely back and forth across middle depth
-      final totalTravel = width + heroSize * 6;
-      final distance = timeSec * 55.0;
-      final rawDistance = (0.25 * width + distance) % totalTravel;
-      posX = rawDistance - heroSize * 3;
-      posY = height * 0.48;
+      // 0. UNFOCUSED AMBIENT
       direction = 1;
       rotation = 0.0;
-      verticalBob = sin(timeSec * 2.2) * 10.0;
     }
 
     _drawFish(canvas, Offset(posX, posY), heroSize, direction, heroColor, verticalBob, rotation, fishImage);
