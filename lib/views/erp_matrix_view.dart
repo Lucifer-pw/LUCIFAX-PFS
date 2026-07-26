@@ -1265,31 +1265,31 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           children: [
             Expanded(
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: 26),
+                      child: const Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: 20),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Income ERP', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
+                        const Text('Total Income ERP', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
                         Text(
                           currencyFormatter.format(grandTotalIncome),
-                          style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -1297,34 +1297,34 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0284C7).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.scale_rounded, color: Color(0xFF38BDF8), size: 26),
+                      child: const Icon(Icons.scale_rounded, color: Color(0xFF38BDF8), size: 20),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Berat ERP (Kg)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
+                        const Text('Total Berat ERP (Kg)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
                         Text(
                           '${grandTotalWeightKg.toStringAsFixed(2)} Kg',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -1334,17 +1334,17 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
         Expanded(
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
             child: Scrollbar(
               child: ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(10),
                 itemCount: filteredRecords.length,
                 itemBuilder: (context, index) {
             final record = filteredRecords[index];
@@ -1365,59 +1365,61 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             });
 
             return Container(
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFF334155)),
               ),
               child: Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                   leading: Container(
-                    width: 44, height: 44,
+                    width: 34, height: 34,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(colors: [Color(0xFF0284C7), Color(0xFF38BDF8)]),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
                       child: Text(
                         customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                     ),
                   ),
                   title: Text(
                     customerName,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
                   ),
                   subtitle: Row(
                     children: [
                       Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0284C7).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
                           '${invoices.length} Invoice',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: Colors.green.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
                           currencyFormatter.format(totalIncome),
-                          style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
