@@ -30,6 +30,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   double _heroCurrentX = -1.0;
   double _heroCurrentY = -1.0;
   List<Offset> _bgFishPos = [];
+  List<int> _bgFishDirections = [];
   double _lastTimeSec = 0.0;
 
   // Animation Controllers
@@ -307,6 +308,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     final f = OceanFeedingFrenzyPainter._fishList[i];
                     return Offset(f.initialXPercent * width, f.yPercent * height);
                   });
+                  _bgFishDirections = List.generate(bgCount, (i) => OceanFeedingFrenzyPainter._fishList[i].direction);
                 }
 
                 final newBgPos = <Offset>[];
@@ -316,10 +318,10 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                   double bgTargetY;
 
                   if (_focusMode > 0) {
-                    // Schooling: orbit around the login card when focused
-                    final angle = nowSec * (1.0 + i * 0.15) + i * (pi * 2 / bgCount);
-                    final radiusX = 260.0 + (i % 3) * 30.0;
-                    final radiusY = 180.0 + (i % 2) * 25.0;
+                    // Schooling: orbit around the login card when focused in a continuous circle
+                    final angle = nowSec * (0.8 + i * 0.12) + i * (pi * 2 / bgCount);
+                    final radiusX = 290.0 + (i % 3) * 35.0;
+                    final radiusY = 190.0 + (i % 2) * 30.0;
                     bgTargetX = cardCenterX + cos(angle) * radiusX;
                     bgTargetY = cardCenterY + sin(angle) * radiusY;
                   } else {
@@ -332,10 +334,19 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                   }
 
                   final currentPos = _bgFishPos[i];
-                  final lerpSpeed = _focusMode > 0 ? (2.5 + (i % 3) * 0.5) : 6.0;
+                  final lerpSpeed = _focusMode > 0 ? (2.2 + (i % 3) * 0.4) : 6.0;
                   final lerpF = 1.0 - exp(-dt * lerpSpeed);
                   final nextX = currentPos.dx + (bgTargetX - currentPos.dx) * lerpF;
                   final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
+
+                  // Update facing direction based on movement velocity deltaX (No rollback!)
+                  final deltaX = nextX - currentPos.dx;
+                  if (deltaX > 0.12) {
+                    _bgFishDirections[i] = 1;
+                  } else if (deltaX < -0.12) {
+                    _bgFishDirections[i] = -1;
+                  }
+
                   newBgPos.add(Offset(nextX, nextY));
                 }
                 _bgFishPos = newBgPos;
@@ -349,6 +360,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     heroX: _heroCurrentX,
                     heroY: _heroCurrentY,
                     bgFishPos: _bgFishPos,
+                    bgFishDirs: _bgFishDirections,
                   ),
                 );
               },
@@ -692,6 +704,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   final double heroX; // Smooth lerped X position
   final double heroY; // Smooth lerped Y position
   final List<Offset> bgFishPos; // Smooth lerped school fish positions
+  final List<int> bgFishDirs; // Velocity-driven facing directions (no rollback!)
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
@@ -701,18 +714,19 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     this.heroX = 0.0,
     this.heroY = 0.0,
     this.bgFishPos = const [],
+    this.bgFishDirs = const [],
   });
 
-  // Procedural background fish data with varied sizes, speeds, and species
+  // Procedural background fish data with realistic sizes, speeds, and species
   // imageIndex: 0=fish, 1=shark, 2=baraccuda, 3=orca, 4=anglerfish
   static final List<_FishData> _fishList = [
-    _FishData(yPercent: 0.14, speed: 45.0, size: 28, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05, imageIndex: 0),
-    _FishData(yPercent: 0.26, speed: 65.0, size: 30, direction: -1, color: const Color(0xFF64748B), initialXPercent: 0.85, imageIndex: 1),
-    _FishData(yPercent: 0.38, speed: 35.0, size: 26, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35, imageIndex: 2),
-    _FishData(yPercent: 0.72, speed: 75.0, size: 24, direction: -1, color: const Color(0xFF1E293B), initialXPercent: 0.70, imageIndex: 3),
-    _FishData(yPercent: 0.80, speed: 50.0, size: 28, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15, imageIndex: 4),
-    _FishData(yPercent: 0.86, speed: 60.0, size: 26, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50, imageIndex: 0),
-    _FishData(yPercent: 0.18, speed: 85.0, size: 22, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60, imageIndex: 2),
+    _FishData(yPercent: 0.14, speed: 45.0, size: 38, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05, imageIndex: 0),
+    _FishData(yPercent: 0.26, speed: 65.0, size: 95, direction: -1, color: const Color(0xFF64748B), initialXPercent: 0.85, imageIndex: 1), // Shark (LARGE!)
+    _FishData(yPercent: 0.38, speed: 35.0, size: 62, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35, imageIndex: 2), // Barracuda
+    _FishData(yPercent: 0.72, speed: 75.0, size: 115, direction: -1, color: const Color(0xFF1E293B), initialXPercent: 0.70, imageIndex: 3), // Orca (HUGE!)
+    _FishData(yPercent: 0.80, speed: 50.0, size: 48, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15, imageIndex: 4), // Anglerfish
+    _FishData(yPercent: 0.86, speed: 60.0, size: 40, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50, imageIndex: 0),
+    _FishData(yPercent: 0.18, speed: 85.0, size: 60, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60, imageIndex: 2), // Barracuda
   ];
 
   // Procedural bubbles
@@ -784,20 +798,14 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
     }
 
-    // 5. Swimming Background Fish School (Orbit login card when focused)
+    // 5. Swimming Background Fish School (Orbit login card when focused - facing direction is continuous)
     if (bgFishPos.isNotEmpty) {
       for (int i = 0; i < _fishList.length && i < bgFishPos.length; i++) {
         final f = _fishList[i];
         final pos = bgFishPos[i];
-        // When focused, fish face towards the card center
-        int dir;
-        if (focusMode > 0) {
-          dir = (size.width * 0.5 >= pos.dx) ? 1 : -1;
-        } else {
-          dir = f.direction;
-        }
+        final dir = (i < bgFishDirs.length) ? bgFishDirs[i] : f.direction;
         final verticalBob = sin(timeSec * 2.5 + i * 2.0) * 5.0;
-        final rot = focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.10 : 0.0;
+        final rot = focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.08 : 0.0;
         final img = (f.imageIndex < fishImages.length) ? fishImages[f.imageIndex] : null;
         _drawFish(canvas, pos, f.size, dir, f.color, verticalBob, rot, img, timeWagPhase: i * 1.5);
       }
