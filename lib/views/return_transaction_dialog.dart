@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart' as model_tr;
 import '../models/transaction_return.dart';
+import '../models/product.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/product_provider.dart';
 import '../providers/auth_provider.dart';
 
 class ReturnTransactionDialog extends StatefulWidget {
@@ -21,9 +23,9 @@ class ReturnTransactionDialog extends StatefulWidget {
 class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
   final _currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-  final Map<String, TextEditingController> _qtyControllers = {};
+  final Map<String, TextEditingController> _qtyBagusControllers = {};
+  final Map<String, TextEditingController> _qtyRusakControllers = {};
   final Map<String, TextEditingController> _reasonControllers = {};
-  final Map<String, String> _conditionMap = {};
 
   bool _isSubmitting = false;
 
@@ -31,15 +33,18 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
   void initState() {
     super.initState();
     for (var item in widget.transaction.items) {
-      _qtyControllers[item.productId] = TextEditingController(text: '0');
+      _qtyBagusControllers[item.productId] = TextEditingController(text: '0');
+      _qtyRusakControllers[item.productId] = TextEditingController(text: '0');
       _reasonControllers[item.productId] = TextEditingController(text: 'Barang Diretur');
-      _conditionMap[item.productId] = 'BAGUS';
     }
   }
 
   @override
   void dispose() {
-    for (var controller in _qtyControllers.values) {
+    for (var controller in _qtyBagusControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _qtyRusakControllers.values) {
       controller.dispose();
     }
     for (var controller in _reasonControllers.values) {
@@ -56,11 +61,13 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
   double _calculateTotalReturnAmount() {
     double total = 0.0;
     for (var item in widget.transaction.items) {
-      final qtyText = _qtyControllers[item.productId]?.text ?? '0';
-      final qty = double.tryParse(qtyText) ?? 0.0;
-      if (qty > 0) {
+      final qtyBagus = double.tryParse(_qtyBagusControllers[item.productId]?.text ?? '0') ?? 0.0;
+      final qtyRusak = double.tryParse(_qtyRusakControllers[item.productId]?.text ?? '0') ?? 0.0;
+      final totalQtyItem = qtyBagus + qtyRusak;
+
+      if (totalQtyItem > 0) {
         final effPrice = _getEffectiveUnitPrice(item);
-        total += qty * effPrice;
+        total += totalQtyItem * effPrice;
       }
     }
     return total;
@@ -71,39 +78,63 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
     double totalReturnAmount = 0.0;
 
     for (var item in widget.transaction.items) {
-      final qtyText = _qtyControllers[item.productId]?.text.trim() ?? '0';
-      final qty = double.tryParse(qtyText) ?? 0.0;
+      final qtyBagus = double.tryParse(_qtyBagusControllers[item.productId]?.text.trim() ?? '0') ?? 0.0;
+      final qtyRusak = double.tryParse(_qtyRusakControllers[item.productId]?.text.trim() ?? '0') ?? 0.0;
+      final totalQtyItem = qtyBagus + qtyRusak;
 
-      if (qty > item.qty) {
+      if (totalQtyItem > item.qty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Qty retur untuk ${item.productName} tidak boleh melebihi qty awal (${item.qty.toInt()} pcs)!'),
+            content: Text(
+              'Total Qty retur untuk ${item.productName} (Bagus: ${qtyBagus.toInt()} + Rusak: ${qtyRusak.toInt()} = ${totalQtyItem.toInt()} pcs) tidak boleh melebihi qty awal (${item.qty.toInt()} pcs)!',
+            ),
             backgroundColor: Colors.redAccent,
           ),
         );
         return;
       }
 
-      if (qty > 0) {
-        final effPrice = _getEffectiveUnitPrice(item);
-        final subtotal = qty * effPrice;
-        final condition = _conditionMap[item.productId] ?? 'BAGUS';
-        final reason = _reasonControllers[item.productId]?.text.trim() ?? 'Retur Produk';
+      final effPrice = _getEffectiveUnitPrice(item);
+      final baseReason = _reasonControllers[item.productId]?.text.trim() ?? 'Retur Produk';
 
-        totalReturnAmount += subtotal;
+      // Item Retur Kondisi BAGUS (Kembali ke Stok Master)
+      if (qtyBagus > 0) {
+        final subtotalBagus = qtyBagus * effPrice;
+        totalReturnAmount += subtotalBagus;
         returnItems.add(
           ReturnItem(
             productId: item.productId,
             productName: item.productName,
-            qtyReturned: qty,
+            qtyReturned: qtyBagus,
             price: item.price,
             discountPercent: item.discountPercent,
             effectiveUnitPrice: effPrice,
-            subtotalReturn: subtotal,
+            subtotalReturn: subtotalBagus,
             sizeGrams: item.sizeGrams,
             isBonus: item.isBonus,
-            condition: condition,
-            reason: reason,
+            condition: 'BAGUS',
+            reason: '$baseReason (Kondisi Bagus / Kembali Stok)',
+          ),
+        );
+      }
+
+      // Item Retur Kondisi RUSAK / BS (Afkir)
+      if (qtyRusak > 0) {
+        final subtotalRusak = qtyRusak * effPrice;
+        totalReturnAmount += subtotalRusak;
+        returnItems.add(
+          ReturnItem(
+            productId: item.productId,
+            productName: item.productName,
+            qtyReturned: qtyRusak,
+            price: item.price,
+            discountPercent: item.discountPercent,
+            effectiveUnitPrice: effPrice,
+            subtotalReturn: subtotalRusak,
+            sizeGrams: item.sizeGrams,
+            isBonus: item.isBonus,
+            condition: 'RUSAK_BS',
+            reason: '$baseReason (Kondisi Rusak / BS Afkir)',
           ),
         );
       }
@@ -166,6 +197,9 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
   @override
   Widget build(BuildContext context) {
     final tr = widget.transaction;
+    final productProvider = Provider.of<ProductProvider>(context);
+    final products = productProvider.products;
+
     final totalReturnAmount = _calculateTotalReturnAmount();
     final remainingNetTotal = (tr.netGrandTotal - totalReturnAmount).clamp(0.0, double.infinity);
 
@@ -204,8 +238,8 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
         ],
       ),
       content: SizedBox(
-        width: 800,
-        height: 520,
+        width: 860,
+        height: 560,
         child: Column(
           children: [
             // Status Banner Info
@@ -260,24 +294,41 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
                   itemBuilder: (context, index) {
                     final item = tr.items[index];
                     final effPrice = _getEffectiveUnitPrice(item);
-                    final controller = _qtyControllers[item.productId]!;
+
+                    // Fetch current master stock for this item
+                    final Product? matchingProd = products.cast<Product?>().firstWhere(
+                      (p) => p != null && (p.id.trim().toLowerCase() == item.productId.trim().toLowerCase() ||
+                             p.name.trim().toLowerCase() == item.productName.trim().toLowerCase()),
+                      orElse: () => null,
+                    );
+                    final double masterStock = matchingProd != null ? matchingProd.stock : 0.0;
+
+                    final controllerBagus = _qtyBagusControllers[item.productId]!;
+                    final controllerRusak = _qtyRusakControllers[item.productId]!;
                     final reasonController = _reasonControllers[item.productId]!;
-                    final currentQty = double.tryParse(controller.text) ?? 0.0;
-                    final itemReturnSubtotal = currentQty * effPrice;
+
+                    final qtyBagus = double.tryParse(controllerBagus.text) ?? 0.0;
+                    final qtyRusak = double.tryParse(controllerRusak.text) ?? 0.0;
+                    final totalQtyItem = qtyBagus + qtyRusak;
+                    final itemReturnSubtotal = totalQtyItem * effPrice;
+
+                    final bool isOverflow = totalQtyItem > item.qty;
 
                     return Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: currentQty > 0 ? Colors.amber.withOpacity(0.5) : Colors.transparent,
+                          color: isOverflow
+                              ? Colors.red
+                              : (totalQtyItem > 0 ? Colors.amber.withOpacity(0.6) : Colors.transparent),
                         ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Item Title & Price Row
+                          // Item Title & Header Info Row
                           Row(
                             children: [
                               Expanded(
@@ -302,9 +353,35 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
                                   ],
                                 ),
                               ),
-                              Text(
-                                'Qty Asal: ${item.qty.toInt()} pcs | Harga Bersih: ${_currencyFormatter.format(effPrice)}',
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                              // Master Stock Badge + Qty Asal + Effective Price
+                              Wrap(
+                                spacing: 10,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF38BDF8), width: 0.8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 12),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Stok Master: ${masterStock.toInt()} pcs',
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    'Qty Asal: ${item.qty.toInt()} pcs | Harga Bersih: ${_currencyFormatter.format(effPrice)}',
+                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -317,78 +394,51 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
                           ],
                           const SizedBox(height: 10),
 
-                          // Controls Row: Qty Retur Input + Condition Dropdown + Reason
+                          // Controls Row: Qty Bagus + Qty Rusak/BS + Alasan + Subtotal
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              // Qty Input
+                              // Input Qty Retur BAGUS
                               SizedBox(
-                                width: 120,
+                                width: 145,
                                 child: TextField(
-                                  controller: controller,
+                                  controller: controllerBagus,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                                  style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                   decoration: InputDecoration(
-                                    labelText: 'Qty Retur (pcs)',
-                                    labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                    labelText: 'Qty BAGUS (Kembali)',
+                                    labelStyle: const TextStyle(color: Colors.greenAccent, fontSize: 11),
+                                    prefixIcon: const Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent, size: 16),
                                     isDense: true,
                                     filled: true,
                                     fillColor: const Color(0xFF0F172A),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                   ),
-                                  onChanged: (val) {
-                                    setState(() {});
-                                  },
+                                  onChanged: (val) => setState(() {}),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
 
-                              // Condition Selector
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFF334155)),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _conditionMap[item.productId] ?? 'BAGUS',
-                                    dropdownColor: const Color(0xFF1E293B),
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: 'BAGUS',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.inventory_rounded, color: Colors.greenAccent, size: 14),
-                                            SizedBox(width: 6),
-                                            Text('BAGUS (Stok Kembali)', style: TextStyle(color: Colors.greenAccent)),
-                                          ],
-                                        ),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'RUSAK_BS',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.report_problem_rounded, color: Colors.redAccent, size: 14),
-                                            SizedBox(width: 6),
-                                            Text('RUSAK/BS (Afkir)', style: TextStyle(color: Colors.redAccent)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setState(() {
-                                          _conditionMap[item.productId] = val;
-                                        });
-                                      }
-                                    },
+                              // Input Qty Retur RUSAK / BS
+                              SizedBox(
+                                width: 145,
+                                child: TextField(
+                                  controller: controllerRusak,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    labelText: 'Qty RUSAK (Afkir)',
+                                    labelStyle: const TextStyle(color: Colors.redAccent, fontSize: 11),
+                                    prefixIcon: const Icon(Icons.report_problem_outlined, color: Colors.redAccent, size: 16),
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: const Color(0xFF0F172A),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                   ),
+                                  onChanged: (val) => setState(() {}),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
 
                               // Reason Text Input
                               Expanded(
@@ -398,7 +448,7 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
                                   decoration: InputDecoration(
                                     labelText: 'Alasan Retur',
                                     labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                    hintText: 'Misal: Rusak kemasan, basi, dll',
+                                    hintText: 'Misal: Kemasan rusak, kadaluarsa, dll',
                                     hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
                                     isDense: true,
                                     filled: true,
@@ -417,9 +467,9 @@ class _ReturnTransactionDialogState extends State<ReturnTransactionDialog> {
                                   Text(
                                     _currencyFormatter.format(itemReturnSubtotal),
                                     style: TextStyle(
-                                      color: currentQty > 0 ? Colors.amberAccent : Colors.white38,
+                                      color: totalQtyItem > 0 ? Colors.amberAccent : Colors.white38,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
