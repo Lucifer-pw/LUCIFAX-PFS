@@ -26,9 +26,6 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   // Focus mode state: 0 = none, 1 = username focused, 2 = password focused
   int _focusMode = 0;
 
-  // Mouse tracking state for cursor-following fish school
-  Offset? _mousePos;
-
   // Hero & School Fish Smooth Position Physics (No instant blinking, 100% fluid swimming)
   double _heroCurrentX = -1.0;
   double _heroCurrentY = -1.0;
@@ -236,128 +233,118 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: const Color(0xFF030F26), // Ocean Abyss Base
-      body: MouseRegion(
-        onHover: (event) {
-          if (!mounted) return;
-          setState(() {
-            _mousePos = event.position;
-          });
-        },
-        child: Stack(
-          children: [
-            // 🌊 Animated Feeding Frenzy Underwater Background Canvas
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _oceanController,
-                builder: (context, child) {
-                  final nowSec = DateTime.now().millisecondsSinceEpoch / 1000.0;
-                  final dt = (_lastTimeSec == 0.0) ? 0.016 : (nowSec - _lastTimeSec).clamp(0.001, 0.1);
-                  _lastTimeSec = nowSec;
+      body: Stack(
+        children: [
+          // 🌊 Animated Feeding Frenzy Underwater Background Canvas
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _oceanController,
+              builder: (context, child) {
+                final nowSec = DateTime.now().millisecondsSinceEpoch / 1000.0;
+                final dt = (_lastTimeSec == 0.0) ? 0.016 : (nowSec - _lastTimeSec).clamp(0.001, 0.1);
+                _lastTimeSec = nowSec;
 
-                  final screenSize = MediaQuery.of(context).size;
-                  final width = screenSize.width;
-                  final height = screenSize.height;
+                final screenSize = MediaQuery.of(context).size;
+                final width = screenSize.width;
+                final height = screenSize.height;
 
-                  double heroTargetX;
-                  double heroTargetY;
+                // Login card center coordinates
+                final cardCenterX = width * 0.5;
+                final cardCenterY = height * 0.52;
 
-                  // 1. Calculate Target Position for Hero Fish
-                  if (_mousePos != null) {
-                    // Follow mouse cursor
-                    heroTargetX = _mousePos!.dx;
-                    heroTargetY = _mousePos!.dy;
-                  } else if (_focusMode == 1) {
-                    // Username focused: approach left of login card
-                    final cardCenterX = width * 0.5;
-                    final cardLeftEdge = (cardCenterX - 215).clamp(20.0, width);
-                    heroTargetX = cardLeftEdge - 45;
-                    heroTargetY = height * 0.44;
-                  } else if (_focusMode == 2) {
-                    // Password focused: peek right of login card
-                    final cardCenterX = width * 0.5;
-                    final cardRightEdge = (cardCenterX + 215).clamp(20.0, width - 60);
-                    if (_obscureText) {
-                      heroTargetX = cardRightEdge + 35;
-                      heroTargetY = height * 0.50;
-                    } else {
-                      heroTargetX = cardRightEdge + 75;
-                      heroTargetY = height * 0.56;
-                    }
+                double heroTargetX;
+                double heroTargetY;
+
+                // 1. Calculate Target Position for Hero Fish
+                if (_focusMode == 1) {
+                  // Username focused: approach left of login card
+                  final cardLeftEdge = (cardCenterX - 215).clamp(20.0, width);
+                  heroTargetX = cardLeftEdge - 45;
+                  heroTargetY = height * 0.44;
+                } else if (_focusMode == 2) {
+                  // Password focused: peek right of login card
+                  final cardRightEdge = (cardCenterX + 215).clamp(20.0, width - 60);
+                  if (_obscureText) {
+                    heroTargetX = cardRightEdge + 35;
+                    heroTargetY = height * 0.50;
                   } else {
-                    // Unfocused ambient: swim across screen
-                    final heroSize = 60.0;
-                    final totalTravel = width + heroSize * 6;
-                    final distance = nowSec * 55.0;
-                    final rawDistance = (0.25 * width + distance) % totalTravel;
-                    heroTargetX = rawDistance - heroSize * 3;
-                    heroTargetY = height * 0.48;
+                    heroTargetX = cardRightEdge + 75;
+                    heroTargetY = height * 0.56;
                   }
+                } else {
+                  // Unfocused ambient: swim across screen
+                  final heroSize = 60.0;
+                  final totalTravel = width + heroSize * 6;
+                  final distance = nowSec * 55.0;
+                  final rawDistance = (0.25 * width + distance) % totalTravel;
+                  heroTargetX = rawDistance - heroSize * 3;
+                  heroTargetY = height * 0.48;
+                }
 
-                  if (_heroCurrentX < 0) {
-                    _heroCurrentX = heroTargetX;
-                    _heroCurrentY = heroTargetY;
-                  } else {
-                    // Smooth swimming lerp glide physics (No instant blinking!)
-                    final lerpFactor = 1.0 - exp(-dt * 4.2);
-                    _heroCurrentX += (heroTargetX - _heroCurrentX) * lerpFactor;
-                    _heroCurrentY += (heroTargetY - _heroCurrentY) * lerpFactor;
-                  }
+                if (_heroCurrentX < 0) {
+                  _heroCurrentX = heroTargetX;
+                  _heroCurrentY = heroTargetY;
+                } else {
+                  // Smooth swimming lerp glide physics
+                  final lerpFactor = 1.0 - exp(-dt * 4.2);
+                  _heroCurrentX += (heroTargetX - _heroCurrentX) * lerpFactor;
+                  _heroCurrentY += (heroTargetY - _heroCurrentY) * lerpFactor;
+                }
 
-                  // 2. Calculate Smooth Swimming Lerp Targets for Background Fish School
-                  final bgCount = OceanFeedingFrenzyPainter._fishList.length;
-                  if (_bgFishPos.length != bgCount) {
-                    _bgFishPos = List.generate(bgCount, (i) {
-                      final f = OceanFeedingFrenzyPainter._fishList[i];
-                      return Offset(f.initialXPercent * width, f.yPercent * height);
-                    });
-                  }
-
-                  final newBgPos = <Offset>[];
-                  for (int i = 0; i < bgCount; i++) {
+                // 2. Calculate Smooth Swimming Lerp Targets for Background Fish School
+                final bgCount = OceanFeedingFrenzyPainter._fishList.length;
+                if (_bgFishPos.length != bgCount) {
+                  _bgFishPos = List.generate(bgCount, (i) {
                     final f = OceanFeedingFrenzyPainter._fishList[i];
-                    double bgTargetX;
-                    double bgTargetY;
+                    return Offset(f.initialXPercent * width, f.yPercent * height);
+                  });
+                }
 
-                    if (_mousePos != null) {
-                      // Schooling flock around mouse cursor with organic offset angle
-                      final angle = nowSec * 1.4 + i * 0.9;
-                      final radiusX = 85.0 + i * 22.0;
-                      final radiusY = 55.0 + i * 16.0;
-                      bgTargetX = _mousePos!.dx + cos(angle) * radiusX;
-                      bgTargetY = _mousePos!.dy + sin(angle) * radiusY;
-                    } else {
-                      // Standard ambient swimming path
-                      final totalTravel = width + f.size * 6;
-                      final distance = nowSec * f.speed;
-                      final rawDistance = (f.initialXPercent * width + distance) % totalTravel;
-                      bgTargetX = f.direction == 1 ? rawDistance - f.size * 3 : width + f.size * 3 - rawDistance;
-                      bgTargetY = f.yPercent * height;
-                    }
+                final newBgPos = <Offset>[];
+                for (int i = 0; i < bgCount; i++) {
+                  final f = OceanFeedingFrenzyPainter._fishList[i];
+                  double bgTargetX;
+                  double bgTargetY;
 
-                    final currentPos = _bgFishPos[i];
-                    final lerpSpeed = _mousePos != null ? (2.8 + (i % 3) * 0.6) : 6.0;
-                    final lerpF = 1.0 - exp(-dt * lerpSpeed);
-                    final nextX = currentPos.dx + (bgTargetX - currentPos.dx) * lerpF;
-                    final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
-                    newBgPos.add(Offset(nextX, nextY));
+                  if (_focusMode > 0) {
+                    // Schooling: orbit around the login card when focused
+                    final angle = nowSec * (1.0 + i * 0.15) + i * (pi * 2 / bgCount);
+                    final radiusX = 260.0 + (i % 3) * 30.0;
+                    final radiusY = 180.0 + (i % 2) * 25.0;
+                    bgTargetX = cardCenterX + cos(angle) * radiusX;
+                    bgTargetY = cardCenterY + sin(angle) * radiusY;
+                  } else {
+                    // Standard ambient swimming path
+                    final totalTravel = width + f.size * 6;
+                    final distance = nowSec * f.speed;
+                    final rawDistance = (f.initialXPercent * width + distance) % totalTravel;
+                    bgTargetX = f.direction == 1 ? rawDistance - f.size * 3 : width + f.size * 3 - rawDistance;
+                    bgTargetY = f.yPercent * height;
                   }
-                  _bgFishPos = newBgPos;
 
-                  return CustomPaint(
-                    painter: OceanFeedingFrenzyPainter(
-                      timeSec: nowSec,
-                      fishImage: _fishUiImage,
-                      focusMode: _focusMode,
-                      isObscured: _obscureText,
-                      heroX: _heroCurrentX,
-                      heroY: _heroCurrentY,
-                      bgFishPos: _bgFishPos,
-                      mousePos: _mousePos,
-                    ),
-                  );
-                },
-              ),
+                  final currentPos = _bgFishPos[i];
+                  final lerpSpeed = _focusMode > 0 ? (2.5 + (i % 3) * 0.5) : 6.0;
+                  final lerpF = 1.0 - exp(-dt * lerpSpeed);
+                  final nextX = currentPos.dx + (bgTargetX - currentPos.dx) * lerpF;
+                  final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
+                  newBgPos.add(Offset(nextX, nextY));
+                }
+                _bgFishPos = newBgPos;
+
+                return CustomPaint(
+                  painter: OceanFeedingFrenzyPainter(
+                    timeSec: nowSec,
+                    fishImage: _fishUiImage,
+                    focusMode: _focusMode,
+                    isObscured: _obscureText,
+                    heroX: _heroCurrentX,
+                    heroY: _heroCurrentY,
+                    bgFishPos: _bgFishPos,
+                  ),
+                );
+              },
             ),
+          ),
 
           // Main Login Interface Content Layer
           Center(
@@ -683,9 +670,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 /// 🎨 CustomPainter for high-performance Seamless Feeding Frenzy Animated Ocean
@@ -697,7 +683,6 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   final double heroX; // Smooth lerped X position
   final double heroY; // Smooth lerped Y position
   final List<Offset> bgFishPos; // Smooth lerped school fish positions
-  final Offset? mousePos; // Current mouse cursor position
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
@@ -707,7 +692,6 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     this.heroX = 0.0,
     this.heroY = 0.0,
     this.bgFishPos = const [],
-    this.mousePos,
   });
 
   // Procedural background fish data with varied sizes and speeds
@@ -790,19 +774,20 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
     }
 
-    // 5. Swimming Background Fish School (Following Mouse if Available)
+    // 5. Swimming Background Fish School (Orbit login card when focused)
     if (bgFishPos.isNotEmpty) {
       for (int i = 0; i < _fishList.length && i < bgFishPos.length; i++) {
         final f = _fishList[i];
         final pos = bgFishPos[i];
+        // When focused, fish face towards the card center
         int dir;
-        if (mousePos != null) {
-          dir = (mousePos!.dx >= pos.dx) ? 1 : -1;
+        if (focusMode > 0) {
+          dir = (size.width * 0.5 >= pos.dx) ? 1 : -1;
         } else {
           dir = f.direction;
         }
         final verticalBob = sin(timeSec * 2.5 + i * 2.0) * 5.0;
-        final rot = mousePos != null ? sin(timeSec * 3.0 + i) * 0.12 : 0.0;
+        final rot = focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.10 : 0.0;
         _drawFish(canvas, pos, f.size, dir, f.color, verticalBob, rot, fishImage);
       }
     } else {
@@ -816,7 +801,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       }
     }
 
-    // 6. 🌟 INTERACTIVE HERO FISH (Follows Mouse Cursor & Focus Events)
+    // 6. 🌟 INTERACTIVE HERO FISH (Responds to Focus Events)
     _drawInteractiveHeroFish(canvas, size);
   }
 
@@ -832,11 +817,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     double rotation = 0.0;
     double verticalBob = sin(timeSec * 3.5) * 5.0;
 
-    if (mousePos != null) {
-      // Face towards mouse cursor
-      direction = (mousePos!.dx >= heroX) ? 1 : -1;
-      rotation = sin(timeSec * 3.5) * 0.10;
-    } else if (focusMode == 1) {
+    if (focusMode == 1) {
       // Username focused: Approaching curiously
       direction = 1; // Face towards the card (right)
       rotation = sin(timeSec * 4.0) * 0.12; // Curious wiggle
