@@ -262,15 +262,24 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                 final cardCenterX = width * 0.5;
                 final cardCenterY = height * 0.52;
 
-                double heroTargetX;
-                double heroTargetY;
+                double heroTargetX = 0;
+                double heroTargetY = 0;
 
-                // 1. Calculate Target Position for Hero Fish
+                // 1. Calculate Target Position & Smooth Movement for Hero Fish
                 if (_focusMode == 1) {
                   // Username focused: approach left of login card
                   final cardLeftEdge = (cardCenterX - 215).clamp(20.0, width);
                   heroTargetX = cardLeftEdge - 45;
                   heroTargetY = height * 0.44;
+
+                  if (_heroCurrentX < 0) {
+                    _heroCurrentX = heroTargetX;
+                    _heroCurrentY = heroTargetY;
+                  } else {
+                    final lerpFactor = 1.0 - exp(-dt * 4.2);
+                    _heroCurrentX += (heroTargetX - _heroCurrentX) * lerpFactor;
+                    _heroCurrentY += (heroTargetY - _heroCurrentY) * lerpFactor;
+                  }
                 } else if (_focusMode == 2) {
                   // Password focused: peek right of login card
                   final cardRightEdge = (cardCenterX + 215).clamp(20.0, width - 60);
@@ -281,27 +290,30 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     heroTargetX = cardRightEdge + 75;
                     heroTargetY = height * 0.56;
                   }
+
+                  if (_heroCurrentX < 0) {
+                    _heroCurrentX = heroTargetX;
+                    _heroCurrentY = heroTargetY;
+                  } else {
+                    final lerpFactor = 1.0 - exp(-dt * 4.2);
+                    _heroCurrentX += (heroTargetX - _heroCurrentX) * lerpFactor;
+                    _heroCurrentY += (heroTargetY - _heroCurrentY) * lerpFactor;
+                  }
                 } else {
-                  // Unfocused ambient: swim across screen
-                  final heroSize = 60.0;
-                  final totalTravel = width + heroSize * 6;
-                  final distance = nowSec * 55.0;
-                  final rawDistance = (0.25 * width + distance) % totalTravel;
-                  heroTargetX = rawDistance - heroSize * 3;
-                  heroTargetY = height * 0.48;
+                  // Unfocused ambient: swim continuously forward across screen (Zero rollback!)
+                  if (_heroCurrentX < -150) {
+                    _heroCurrentX = -180;
+                    _heroCurrentY = height * 0.48;
+                  }
+                  _heroCurrentX += 60.0 * dt;
+                  _heroCurrentY += ((height * 0.48) - _heroCurrentY) * (1.0 - exp(-dt * 3.0));
+
+                  if (_heroCurrentX > width + 200) {
+                    _heroCurrentX = -200; // Wrap off-screen instantly
+                  }
                 }
 
-                if (_heroCurrentX < 0) {
-                  _heroCurrentX = heroTargetX;
-                  _heroCurrentY = heroTargetY;
-                } else {
-                  // Smooth swimming lerp glide physics
-                  final lerpFactor = 1.0 - exp(-dt * 4.2);
-                  _heroCurrentX += (heroTargetX - _heroCurrentX) * lerpFactor;
-                  _heroCurrentY += (heroTargetY - _heroCurrentY) * lerpFactor;
-                }
-
-                // 2. Calculate Smooth Swimming Lerp Targets for Background Fish School
+                // 2. Calculate Position & Movement for Background Fish School
                 final bgCount = OceanFeedingFrenzyPainter._fishList.length;
                 if (_bgFishPos.length != bgCount) {
                   _bgFishPos = List.generate(bgCount, (i) {
@@ -314,40 +326,45 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                 final newBgPos = <Offset>[];
                 for (int i = 0; i < bgCount; i++) {
                   final f = OceanFeedingFrenzyPainter._fishList[i];
-                  double bgTargetX;
-                  double bgTargetY;
+                  final currentPos = _bgFishPos[i];
 
                   if (_focusMode > 0) {
                     // Schooling: orbit around the login card when focused in a continuous circle
                     final angle = nowSec * (0.8 + i * 0.12) + i * (pi * 2 / bgCount);
                     final radiusX = 290.0 + (i % 3) * 35.0;
                     final radiusY = 190.0 + (i % 2) * 30.0;
-                    bgTargetX = cardCenterX + cos(angle) * radiusX;
-                    bgTargetY = cardCenterY + sin(angle) * radiusY;
+                    final bgTargetX = cardCenterX + cos(angle) * radiusX;
+                    final bgTargetY = cardCenterY + sin(angle) * radiusY;
+
+                    final lerpSpeed = 2.2 + (i % 3) * 0.4;
+                    final lerpF = 1.0 - exp(-dt * lerpSpeed);
+                    final nextX = currentPos.dx + (bgTargetX - currentPos.dx) * lerpF;
+                    final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
+
+                    final deltaX = nextX - currentPos.dx;
+                    if (deltaX > 0.12) {
+                      _bgFishDirections[i] = 1;
+                    } else if (deltaX < -0.12) {
+                      _bgFishDirections[i] = -1;
+                    }
+
+                    newBgPos.add(Offset(nextX, nextY));
                   } else {
-                    // Standard ambient swimming path
-                    final totalTravel = width + f.size * 6;
-                    final distance = nowSec * f.speed;
-                    final rawDistance = (f.initialXPercent * width + distance) % totalTravel;
-                    bgTargetX = f.direction == 1 ? rawDistance - f.size * 3 : width + f.size * 3 - rawDistance;
-                    bgTargetY = f.yPercent * height;
+                    // Standard ambient swimming path: linear velocity forward + off-screen wrap (Zero rollback!)
+                    final moveSpeed = f.speed * 1.15;
+                    double nextX = currentPos.dx + (f.direction * moveSpeed * dt);
+                    double nextY = currentPos.dy + ((f.yPercent * height) - currentPos.dy) * (1.0 - exp(-dt * 3.0));
+
+                    final margin = f.size * 4.0;
+                    if (f.direction == 1 && nextX > width + margin) {
+                      nextX = -margin; // Wrap off-screen instantly
+                    } else if (f.direction == -1 && nextX < -margin) {
+                      nextX = width + margin; // Wrap off-screen instantly
+                    }
+
+                    _bgFishDirections[i] = f.direction;
+                    newBgPos.add(Offset(nextX, nextY));
                   }
-
-                  final currentPos = _bgFishPos[i];
-                  final lerpSpeed = _focusMode > 0 ? (2.2 + (i % 3) * 0.4) : 6.0;
-                  final lerpF = 1.0 - exp(-dt * lerpSpeed);
-                  final nextX = currentPos.dx + (bgTargetX - currentPos.dx) * lerpF;
-                  final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
-
-                  // Update facing direction based on movement velocity deltaX (No rollback!)
-                  final deltaX = nextX - currentPos.dx;
-                  if (deltaX > 0.12) {
-                    _bgFishDirections[i] = 1;
-                  } else if (deltaX < -0.12) {
-                    _bgFishDirections[i] = -1;
-                  }
-
-                  newBgPos.add(Offset(nextX, nextY));
                 }
                 _bgFishPos = newBgPos;
 
