@@ -44,8 +44,15 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   // Ocean Ticker Controller for 60 FPS continuous rendering
   late AnimationController _oceanController;
 
-  // Decoded Feeding Frenzy Fish Image Asset
-  ui.Image? _fishUiImage;
+  // Decoded Feeding Frenzy Fish Image Assets (5 species)
+  List<ui.Image?> _fishImages = List.filled(5, null);
+  static const List<String> _fishAssets = [
+    'assets/images/fish_feeding_frenzy.png',
+    'assets/images/shark_feeding_frenzy.png',
+    'assets/images/baraccuda_feeding_frenzy.png',
+    'assets/images/orca_feeding_frenzy.png',
+    'assets/images/anglerfish_feeding_frenzy.png',
+  ];
 
   @override
   void initState() {
@@ -109,18 +116,20 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   }
 
   Future<void> _loadFishImage() async {
-    try {
-      final data = await rootBundle.load('assets/images/fish_feeding_frenzy.png');
-      final bytes = data.buffer.asUint8List();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      if (mounted) {
-        setState(() {
-          _fishUiImage = frame.image;
-        });
+    for (int i = 0; i < _fishAssets.length; i++) {
+      try {
+        final data = await rootBundle.load(_fishAssets[i]);
+        final bytes = data.buffer.asUint8List();
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        if (mounted) {
+          setState(() {
+            _fishImages[i] = frame.image;
+          });
+        }
+      } catch (e) {
+        debugPrint("Error loading fish image ${_fishAssets[i]}: $e");
       }
-    } catch (e) {
-      debugPrint("Error loading Feeding Frenzy fish image: $e");
     }
   }
 
@@ -334,7 +343,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                 return CustomPaint(
                   painter: OceanFeedingFrenzyPainter(
                     timeSec: nowSec,
-                    fishImage: _fishUiImage,
+                    fishImages: _fishImages,
                     focusMode: _focusMode,
                     isObscured: _obscureText,
                     heroX: _heroCurrentX,
@@ -677,7 +686,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 /// 🎨 CustomPainter for high-performance Seamless Feeding Frenzy Animated Ocean
 class OceanFeedingFrenzyPainter extends CustomPainter {
   final double timeSec; // Continuous epoch time in seconds
-  final ui.Image? fishImage; // Decoded Feeding Frenzy fish PNG
+  final List<ui.Image?> fishImages; // 5 Decoded species PNGs
   final int focusMode; // 0 = none, 1 = username focused, 2 = password focused
   final bool isObscured; // true = password hidden, false = password shown
   final double heroX; // Smooth lerped X position
@@ -686,7 +695,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
-    this.fishImage,
+    this.fishImages = const [],
     this.focusMode = 0,
     this.isObscured = true,
     this.heroX = 0.0,
@@ -694,15 +703,16 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     this.bgFishPos = const [],
   });
 
-  // Procedural background fish data with varied sizes and speeds
+  // Procedural background fish data with varied sizes, speeds, and species
+  // imageIndex: 0=fish, 1=shark, 2=baraccuda, 3=orca, 4=anglerfish
   static final List<_FishData> _fishList = [
-    _FishData(yPercent: 0.14, speed: 45.0, size: 28, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05),
-    _FishData(yPercent: 0.26, speed: 65.0, size: 22, direction: -1, color: const Color(0xFFF59E0B), initialXPercent: 0.85),
-    _FishData(yPercent: 0.38, speed: 35.0, size: 38, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35),
-    _FishData(yPercent: 0.72, speed: 75.0, size: 20, direction: -1, color: const Color(0xFFEC4899), initialXPercent: 0.70),
-    _FishData(yPercent: 0.80, speed: 50.0, size: 34, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15),
-    _FishData(yPercent: 0.86, speed: 60.0, size: 26, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50),
-    _FishData(yPercent: 0.18, speed: 85.0, size: 18, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60),
+    _FishData(yPercent: 0.14, speed: 45.0, size: 28, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05, imageIndex: 0),
+    _FishData(yPercent: 0.26, speed: 65.0, size: 30, direction: -1, color: const Color(0xFF64748B), initialXPercent: 0.85, imageIndex: 1),
+    _FishData(yPercent: 0.38, speed: 35.0, size: 26, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35, imageIndex: 2),
+    _FishData(yPercent: 0.72, speed: 75.0, size: 24, direction: -1, color: const Color(0xFF1E293B), initialXPercent: 0.70, imageIndex: 3),
+    _FishData(yPercent: 0.80, speed: 50.0, size: 28, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15, imageIndex: 4),
+    _FishData(yPercent: 0.86, speed: 60.0, size: 26, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50, imageIndex: 0),
+    _FishData(yPercent: 0.18, speed: 85.0, size: 22, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60, imageIndex: 2),
   ];
 
   // Procedural bubbles
@@ -788,16 +798,19 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
         }
         final verticalBob = sin(timeSec * 2.5 + i * 2.0) * 5.0;
         final rot = focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.10 : 0.0;
-        _drawFish(canvas, pos, f.size, dir, f.color, verticalBob, rot, fishImage);
+        final img = (f.imageIndex < fishImages.length) ? fishImages[f.imageIndex] : null;
+        _drawFish(canvas, pos, f.size, dir, f.color, verticalBob, rot, img, timeWagPhase: i * 1.5);
       }
     } else {
-      for (var f in _fishList) {
+      for (int i = 0; i < _fishList.length; i++) {
+        final f = _fishList[i];
         final totalTravel = width + f.size * 6;
         final distance = timeSec * f.speed;
         final rawDistance = (f.initialXPercent * width + distance) % totalTravel;
         final posX = f.direction == 1 ? rawDistance - f.size * 3 : width + f.size * 3 - rawDistance;
         final verticalBob = sin(timeSec * 2.5 + f.initialXPercent * 10) * 8.0;
-        _drawFish(canvas, Offset(posX, f.yPercent * height), f.size, f.direction, f.color, verticalBob, 0.0, fishImage);
+        final img = (f.imageIndex < fishImages.length) ? fishImages[f.imageIndex] : null;
+        _drawFish(canvas, Offset(posX, f.yPercent * height), f.size, f.direction, f.color, verticalBob, 0.0, img, timeWagPhase: i * 1.5);
       }
     }
 
@@ -857,7 +870,8 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       rotation = 0.0;
     }
 
-    _drawFish(canvas, Offset(posX, posY), heroSize, direction, heroColor, verticalBob, rotation, fishImage);
+    final heroImg = fishImages.isNotEmpty ? fishImages[0] : null;
+    _drawFish(canvas, Offset(posX, posY), heroSize, direction, heroColor, verticalBob, rotation, heroImg, timeWagPhase: 0.0);
   }
 
   void _drawSeaweed(Canvas canvas, Size size) {
@@ -895,9 +909,10 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     }
   }
 
-  void _drawFish(Canvas canvas, Offset center, double size, int direction, Color color, double verticalBob, double rotation, ui.Image? img) {
+  void _drawFish(Canvas canvas, Offset center, double size, int direction, Color color, double verticalBob, double rotation, ui.Image? img, {double timeWagPhase = 0.0}) {
     canvas.save();
     canvas.translate(center.dx, center.dy + verticalBob);
+
     if (rotation != 0.0) {
       canvas.rotate(rotation);
     }
@@ -907,6 +922,10 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     if (direction == 1) {
       canvas.scale(-1, 1);
     }
+
+    // 🐟 Realist Tail Wagging Oscillation (Dynamic Skew & Pitch transform)
+    final tailWag = sin(timeSec * 8.0 + timeWagPhase) * 0.08;
+    canvas.skew(0.0, tailWag);
 
     if (img != null) {
       final rect = Rect.fromCenter(center: Offset.zero, width: size * 2.8, height: size * 2.2);
@@ -944,7 +963,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant OceanFeedingFrenzyPainter oldDelegate) {
     return oldDelegate.timeSec != timeSec ||
-        oldDelegate.fishImage != fishImage ||
+        oldDelegate.fishImages != fishImages ||
         oldDelegate.focusMode != focusMode ||
         oldDelegate.isObscured != isObscured;
   }
@@ -957,6 +976,7 @@ class _FishData {
   final int direction; // 1 for right, -1 for left
   final Color color;
   final double initialXPercent;
+  final int imageIndex; // 0=fish, 1=shark, 2=barracuda, 3=orca, 4=anglerfish
 
   _FishData({
     required this.yPercent,
@@ -965,6 +985,7 @@ class _FishData {
     required this.direction,
     required this.color,
     required this.initialXPercent,
+    this.imageIndex = 0,
   });
 }
 
