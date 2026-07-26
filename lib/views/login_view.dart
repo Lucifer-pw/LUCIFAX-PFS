@@ -1,6 +1,6 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../providers/auth_provider.dart';
 import 'shell_view.dart';
 
@@ -27,8 +27,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  late AnimationController _orbController;
-  late Animation<double> _orbAnimation;
+  // Feeding Frenzy Ocean Background Animation Controller
+  late AnimationController _oceanController;
 
   @override
   void initState() {
@@ -65,15 +65,11 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic),
     );
 
-    // 3. Background Ambient Orbs Motion Animation
-    _orbController = AnimationController(
+    // 3. Feeding Frenzy Continuous Ocean Animation Controller (60 FPS loop)
+    _oceanController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 7),
-    )..repeat(reverse: true);
-
-    _orbAnimation = Tween<double>(begin: -15.0, end: 15.0).animate(
-      CurvedAnimation(parent: _orbController, curve: Curves.easeInOut),
-    );
+      duration: const Duration(seconds: 10),
+    )..repeat();
 
     _entranceController.forward();
   }
@@ -82,7 +78,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   void dispose() {
     _pulseController.dispose();
     _entranceController.dispose();
-    _orbController.dispose();
+    _oceanController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -180,65 +176,26 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B132B), // Deep Cosmic Dark Slate
+      backgroundColor: const Color(0xFF030F26), // Ocean Abyss Base
       body: Stack(
         children: [
-          // Ambient Animated Glowing Orbs in Background
-          AnimatedBuilder(
-            animation: _orbController,
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  // Top Cyan Glowing Orb
-                  Positioned(
-                    top: -80 + _orbAnimation.value,
-                    left: size.width * 0.2 + (_orbAnimation.value * 0.5),
-                    child: Container(
-                      width: 320,
-                      height: 320,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF00F2FE).withOpacity(0.12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00F2FE).withOpacity(0.18),
-                            blurRadius: 100,
-                            spreadRadius: 40,
-                          ),
-                        ],
-                      ),
-                    ),
+          // 🌊 Animated Feeding Frenzy Underwater Background Canvas
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _oceanController,
+              builder: (context, child) {
+                return CustomPaint(
+                  painter: OceanFeedingFrenzyPainter(
+                    progress: _oceanController.value,
                   ),
-
-                  // Bottom Blue Glowing Orb
-                  Positioned(
-                    bottom: -100 - _orbAnimation.value,
-                    right: size.width * 0.15 - (_orbAnimation.value * 0.5),
-                    child: Container(
-                      width: 380,
-                      height: 380,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF4FACFE).withOpacity(0.12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF4FACFE).withOpacity(0.18),
-                            blurRadius: 120,
-                            spreadRadius: 50,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
 
-          // Main Login Interface Content
+          // Main Login Interface Content Layer
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -256,26 +213,26 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                           return Transform.scale(
                             scale: _pulseAnimation.value,
                             child: Container(
-                              width: 110,
-                              height: 110,
+                              width: 115,
+                              height: 115,
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1E293B),
-                                borderRadius: BorderRadius.circular(28.0),
+                                color: const Color(0xFF0F172A).withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(30.0),
                                 border: Border.all(
-                                  color: const Color(0xFF38BDF8).withOpacity(0.6),
-                                  width: 1.5,
+                                  color: const Color(0xFF38BDF8).withOpacity(0.8),
+                                  width: 1.8,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF0284C7).withOpacity(0.45),
+                                    color: const Color(0xFF0284C7).withOpacity(0.55),
                                     blurRadius: _glowAnimation.value,
                                     spreadRadius: 4.0,
                                   ),
                                 ],
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(20),
                                 child: Image.asset(
                                   'assets/images/logo_fiva.png',
                                   fit: BoxFit.contain,
@@ -298,9 +255,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                         'LUCIFAX PFS',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 28.0,
+                          fontSize: 30.0,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 2.5,
+                          shadows: [
+                            Shadow(color: Color(0xFF0284C7), blurRadius: 16),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 4.0),
@@ -308,8 +268,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 6,
-                            height: 6,
+                            width: 7,
+                            height: 7,
                             decoration: const BoxDecoration(
                               color: Color(0xFF10B981),
                               shape: BoxShape.circle,
@@ -334,18 +294,23 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                         width: 430.0,
                         padding: const EdgeInsets.all(32.0),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B).withOpacity(0.95), // Slate Grey Glass
-                          borderRadius: BorderRadius.circular(22.0),
+                          color: const Color(0xFF0F172A).withOpacity(0.88), // Slate Ocean Glass
+                          borderRadius: BorderRadius.circular(24.0),
                           border: Border.all(
-                            color: const Color(0xFF38BDF8).withOpacity(0.2),
-                            width: 1.2,
+                            color: const Color(0xFF38BDF8).withOpacity(0.3),
+                            width: 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.35),
-                              blurRadius: 24.0,
-                              offset: const Offset(0, 12),
-                            )
+                              color: const Color(0xFF0284C7).withOpacity(0.2),
+                              blurRadius: 30.0,
+                              spreadRadius: 2.0,
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 20.0,
+                              offset: const Offset(0, 10),
+                            ),
                           ],
                         ),
                         child: Form(
@@ -353,12 +318,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Row(
+                              const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.lock_person_rounded, color: Color(0xFF38BDF8), size: 20),
-                                  const SizedBox(width: 8),
-                                  const Text(
+                                  Icon(Icons.waves_rounded, color: Color(0xFF38BDF8), size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
                                     'MASUK AKUN',
                                     style: TextStyle(
                                       color: Colors.white,
@@ -419,7 +384,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                                   hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                                   prefixIcon: const Icon(Icons.person_outline_rounded, color: Color(0xFF38BDF8), size: 20),
                                   filled: true,
-                                  fillColor: const Color(0xFF0F172A),
+                                  fillColor: const Color(0xFF030F26),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12.0),
@@ -467,7 +432,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                                     },
                                   ),
                                   filled: true,
-                                  fillColor: const Color(0xFF0F172A),
+                                  fillColor: const Color(0xFF030F26),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12.0),
@@ -554,4 +519,224 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       ),
     );
   }
+}
+
+/// 🎨 CustomPainter for high-performance Feeding Frenzy Animated Ocean
+class OceanFeedingFrenzyPainter extends CustomPainter {
+  final double progress; // 0.0 to 1.0 continuous animation loop
+
+  OceanFeedingFrenzyPainter({required this.progress});
+
+  // Fixed procedural fish data for high FPS deterministic animation
+  static final List<_FishData> _fishList = [
+    _FishData(yPercent: 0.15, speed: 0.8, size: 24, direction: 1, color: const Color(0xFF38BDF8), initialX: 0.05),
+    _FishData(yPercent: 0.28, speed: 1.2, size: 18, direction: -1, color: const Color(0xFFF59E0B), initialX: 0.85),
+    _FishData(yPercent: 0.42, speed: 0.6, size: 32, direction: 1, color: const Color(0xFF10B981), initialX: 0.35),
+    _FishData(yPercent: 0.58, speed: 1.4, size: 16, direction: -1, color: const Color(0xFFEC4899), initialX: 0.70),
+    _FishData(yPercent: 0.72, speed: 0.9, size: 28, direction: 1, color: const Color(0xFFA855F7), initialX: 0.15),
+    _FishData(yPercent: 0.84, speed: 1.1, size: 22, direction: -1, color: const Color(0xFF06B6D4), initialX: 0.50),
+    _FishData(yPercent: 0.22, speed: 1.5, size: 14, direction: 1, color: const Color(0xFFF43F5E), initialX: 0.60),
+    _FishData(yPercent: 0.65, speed: 0.7, size: 36, direction: -1, color: const Color(0xFFEAB308), initialX: 0.90),
+  ];
+
+  // Fixed procedural bubbles
+  static final List<_BubbleData> _bubbles = List.generate(35, (index) {
+    final random = Random(index * 7);
+    return _BubbleData(
+      xPercent: random.nextDouble(),
+      speed: 0.3 + random.nextDouble() * 0.7,
+      radius: 2.0 + random.nextDouble() * 5.0,
+      phaseShift: random.nextDouble() * pi * 2,
+    );
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final width = size.width;
+    final height = size.height;
+
+    // 1. Deep Ocean Background Gradient
+    final bgGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: const [
+        Color(0xFF041C44), // Top sunny water blue
+        Color(0xFF03102C), // Mid deep ocean
+        Color(0xFF010614), // Seabed abyss
+      ],
+    );
+    final bgPaint = Paint()..shader = bgGradient.createShader(Rect.fromLTWH(0, 0, width, height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, width, height), bgPaint);
+
+    // 2. Underwater Sun Rays / Caustics
+    final rayPaint = Paint()
+      ..color = const Color(0xFF38BDF8).withOpacity(0.04)
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < 5; i++) {
+      final rayPath = Path();
+      final rayX = (width * 0.15 * i) + sin(progress * pi * 2 + i) * 20;
+      rayPath.moveTo(rayX, 0);
+      rayPath.lineTo(rayX + 80, 0);
+      rayPath.lineTo(rayX + 180, height);
+      rayPath.lineTo(rayX + 40, height);
+      rayPath.close();
+      canvas.drawPath(rayPath, rayPaint);
+    }
+
+    // 3. Swaying Seaweed at Seabed Bottom
+    _drawSeaweed(canvas, size);
+
+    // 4. Floating Animated Bubbles
+    final bubblePaint = Paint()
+      ..color = const Color(0xFF38BDF8).withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final bubbleFill = Paint()
+      ..color = const Color(0xFF38BDF8).withOpacity(0.08)
+      ..style = PaintingStyle.fill;
+
+    for (var b in _bubbles) {
+      final floatY = ((1.0 - (progress * b.speed + b.phaseShift) % 1.0)) * (height + 40) - 20;
+      final wobbleX = (b.xPercent * width) + sin(progress * pi * 4 + b.phaseShift) * 12;
+
+      canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubbleFill);
+      canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
+    }
+
+    // 5. Swimming Fish (Feeding Frenzy Animation)
+    for (var f in _fishList) {
+      final totalTravel = width + f.size * 4;
+      double posX;
+      if (f.direction == 1) {
+        posX = ((f.initialX * width + progress * totalTravel * f.speed) % totalTravel) - f.size * 2;
+      } else {
+        posX = width + f.size * 2 - ((f.initialX * width + progress * totalTravel * f.speed) % totalTravel);
+      }
+
+      final posY = f.yPercent * height + sin(progress * pi * 4 + f.initialX * 10) * 10;
+      final tailWag = sin(progress * pi * 20 + f.initialX * 5) * 8;
+
+      _drawFish(canvas, Offset(posX, posY), f.size, f.direction, f.color, tailWag);
+    }
+  }
+
+  void _drawSeaweed(Canvas canvas, Size size) {
+    final seaweedPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final colors = [
+      const Color(0xFF10B981).withOpacity(0.35),
+      const Color(0xFF059669).withOpacity(0.25),
+      const Color(0xFF047857).withOpacity(0.4),
+    ];
+
+    for (int i = 0; i < 8; i++) {
+      final baseX = size.width * (0.05 + i * 0.13);
+      final height = 120.0 + sin(i * 1.5) * 40.0;
+
+      seaweedPaint.color = colors[i % colors.length];
+      seaweedPaint.strokeWidth = 6.0 + (i % 3);
+
+      final path = Path();
+      path.moveTo(baseX, size.height);
+
+      final sway = sin(progress * pi * 2 + i) * 18.0;
+      path.cubicTo(
+        baseX + sway * 0.5,
+        size.height - height * 0.33,
+        baseX - sway,
+        size.height - height * 0.66,
+        baseX + sway * 1.2,
+        size.height - height,
+      );
+
+      canvas.drawPath(path, seaweedPaint);
+    }
+  }
+
+  void _drawFish(Canvas canvas, Offset center, double size, int direction, Color color, double tailWag) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+
+    // If moving left, flip horizontally
+    if (direction == -1) {
+      canvas.scale(-1, 1);
+    }
+
+    final fishPaint = Paint()
+      ..color = color.withOpacity(0.85)
+      ..style = PaintingStyle.fill;
+
+    final glowPaint = Paint()
+      ..color = color.withOpacity(0.25)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+
+    // Fish Body Path
+    final bodyPath = Path();
+    bodyPath.moveTo(size * 1.2, 0); // Nose
+    bodyPath.cubicTo(size * 0.5, -size * 0.65, -size * 0.4, -size * 0.5, -size * 0.8, 0); // Upper Body
+    bodyPath.cubicTo(-size * 0.4, size * 0.5, size * 0.5, size * 0.65, size * 1.2, 0); // Lower Body
+    bodyPath.close();
+
+    // Tail Fin Path (Swinging with tailWag)
+    final tailPath = Path();
+    tailPath.moveTo(-size * 0.7, 0);
+    tailPath.lineTo(-size * 1.4, -size * 0.5 + tailWag * 0.4);
+    tailPath.lineTo(-size * 1.2, 0);
+    tailPath.lineTo(-size * 1.4, size * 0.5 + tailWag * 0.4);
+    tailPath.close();
+
+    // Draw Glow & Body
+    canvas.drawPath(bodyPath, glowPaint);
+    canvas.drawPath(bodyPath, fishPaint);
+    canvas.drawPath(tailPath, fishPaint);
+
+    // Eye
+    final eyePaint = Paint()..color = Colors.white;
+    final pupilPaint = Paint()..color = const Color(0xFF030F26);
+    canvas.drawCircle(Offset(size * 0.6, -size * 0.15), size * 0.15, eyePaint);
+    canvas.drawCircle(Offset(size * 0.68, -size * 0.15), size * 0.08, pupilPaint);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant OceanFeedingFrenzyPainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
+}
+
+class _FishData {
+  final double yPercent;
+  final double speed;
+  final double size;
+  final int direction; // 1 for right, -1 for left
+  final Color color;
+  final double initialX;
+
+  _FishData({
+    required this.yPercent,
+    required this.speed,
+    required this.size,
+    required this.direction,
+    required this.color,
+    required this.initialX,
+  });
+}
+
+class _BubbleData {
+  final double xPercent;
+  final double speed;
+  final double radius;
+  final double phaseShift;
+
+  _BubbleData({
+    required this.xPercent,
+    required this.speed,
+    required this.radius,
+    required this.phaseShift,
+  });
 }
