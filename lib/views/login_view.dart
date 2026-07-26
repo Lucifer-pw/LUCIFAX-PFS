@@ -17,8 +17,14 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _usernameFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+
   bool _obscureText = true;
   String? _errorMessage;
+
+  // Focus mode state: 0 = none, 1 = username focused, 2 = password focused
+  int _focusMode = 0;
 
   // Animation Controllers
   late AnimationController _pulseController;
@@ -39,6 +45,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _loadFishImage();
+
+    _usernameFocusNode.addListener(_updateFocusMode);
+    _passwordFocusNode.addListener(_updateFocusMode);
 
     // 1. Logo FIVA Breathing/Pulsating Animation
     _pulseController = AnimationController(
@@ -80,6 +89,19 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     _entranceController.forward();
   }
 
+  void _updateFocusMode() {
+    if (!mounted) return;
+    setState(() {
+      if (_usernameFocusNode.hasFocus) {
+        _focusMode = 1; // Username: Approaching curiously
+      } else if (_passwordFocusNode.hasFocus) {
+        _focusMode = 2; // Password: Peeking from behind card
+      } else {
+        _focusMode = 0; // Default: Free swimming
+      }
+    });
+  }
+
   Future<void> _loadFishImage() async {
     try {
       final data = await rootBundle.load('assets/images/fish_feeding_frenzy.png');
@@ -98,6 +120,10 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _usernameFocusNode.removeListener(_updateFocusMode);
+    _passwordFocusNode.removeListener(_updateFocusMode);
+    _usernameFocusNode.dispose();
+    _passwordFocusNode.dispose();
     _pulseController.dispose();
     _entranceController.dispose();
     _oceanController.dispose();
@@ -212,6 +238,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                   painter: OceanFeedingFrenzyPainter(
                     timeSec: DateTime.now().millisecondsSinceEpoch / 1000.0,
                     fishImage: _fishUiImage,
+                    focusMode: _focusMode,
+                    isObscured: _obscureText,
                   ),
                 );
               },
@@ -395,6 +423,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                               // Username Input Field
                               TextFormField(
                                 controller: _usernameController,
+                                focusNode: _usernameFocusNode,
                                 style: const TextStyle(color: Colors.white, fontSize: 14),
                                 onChanged: (_) {
                                   if (_errorMessage != null || authProvider.errorMessage != null) {
@@ -430,6 +459,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                               // Password Input Field
                               TextFormField(
                                 controller: _passwordController,
+                                focusNode: _passwordFocusNode,
                                 obscureText: _obscureText,
                                 style: const TextStyle(color: Colors.white, fontSize: 14),
                                 onChanged: (_) {
@@ -548,22 +578,25 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 class OceanFeedingFrenzyPainter extends CustomPainter {
   final double timeSec; // Continuous epoch time in seconds
   final ui.Image? fishImage; // Decoded Feeding Frenzy fish PNG
+  final int focusMode; // 0 = none, 1 = username focused, 2 = password focused
+  final bool isObscured; // true = password hidden, false = password shown
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
     this.fishImage,
+    this.focusMode = 0,
+    this.isObscured = true,
   });
 
-  // Procedural fish data with varied sizes and speeds
+  // Procedural background fish data with varied sizes and speeds
   static final List<_FishData> _fishList = [
-    _FishData(yPercent: 0.14, speed: 45.0, size: 30, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05),
+    _FishData(yPercent: 0.14, speed: 45.0, size: 28, direction: 1, color: const Color(0xFF38BDF8), initialXPercent: 0.05),
     _FishData(yPercent: 0.26, speed: 65.0, size: 22, direction: -1, color: const Color(0xFFF59E0B), initialXPercent: 0.85),
-    _FishData(yPercent: 0.38, speed: 35.0, size: 44, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35),
-    _FishData(yPercent: 0.52, speed: 75.0, size: 20, direction: -1, color: const Color(0xFFEC4899), initialXPercent: 0.70),
-    _FishData(yPercent: 0.68, speed: 50.0, size: 36, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15),
-    _FishData(yPercent: 0.82, speed: 60.0, size: 28, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50),
-    _FishData(yPercent: 0.20, speed: 85.0, size: 18, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60),
-    _FishData(yPercent: 0.62, speed: 40.0, size: 48, direction: -1, color: const Color(0xFFEAB308), initialXPercent: 0.90),
+    _FishData(yPercent: 0.38, speed: 35.0, size: 38, direction: 1, color: const Color(0xFF10B981), initialXPercent: 0.35),
+    _FishData(yPercent: 0.72, speed: 75.0, size: 20, direction: -1, color: const Color(0xFFEC4899), initialXPercent: 0.70),
+    _FishData(yPercent: 0.80, speed: 50.0, size: 34, direction: 1, color: const Color(0xFFA855F7), initialXPercent: 0.15),
+    _FishData(yPercent: 0.86, speed: 60.0, size: 26, direction: -1, color: const Color(0xFF06B6D4), initialXPercent: 0.50),
+    _FishData(yPercent: 0.18, speed: 85.0, size: 18, direction: 1, color: const Color(0xFFF43F5E), initialXPercent: 0.60),
   ];
 
   // Procedural bubbles
@@ -635,7 +668,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
     }
 
-    // 5. Swimming Feeding Frenzy Fish (Seamless Wrap Off-screen)
+    // 5. Swimming Background Fish
     for (var f in _fishList) {
       final totalTravel = width + f.size * 6;
       final distance = timeSec * f.speed;
@@ -643,16 +676,95 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
 
       double posX;
       if (f.direction == 1) {
-        // Left to Right
         posX = rawDistance - f.size * 3;
       } else {
-        // Right to Left
         posX = width + f.size * 3 - rawDistance;
       }
 
       final verticalBob = sin(timeSec * 2.5 + f.initialXPercent * 10) * 8.0;
-      _drawFish(canvas, Offset(posX, f.yPercent * height), f.size, f.direction, f.color, verticalBob, fishImage);
+      _drawFish(canvas, Offset(posX, f.yPercent * height), f.size, f.direction, f.color, verticalBob, 0.0, fishImage);
     }
+
+    // 6. 🌟 INTERACTIVE HERO FISH (Responds to Username & Password Focus)
+    _drawInteractiveHeroFish(canvas, size);
+  }
+
+  void _drawInteractiveHeroFish(Canvas canvas, Size size) {
+    final width = size.width;
+    final height = size.height;
+    final heroSize = 60.0;
+    final heroColor = const Color(0xFF38BDF8);
+
+    double posX;
+    double posY;
+    int direction;
+    double rotation = 0.0;
+    double verticalBob = 0.0;
+
+    if (focusMode == 1) {
+      // 1. USERNAME FOCUSED: Hero fish approaches the Login Card with curious wiggling
+      final cardCenterX = width * 0.5;
+      final cardLeftEdge = (cardCenterX - 215).clamp(20.0, width);
+      posX = cardLeftEdge - 45 + sin(timeSec * 2.5) * 15;
+      posY = height * 0.44 + sin(timeSec * 3.5) * 8;
+      direction = 1; // Face towards the card (right)
+      rotation = sin(timeSec * 4.0) * 0.12; // Curious wiggle
+      verticalBob = sin(timeSec * 5.0) * 4;
+
+      // Draw curious bubbles near fish head
+      final bubblePaint = Paint()
+        ..color = const Color(0xFF38BDF8).withOpacity(0.6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      for (int i = 0; i < 3; i++) {
+        final bY = posY - 25 - (i * 14) - sin(timeSec * 4.0 + i) * 6;
+        final bX = posX + 25 + sin(timeSec * 3.0 + i) * 8;
+        canvas.drawCircle(Offset(bX, bY), 3.0 + i, bubblePaint);
+      }
+    } else if (focusMode == 2) {
+      // 2. PASSWORD FOCUSED: Hero fish peeks from behind the right edge of Login Card
+      final cardCenterX = width * 0.5;
+      final cardRightEdge = (cardCenterX + 215).clamp(20.0, width - 60);
+
+      if (isObscured) {
+        // Password Hidden: Curious Peeking
+        posX = cardRightEdge + 35 + sin(timeSec * 2.0) * 8;
+        posY = height * 0.52 + sin(timeSec * 4.0) * 6;
+        direction = -1; // Face left towards the card
+        rotation = -0.18 + sin(timeSec * 3.0) * 0.08; // Peek tilt angle
+        verticalBob = sin(timeSec * 4.5) * 6;
+      } else {
+        // Password Shown: Shy & Surprised!
+        posX = cardRightEdge + 75 + sin(timeSec * 6.0) * 12;
+        posY = height * 0.56 + sin(timeSec * 5.0) * 10;
+        direction = -1;
+        rotation = 0.45 + sin(timeSec * 8.0) * 0.15; // Shy tilt backwards
+        verticalBob = sin(timeSec * 6.0) * 8;
+
+        // Burst of surprised bubbles
+        final bubblePaint = Paint()
+          ..color = Colors.amberAccent.withOpacity(0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.8;
+        for (int i = 0; i < 5; i++) {
+          final bY = posY - 30 - (i * 12) - sin(timeSec * 8.0 + i) * 8;
+          final bX = posX - 15 + sin(timeSec * 7.0 + i) * 12;
+          canvas.drawCircle(Offset(bX, bY), 2.5 + i * 1.2, bubblePaint);
+        }
+      }
+    } else {
+      // 0. UNFOCUSED / AMBIENT MODE: Hero fish swims freely back and forth across middle depth
+      final totalTravel = width + heroSize * 6;
+      final distance = timeSec * 55.0;
+      final rawDistance = (0.25 * width + distance) % totalTravel;
+      posX = rawDistance - heroSize * 3;
+      posY = height * 0.48;
+      direction = 1;
+      rotation = 0.0;
+      verticalBob = sin(timeSec * 2.2) * 10.0;
+    }
+
+    _drawFish(canvas, Offset(posX, posY), heroSize, direction, heroColor, verticalBob, rotation, fishImage);
   }
 
   void _drawSeaweed(Canvas canvas, Size size) {
@@ -690,9 +802,12 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     }
   }
 
-  void _drawFish(Canvas canvas, Offset center, double size, int direction, Color color, double verticalBob, ui.Image? img) {
+  void _drawFish(Canvas canvas, Offset center, double size, int direction, Color color, double verticalBob, double rotation, ui.Image? img) {
     canvas.save();
     canvas.translate(center.dx, center.dy + verticalBob);
+    if (rotation != 0.0) {
+      canvas.rotate(rotation);
+    }
 
     // Source fish PNG faces LEFT.
     // If direction == 1 (moving right), flip horizontally so fish faces right!
@@ -703,7 +818,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     if (img != null) {
       final rect = Rect.fromCenter(center: Offset.zero, width: size * 2.8, height: size * 2.2);
 
-      // Subtle ambient glow behind fish
+      // Ambient glow behind fish
       final shadowPaint = Paint()
         ..color = color.withOpacity(0.35)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
@@ -735,7 +850,10 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant OceanFeedingFrenzyPainter oldDelegate) {
-    return oldDelegate.timeSec != timeSec || oldDelegate.fishImage != fishImage;
+    return oldDelegate.timeSec != timeSec ||
+        oldDelegate.fishImage != fishImage ||
+        oldDelegate.focusMode != focusMode ||
+        oldDelegate.isObscured != isObscured;
   }
 }
 
