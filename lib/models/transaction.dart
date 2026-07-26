@@ -69,6 +69,8 @@ class Transaction {
   final DateTime? erpSyncDate;
   final String createdBy;
   final DateTime createdAt;
+  final double returnAmount;
+  final bool hasReturn;
 
   Transaction({
     required this.invoiceNo,
@@ -89,7 +91,11 @@ class Transaction {
     this.erpSyncDate,
     required this.createdBy,
     required this.createdAt,
+    this.returnAmount = 0.0,
+    this.hasReturn = false,
   });
+
+  double get netGrandTotal => (grandTotal - returnAmount).clamp(0.0, double.infinity);
 
   factory Transaction.fromMap(Map<String, dynamic> map, String docId) {
     final itemsList = (map['items'] as List<dynamic>?)
@@ -107,6 +113,9 @@ class Transaction {
     final String finalInvoiceNo = map['invoiceNo']?.toString().isNotEmpty == true 
         ? map['invoiceNo'].toString() 
         : docId;
+
+    final retAmt = (map['returnAmount'] ?? 0.0).toDouble();
+    final hasRet = (map['hasReturn'] ?? false) || retAmt > 0;
 
     return Transaction(
       invoiceNo: finalInvoiceNo,
@@ -127,6 +136,8 @@ class Transaction {
       erpSyncDate: (map['erpSyncDate'] as Timestamp?)?.toDate(),
       createdBy: map['createdBy'] ?? '',
       createdAt: (map['createdAt'] as Timestamp).toDate(),
+      returnAmount: retAmt,
+      hasReturn: hasRet,
     );
   }
 
@@ -150,6 +161,8 @@ class Transaction {
       'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate!) : null,
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),
+      'returnAmount': returnAmount,
+      'hasReturn': hasReturn,
     };
   }
 }

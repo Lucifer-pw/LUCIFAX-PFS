@@ -17,6 +17,7 @@ import '../services/import_service.dart';
 import '../services/firebase_service.dart';
 import 'package:printing/printing.dart';
 import 'transaction_entry_view.dart';
+import 'return_transaction_dialog.dart';
 
 class TransactionHistoryView extends StatefulWidget {
   const TransactionHistoryView({super.key});
@@ -2720,6 +2721,28 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  void _showReturnProductDialog(model_tr.Transaction tr) {
+    if (tr.status != 'DIKIRIM') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Retur Produk hanya dapat dilakukan untuk transaksi berstatus DIKIRIM (Status saat ini: ${tr.status}).'),
+          backgroundColor: Colors.orangeAccent,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ReturnTransactionDialog(transaction: tr),
+    ).then((result) {
+      if (result == true) {
+        setState(() {});
+      }
+    });
+  }
+
   void _deleteTransaction(dynamic invoiceNo) {
     showDialog(
       context: context,
@@ -3157,6 +3180,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                             decoration: TextDecoration.underline,
                                                           ),
                                                         ),
+                                                        if (tr.hasReturn || tr.returnAmount > 0) ...[
+                                                          const SizedBox(width: 4),
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.amber.withOpacity(0.2),
+                                                              borderRadius: BorderRadius.circular(4),
+                                                              border: Border.all(color: Colors.amberAccent, width: 0.6),
+                                                            ),
+                                                            child: const Text('RETUR', style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                                          ),
+                                                        ],
                                                         const SizedBox(width: 4),
                                                         const Icon(Icons.open_in_new_rounded, size: 12, color: Color(0xFF38BDF8)),
                                                       ],
@@ -3238,9 +3273,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
-                                                    Text(
-                                                      _rupiahFormatter.format(tr.grandTotal),
-                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                    Column(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                      children: [
+                                                        Text(
+                                                          _rupiahFormatter.format(tr.netGrandTotal),
+                                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                        ),
+                                                        if (tr.returnAmount > 0)
+                                                          Text(
+                                                            'Retur: -${_rupiahFormatter.format(tr.returnAmount)}',
+                                                            style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                                          ),
+                                                      ],
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
@@ -3348,6 +3394,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         onSelected: (action) {
                                                           if (action == 'detail') {
                                                             _showDetailDialog(tr);
+                                                          } else if (action == 'return_product') {
+                                                            _showReturnProductDialog(tr);
                                                           } else if (action == 'move_items') {
                                                             _showMoveInvoiceItemsDialog(tr);
                                                           } else if (action == 'delivery') {
@@ -3375,6 +3423,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                               ],
                                                             ),
                                                           ),
+                                                          if (tr.status == 'DIKIRIM') ...[
+                                                            const PopupMenuItem(
+                                                              value: 'return_product',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(Icons.assignment_return_rounded, color: Colors.amberAccent, size: 18),
+                                                                  SizedBox(width: 10),
+                                                                  Text('Retur Produk (DIKIRIM)', style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
                                                           const PopupMenuItem(
                                                             value: 'print',
                                                             child: Row(

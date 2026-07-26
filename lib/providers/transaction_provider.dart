@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
 import '../models/transaction.dart' as model_tr;
+import '../models/transaction_return.dart';
 import '../services/firebase_service.dart';
 
 class TransactionProvider extends ChangeNotifier {
@@ -255,6 +256,11 @@ class TransactionProvider extends ChangeNotifier {
   // Fetch ERP Summaries for reports (0 Reads using in-memory cached transactions)
   Future<List<Map<String, dynamic>>> getMonthlyErpSummary(String monthYear) async {
     return await _dbService.getErpSummaries(monthYear, cachedTransactions: _transactions);
+  }
+
+  Future<void> processTransactionReturn(TransactionReturn returnData) async {
+    await _dbService.saveTransactionReturn(returnData);
+    notifyListeners();
   }
 
   @override

@@ -5,6 +5,7 @@ import '../models/customer.dart';
 import '../models/staff.dart';
 import '../models/attendance_record.dart';
 import '../models/transaction.dart' as model_tr;
+import '../models/transaction_return.dart';
 import 'package:intl/intl.dart';
 
 class FirebaseService {
@@ -1153,5 +1154,41 @@ class FirebaseService {
         SetOptions(merge: true),
       );
     } catch (_) {}
+  }
+
+  // ==========================================
+  // TRANSACTION RETURNS CRUD
+  // ==========================================
+
+  Future<void> saveTransactionReturn(TransactionReturn retData) async {
+    final batch = _db.batch();
+
+    final retRef = _db.collection('returns').doc();
+    batch.set(retRef, retData.toMap());
+
+    final trRef = _db.collection('transactions').doc(retData.invoiceNo);
+    batch.update(trRef, {
+      'returnAmount': FieldValue.increment(retData.totalReturnAmount),
+      'hasReturn': true,
+    });
+
+    for (final item in retData.items) {
+      if (item.condition == 'BAGUS' && item.qtyReturned > 0) {
+        final prodRef = _db.collection('products').doc(item.productId);
+        batch.update(prodRef, {
+          'stock': FieldValue.increment(item.qtyReturned),
+        });
+      }
+    }
+
+    await batch.commit();
+  }
+
+  Stream<List<TransactionReturn>> streamReturns() {
+    return _db.collection('returns').snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => TransactionReturn.fromMap(doc.data(), doc.id))
+          .toList();
+    });
   }
 }
