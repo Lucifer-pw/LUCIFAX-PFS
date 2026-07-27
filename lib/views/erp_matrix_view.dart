@@ -23,6 +23,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   final dateFormatter = DateFormat('dd-MM-yyyy');
 
   String _selectedMonthYear = "";
+  DateTime? _selectedDate;
   Customer? _selectedCustomer;
   String _searchQuery = "";
   bool _showPcs = true; // true = Pcs, false = Kg
@@ -770,6 +771,87 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     );
   }
 
+  Widget _buildDatePickerFilter() {
+    return InkWell(
+      onTap: () async {
+        final now = DateTime.now();
+        final parts = _selectedMonthYear.split('-');
+        int initYear = now.year;
+        int initMonth = now.month;
+        if (parts.length == 2) {
+          initMonth = int.tryParse(parts[0]) ?? now.month;
+          initYear = int.tryParse(parts[1]) ?? now.year;
+        }
+        final initialDate = _selectedDate ?? DateTime(initYear, initMonth, DateTime.now().day <= 28 ? DateTime.now().day : 1);
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: initialDate,
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2030),
+          helpText: 'PILIH TANGGAL INPUT MENU ERP',
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: const ColorScheme.dark(
+                  primary: Color(0xFF38BDF8),
+                  onPrimary: Colors.black,
+                  surface: Color(0xFF1E293B),
+                  onSurface: Colors.white,
+                ),
+                dialogBackgroundColor: const Color(0xFF0F172A),
+              ),
+              child: child!,
+            );
+          },
+        );
+        if (picked != null) {
+          final newMonthYear = DateFormat('MM-yyyy').format(picked);
+          setState(() {
+            _selectedDate = picked;
+            if (_selectedMonthYear != newMonthYear) {
+              _selectedMonthYear = newMonthYear;
+              _loadErpData();
+            }
+          });
+        }
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.event_rounded, color: _selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8), size: 15),
+            const SizedBox(width: 6),
+            Text(
+              _selectedDate != null ? 'Tgl ERP: ${DateFormat('dd-MM-yyyy').format(_selectedDate!)}' : 'Tgl ERP: Semua',
+              style: TextStyle(
+                color: _selectedDate != null ? const Color(0xFF38BDF8) : Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+            if (_selectedDate != null) ...[
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => setState(() => _selectedDate = null),
+                child: const Icon(Icons.cancel_rounded, color: Colors.amberAccent, size: 16),
+              ),
+            ] else ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8), size: 18),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
@@ -893,7 +975,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           ),
           const SizedBox(height: 10),
 
-          // Control Bar: Periode, Customer Filter, Pcs/Kg Toggle
+          // Control Bar: Periode, Date Filter, Customer Filter, Pcs/Kg Toggle
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
             decoration: BoxDecoration(
@@ -922,7 +1004,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     }
                   },
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
+
+                // Specific Date Filter (Calendar Picker)
+                _buildDatePickerFilter(),
+                const SizedBox(width: 14),
 
                 const Icon(Icons.store_rounded, color: Color(0xFF38BDF8), size: 18),
                 const SizedBox(width: 6),
@@ -1082,8 +1168,25 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   int _getTotalInvoiceCount() {
     int count = 0;
     for (var r in _erpRecords) {
+      if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
+        continue;
+      }
       final invoices = r['invoices'] as List<dynamic>?;
-      count += invoices?.length ?? 0;
+      if (invoices == null) continue;
+      for (var inv in invoices) {
+        if (inv is! Map) continue;
+        if (_selectedDate != null) {
+          final Timestamp? erpTs = inv['erpSyncDate'] as Timestamp? ?? inv['date'] as Timestamp?;
+          final erpDate = erpTs?.toDate();
+          if (erpDate == null) continue;
+          if (erpDate.year != _selectedDate!.year ||
+              erpDate.month != _selectedDate!.month ||
+              erpDate.day != _selectedDate!.day) {
+            continue;
+          }
+        }
+        count++;
+      }
     }
     return count;
   }
@@ -1229,12 +1332,69 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Filter ERP records by selected customer
-    final filteredRecords = _selectedCustomer != null
-        ? _erpRecords.where((r) => r['customerId'] == _selectedCustomer!.id).toList()
-        : _erpRecords;
+    // Filter ERP records by selected customer & selected date
+    final List<Map<String, dynamic>> filteredRecords = [];
+
+    for (var r in _erpRecords) {
+      if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
+        continue;
+      }
+
+      final invoices = List<dynamic>.from(r['invoices'] ?? []);
+      final List<Map<String, dynamic>> matchingInvoices = [];
+
+      for (var inv in invoices) {
+        if (inv is! Map) continue;
+        final invMap = Map<String, dynamic>.from(inv);
+        final Timestamp? erpTs = invMap['erpSyncDate'] as Timestamp? ?? invMap['date'] as Timestamp?;
+        final invErpDate = erpTs?.toDate();
+
+        if (_selectedDate != null) {
+          if (invErpDate == null) continue;
+          if (invErpDate.year != _selectedDate!.year ||
+              invErpDate.month != _selectedDate!.month ||
+              invErpDate.day != _selectedDate!.day) {
+            continue;
+          }
+        }
+        matchingInvoices.add(invMap);
+      }
+
+      if (matchingInvoices.isNotEmpty) {
+        double custIncome = 0.0;
+        final Map<String, Map<String, double>> custProducts = {};
+
+        for (var inv in matchingInvoices) {
+          custIncome += (inv['grandTotal'] ?? 0.0).toDouble();
+          final items = List<dynamic>.from(inv['items'] ?? []);
+          for (var item in items) {
+            if (item is! Map) continue;
+            final itemMap = Map<String, dynamic>.from(item);
+            final productId = (itemMap['productId'] ?? '').toString();
+            final qty = ((itemMap['qty'] ?? 0.0) as num).toDouble();
+            final weightKg = ((itemMap['weightKg'] ?? 0.0) as num).toDouble();
+
+            if (!custProducts.containsKey(productId)) {
+              custProducts[productId] = {'pcs': 0.0, 'kg': 0.0};
+            }
+            custProducts[productId]!['pcs'] = custProducts[productId]!['pcs']! + qty;
+            custProducts[productId]!['kg'] = custProducts[productId]!['kg']! + weightKg;
+          }
+        }
+
+        final recCopy = Map<String, dynamic>.from(r);
+        recCopy['invoices'] = matchingInvoices;
+        recCopy['totalIncome'] = custIncome;
+        recCopy['products'] = custProducts;
+        filteredRecords.add(recCopy);
+      }
+    }
 
     if (filteredRecords.isEmpty) {
+      final String emptySubtext = _selectedDate != null
+          ? 'pada tanggal ${DateFormat('dd-MM-yyyy').format(_selectedDate!)}'
+          : 'pada periode $_selectedMonthYear';
+
       return Container(
         decoration: BoxDecoration(
           color: const Color(0xFF1E293B),
@@ -1248,7 +1408,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               Icon(Icons.receipt_long_rounded, size: 64, color: Colors.white.withOpacity(0.1)),
               const SizedBox(height: 16),
               Text(
-                'Belum ada invoice yang masuk ERP\npada periode $_selectedMonthYear',
+                'Belum ada invoice yang masuk ERP\n$emptySubtext',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
               ),
@@ -1519,11 +1679,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                       });
                       final invTotal = calculatedInvTotal > 0 ? calculatedInvTotal : ((inv['grandTotal'] ?? 0.0) as num).toDouble().roundToDouble();
                       DateTime? invDate;
+                      DateTime? erpInputDate;
                       try {
-                        if (inv['date'] != null) {
-                          if (inv['date'] is Timestamp) {
-                            invDate = (inv['date'] as Timestamp).toDate();
-                          }
+                        if (inv['date'] != null && inv['date'] is Timestamp) {
+                          invDate = (inv['date'] as Timestamp).toDate();
+                        }
+                        if (inv['erpSyncDate'] != null && inv['erpSyncDate'] is Timestamp) {
+                          erpInputDate = (inv['erpSyncDate'] as Timestamp).toDate();
                         }
                       } catch (_) {}
 
@@ -1557,12 +1719,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                   currencyFormatter.format(invTotal),
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 10),
                                 if (invDate != null)
                                   Text(
                                     dateFormatter.format(invDate),
                                     style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
                                   ),
+                                if (erpInputDate != null) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF38BDF8).withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                                    ),
+                                    child: Text(
+                                      'Tgl ERP: ${dateFormatter.format(erpInputDate)}',
+                                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                             subtitle: Text(

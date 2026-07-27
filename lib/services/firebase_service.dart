@@ -804,6 +804,7 @@ class FirebaseService {
         'invoiceNo': invoiceNo,
         'grandTotal': calculatedGrandTotal,
         'date': Timestamp.fromDate(trDate),
+        'erpSyncDate': Timestamp.fromDate(erpDate),
         'items': formattedItems,
       });
     }
