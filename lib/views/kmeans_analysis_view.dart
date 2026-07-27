@@ -19,6 +19,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
   int _clusterK = 3;
   double _splitRatio = 0.80; // 80% Training, 20% Testing
   bool _isProcessing = false;
+  bool _showFormulaInfo = false;
 
   List<KMeansPoint> _allPoints = [];
   List<KMeansPoint> _trainingPoints = [];
@@ -773,64 +774,118 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
   // TAB 3: Kalkulator Rekonsiliasi Stok Opname vs Stok Fisik
   Widget _buildReconciliationTab() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header Banner with Formula
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF4ADE80)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: const Color(0xFF4ADE80).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.fact_check_rounded, color: Color(0xFF4ADE80), size: 28),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. Minimalist Header Banner with Collapsible Formula Info
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF4ADE80).withOpacity(0.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4ADE80).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('Kalkulator Rekonsiliasi Stok Opname (ERP) vs Stok Fisik (Master Barang)', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 4),
-                          Text('Membuktikan penyebab ketidaksesuaian stok opname menggunakan rumus:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                    child: const Icon(Icons.fact_check_rounded, color: Color(0xFF4ADE80), size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Kalkulator Rekonsiliasi Stok Opname (ERP) vs Stok Fisik (Master Barang)',
+                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () => setState(() => _showFormulaInfo = !_showFormulaInfo),
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _showFormulaInfo ? const Color(0xFF38BDF8).withOpacity(0.2) : const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _showFormulaInfo ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _showFormulaInfo ? Icons.info_rounded : Icons.info_outline_rounded,
+                            color: const Color(0xFF38BDF8),
+                            size: 15,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _showFormulaInfo ? 'Sembunyikan Rumus' : 'Rumus Rekonsiliasi',
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            _showFormulaInfo ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                            color: const Color(0xFF38BDF8),
+                            size: 16,
+                          ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
                   ),
-                  child: const Text(
-                    'STOK OPNAME (ERP) = STOK AWAL + BARANG MASUK - BARANG KELUAR (ERP)\n'
-                    'SELISIH = STOK OPNAME (ERP) - STOK FISIK (Master Barang)\n'
-                    'Selisih PLUS (+) = Keterlambatan Pelaporan ERP | Selisih MINUS (-) = ERP menanggung laporan bulan lalu',
-                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontFamily: 'monospace', height: 1.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
+                ],
+              ),
 
-          // Reconciliation Table
-          Container(
+              // Expandable Formula Information Box
+              AnimatedCrossFade(
+                firstChild: const SizedBox.shrink(),
+                secondChild: Padding(
+                  padding: const EdgeInsets.only(top: 10.0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Membuktikan penyebab ketidaksesuaian stok opname menggunakan rumus:',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          '• STOK OPNAME (ERP) = STOK AWAL + BARANG MASUK - BARANG KELUAR (ERP)\n'
+                          '• SELISIH = STOK OPNAME (ERP) - STOK FISIK (Master Barang)\n'
+                          '• Selisih PLUS (+) = Keterlambatan Pelaporan ERP | Selisih MINUS (-) = ERP menanggung laporan bulan lalu',
+                          style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontFamily: 'monospace', height: 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                crossFadeState: _showFormulaInfo ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                duration: const Duration(milliseconds: 200),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 2. Fixed Table Header (Gambar 3 Statis) + Scrollable Item Rows (Gambar 4 Only)
+        Expanded(
+          child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(12),
@@ -839,94 +894,137 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Static Table Title
                 const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('Tabel Rekonsiliasi Stok Opname ERP vs Stok Fisik per Produk', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Text(
+                    'Tabel Rekonsiliasi Stok Opname ERP vs Stok Fisik per Produk',
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 const Divider(color: Color(0xFF334155), height: 1),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                        child: DataTable(
-                          columnSpacing: 10,
-                          horizontalMargin: 10,
-                          headingRowHeight: 52,
-                          dataRowMaxHeight: 50,
-                          headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                          columns: const [
-                            DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                            DataColumn(label: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                            DataColumn(label: Text('STOK\nAWAL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('BARANG\nMASUK', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('KELUAR\nFISIK', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('KELUAR\nERP', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('STOK OPNAME\n(ERP)', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('STOK FISIK\n(MASTER)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('SELISIH', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                            DataColumn(label: Text('STATUS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                          ],
-                          rows: _allPoints.asMap().entries.map((entry) {
-                            final index = entry.key + 1;
-                            final p = entry.value;
-                            final double selisih = p.selisihOpname;
 
-                            Color statusColor;
-                            String statusText;
-                            if (selisih.abs() < 0.5) {
-                              statusColor = const Color(0xFF4ADE80);
-                              statusText = 'COCOK';
-                            } else if (selisih > 0) {
-                              statusColor = Colors.amberAccent;
-                              statusText = 'PLUS (+)';
-                            } else {
-                              statusColor = Colors.redAccent;
-                              statusText = 'MINUS (-)';
-                            }
+                // Table Content Area
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: constraints.maxWidth,
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: SizedBox(
+                            width: 1020,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Static Header Row (Gambar 3 - Statis, Tidak Ter-scroll)
+                                Container(
+                                  color: const Color(0xFF0F172A),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(
+                                    children: const [
+                                      SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 210, child: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 75, child: Text('STOK\nAWAL', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 90, child: Text('BARANG\nMASUK', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 85, child: Text('KELUAR\nFISIK', textAlign: TextAlign.right, style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 85, child: Text('KELUAR\nERP', textAlign: TextAlign.right, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 110, child: Text('STOK OPNAME\n(ERP)', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 110, child: Text('STOK FISIK\n(MASTER)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 85, child: Text('SELISIH', textAlign: TextAlign.right, style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 90, child: Center(child: Text('STATUS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(color: Color(0xFF334155), height: 1),
 
-                            return DataRow(
-                              cells: [
-                                DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
-                                DataCell(SizedBox(
-                                  width: 160,
-                                  child: Text(p.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                )),
-                                DataCell(Text('${p.stokAwal.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                DataCell(Text('+${p.barangMasuk.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12))),
-                                DataCell(Text('-${p.barangKeluarFisik.toStringAsFixed(0)}', style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
-                                DataCell(Text('-${p.barangKeluarERP.toStringAsFixed(0)}', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                DataCell(Text('${p.stokOpnameERP.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                DataCell(Text('${p.stokFisik.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-                                DataCell(Text('${selisih >= 0 ? "+" : ""}${selisih.toStringAsFixed(0)}', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: statusColor.withOpacity(0.4)),
-                                    ),
-                                    child: Text(
-                                      statusText,
-                                      style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                // Scrollable Product Rows (Gambar 4 - Hanya ini yang ter-scroll secara vertikal)
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.vertical,
+                                    child: Column(
+                                      children: _allPoints.asMap().entries.map((entry) {
+                                        final index = entry.key + 1;
+                                        final p = entry.value;
+                                        final double selisih = p.selisihOpname;
+
+                                        Color statusColor;
+                                        String statusText;
+                                        if (selisih.abs() < 0.5) {
+                                          statusColor = const Color(0xFF4ADE80);
+                                          statusText = 'COCOK';
+                                        } else if (selisih > 0) {
+                                          statusColor = Colors.amberAccent;
+                                          statusText = 'PLUS (+)';
+                                        } else {
+                                          statusColor = Colors.redAccent;
+                                          statusText = 'MINUS (-)';
+                                        }
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          decoration: const BoxDecoration(
+                                            border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(
+                                                width: 210,
+                                                child: Text(
+                                                  p.productName,
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              SizedBox(width: 75, child: Text(p.stokAwal.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                              SizedBox(width: 90, child: Text('+${p.barangMasuk.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 85, child: Text('-${p.barangKeluarFisik.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+                                              SizedBox(width: 85, child: Text('-${p.barangKeluarERP.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 110, child: Text(p.stokOpnameERP.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 110, child: Text(p.stokFisik.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 85, child: Text('${selisih >= 0 ? "+" : ""}${selisih.toStringAsFixed(0)}', textAlign: TextAlign.right, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(
+                                                width: 90,
+                                                child: Center(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: statusColor.withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(color: statusColor.withOpacity(0.4)),
+                                                    ),
+                                                    child: Text(
+                                                      statusText,
+                                                      style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
                                     ),
                                   ),
                                 ),
                               ],
-                            );
-                          }).toList(),
+                            ),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
