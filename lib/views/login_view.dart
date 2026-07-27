@@ -436,12 +436,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                           return Transform.scale(
                             scale: _pulseAnimation.value,
                             child: Container(
-                              width: 115,
-                              height: 115,
-                              padding: const EdgeInsets.all(12),
+                              width: 135,
+                              height: 135,
+                              padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF0F172A).withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(30.0),
+                                borderRadius: BorderRadius.circular(28.0),
                                 border: Border.all(
                                   color: const Color(0xFF38BDF8).withOpacity(0.8),
                                   width: 1.8,
