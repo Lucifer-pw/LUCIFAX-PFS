@@ -1046,50 +1046,45 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
       return dateA.compareTo(dateB); // Oldest first
     });
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFF38BDF8).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.timer_outlined, color: Color(0xFF38BDF8), size: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Pemantau Aging Delay Pengiriman Barang (Status Kirim Belum Masuk ERP)', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 4),
-                      Text('Menampilkan rincian hari & bulan penundaan penginputan invoice ERP dari tanggal pengiriman fisik barang sampai hari ini.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF38BDF8))),
-                  child: Text(
-                    'Total: ${pendingDeliveries.length} Nota Pending',
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Static Header Banner
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
           ),
-          const SizedBox(height: 20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: const Color(0xFF38BDF8).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.timer_outlined, color: Color(0xFF38BDF8), size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Pemantau Aging Delay Pengiriman Barang (Status Kirim Belum Masuk ERP)', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF38BDF8))),
+                child: Text(
+                  'Total: ${pendingDeliveries.length} Nota',
+                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
 
-          // Aging Delay Table
-          Container(
+        // Table with Sticky Header
+        Expanded(
+          child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(12),
@@ -1098,104 +1093,127 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Static Table Title
                 const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('⏱️ Daftar Transaksi Pending Invoice ERP & Perhitungan Aging Delay Hari / Bulan', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Text('⏱️ Daftar Transaksi Pending Invoice ERP & Perhitungan Aging Delay Hari / Bulan', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(color: Color(0xFF334155), height: 1),
+
                 pendingDeliveries.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(32.0),
+                    ? const Expanded(
                         child: Center(
                           child: Text('✅ Tidak ada transaksi berstatus DIKIRIM yang menunggak laporan ERP saat ini.', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w500, fontSize: 15)),
                         ),
                       )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                              child: DataTable(
-                                columnSpacing: 10,
-                                horizontalMargin: 8,
-                                headingRowHeight: 46,
-                                dataRowMaxHeight: 52,
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                columns: const [
-                                  DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('DETAIL ITEM BARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('LAMA DELAY (HARI)', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold))),
-                                  DataColumn(label: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                ],
-                                rows: pendingDeliveries.asMap().entries.map((entry) {
-                                  final index = entry.key + 1;
-                                  final tr = entry.value;
-                                  final delivDate = tr.deliveryDate ?? tr.date;
-                                  final delayDays = now.difference(delivDate).inDays;
-                                  final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
-
-                                  Color statusColor = const Color(0xFF4ADE80);
-                                  String statusText = 'Normal (< 7 Hari)';
-
-                                  if (delayDays >= 30 || delayMonths >= 1) {
-                                    statusColor = Colors.redAccent;
-                                    statusText = 'Kritis (> 30 Hari)';
-                                  } else if (delayDays >= 7) {
-                                    statusColor = Colors.amberAccent;
-                                    statusText = 'Perhatian (7-30 Hari)';
-                                  }
-
-                                  final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
-                                  final String displayCustomer = tr.aliasName.trim().isNotEmpty
-                                      ? tr.aliasName
-                                      : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
-
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold))),
-                                      DataCell(Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                                      DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70))),
-                                      DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent))),
-                                      DataCell(
-                                        SizedBox(
-                                          width: 200,
-                                          child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    : Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minWidth: constraints.maxWidth, minHeight: constraints.maxHeight),
+                                child: SizedBox(
+                                  width: 1100,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Static Header Row
+                                      Container(
+                                        color: const Color(0xFF0F172A),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        child: Row(
+                                          children: const [
+                                            SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 140, child: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 150, child: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 120, child: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 220, child: Text('DETAIL ITEM BARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 130, child: Text('LAMA DELAY (HARI)', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 140, child: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 140, child: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                          ],
                                         ),
                                       ),
-                                      DataCell(Text('$delayDays Hari', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold))),
-                                      DataCell(Text('$delayMonths Bulan', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold))),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: statusColor.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: statusColor.withOpacity(0.4)),
-                                          ),
-                                          child: Text(
-                                            statusText,
-                                            style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                      const Divider(color: Color(0xFF334155), height: 1),
+
+                                      // Scrollable Data Rows
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.vertical,
+                                          child: Column(
+                                            children: pendingDeliveries.asMap().entries.map((entry) {
+                                              final index = entry.key + 1;
+                                              final tr = entry.value;
+                                              final delivDate = tr.deliveryDate ?? tr.date;
+                                              final delayDays = now.difference(delivDate).inDays;
+                                              final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
+
+                                              Color statusColor = const Color(0xFF4ADE80);
+                                              String statusText = 'Normal (< 7 Hari)';
+
+                                              if (delayDays >= 30 || delayMonths >= 1) {
+                                                statusColor = Colors.redAccent;
+                                                statusText = 'Kritis (> 30 Hari)';
+                                              } else if (delayDays >= 7) {
+                                                statusColor = Colors.amberAccent;
+                                                statusText = 'Perhatian (7-30 Hari)';
+                                              }
+
+                                              final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+                                              final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                                  ? tr.aliasName
+                                                  : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
+
+                                              return Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                decoration: const BoxDecoration(
+                                                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    SizedBox(width: 140, child: Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    SizedBox(width: 150, child: Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                                                    SizedBox(width: 120, child: Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontSize: 12))),
+                                                    SizedBox(width: 220, child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                                                    SizedBox(width: 130, child: Text('$delayDays Hari', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    SizedBox(width: 140, child: Text('$delayMonths Bulan', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    SizedBox(
+                                                      width: 140,
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: statusColor.withOpacity(0.15),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: statusColor.withOpacity(0.4)),
+                                                        ),
+                                                        child: Text(
+                                                          statusText,
+                                                          style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }).toList(),
                                           ),
                                         ),
                                       ),
                                     ],
-                                  );
-                                }).toList(),
+                                  ),
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1361,144 +1379,144 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
     final int pendingDeliveryCount = filteredPOs.where((item) => item['isPendingDelivery'] == true).length;
     final int crossMonthCount = filteredPOs.where((item) => item['isCrossMonth'] == true).length;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header Card (Compact)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFF43F5E)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: const Color(0xFFF43F5E).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFF43F5E), size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('Audit Detail PO (Invoice) Penyebab Selisih Stok Opname', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                          SizedBox(height: 2),
-                          Text('Menampilkan rincian nota transaksi spesifik yang barang fisiknya sudah keluar tetapi belum/terlambat diinput ke Laporan ERP.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 6,
-                  children: [
-                    _buildMetricBadge('Total PO Penyebab Selisih', '${filteredPOs.length} Nota', const Color(0xFFF43F5E)),
-                    _buildMetricBadge('Total Qty Barang Delay', '${totalPendingQty.toStringAsFixed(0)} pcs', const Color(0xFFFB7185)),
-                    _buildMetricBadge('Belum Diinput (Status DIKIRIM)', '$pendingDeliveryCount Nota', Colors.amberAccent),
-                    _buildMetricBadge('Late Reporting Lintas Bulan', '$crossMonthCount Nota', Colors.orangeAccent),
-                  ],
-                ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header Card (Compact)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFF43F5E)),
           ),
-          const SizedBox(height: 10),
-
-          // Filters Card: Product Dropdown & Search Input (Compact)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF334155)),
-            ),
-            child: Wrap(
-              spacing: 14,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                // Product Filter Dropdown
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
-                    const SizedBox(width: 6),
-                    const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF334155)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: products.any((p) => p.name == _poAuditProductFilter || p.id == _poAuditProductFilter)
-                              ? _poAuditProductFilter
-                              : 'Semua Produk',
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                          items: [
-                            const DropdownMenuItem(value: 'Semua Produk', child: Text('Semua Produk (Semua Barang)')),
-                            ...products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _poAuditProductFilter = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Search Bar
-                SizedBox(
-                  width: 280,
-                  height: 36,
-                  child: TextField(
-                    controller: _poAuditSearchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: 'Cari No. PO, Pelanggan, atau Produk...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 16),
-                      suffixIcon: _poAuditSearchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, color: Colors.white54, size: 14),
-                              onPressed: () {
-                                _poAuditSearchController.clear();
-                                setState(() {});
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
-                    ),
-                    onChanged: (_) => setState(() {}),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFFF43F5E).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFF43F5E), size: 22),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Audit Detail PO (Invoice) Penyebab Selisih Stok Opname', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                        SizedBox(height: 2),
+                        Text('Menampilkan rincian nota transaksi spesifik yang barang fisiknya sudah keluar tetapi belum/terlambat diinput ke Laporan ERP.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                children: [
+                  _buildMetricBadge('Total PO Penyebab Selisih', '${filteredPOs.length} Nota', const Color(0xFFF43F5E)),
+                  _buildMetricBadge('Total Qty Barang Delay', '${totalPendingQty.toStringAsFixed(0)} pcs', const Color(0xFFFB7185)),
+                  _buildMetricBadge('Belum Diinput (Status DIKIRIM)', '$pendingDeliveryCount Nota', Colors.amberAccent),
+                  _buildMetricBadge('Late Reporting Lintas Bulan', '$crossMonthCount Nota', Colors.orangeAccent),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
+        ),
+        const SizedBox(height: 10),
 
-          // Audit Table Container (Compact Header)
-          Container(
+        // Filters Card: Product Dropdown & Search Input (Compact)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF334155)),
+          ),
+          child: Wrap(
+            spacing: 14,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Product Filter Dropdown
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
+                  const SizedBox(width: 6),
+                  const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: products.any((p) => p.name == _poAuditProductFilter || p.id == _poAuditProductFilter)
+                            ? _poAuditProductFilter
+                            : 'Semua Produk',
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                        items: [
+                          const DropdownMenuItem(value: 'Semua Produk', child: Text('Semua Produk (Semua Barang)')),
+                          ...products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _poAuditProductFilter = val);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Search Bar
+              SizedBox(
+                width: 280,
+                height: 36,
+                child: TextField(
+                  controller: _poAuditSearchController,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: 'Cari No. PO, Pelanggan, atau Produk...',
+                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 16),
+                    suffixIcon: _poAuditSearchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.white54, size: 14),
+                            onPressed: () {
+                              _poAuditSearchController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+                    filled: true,
+                    fillColor: const Color(0xFF0F172A),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Audit Table with Sticky Header
+        Expanded(
+          child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(10),
@@ -1513,112 +1531,135 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                 ),
                 const Divider(color: Color(0xFF334155), height: 1),
                 filteredPOs.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(36.0),
+                    ? const Expanded(
                         child: Center(
                           child: Text('✅ Tidak ditemukan nota PO penyebab selisih untuk filter ini.', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w500, fontSize: 15)),
                         ),
                       )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                              child: DataTable(
-                                columnSpacing: 10,
-                                horizontalMargin: 10,
-                                headingRowHeight: 52,
-                                dataRowMaxHeight: 56,
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                columns: const [
-                                  DataColumn(label: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                  DataColumn(label: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                  DataColumn(label: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                  DataColumn(label: Text('TGL KIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                  DataColumn(label: Text('TGL INVOICE ERP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                  DataColumn(label: Text('RINCIAN BARANG (ITEM & QTY)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                  DataColumn(label: Text('TOTAL QTY', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)), numeric: true),
-                                  DataColumn(label: Text('KATEGORI PENYEBAB SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                ],
-                                rows: filteredPOs.asMap().entries.map((entry) {
-                                  final index = entry.key + 1;
-                                  final map = entry.value;
-                                  final tr = map['transaction'];
-                                  final delivDate = map['delivDate'] as DateTime;
-                                  final causeCategory = map['causeCategory'] as String;
-                                  final causeColor = map['causeColor'] as Color;
-                                  final isPending = map['isPendingDelivery'] as bool;
-                                  final double totalQty = map['totalQty'] as double;
-
-                                  final String invoiceNo = tr.invoiceNo;
-                                  final String statusTransfer = (tr.statusTransfer != null && tr.statusTransfer.isNotEmpty) ? tr.statusTransfer : 'UNPAID';
-                                  final String displayCustomer = tr.aliasName.trim().isNotEmpty
-                                      ? tr.aliasName
-                                      : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
-
-                                  final itemsSummary = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
-
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataCell(
-                                        Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                            Text(
-                                              statusTransfer.toUpperCase(),
-                                              style: TextStyle(
-                                                color: statusTransfer.toUpperCase() == 'PAID' ? const Color(0xFF4ADE80) : Colors.amberAccent,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
+                    : Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minWidth: constraints.maxWidth, minHeight: constraints.maxHeight),
+                                child: SizedBox(
+                                  width: 1200,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Static Header Row
+                                      Container(
+                                        color: const Color(0xFF0F172A),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        child: Row(
+                                          children: const [
+                                            SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 140, child: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 150, child: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 110, child: Text('TGL KIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 110, child: Text('TGL INVOICE ERP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 240, child: Text('RINCIAN BARANG (ITEM & QTY)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            SizedBox(width: 90, child: Text('TOTAL QTY', textAlign: TextAlign.right, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                            Expanded(child: Text('KATEGORI PENYEBAB SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
                                           ],
                                         ),
                                       ),
-                                      DataCell(Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataCell(Text(
-                                        map['erpDateDisplay'] as String,
-                                        style: TextStyle(color: isPending ? Colors.redAccent : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                                      )),
-                                      DataCell(
-                                        SizedBox(
-                                          width: 220,
-                                          child: Text(itemsSummary, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                                        ),
-                                      ),
-                                      DataCell(Text('${totalQty.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: causeColor.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: causeColor.withOpacity(0.4)),
-                                          ),
-                                          child: Text(
-                                            causeCategory,
-                                            style: TextStyle(color: causeColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                      const Divider(color: Color(0xFF334155), height: 1),
+
+                                      // Scrollable Data Rows
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.vertical,
+                                          child: Column(
+                                            children: filteredPOs.asMap().entries.map((entry) {
+                                              final index = entry.key + 1;
+                                              final map = entry.value;
+                                              final tr = map['transaction'];
+                                              final delivDate = map['delivDate'] as DateTime;
+                                              final causeCategory = map['causeCategory'] as String;
+                                              final causeColor = map['causeColor'] as Color;
+                                              final isPending = map['isPendingDelivery'] as bool;
+                                              final double totalQty = map['totalQty'] as double;
+
+                                              final String invoiceNo = tr.invoiceNo;
+                                              final String statusTransfer = (tr.statusTransfer != null && tr.statusTransfer.isNotEmpty) ? tr.statusTransfer : 'UNPAID';
+                                              final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                                  ? tr.aliasName
+                                                  : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
+                                              final itemsSummary = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+
+                                              return Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                decoration: const BoxDecoration(
+                                                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    SizedBox(
+                                                      width: 140,
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Text(invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                                          Text(
+                                                            statusTransfer.toUpperCase(),
+                                                            style: TextStyle(
+                                                              color: statusTransfer.toUpperCase() == 'PAID' ? const Color(0xFF4ADE80) : Colors.amberAccent,
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 150, child: Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                                                    SizedBox(width: 110, child: Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    SizedBox(
+                                                      width: 110,
+                                                      child: Text(
+                                                        map['erpDateDisplay'] as String,
+                                                        style: TextStyle(color: isPending ? Colors.redAccent : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 240, child: Text(itemsSummary, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                                                    SizedBox(width: 90, child: Text('${totalQty.toStringAsFixed(0)} pcs', textAlign: TextAlign.right, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    Expanded(
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: causeColor.withOpacity(0.15),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: causeColor.withOpacity(0.4)),
+                                                        ),
+                                                        child: Text(
+                                                          causeCategory,
+                                                          style: TextStyle(color: causeColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }).toList(),
                                           ),
                                         ),
                                       ),
                                     ],
-                                  );
-                                }).toList(),
+                                  ),
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
