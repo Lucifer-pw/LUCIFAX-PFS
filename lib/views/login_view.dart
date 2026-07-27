@@ -32,6 +32,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   List<Offset> _bgFishPos = [];
   List<int> _bgFishDirs = [];
   List<double> _bgFishScales = [];
+  List<double> _bgFishRots = [];
   List<double> _nextTurnTimes = [];
   double _lastTimeSec = 0.0;
 
@@ -302,20 +303,22 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     _heroCurrentY += (heroTargetY - _heroCurrentY) * lerpFactor;
                   }
                 } else {
-                  // Unfocused ambient: swim continuously forward across screen (Zero rollback!)
+                  // Unfocused ambient: swim continuously forward & gracefully up & down across screen
                   if (_heroCurrentX < -150) {
                     _heroCurrentX = -180;
                     _heroCurrentY = height * 0.48;
                   }
                   _heroCurrentX += 60.0 * dt;
-                  _heroCurrentY += ((height * 0.48) - _heroCurrentY) * (1.0 - exp(-dt * 3.0));
+
+                  final heroTargetY = height * 0.48 + sin(nowSec * 0.8) * 80.0 + cos(nowSec * 1.6) * 35.0;
+                  _heroCurrentY += (heroTargetY - _heroCurrentY) * (1.0 - exp(-dt * 2.5));
 
                   if (_heroCurrentX > width + 200) {
                     _heroCurrentX = -200; // Wrap off-screen instantly
                   }
                 }
 
-                // 2. Calculate Position & Movement for Background Fish School (Smooth 3D Mirror Flips)
+                // 2. Calculate Position & Movement for Background Fish School (3D Mirror Flips & Up/Down Swimming)
                 final bgCount = OceanFeedingFrenzyPainter._fishList.length;
                 if (_bgFishPos.length != bgCount) {
                   _bgFishPos = List.generate(bgCount, (i) {
@@ -324,6 +327,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                   });
                   _bgFishDirs = List.generate(bgCount, (i) => OceanFeedingFrenzyPainter._fishList[i].direction);
                   _bgFishScales = List.generate(bgCount, (i) => OceanFeedingFrenzyPainter._fishList[i].direction == 1 ? -1.0 : 1.0);
+                  _bgFishRots = List.generate(bgCount, (i) => 0.0);
                   _nextTurnTimes = List.generate(bgCount, (i) => nowSec + 5.0 + i * 2.2);
                 }
 
@@ -346,6 +350,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     final nextY = currentPos.dy + (bgTargetY - currentPos.dy) * lerpF;
 
                     final deltaX = nextX - currentPos.dx;
+                    final deltaY = nextY - currentPos.dy;
                     if (deltaX > 0.15) {
                       _bgFishDirs[i] = 1;
                     } else if (deltaX < -0.15) {
@@ -356,9 +361,13 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     final targetScaleX = (_bgFishDirs[i] == 1) ? -1.0 : 1.0;
                     _bgFishScales[i] += (targetScaleX - _bgFishScales[i]) * (1.0 - exp(-dt * 8.0));
 
+                    final vy = deltaY / dt;
+                    final targetRot = (vy / 60.0).clamp(-0.35, 0.35) * (_bgFishDirs[i] == 1 ? 1.0 : -1.0);
+                    _bgFishRots[i] += (targetRot - _bgFishRots[i]) * (1.0 - exp(-dt * 8.0));
+
                     newBgPos.add(Offset(nextX, nextY));
                   } else {
-                    // Organic Ambient Swimming with Smooth 3D Mirror Flips (No upside-down fish!)
+                    // Organic Ambient Swimming with Dynamic Vertical (Up/Down) Navigation & Pitch Rotation
                     final isNearRightEdge = currentPos.dx > width * 0.86 && _bgFishDirs[i] == 1;
                     final isNearLeftEdge = currentPos.dx < width * 0.14 && _bgFishDirs[i] == -1;
                     final isTimerDue = nowSec > _nextTurnTimes[i];
@@ -372,17 +381,25 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     final targetScaleX = (_bgFishDirs[i] == 1) ? -1.0 : 1.0;
                     _bgFishScales[i] += (targetScaleX - _bgFishScales[i]) * (1.0 - exp(-dt * 6.0));
 
-                    // Move along linear direction
+                    // Horizontal and vertical velocity components
                     final moveSpeed = f.speed * 1.15;
                     final vx = _bgFishDirs[i] * moveSpeed;
-                    final vy = sin(nowSec * 2.2 + i * 1.5) * 5.0;
+
+                    // Dynamic multi-wave vertical movement (swimming UP and DOWN across the ocean depth)
+                    final vWave1 = sin(nowSec * 0.7 + i * 2.3) * (28.0 + (i % 3) * 14.0);
+                    final vWave2 = cos(nowSec * 1.5 + i * 1.1) * (16.0 + (i % 2) * 10.0);
+                    final vy = vWave1 + vWave2;
 
                     double nextX = currentPos.dx + vx * dt;
                     double nextY = currentPos.dy + vy * dt;
 
-                    // Keep Y inside vertical screen bounds
-                    final minY = height * 0.12;
-                    final maxY = height * 0.88;
+                    // Smooth head pitch rotation when ascending (-rad) or diving (+rad)
+                    final targetRot = (vy / 50.0).clamp(-0.35, 0.35) * (_bgFishDirs[i] == 1 ? 1.0 : -1.0);
+                    _bgFishRots[i] += (targetRot - _bgFishRots[i]) * (1.0 - exp(-dt * 6.0));
+
+                    // Keep Y inside vertical screen bounds gracefully
+                    final minY = height * 0.10;
+                    final maxY = height * 0.90;
                     if (nextY < minY) nextY = minY;
                     if (nextY > maxY) nextY = maxY;
 
@@ -412,6 +429,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     heroY: _heroCurrentY,
                     bgFishPos: _bgFishPos,
                     bgFishScales: _bgFishScales,
+                    bgFishRots: _bgFishRots,
                   ),
                 );
               },
@@ -756,6 +774,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
   final double heroY; // Smooth lerped Y position
   final List<Offset> bgFishPos; // Smooth lerped school fish positions
   final List<double> bgFishScales; // Smooth lerped scaleX (-1.0 for right, 1.0 for left)
+  final List<double> bgFishRots; // Smooth lerped pitch rotation for vertical swimming
 
   OceanFeedingFrenzyPainter({
     required this.timeSec,
@@ -766,6 +785,7 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
     this.heroY = 0.0,
     this.bgFishPos = const [],
     this.bgFishScales = const [],
+    this.bgFishRots = const [],
   });
 
   // Procedural background fish data with realistic sizes, speeds, and species
@@ -849,14 +869,14 @@ class OceanFeedingFrenzyPainter extends CustomPainter {
       canvas.drawCircle(Offset(wobbleX, floatY), b.radius, bubblePaint);
     }
 
-    // 5. Swimming Background Fish School (Smooth 3D Mirror Flips)
+    // 5. Swimming Background Fish School (Smooth 3D Mirror Flips & Vertical Pitch)
     if (bgFishPos.isNotEmpty) {
       for (int i = 0; i < _fishList.length && i < bgFishPos.length; i++) {
         final f = _fishList[i];
         final pos = bgFishPos[i];
         final scaleX = (i < bgFishScales.length) ? bgFishScales[i] : (f.direction == 1 ? -1.0 : 1.0);
         final verticalBob = sin(timeSec * 2.5 + i * 2.0) * 4.0;
-        final rot = focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.06 : sin(timeSec * 2.0 + i) * 0.03;
+        final rot = (i < bgFishRots.length) ? bgFishRots[i] : (focusMode > 0 ? sin(timeSec * 3.0 + i) * 0.06 : sin(timeSec * 2.0 + i) * 0.03);
         final img = (f.imageIndex < fishImages.length) ? fishImages[f.imageIndex] : null;
         _drawFish(canvas, pos, f.size, scaleX, f.color, verticalBob, rot, img, timeWagPhase: i * 1.5);
       }
