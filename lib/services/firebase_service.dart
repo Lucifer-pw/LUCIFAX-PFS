@@ -268,7 +268,24 @@ class FirebaseService {
     required String createdBy,
     String invoiceType = 'PO', // 'PO' or 'SA'
     String? customSaNo,
+    String? idempotencyKey,
   }) async {
+    // Idempotency check: if this key was already used, return existing transaction
+    if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
+      final idempotencyRef = _db.collection('idempotency_keys').doc(idempotencyKey);
+      final idempotencySnap = await idempotencyRef.get();
+      if (idempotencySnap.exists) {
+        final existingInvoiceNo = idempotencySnap.data()?['invoiceNo']?.toString() ?? '';
+        if (existingInvoiceNo.isNotEmpty) {
+          final existingDoc = await _db.collection('transactions').doc(existingInvoiceNo).get();
+          if (existingDoc.exists) {
+            debugPrint('Idempotency hit: returning existing invoice #$existingInvoiceNo');
+            return model_tr.Transaction.fromMap(existingDoc.data()!, existingDoc.id);
+          }
+        }
+      }
+    }
+
     final now = DateTime.now();
     String docId = '';
 
@@ -339,6 +356,14 @@ class FirebaseService {
 
     // Save transaction (status PENDING = no stock deduction, no ERP sync)
     await _db.collection('transactions').doc(docId).set(trDoc.toMap());
+
+    // Save idempotency key to prevent duplicate creation
+    if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
+      await _db.collection('idempotency_keys').doc(idempotencyKey).set({
+        'invoiceNo': docId,
+        'createdAt': Timestamp.fromDate(now),
+      });
+    }
 
     return trDoc;
   }

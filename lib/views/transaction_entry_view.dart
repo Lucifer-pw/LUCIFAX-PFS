@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
 import '../providers/auth_provider.dart';
@@ -27,6 +28,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   final _customerTextController = TextEditingController();
   final _productTextController = TextEditingController();
   bool _isBonus = false;
+  bool _isSaving = false;
+  String _idempotencyKey = const Uuid().v4();
 
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -106,11 +109,13 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   }
 
   Future<void> _submitAndPrint(TransactionProvider trProvider, String createdBy) async {
+    if (_isSaving) return; // Prevent double-click
+    setState(() => _isSaving = true);
     try {
       trProvider.setNote(_noteController.text);
       
-      // Save to Firebase and get transaction object directly
-      final savedTransaction = await trProvider.submitTransaction(createdBy);
+      // Save to Firebase with idempotency key
+      final savedTransaction = await trProvider.submitTransaction(createdBy, idempotencyKey: _idempotencyKey);
 
       // Generate local PDF and download
       final pdfFile = await PrintService.generateInvoicePdf(savedTransaction);
@@ -121,6 +126,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       setState(() {
         _selectedCustomer = null;
         _selectedProduct = null;
+        _isSaving = false;
+        _idempotencyKey = const Uuid().v4(); // Regenerate for next invoice
       });
 
       if (mounted) {
@@ -182,6 +189,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.redAccent),
         );
@@ -190,11 +198,13 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   }
 
   Future<void> _submitOnly(TransactionProvider trProvider, String createdBy) async {
+    if (_isSaving) return; // Prevent double-click
+    setState(() => _isSaving = true);
     try {
       trProvider.setNote(_noteController.text);
       
-      // Save to Firebase only
-      final savedTransaction = await trProvider.submitTransaction(createdBy);
+      // Save to Firebase with idempotency key
+      final savedTransaction = await trProvider.submitTransaction(createdBy, idempotencyKey: _idempotencyKey);
  
       _noteController.clear();
       _customerTextController.clear();
@@ -202,6 +212,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       setState(() {
         _selectedCustomer = null;
         _selectedProduct = null;
+        _isSaving = false;
+        _idempotencyKey = const Uuid().v4(); // Regenerate for next invoice
       });
 
       if (mounted) {
@@ -228,6 +240,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.redAccent),
         );
@@ -755,14 +768,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
+                      onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null || _isSaving
                           ? null
                           : () async => await _submitOnly(trProvider, user.uid),
-                      icon: const Icon(Icons.save_rounded, color: Colors.white),
-                      label: const Text('Simpan Saja', style: TextStyle(color: Colors.white, fontSize: 13)),
+                      icon: _isSaving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.save_rounded, color: Colors.white),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja', style: const TextStyle(color: Colors.white, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
-                        backgroundColor: Colors.teal[600],
+                        backgroundColor: _isSaving ? Colors.teal[800] : Colors.teal[600],
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
@@ -770,14 +785,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null
+                      onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null || _isSaving
                           ? null
                           : () async => await _submitAndPrint(trProvider, user.uid),
-                      icon: const Icon(Icons.print_rounded, color: Colors.white),
-                      label: const Text('Simpan & Cetak', style: TextStyle(color: Colors.white, fontSize: 13)),
+                      icon: _isSaving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.print_rounded, color: Colors.white),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak', style: const TextStyle(color: Colors.white, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
-                        backgroundColor: const Color(0xFF0284C7),
+                        backgroundColor: _isSaving ? const Color(0xFF015B8C) : const Color(0xFF0284C7),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),

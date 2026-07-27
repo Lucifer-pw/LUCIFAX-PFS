@@ -189,7 +189,7 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   // Save current cart transaction and return the Transaction object
-  Future<model_tr.Transaction> submitTransaction(String createdBy) async {
+  Future<model_tr.Transaction> submitTransaction(String createdBy, {String? idempotencyKey}) async {
     if (_selectedCustomerId == null) {
       throw Exception("Silakan pilih Nama Pelanggan terlebih dahulu!");
     }
@@ -211,6 +211,7 @@ class TransactionProvider extends ChangeNotifier {
       createdBy: createdBy,
       invoiceType: _invoiceType,
       customSaNo: _customSaNo,
+      idempotencyKey: idempotencyKey,
     );
 
     clearCart();
