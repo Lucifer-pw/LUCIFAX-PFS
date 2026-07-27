@@ -71,6 +71,8 @@ class Transaction {
   final DateTime createdAt;
   final double returnAmount;
   final bool hasReturn;
+  final List<TransactionItem> movedItems; // History of items moved to another invoice
+  final String movedToInvoice; // Target invoice number for moved items
 
   Transaction({
     required this.invoiceNo,
@@ -93,6 +95,8 @@ class Transaction {
     required this.createdAt,
     this.returnAmount = 0.0,
     this.hasReturn = false,
+    this.movedItems = const [],
+    this.movedToInvoice = '',
   });
 
   double get netGrandTotal => (grandTotal - returnAmount).clamp(0.0, double.infinity);
@@ -117,6 +121,11 @@ class Transaction {
     final retAmt = (map['returnAmount'] ?? 0.0).toDouble();
     final hasRet = (map['hasReturn'] ?? false) || retAmt > 0;
 
+    final movedItemsList = (map['movedItems'] as List<dynamic>?)
+            ?.map((item) => TransactionItem.fromMap(item as Map<String, dynamic>))
+            .toList() ??
+        [];
+
     return Transaction(
       invoiceNo: finalInvoiceNo,
       customerId: map['customerId'] ?? '',
@@ -138,6 +147,8 @@ class Transaction {
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       returnAmount: retAmt,
       hasReturn: hasRet,
+      movedItems: movedItemsList,
+      movedToInvoice: map['movedToInvoice'] ?? '',
     );
   }
 
@@ -163,6 +174,8 @@ class Transaction {
       'createdAt': Timestamp.fromDate(createdAt),
       'returnAmount': returnAmount,
       'hasReturn': hasReturn,
+      'movedItems': movedItems.map((item) => item.toMap()).toList(),
+      'movedToInvoice': movedToInvoice,
     };
   }
 }

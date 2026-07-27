@@ -1224,6 +1224,113 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                 ),
 
+                // Moved Items History Section (shown only if items were moved)
+                if (tr.movedItems.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.history_rounded, color: Colors.purpleAccent, size: 16),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Riwayat Item Dipindah → Invoice #${tr.movedToInvoice}',
+                                style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.purpleAccent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${tr.movedItems.length} Item',
+                          style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(maxHeight: isMobile ? 180 : 220),
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
+                    ),
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                child: Table(
+                                  columnWidths: isMobile
+                                      ? const {
+                                          0: FixedColumnWidth(210),
+                                          1: FixedColumnWidth(55),
+                                          2: FixedColumnWidth(95),
+                                          3: FixedColumnWidth(130),
+                                        }
+                                      : const {
+                                          0: FlexColumnWidth(2.6),
+                                          1: FlexColumnWidth(0.7),
+                                          2: FlexColumnWidth(1.1),
+                                          3: FlexColumnWidth(1.4),
+                                        },
+                                  children: [
+                                    TableRow(
+                                      decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.12)),
+                                      children: [
+                                        _buildTableCell('Nama Barang', isHeader: true),
+                                        _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                                        _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                                      ],
+                                    ),
+                                    ...tr.movedItems.asMap().entries.map((entry) {
+                                      final index = entry.key;
+                                      final item = entry.value;
+                                      final isEven = index % 2 == 0;
+                                      return TableRow(
+                                        decoration: BoxDecoration(
+                                          color: isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
+                                          border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
+                                        ),
+                                        children: [
+                                          _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                          _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                        ],
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 12),
 
                 // Bottom Summary Footer (Catatan & Highlighted GRAND TOTAL) - PINNED AT BOTTOM!
@@ -2419,6 +2526,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           try {
                             final List<model_tr.TransactionItem> newSourceItems = List.from(sourceTr.items);
                             final List<model_tr.TransactionItem> newTargetItems = List.from(target.items);
+                            final List<model_tr.TransactionItem> movedItemsHistory = List.from(sourceTr.movedItems); // Preserve previous moved items
 
                             // Process moving selected items
                             final List<int> sortedIndices = selectedIndices.toList()..sort((a, b) => b.compareTo(a));
@@ -2432,6 +2540,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                               final double validMoveQty = moveQty > origItem.qty ? origItem.qty : moveQty;
                               final double remainingQty = origItem.qty - validMoveQty;
+
+                              // Save moved item to history
+                              final double movedSubtotal = validMoveQty * origItem.price * (1 - origItem.discountPercent / 100);
+                              movedItemsHistory.add(
+                                model_tr.TransactionItem(
+                                  productId: origItem.productId,
+                                  productName: origItem.productName,
+                                  price: origItem.price,
+                                  qty: validMoveQty,
+                                  discountPercent: origItem.discountPercent,
+                                  subtotal: movedSubtotal,
+                                  sizeGrams: origItem.sizeGrams,
+                                  isBonus: origItem.isBonus,
+                                ),
+                              );
 
                               if (remainingQty > 0) {
                                 final double newSubtotal = remainingQty * origItem.price * (1 - origItem.discountPercent / 100);
@@ -2497,6 +2620,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               erpSyncDate: newSourceErpSyncDate,
                               createdBy: sourceTr.createdBy,
                               createdAt: sourceTr.createdAt,
+                              movedItems: movedItemsHistory,
+                              movedToInvoice: target.invoiceNo.toString(),
                             );
 
                             final updatedTargetTr = model_tr.Transaction(
