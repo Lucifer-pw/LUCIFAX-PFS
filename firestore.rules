@@ -148,6 +148,15 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 14. IDEMPOTENCY_KEYS — Kunci anti-duplikasi invoice
+    // ═══════════════════════════════════════════════════
+    match /idempotency_keys/{keyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {

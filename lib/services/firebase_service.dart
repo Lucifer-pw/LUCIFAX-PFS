@@ -272,17 +272,21 @@ class FirebaseService {
   }) async {
     // Idempotency check: if this key was already used, return existing transaction
     if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
-      final idempotencyRef = _db.collection('idempotency_keys').doc(idempotencyKey);
-      final idempotencySnap = await idempotencyRef.get();
-      if (idempotencySnap.exists) {
-        final existingInvoiceNo = idempotencySnap.data()?['invoiceNo']?.toString() ?? '';
-        if (existingInvoiceNo.isNotEmpty) {
-          final existingDoc = await _db.collection('transactions').doc(existingInvoiceNo).get();
-          if (existingDoc.exists) {
-            debugPrint('Idempotency hit: returning existing invoice #$existingInvoiceNo');
-            return model_tr.Transaction.fromMap(existingDoc.data()!, existingDoc.id);
+      try {
+        final idempotencyRef = _db.collection('idempotency_keys').doc(idempotencyKey);
+        final idempotencySnap = await idempotencyRef.get();
+        if (idempotencySnap.exists) {
+          final existingInvoiceNo = idempotencySnap.data()?['invoiceNo']?.toString() ?? '';
+          if (existingInvoiceNo.isNotEmpty) {
+            final existingDoc = await _db.collection('transactions').doc(existingInvoiceNo).get();
+            if (existingDoc.exists) {
+              debugPrint('Idempotency hit: returning existing invoice #$existingInvoiceNo');
+              return model_tr.Transaction.fromMap(existingDoc.data()!, existingDoc.id);
+            }
           }
         }
+      } catch (e) {
+        debugPrint("Idempotency check bypass/error: $e");
       }
     }
 
@@ -359,10 +363,14 @@ class FirebaseService {
 
     // Save idempotency key to prevent duplicate creation
     if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
-      await _db.collection('idempotency_keys').doc(idempotencyKey).set({
-        'invoiceNo': docId,
-        'createdAt': Timestamp.fromDate(now),
-      });
+      try {
+        await _db.collection('idempotency_keys').doc(idempotencyKey).set({
+          'invoiceNo': docId,
+          'createdAt': Timestamp.fromDate(now),
+        });
+      } catch (e) {
+        debugPrint("Idempotency key save bypass/error: $e");
+      }
     }
 
     return trDoc;
