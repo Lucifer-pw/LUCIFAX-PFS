@@ -1285,13 +1285,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           0: FixedColumnWidth(210),
                                           1: FixedColumnWidth(55),
                                           2: FixedColumnWidth(95),
-                                          3: FixedColumnWidth(130),
+                                          3: FixedColumnWidth(105),
+                                          4: FixedColumnWidth(65),
+                                          5: FixedColumnWidth(100),
+                                          6: FixedColumnWidth(130),
                                         }
                                       : const {
                                           0: FlexColumnWidth(2.6),
                                           1: FlexColumnWidth(0.7),
                                           2: FlexColumnWidth(1.1),
-                                          3: FlexColumnWidth(1.4),
+                                          3: FlexColumnWidth(1.2),
+                                          4: FlexColumnWidth(0.8),
+                                          5: FlexColumnWidth(1.1),
+                                          6: FlexColumnWidth(1.4),
                                         },
                                   children: [
                                     TableRow(
@@ -1300,6 +1306,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell('Total', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
+                                        _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
                                       ],
                                     ),
@@ -1307,6 +1316,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       final index = entry.key;
                                       final item = entry.value;
                                       final isEven = index % 2 == 0;
+                                      final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
+                                      final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
                                       return TableRow(
                                         decoration: BoxDecoration(
                                           color: isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
@@ -1316,6 +1327,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
+                                          _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
+                                          _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
                                         ],
                                       );
