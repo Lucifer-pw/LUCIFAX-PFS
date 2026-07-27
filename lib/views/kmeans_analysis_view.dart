@@ -338,6 +338,34 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 12),
+
+                  // Refresh Button
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _isProcessing ? null : () => _loadAndProcessData(),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: _isProcessing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF38BDF8),
+                                ),
+                              )
+                            : const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 20),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
