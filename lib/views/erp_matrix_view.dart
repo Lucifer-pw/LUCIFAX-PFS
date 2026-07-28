@@ -326,6 +326,26 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     );
   }
 
+  ExcelColor? _getProductRowColor(String prodName) {
+    final upper = prodName.toUpperCase().trim();
+    if (upper.contains('KORNET AYAM LOYANG')) {
+      return ExcelColor.fromHexString('#3B82F6'); // 1. Biru
+    } else if (upper.contains('ROLLADE AYAM')) {
+      return ExcelColor.fromHexString('#15803D'); // 2. Hijau Tua
+    } else if (upper.contains('ROLLADE SAPI')) {
+      return ExcelColor.fromHexString('#84CC16'); // 3. Hijau Lime
+    } else if (upper.contains('BRS COKLAT 13S')) {
+      return ExcelColor.fromHexString('#EF4444'); // 4. Merah
+    } else if (upper.contains('BRS COKLAT 24S')) {
+      return ExcelColor.fromHexString('#F97316'); // 5. Orange
+    } else if (upper.contains('BRS COKLAT 7S')) {
+      return ExcelColor.fromHexString('#EAB308'); // 6. Kuning
+    } else if (upper.contains('BRS MERAH 24') || upper.contains('BRS MERAH 24S')) {
+      return ExcelColor.fromHexString('#9333EA'); // 7. Ungu
+    }
+    return null;
+  }
+
   /// Export Laporan ERP ke Format File Excel (.xlsx) 2 Sheet (Matriks Stok & Rincian Invoice)
   Future<void> _exportToExcelErp() async {
     try {
@@ -341,44 +361,157 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       Sheet sheet1 = excel[sheet1Name];
       excel.setDefaultSheet(sheet1Name);
 
-      sheet1.appendRow([
-        TextCellValue('NO'),
-        TextCellValue('NAMA PRODUK'),
-        TextCellValue('STOK AWAL'),
-        TextCellValue('TOTAL PENJUALAN'),
-        TextCellValue('SAMPLE / BONUS'),
-        TextCellValue('TOTAL KELUAR'),
-        TextCellValue('INFLUX M1'),
-        TextCellValue('INFLUX M2'),
-        TextCellValue('INFLUX M3'),
-        TextCellValue('INFLUX M4'),
-        TextCellValue('INFLUX M5'),
-        TextCellValue('TOTAL MASUK'),
-        TextCellValue('STOK AKHIR'),
-        TextCellValue('SATUAN'),
-      ]);
+      // Extract active customers from _erpRecords
+      List<Map<String, dynamic>> customerList = [];
+      for (var r in _erpRecords) {
+        if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
+          continue;
+        }
+        customerList.add(r);
+      }
 
+      // Title Banner Row 0
+      var titleCell = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
+      titleCell.value = TextCellValue('LAPORAN MATRIKS STOK ERP & OUTLET — PERIODE: $_selectedMonthYear');
+      titleCell.cellStyle = CellStyle(
+        bold: true,
+        fontColorHex: ExcelColor.fromHexString('#0F172A'),
+      );
+
+      // Header Columns Row 1
+      int colIdx = 0;
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('NO');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('NAMA PRODUK / ITEM');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('STOK AWAL');
+
+      // Outlet Sales Header Columns (1 Column Per Customer)
+      for (var cust in customerList) {
+        final custAlias = cust['customerName'] ?? cust['aliasName'] ?? 'Outlet';
+        sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue(custAlias.toString().toUpperCase());
+      }
+
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('TOTAL PENJUALAN');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('SAMPLE / BONUS');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('TOTAL KELUAR');
+
+      // Influx Header Columns
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M1');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M2');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M3');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M4');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M5');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('TOTAL MASUK');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('STOK AKHIR');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('SATUAN');
+
+      // Header styling (Row 1)
+      for (int c = 0; c < colIdx; c++) {
+        var hCell = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 1));
+        hCell.cellStyle = CellStyle(
+          bold: true,
+          backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
+          fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+          horizontalAlign: c == 1 ? HorizontalAlign.Left : HorizontalAlign.Center,
+        );
+      }
+
+      // Populate Data Rows starting at rowIndex = 2
       for (int i = 0; i < products.length; i++) {
         final prod = products[i];
         final wMap = _getGroupWeeklyMap(prod, weeklyMap, products);
         final stats = _calculateProductStats(prod, wMap, products);
 
-        sheet1.appendRow([
-          IntCellValue(i + 1),
-          TextCellValue(prod.name),
-          DoubleCellValue(stats['stockBefore'] ?? 0.0),
-          DoubleCellValue(stats['totalPenjualan'] ?? 0.0),
-          DoubleCellValue(stats['sampleBonus'] ?? 0.0),
-          DoubleCellValue(stats['totalKeluar'] ?? 0.0),
-          DoubleCellValue(stats['m1'] ?? 0.0),
-          DoubleCellValue(stats['m2'] ?? 0.0),
-          DoubleCellValue(stats['m3'] ?? 0.0),
-          DoubleCellValue(stats['m4'] ?? 0.0),
-          DoubleCellValue(stats['m5'] ?? 0.0),
-          DoubleCellValue(stats['totalMasuk'] ?? 0.0),
-          DoubleCellValue(stats['stockAkhir'] ?? 0.0),
-          TextCellValue(_showPcs ? 'Pcs' : 'Kg'),
-        ]);
+        final bgExcelColor = _getProductRowColor(prod.name);
+        final hexUpper = bgExcelColor?.colorHex.toUpperCase() ?? '';
+        final isDarkBg = bgExcelColor != null &&
+            hexUpper != '#84CC16' &&
+            hexUpper != '#EAB308';
+        final fontExcelColor = bgExcelColor != null
+            ? (isDarkBg ? ExcelColor.fromHexString('#FFFFFF') : ExcelColor.fromHexString('#000000'))
+            : null;
+
+        CellStyle rowStyle = CellStyle(
+          backgroundColorHex: bgExcelColor ?? ExcelColor.none,
+          fontColorHex: fontExcelColor ?? ExcelColor.black,
+          bold: bgExcelColor != null,
+        );
+
+        int cIdx = 0;
+
+        // NO
+        var cNo = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cNo.value = IntCellValue(i + 1);
+        cNo.cellStyle = rowStyle;
+
+        // NAMA PRODUK
+        var cName = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cName.value = TextCellValue(prod.name);
+        cName.cellStyle = rowStyle;
+
+        // STOK AWAL
+        var cStokAwal = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cStokAwal.value = DoubleCellValue(stats['stockBefore'] ?? 0.0);
+        cStokAwal.cellStyle = rowStyle;
+
+        // Sales Per Customer Outlet
+        for (var cust in customerList) {
+          final custProducts = cust['products'] as Map<String, dynamic>? ?? {};
+          final soldQty = _getProductSoldQty(custProducts, prod.id, _showPcs, prod.sizeGrams);
+          var cCust = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+          cCust.value = DoubleCellValue(soldQty);
+          cCust.cellStyle = rowStyle;
+        }
+
+        // TOTAL PENJUALAN
+        var cTotJual = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cTotJual.value = DoubleCellValue(stats['totalPenjualan'] ?? 0.0);
+        cTotJual.cellStyle = rowStyle;
+
+        // SAMPLE / BONUS
+        var cSample = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cSample.value = DoubleCellValue(stats['sampleBonus'] ?? 0.0);
+        cSample.cellStyle = rowStyle;
+
+        // TOTAL KELUAR
+        var cTotKeluar = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cTotKeluar.value = DoubleCellValue(stats['totalKeluar'] ?? 0.0);
+        cTotKeluar.cellStyle = rowStyle;
+
+        // INFLUX M1-M5
+        var cM1 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cM1.value = DoubleCellValue(stats['m1'] ?? 0.0);
+        cM1.cellStyle = rowStyle;
+
+        var cM2 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cM2.value = DoubleCellValue(stats['m2'] ?? 0.0);
+        cM2.cellStyle = rowStyle;
+
+        var cM3 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cM3.value = DoubleCellValue(stats['m3'] ?? 0.0);
+        cM3.cellStyle = rowStyle;
+
+        var cM4 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cM4.value = DoubleCellValue(stats['m4'] ?? 0.0);
+        cM4.cellStyle = rowStyle;
+
+        var cM5 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cM5.value = DoubleCellValue(stats['m5'] ?? 0.0);
+        cM5.cellStyle = rowStyle;
+
+        // TOTAL MASUK
+        var cTotMasuk = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cTotMasuk.value = DoubleCellValue(stats['totalMasuk'] ?? 0.0);
+        cTotMasuk.cellStyle = rowStyle;
+
+        // STOK AKHIR
+        var cStokAkhir = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cStokAkhir.value = DoubleCellValue(stats['stockAkhir'] ?? 0.0);
+        cStokAkhir.cellStyle = rowStyle;
+
+        // SATUAN
+        var cSatuan = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
+        cSatuan.value = TextCellValue(_showPcs ? 'Pcs' : 'Kg');
+        cSatuan.cellStyle = rowStyle;
       }
 
       // --- SHEET 2: Rincian Invoice ERP ---
