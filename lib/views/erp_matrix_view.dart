@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:excel/excel.dart' hide Border;
 import '../providers/customer_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -322,6 +324,154 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: 'laporan_erp_stok_$_selectedMonthYear.pdf',
     );
+  }
+
+  /// Export Laporan ERP ke Format File Excel (.xlsx) 2 Sheet (Matriks Stok & Rincian Invoice)
+  Future<void> _exportToExcelErp() async {
+    try {
+      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+      final stockProvider = Provider.of<StockProvider>(context, listen: false);
+      final products = productProvider.products;
+      final weeklyMap = stockProvider.getWeeklySummary(_selectedMonthYear);
+
+      var excel = Excel.createExcel();
+
+      // --- SHEET 1: Matriks Stok ERP ---
+      String sheet1Name = 'Matriks Stok ERP';
+      Sheet sheet1 = excel[sheet1Name];
+      excel.setDefaultSheet(sheet1Name);
+
+      sheet1.appendRow([
+        TextCellValue('NO'),
+        TextCellValue('NAMA PRODUK'),
+        TextCellValue('STOK AWAL'),
+        TextCellValue('TOTAL PENJUALAN'),
+        TextCellValue('SAMPLE / BONUS'),
+        TextCellValue('TOTAL KELUAR'),
+        TextCellValue('INFLUX M1'),
+        TextCellValue('INFLUX M2'),
+        TextCellValue('INFLUX M3'),
+        TextCellValue('INFLUX M4'),
+        TextCellValue('INFLUX M5'),
+        TextCellValue('TOTAL MASUK'),
+        TextCellValue('STOK AKHIR'),
+        TextCellValue('SATUAN'),
+      ]);
+
+      for (int i = 0; i < products.length; i++) {
+        final prod = products[i];
+        final wMap = _getGroupWeeklyMap(prod, weeklyMap, products);
+        final stats = _calculateProductStats(prod, wMap, products);
+
+        sheet1.appendRow([
+          IntCellValue(i + 1),
+          TextCellValue(prod.name),
+          DoubleCellValue(stats['stockBefore'] ?? 0.0),
+          DoubleCellValue(stats['totalPenjualan'] ?? 0.0),
+          DoubleCellValue(stats['sampleBonus'] ?? 0.0),
+          DoubleCellValue(stats['totalKeluar'] ?? 0.0),
+          DoubleCellValue(stats['m1'] ?? 0.0),
+          DoubleCellValue(stats['m2'] ?? 0.0),
+          DoubleCellValue(stats['m3'] ?? 0.0),
+          DoubleCellValue(stats['m4'] ?? 0.0),
+          DoubleCellValue(stats['m5'] ?? 0.0),
+          DoubleCellValue(stats['totalMasuk'] ?? 0.0),
+          DoubleCellValue(stats['stockAkhir'] ?? 0.0),
+          TextCellValue(_showPcs ? 'Pcs' : 'Kg'),
+        ]);
+      }
+
+      // --- SHEET 2: Rincian Invoice ERP ---
+      String sheet2Name = 'Rincian Invoice ERP';
+      Sheet sheet2 = excel[sheet2Name];
+
+      sheet2.appendRow([
+        TextCellValue('NO'),
+        TextCellValue('NO. INVOICE / PO'),
+        TextCellValue('PELANGGAN / OUTLET'),
+        TextCellValue('TGL INVOICE ERP'),
+        TextCellValue('DETAIL ITEM & QTY'),
+        TextCellValue('TOTAL QTY'),
+        TextCellValue('GRAND TOTAL (RP)'),
+      ]);
+
+      int rowNo = 1;
+      for (var r in _erpRecords) {
+        if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
+          continue;
+        }
+        final customerName = r['customerName'] ?? 'Unknown Customer';
+        final invoices = r['invoices'] as List<dynamic>? ?? [];
+
+        for (var inv in invoices) {
+          DateTime? erpInputDate;
+          if (inv['erpSyncDate'] != null && inv['erpSyncDate'] is Timestamp) {
+            erpInputDate = (inv['erpSyncDate'] as Timestamp).toDate();
+          } else if (inv['date'] != null && inv['date'] is Timestamp) {
+            erpInputDate = (inv['date'] as Timestamp).toDate();
+          }
+
+          if (_selectedDate != null && erpInputDate != null) {
+            if (erpInputDate.year != _selectedDate!.year ||
+                erpInputDate.month != _selectedDate!.month ||
+                erpInputDate.day != _selectedDate!.day) {
+              continue;
+            }
+          }
+
+          final invoiceNo = inv['invoiceNo']?.toString() ?? '-';
+          final grandTotal = (inv['grandTotal'] ?? 0.0).toDouble();
+          final items = inv['items'] as List<dynamic>? ?? [];
+
+          double totalQty = 0;
+          List<String> itemStrings = [];
+          for (var item in items) {
+            final pName = item['productName'] ?? item['productId'] ?? '';
+            final q = (item['qty'] ?? 0.0).toDouble();
+            totalQty += q;
+            itemStrings.add('$pName (${q.toStringAsFixed(0)} pcs)');
+          }
+
+          final dateStr = erpInputDate != null ? dateFormatter.format(erpInputDate) : '-';
+
+          sheet2.appendRow([
+            IntCellValue(rowNo++),
+            TextCellValue(invoiceNo),
+            TextCellValue(customerName.toString()),
+            TextCellValue(dateStr),
+            TextCellValue(itemStrings.join(', ')),
+            DoubleCellValue(totalQty),
+            DoubleCellValue(grandTotal),
+          ]);
+        }
+      }
+
+      List<int>? fileBytes = excel.save();
+      if (fileBytes != null) {
+        final bytes = Uint8List.fromList(fileBytes);
+        final fileName = 'Laporan_ERP_Stok_$_selectedMonthYear.xlsx'.replaceAll(' ', '_');
+
+        await Printing.sharePdf(bytes: bytes, filename: fileName);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎉 Berhasil mengekspor Excel: $fileName'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengekspor Excel: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   double _getProductSoldQty(Map<String, dynamic> prodSales, String productId, bool showPcs, double sizeGrams) {
@@ -926,6 +1076,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     );
                   }
                   if (val == 'print_pdf') _printPdfErp();
+                  if (val == 'export_excel') _exportToExcelErp();
                 },
                 itemBuilder: (ctx) => [
                   const PopupMenuItem<String>(
@@ -959,6 +1110,16 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                     ),
                   ),
                   const PopupMenuDivider(height: 1),
+                  const PopupMenuItem<String>(
+                    value: 'export_excel',
+                    child: Row(
+                      children: [
+                        Icon(Icons.table_chart_rounded, color: Colors.greenAccent, size: 18),
+                        SizedBox(width: 10),
+                        Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem<String>(
                     value: 'print_pdf',
                     child: Row(
