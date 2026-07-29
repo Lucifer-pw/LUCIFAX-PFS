@@ -2454,6 +2454,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         onChanged: (val) {
                           setDialogState(() {
                             targetSearchQuery = val;
+                            final matches = otherTxs.where((t) {
+                              if (val.trim().isEmpty) return true;
+                              final q = val.toLowerCase();
+                              final invNo = '#${t.invoiceNo}'.toLowerCase();
+                              final cust = t.customerName.toLowerCase();
+                              final alias = t.aliasName.toLowerCase();
+                              return invNo.contains(q) || cust.contains(q) || alias.contains(q);
+                            }).toList();
+                            if (matches.isNotEmpty) {
+                              selectedTargetTr = matches.first;
+                            }
                           });
                         },
                       ),
@@ -2527,7 +2538,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             return;
                           }
 
-                          final target = selectedTargetTr ?? (filteredTargets.isNotEmpty ? filteredTargets.first : null);
+                          final target = (selectedTargetTr != null && filteredTargets.contains(selectedTargetTr))
+                              ? selectedTargetTr
+                              : (filteredTargets.isNotEmpty ? filteredTargets.first : null);
                           if (target == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Silakan pilih Invoice Tujuan terlebih dahulu.'), backgroundColor: Colors.orangeAccent),
