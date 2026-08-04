@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Receivable {
   final String id;
   final String toko;
+  final String kota;
   final String noInvoice;
   final DateTime tglKirim;
   final double nominal;
@@ -13,6 +14,7 @@ class Receivable {
   Receivable({
     required this.id,
     required this.toko,
+    this.kota = '',
     required this.noInvoice,
     required this.tglKirim,
     required this.nominal,
@@ -41,6 +43,7 @@ class Receivable {
     return Receivable(
       id: doc.id,
       toko: data['toko'] ?? '',
+      kota: data['kota'] ?? '',
       noInvoice: data['noInvoice'] ?? '',
       tglKirim: parsedTglKirim,
       nominal: (data['nominal'] is num) ? (data['nominal'] as num).toDouble() : 0.0,
@@ -53,6 +56,7 @@ class Receivable {
   Map<String, dynamic> toFirestore() {
     return {
       'toko': toko,
+      'kota': kota,
       'noInvoice': noInvoice,
       'tglKirim': Timestamp.fromDate(tglKirim),
       'nominal': nominal,
@@ -65,6 +69,7 @@ class Receivable {
   Receivable copyWith({
     String? id,
     String? toko,
+    String? kota,
     String? noInvoice,
     DateTime? tglKirim,
     double? nominal,
@@ -75,6 +80,7 @@ class Receivable {
     return Receivable(
       id: id ?? this.id,
       toko: toko ?? this.toko,
+      kota: kota ?? this.kota,
       noInvoice: noInvoice ?? this.noInvoice,
       tglKirim: tglKirim ?? this.tglKirim,
       nominal: nominal ?? this.nominal,

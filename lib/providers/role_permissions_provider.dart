@@ -19,6 +19,7 @@ class RolePermissionsProvider with ChangeNotifier {
     'attendance': false,
     'dashboard': false,
     'kmeans_analysis': false,
+    'monthly_operational_expenses': true,
   };
 
   bool _isLoading = true;

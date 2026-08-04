@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/role_permissions_provider.dart';
 import '../models/user_profile.dart';
+import 'operational_invoice_view.dart';
 
 class UserPresenceView extends StatefulWidget {
   const UserPresenceView({super.key});
@@ -82,6 +83,12 @@ class _UserPresenceViewState extends State<UserPresenceView> {
       'title': 'Clustering K-Means (Skripsi)',
       'icon': Icons.hub_rounded,
       'desc': 'Analisis K-Means Clustering, Data Training & Testing, dan Rekonsiliasi Stok.',
+    },
+    {
+      'key': 'monthly_operational_expenses',
+      'title': 'Biaya Operasional Bulanan',
+      'icon': Icons.request_quote_rounded,
+      'desc': 'Pencatatan & rekapitulasi pengeluaran operasional serta biaya of country bulanan.',
     },
   ];
 
@@ -251,6 +258,12 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                 icon: Icons.admin_panel_settings_rounded,
                 label: 'Hak Akses Role KACAB',
               ),
+              const SizedBox(width: 12),
+              _buildTabButton(
+                index: 2,
+                icon: Icons.receipt_long_rounded,
+                label: 'Invoice Operasional Dev',
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -259,7 +272,9 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           Expanded(
             child: _selectedTab == 0
                 ? _buildUserPresenceTab(authProvider, currentUser)
-                : _buildKacabPermissionsTab(rolePermissionsProvider),
+                : _selectedTab == 1
+                    ? _buildKacabPermissionsTab(rolePermissionsProvider)
+                    : const OperationalInvoiceView(),
           ),
         ],
       ),

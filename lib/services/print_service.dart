@@ -6,7 +6,9 @@ import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import '../models/transaction.dart' as model_tr;
+import '../models/receivable.dart';
 import 'logo_base64.dart';
 
 class PrintService {
@@ -41,7 +43,7 @@ class PrintService {
               // 1. TOP HEADER BOX (Solid 1px Black Border Box)
               pw.Container(
                 decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.black, width: 1),
+                  border: pw.Border.all(color: PdfColors.black, width: 2),
                 ),
                 padding: const pw.EdgeInsets.all(6),
                 child: pw.Row(
@@ -111,9 +113,9 @@ class PrintService {
               pw.Container(
                 decoration: const pw.BoxDecoration(
                   border: pw.Border(
-                    left: pw.BorderSide(color: PdfColors.black, width: 1),
-                    right: pw.BorderSide(color: PdfColors.black, width: 1),
-                    bottom: pw.BorderSide(color: PdfColors.black, width: 1),
+                    left: pw.BorderSide(color: PdfColors.black, width: 2),
+                    right: pw.BorderSide(color: PdfColors.black, width: 2),
+                    bottom: pw.BorderSide(color: PdfColors.black, width: 2),
                   ),
                 ),
                 padding: const pw.EdgeInsets.symmetric(vertical: 3),
@@ -130,7 +132,14 @@ class PrintService {
 
               // 3. TABLE GRID (FULL SOLID 1px BLACK BORDER MATCHING TEMPLATE WITH STATIC COLUMN WIDTHS)
               pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.black, width: 1),
+                border: const pw.TableBorder(
+                  top: pw.BorderSide(color: PdfColors.black, width: 2),
+                  bottom: pw.BorderSide(color: PdfColors.black, width: 2),
+                  left: pw.BorderSide(color: PdfColors.black, width: 2),
+                  right: pw.BorderSide(color: PdfColors.black, width: 2),
+                  horizontalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+                  verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+                ),
                 columnWidths: const {
                   0: pw.FixedColumnWidth(255), // NAMA BARANG
                   1: pw.FixedColumnWidth(55),  // QTY
@@ -141,7 +150,12 @@ class PrintService {
                 children: [
                   // Table Header Row
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.white,
+                      border: pw.Border(
+                        bottom: pw.BorderSide(color: PdfColors.black, width: 2),
+                      ),
+                    ),
                     children: [
                       _buildCell('NAMA BARANG', isHeader: true, align: pw.TextAlign.center),
                       _buildCell('QTY', isHeader: true, align: pw.TextAlign.center),
@@ -184,14 +198,13 @@ class PrintService {
                   }),
                 ],
               ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 6), // Small gap between table and bottom section
 
-              // 4. BOTTOM SECTION: GRAND TOTAL BOX & SIGNATURES
+              // 4. BOTTOM SECTION: Left (Note + Diterima Oleh) | Right (Grand Total + Signatures)
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  // Signature Left: Diterima Oleh (with Note above it if present)
+                  // LEFT COLUMN: Note (if present) + Diterima Oleh
                   pw.Expanded(
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -203,10 +216,10 @@ class PrintService {
                               color: PdfColors.red,
                               fontWeight: pw.FontWeight.bold,
                               fontStyle: pw.FontStyle.italic,
-                              fontSize: 10,
+                              fontSize: 9,
                             ),
                           ),
-                          pw.SizedBox(height: 6),
+                          pw.SizedBox(height: 4),
                         ],
                         pw.Text(
                           'Diterima Oleh,',
@@ -217,41 +230,37 @@ class PrintService {
                     ),
                   ),
 
-                  // Right Block: Grand Total Box & Signatures (Pengirim & Hormat Kami)
+                  // RIGHT COLUMN: Grand Total Box + Pengirim & Hormat Kami
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      // GRAND TOTAL BOX
+                      // Grand Total Box
                       pw.Container(
-                        width: 220,
                         decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: PdfColors.black, width: 1),
+                          border: pw.Border.all(color: PdfColors.black, width: 2),
                         ),
                         child: pw.Row(
+                          mainAxisSize: pw.MainAxisSize.min,
                           children: [
-                            pw.Expanded(
-                              flex: 4,
-                              child: pw.Container(
-                                padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-                                decoration: const pw.BoxDecoration(
-                                  border: pw.Border(right: pw.BorderSide(color: PdfColors.black, width: 1)),
-                                ),
-                                child: pw.Text(
-                                  'GRAND TOTAL',
-                                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
-                                  textAlign: pw.TextAlign.center,
-                                ),
+                            pw.Container(
+                              width: 110,
+                              padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                              decoration: const pw.BoxDecoration(
+                                border: pw.Border(right: pw.BorderSide(color: PdfColors.black, width: 0.5)),
+                              ),
+                              child: pw.Text(
+                                'GRAND TOTAL',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                                textAlign: pw.TextAlign.center,
                               ),
                             ),
-                            pw.Expanded(
-                              flex: 5,
-                              child: pw.Container(
-                                padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
-                                child: pw.Text(
-                                  _rupiahFormatter.format(transaction.grandTotal),
-                                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
-                                  textAlign: pw.TextAlign.right,
-                                ),
+                            pw.Container(
+                              width: 102, // Matches SUB TOTAL column width
+                              padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                              child: pw.Text(
+                                _rupiahFormatter.format(transaction.grandTotal),
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                                textAlign: pw.TextAlign.right,
                               ),
                             ),
                           ],
@@ -259,7 +268,7 @@ class PrintService {
                       ),
                       pw.SizedBox(height: 8),
 
-                      // Signatures Row: Pengirim & Hormat Kami
+                      // Signatures: Pengirim & Hormat Kami
                       pw.Row(
                         children: [
                           pw.Column(
@@ -347,6 +356,9 @@ class PrintService {
   static Future<void> printInvoice(model_tr.Transaction transaction) async {
     final pdf = await buildInvoiceDocument(transaction);
     final filename = generateInvoiceFilename(transaction);
+    SystemChrome.setApplicationSwitcherDescription(
+      ApplicationSwitcherDescription(label: filename.replaceAll('.pdf', '')),
+    );
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: filename,
@@ -360,6 +372,9 @@ class PrintService {
 
     if (kIsWeb) {
       try {
+        SystemChrome.setApplicationSwitcherDescription(
+          ApplicationSwitcherDescription(label: filename.replaceAll('.pdf', '')),
+        );
         await Printing.layoutPdf(
           onLayout: (PdfPageFormat format) async => pdf.save(),
           name: filename,
@@ -539,5 +554,236 @@ class PrintService {
     } else {
       return await getApplicationDocumentsDirectory();
     }
+  }
+
+  // ============================================================
+  // PRINT KARTU PIUTANG PDF (PER TOKO / CUSTOMER OR ALL)
+  // ============================================================
+  static Future<void> printKartuPiutang({
+    required String customerName,
+    required String city,
+    required List<Receivable> items,
+  }) async {
+    final pdf = pw.Document();
+    const pageFormat = PdfPageFormat.letter;
+
+    final logoBytes = base64Decode(fivaLogoBase64);
+    final logoImage = pw.MemoryImage(logoBytes);
+    final double grandTotal = items.fold(0.0, (acc, r) => acc + r.nominal);
+    final dateStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: pageFormat,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              // 1. TOP HEADER BOX (Solid 2px Black Border Box)
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.black, width: 2),
+                ),
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Left Column: Logo & Company Address
+                    pw.Expanded(
+                      flex: 6,
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.ClipOval(
+                            child: pw.Image(logoImage, width: 54, height: 54),
+                          ),
+                          pw.SizedBox(width: 8),
+                          pw.Expanded(
+                            child: pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(
+                                  'FIVA SOLO FOOD & MEAT SUPPLY',
+                                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                                ),
+                                pw.SizedBox(height: 2),
+                                pw.Text(
+                                  'JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412, Tel: 021-8484308',
+                                  style: const pw.TextStyle(fontSize: 8.5),
+                                ),
+                                pw.Text(
+                                  'Fax: 021-84972237',
+                                  style: const pw.TextStyle(fontSize: 8.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(width: 10),
+                    // Right Column: Customer / Agen & Date Info
+                    pw.Expanded(
+                      flex: 4,
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _buildHeaderField('Customer / Agen', customerName.isNotEmpty ? customerName : 'SEMUA AGEN'),
+                          _buildHeaderField('Alamat / Kota', city.isNotEmpty ? city : '-'),
+                          _buildHeaderField('Tanggal Cetak', dateStr),
+                          _buildHeaderField('Total Invoice', '${items.length} Invoice'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. SECTION TITLE BAR: KARTU PIUTANG
+              pw.Container(
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(
+                    left: pw.BorderSide(color: PdfColors.black, width: 2),
+                    right: pw.BorderSide(color: PdfColors.black, width: 2),
+                    bottom: pw.BorderSide(color: PdfColors.black, width: 2),
+                  ),
+                ),
+                padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                alignment: pw.Alignment.center,
+                child: pw.Text(
+                  'KARTU PIUTANG',
+                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5),
+                ),
+              ),
+
+              // 3. TABLE GRID (Thick outer borders, thin inner lines)
+              pw.Table(
+                border: const pw.TableBorder(
+                  top: pw.BorderSide(color: PdfColors.black, width: 2),
+                  bottom: pw.BorderSide(color: PdfColors.black, width: 2),
+                  left: pw.BorderSide(color: PdfColors.black, width: 2),
+                  right: pw.BorderSide(color: PdfColors.black, width: 2),
+                  horizontalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+                  verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+                ),
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(30),  // NO
+                  1: pw.FixedColumnWidth(110), // NO INVOICE
+                  2: pw.FixedColumnWidth(160), // CUSTOMER / TOKO
+                  3: pw.FixedColumnWidth(90),  // KOTA
+                  4: pw.FixedColumnWidth(80),  // TGL KIRIM
+                  5: pw.FixedColumnWidth(100), // NOMINAL
+                },
+                children: [
+                  // Table Header Row
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.white,
+                      border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black, width: 2)),
+                    ),
+                    children: [
+                      _buildCell('NO', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('NO INVOICE', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('CUSTOMER / TOKO', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('KOTA', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('TGL KIRIM', isHeader: true, align: pw.TextAlign.center),
+                      _buildCell('NOMINAL', isHeader: true, align: pw.TextAlign.center),
+                    ],
+                  ),
+                  // Data Rows
+                  ...List.generate(items.length, (index) {
+                    final rec = items[index];
+                    return pw.TableRow(
+                      children: [
+                        _buildCell('${index + 1}', align: pw.TextAlign.center),
+                        _buildCell(rec.noInvoice, align: pw.TextAlign.center),
+                        _buildCell(rec.toko),
+                        _buildCell(rec.kota.isEmpty ? '-' : rec.kota, align: pw.TextAlign.center),
+                        _buildCell(DateFormat('dd-MM-yyyy').format(rec.tglKirim), align: pw.TextAlign.center),
+                        _buildCell(_rupiahFormatter.format(rec.nominal), align: pw.TextAlign.right),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+              pw.SizedBox(height: 12),
+
+              // 4. BOTTOM SECTION: Grand Total Box (right-aligned)
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Container(
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.black, width: 2),
+                  ),
+                  child: pw.Row(
+                    mainAxisSize: pw.MainAxisSize.min,
+                    children: [
+                      pw.Container(
+                        width: 110,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                        decoration: const pw.BoxDecoration(
+                          border: pw.Border(right: pw.BorderSide(color: PdfColors.black, width: 0.5)),
+                        ),
+                        child: pw.Text(
+                          'GRAND TOTAL',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Container(
+                        width: 110,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                        child: pw.Text(
+                          _rupiahFormatter.format(grandTotal),
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
+              // 5. SIGNATURE SECTION: Diterima Oleh (left) | Hormat Kami (right) - ALIGNED
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('Diterima Oleh,', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                        pw.SizedBox(height: 40),
+                        pw.Text('( .................................... )', style: const pw.TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text('Hormat Kami,', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                        pw.SizedBox(height: 40),
+                        pw.Text('( PT PUTRA FIVA SEJAHTERA )', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    final cleanName = customerName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final filename = customerName.isNotEmpty ? 'Kartu_Piutang_${cleanName}_$dateStr.pdf' : 'Kartu_Piutang_Semua_$dateStr.pdf';
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: filename,
+    );
   }
 }

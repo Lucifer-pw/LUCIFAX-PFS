@@ -6,6 +6,10 @@ import '../models/staff.dart';
 import '../models/attendance_record.dart';
 import '../models/transaction.dart' as model_tr;
 import '../models/transaction_return.dart';
+import '../models/operational_invoice.dart';
+import '../models/operational_category.dart';
+import '../models/operational_payment_method.dart';
+import '../models/stock_mutation.dart';
 import 'package:intl/intl.dart';
 
 class FirebaseService {
@@ -23,7 +27,7 @@ class FirebaseService {
     });
   }
 
-  Future<void> saveProduct(Product product) async {
+  Future<void> saveProduct(Product product, {bool logMutation = false, double? oldStock}) async {
     await _db.collection('products').doc(product.id).set(product.toMap());
 
     if (product.kodeInduk.isNotEmpty) {
@@ -40,6 +44,75 @@ class FirebaseService {
         await batch.commit();
       }
     }
+
+    // Log stock mutation for manual edits
+    if (logMutation && oldStock != null && oldStock != product.stock) {
+      final delta = product.stock - oldStock;
+      await _logStockMutations([
+        StockMutation(
+          id: '',
+          kodeInduk: product.kodeInduk,
+          productName: product.name,
+          type: 'EDIT_MANUAL',
+          qty: delta,
+          stockBefore: oldStock,
+          stockAfter: product.stock,
+          reference: 'Edit Manual Master Barang',
+          timestamp: DateTime.now(),
+        ),
+      ]);
+    }
+  }
+
+  // ==========================================
+  // STOCK MUTATION LOGGING
+  // ==========================================
+
+  Future<void> _logStockMutations(List<StockMutation> mutations) async {
+    try {
+      final batch = _db.batch();
+      for (var m in mutations) {
+        final docRef = _db.collection('stock_mutations').doc();
+        batch.set(docRef, m.toFirestore());
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error logging stock mutations: $e');
+    }
+  }
+
+  Stream<List<StockMutation>> streamStockMutations(String kodeInduk, {DateTime? date}) {
+    Query query = _db
+        .collection('stock_mutations')
+        .where('kodeInduk', isEqualTo: kodeInduk);
+    if (date != null) {
+      final start = DateTime(date.year, date.month, date.day, 0, 0, 0);
+      final end = DateTime(date.year, date.month, date.day, 23, 59, 59);
+      query = query.where('timestamp', isGreaterThanOrEqualTo: start).where('timestamp', isLessThanOrEqualTo: end);
+    }
+    return query
+        .orderBy('timestamp', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => StockMutation.fromFirestore(doc)).toList();
+    });
+  }
+
+  Stream<List<StockMutation>> streamAllStockMutations({DateTime? date, int limit = 200}) {
+    Query query = _db.collection('stock_mutations');
+    if (date != null) {
+      final start = DateTime(date.year, date.month, date.day, 0, 0, 0);
+      final end = DateTime(date.year, date.month, date.day, 23, 59, 59);
+      query = query.where('timestamp', isGreaterThanOrEqualTo: start).where('timestamp', isLessThanOrEqualTo: end);
+    }
+    return query
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => StockMutation.fromFirestore(doc)).toList();
+    });
   }
 
   Future<void> deleteProduct(String id) async {
@@ -537,67 +610,9 @@ class FirebaseService {
     String productId,
     String productName,
   ) async {
-    final List<DocumentReference<Map<String, dynamic>>> refs = [];
-    final Set<String> processedDocIds = {};
-
-    final cleanId = productId.trim();
-    final cleanName = productName.trim();
-
-    // 1. Direct lookup by ID
-    if (cleanId.isNotEmpty) {
-      final directRef = _db.collection('products').doc(cleanId);
-      final directSnap = await directRef.get();
-      if (directSnap.exists) {
-        refs.add(directRef);
-        processedDocIds.add(directSnap.id);
-      }
-    }
-
-    // 2. Fallback scan if direct lookup failed
-    if (refs.isEmpty) {
-      final allProdsQuery = await _db.collection('products').get();
-      final pIdLower = cleanId.toLowerCase();
-      final pNameLower = cleanName.toLowerCase();
-
-      for (var d in allProdsQuery.docs) {
-        final dIdLower = d.id.trim().toLowerCase();
-        final dNameLower = (d.data()['name'] ?? '').toString().trim().toLowerCase();
-        final dKodeIndukLower = (d.data()['kodeInduk'] ?? '').toString().trim().toLowerCase();
-
-        if ((pIdLower.isNotEmpty && (dIdLower == pIdLower || dKodeIndukLower == pIdLower)) ||
-            (pNameLower.isNotEmpty && dNameLower == pNameLower)) {
-          if (!processedDocIds.contains(d.id)) {
-            refs.add(d.reference);
-            processedDocIds.add(d.id);
-          }
-        }
-      }
-    }
-
-    // 3. Sibling products matching kodeInduk
-    final List<DocumentReference<Map<String, dynamic>>> siblingRefs = [];
-    for (var mainRef in List.from(refs)) {
-      final mainSnap = await mainRef.get();
-      if (mainSnap.exists) {
-        final kInduk = (mainSnap.data()?['kodeInduk'] ?? '').toString().trim();
-        final targetKodeInduk = kInduk.isNotEmpty ? kInduk : mainSnap.id;
-
-        final siblingQuery = await _db
-            .collection('products')
-            .where('kodeInduk', isEqualTo: targetKodeInduk)
-            .get();
-
-        for (var sDoc in siblingQuery.docs) {
-          if (!processedDocIds.contains(sDoc.id)) {
-            siblingRefs.add(sDoc.reference);
-            processedDocIds.add(sDoc.id);
-          }
-        }
-      }
-    }
-
-    refs.addAll(siblingRefs);
-    return refs;
+    final resolver = await _KodeIndukResolver.create(_db);
+    final kInduk = resolver.resolveKodeInduk(productId, productName);
+    return resolver.getRefsForKodeInduk(kInduk);
   }
 
   // Update delivery status (DIKIRIM / PENDING) and deliveryDate with automatic stock deduction/restoration
@@ -619,36 +634,40 @@ class FirebaseService {
     bool stockShouldDecrease = (oldStatus != 'DIKIRIM' && newStatus == 'DIKIRIM');
     bool stockShouldIncrease = (oldStatus == 'DIKIRIM' && newStatus != 'DIKIRIM');
 
-    // Resolve all product document references BEFORE entering runTransaction
-    final Map<String, List<DocumentReference<Map<String, dynamic>>>> productRefsMap = {};
-    if (stockShouldDecrease || stockShouldIncrease) {
+    final resolver = await _KodeIndukResolver.create(_db);
+
+    // Aggregate delta per kodeInduk
+    final Map<String, double> deltaPerKodeInduk = {};
+    if (stockShouldDecrease) {
       for (var item in initTr.items) {
-        final refs = await _resolveProductRefs(item.productId, item.productName);
-        productRefsMap[item.productId] = refs;
+        final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+        deltaPerKodeInduk[kInduk] = (deltaPerKodeInduk[kInduk] ?? 0.0) - item.qty;
+      }
+    } else if (stockShouldIncrease) {
+      for (var item in initTr.items) {
+        final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+        deltaPerKodeInduk[kInduk] = (deltaPerKodeInduk[kInduk] ?? 0.0) + item.qty;
       }
     }
 
-    // 2. Aggregate qty per productId
-    final Map<String, double> totalQtyPerProduct = {};
-    for (var item in initTr.items) {
-      totalQtyPerProduct[item.productId] = (totalQtyPerProduct[item.productId] ?? 0.0) + item.qty;
-    }
-
-    // PRE-CHECK PHYSICAL STOCK SUFFICIENCY BEFORE TRANSACTION (Ensures pure Dart Exception, clean UI modal)
+    // PRE-CHECK PHYSICAL STOCK SUFFICIENCY BEFORE TRANSACTION
     if (stockShouldDecrease) {
       final List<String> insufficientStockProducts = [];
 
-      for (var entry in totalQtyPerProduct.entries) {
-        final productId = entry.key;
-        final totalQty = entry.value;
-        final refs = productRefsMap[productId] ?? [];
-        for (var ref in refs) {
-          final pSnap = await ref.get();
-          if (pSnap.exists) {
-            final currentStock = (pSnap.data()?['stock'] ?? 0.0).toDouble();
-            if (currentStock < totalQty) {
-              final pName = pSnap.data()?['name'] ?? productId;
-              insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${totalQty.toInt()} pcs)");
+      for (var entry in deltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final delta = entry.value;
+        if (delta < 0) {
+          final requiredQty = delta.abs();
+          final refs = resolver.getRefsForKodeInduk(kInduk);
+          for (var ref in refs) {
+            final pSnap = await ref.get();
+            if (pSnap.exists) {
+              final currentStock = (pSnap.data()?['stock'] ?? 0.0).toDouble();
+              if (currentStock < requiredQty) {
+                final pName = pSnap.data()?['name'] ?? kInduk;
+                insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${requiredQty.toInt()} pcs)");
+              }
             }
           }
         }
@@ -665,42 +684,26 @@ class FirebaseService {
         throw Exception("Transaksi tidak ditemukan!");
       }
 
-      final Map<String, List<DocumentSnapshot<Map<String, dynamic>>>> variantSnaps = {};
-
-      if (stockShouldDecrease || stockShouldIncrease) {
-        for (var item in initTr.items) {
-          final refs = productRefsMap[item.productId] ?? [];
-          final List<DocumentSnapshot<Map<String, dynamic>>> snapsList = [];
-          for (var ref in refs) {
-            final pSnap = await transaction.get(ref);
-            if (pSnap.exists) snapsList.add(pSnap);
-          }
-          variantSnaps[item.productId] = snapsList;
+      final Map<String, DocumentSnapshot> pSnapshots = {};
+      for (var entry in deltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        for (var ref in refs) {
+          final pSnap = await transaction.get(ref);
+          if (pSnap.exists) pSnapshots[ref.path] = pSnap;
         }
       }
 
-      if (stockShouldDecrease) {
-        for (var entry in totalQtyPerProduct.entries) {
-          final productId = entry.key;
-          final totalQty = entry.value;
-          final vars = variantSnaps[productId] ?? [];
-          for (var vSnap in vars) {
-            if (vSnap.exists) {
-              final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(vSnap.reference, {'stock': currentStock - totalQty});
-            }
-          }
-        }
-      } else if (stockShouldIncrease) {
-        for (var entry in totalQtyPerProduct.entries) {
-          final productId = entry.key;
-          final totalQty = entry.value;
-          final vars = variantSnaps[productId] ?? [];
-          for (var vSnap in vars) {
-            if (vSnap.exists) {
-              final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(vSnap.reference, {'stock': currentStock + totalQty});
-            }
+      for (var entry in deltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final delta = entry.value;
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        for (var ref in refs) {
+          final pSnap = pSnapshots[ref.path];
+          if (pSnap != null && pSnap.exists) {
+            final data = pSnap.data() as Map<String, dynamic>?;
+            final currentStock = (data?['stock'] ?? 0.0).toDouble();
+            transaction.update(ref, {'stock': currentStock + delta});
           }
         }
       }
@@ -710,6 +713,50 @@ class FirebaseService {
         'deliveryDate': newStatus == 'PENDING' ? null : (newDeliveryDate != null ? Timestamp.fromDate(newDeliveryDate) : null),
       });
     });
+
+    // Log stock mutations AFTER transaction succeeds
+    if (deltaPerKodeInduk.isNotEmpty) {
+      final String mutationType = stockShouldDecrease ? 'KELUAR' : 'RETUR_STATUS';
+      final List<StockMutation> mutations = [];
+
+      for (var entry in deltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final delta = entry.value;
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        // Get representative product name from first ref
+        String pName = kInduk;
+        if (refs.isNotEmpty) {
+          final pSnap = await refs.first.get();
+          if (pSnap.exists) {
+            pName = (pSnap.data() as Map<String, dynamic>?)?['name'] ?? kInduk;
+          }
+        }
+        // Get current stock (after mutation) to compute before
+        double currentStockAfter = 0;
+        if (refs.isNotEmpty) {
+          final pSnap = await refs.first.get();
+          if (pSnap.exists) {
+            currentStockAfter = ((pSnap.data() as Map<String, dynamic>?)?['stock'] ?? 0.0).toDouble();
+          }
+        }
+        final stockBefore = currentStockAfter - delta; // reverse to get before
+
+        mutations.add(StockMutation(
+          id: '',
+          kodeInduk: kInduk,
+          productName: pName,
+          type: mutationType,
+          qty: delta,
+          stockBefore: stockBefore,
+          stockAfter: currentStockAfter,
+          reference: 'Invoice #${invoiceNo.toString()}',
+          customerName: initTr.customerName,
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      await _logStockMutations(mutations);
+    }
   }
 
   // Get ERP summaries for a specific month - reads directly from transactions for 100% accuracy (0 Reads when cached)
@@ -952,54 +999,78 @@ class FirebaseService {
   Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
     final docRef = _db.collection('transactions').doc(updatedTr.invoiceNo.toString());
 
-    await _db.runTransaction((transaction) async {
-      // 1. READ ALL DOCUMENTS FIRST
-      final oldSnap = await transaction.get(docRef);
-      if (!oldSnap.exists) {
-        throw Exception("Transaksi tidak ditemukan!");
+    // 1. READ OLD TRANSACTION FIRST
+    final oldSnapInit = await docRef.get();
+    if (!oldSnapInit.exists) {
+      throw Exception("Transaksi tidak ditemukan!");
+    }
+    final oldTr = model_tr.Transaction.fromMap(oldSnapInit.data()!, oldSnapInit.id);
+
+    final bool oldWasDelivered = (oldTr.status == 'DIKIRIM');
+    final bool newIsDelivered = (updatedTr.status == 'DIKIRIM');
+
+    // 2. RESOLVE KODE INDUK & CALCULATE NET STOCK DELTA PER KODE INDUK
+    final resolver = await _KodeIndukResolver.create(_db);
+    final Map<String, double> netStockDeltaPerKodeInduk = {};
+
+    if (oldWasDelivered) {
+      for (var item in oldTr.items) {
+        final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+        netStockDeltaPerKodeInduk[kInduk] = (netStockDeltaPerKodeInduk[kInduk] ?? 0.0) + item.qty;
       }
-      final oldTr = model_tr.Transaction.fromMap(oldSnap.data()!, oldSnap.id);
+    }
 
-      final bool oldWasDelivered = (oldTr.status == 'DIKIRIM');
-      final bool newIsDelivered = (updatedTr.status == 'DIKIRIM');
+    if (newIsDelivered) {
+      for (var item in updatedTr.items) {
+        final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+        netStockDeltaPerKodeInduk[kInduk] = (netStockDeltaPerKodeInduk[kInduk] ?? 0.0) - item.qty;
+      }
+    }
 
-      // Read old product snaps and their variants if old status was DIKIRIM
-      final Map<String, DocumentSnapshot<Map<String, dynamic>>> oldProductSnaps = {};
-      final Map<String, List<DocumentSnapshot<Map<String, dynamic>>>> oldVariantSnaps = {};
-      if (oldWasDelivered) {
-        for (var item in oldTr.items) {
-          final prodRef = _db.collection('products').doc(item.productId);
-          final snap = await transaction.get(prodRef);
-          oldProductSnaps[item.productId] = snap;
-          if (snap.exists) {
-            final parentKodeInduk = snap.data()?['kodeInduk'] ?? item.productId;
-            final query = await _db.collection('products').where('kodeInduk', isEqualTo: parentKodeInduk).get();
-            final List<DocumentSnapshot<Map<String, dynamic>>> list = [];
-            for (var doc in query.docs) {
-              list.add(await transaction.get(doc.reference));
+    // Filter out zero net stock changes
+    netStockDeltaPerKodeInduk.removeWhere((key, value) => value == 0.0);
+
+    // PRE-CHECK PHYSICAL STOCK SUFFICIENCY if netStockDelta requires stock deduction (-)
+    final List<String> insufficientStockProducts = [];
+    for (var entry in netStockDeltaPerKodeInduk.entries) {
+      final kInduk = entry.key;
+      final delta = entry.value;
+      if (delta < 0) {
+        final requiredQty = delta.abs();
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        for (var ref in refs) {
+          final pSnap = await ref.get();
+          if (pSnap.exists) {
+            final data = pSnap.data() as Map<String, dynamic>?;
+            final currentStock = (data?['stock'] ?? 0.0).toDouble();
+            if (currentStock < requiredQty) {
+              final pName = pSnap.data()?['name'] ?? kInduk;
+              insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${requiredQty.toInt()} pcs)");
             }
-            oldVariantSnaps[item.productId] = list;
           }
         }
       }
+    }
+    if (insufficientStockProducts.isNotEmpty) {
+      throw Exception("STOK_TIDAK_CUKUP:\n${insufficientStockProducts.join('\n')}");
+    }
 
-      // Read new product snaps and their variants if new status is DIKIRIM
-      final Map<String, DocumentSnapshot<Map<String, dynamic>>> newProductSnaps = {};
-      final Map<String, List<DocumentSnapshot<Map<String, dynamic>>>> newVariantSnaps = {};
-      if (newIsDelivered) {
-        for (var item in updatedTr.items) {
-          final prodRef = _db.collection('products').doc(item.productId);
-          final snap = await transaction.get(prodRef);
-          newProductSnaps[item.productId] = snap;
-          if (snap.exists) {
-            final parentKodeInduk = snap.data()?['kodeInduk'] ?? item.productId;
-            final query = await _db.collection('products').where('kodeInduk', isEqualTo: parentKodeInduk).get();
-            final List<DocumentSnapshot<Map<String, dynamic>>> list = [];
-            for (var doc in query.docs) {
-              list.add(await transaction.get(doc.reference));
-            }
-            newVariantSnaps[item.productId] = list;
-          }
+    // 3. RUN FIRESTORE TRANSACTION
+    await _db.runTransaction((transaction) async {
+      // Step A: READ ALL DOCUMENTS FIRST
+      final snap = await transaction.get(docRef);
+      if (!snap.exists) {
+        throw Exception("Transaksi tidak ditemukan!");
+      }
+
+      // Read product snapshots transactionally
+      final Map<String, DocumentSnapshot> pSnapshots = {};
+      for (var entry in netStockDeltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        for (var ref in refs) {
+          final pSnap = await transaction.get(ref);
+          if (pSnap.exists) pSnapshots[ref.path] = pSnap;
         }
       }
 
@@ -1025,70 +1096,33 @@ class FirebaseService {
         }
       }
 
-      // 2. NOW PERFORM ALL WRITES
-      // Aggregate qty per productId for old items (handles duplicate productIds like normal + bonus)
-      if (oldWasDelivered) {
-        final Map<String, double> oldTotalQty = {};
-        for (var item in oldTr.items) {
-          oldTotalQty[item.productId] = (oldTotalQty[item.productId] ?? 0.0) + item.qty;
-        }
-        for (var entry in oldTotalQty.entries) {
-          final productId = entry.key;
-          final totalQty = entry.value;
-          final vars = oldVariantSnaps[productId];
-          if (vars != null) {
-            for (var vSnap in vars) {
-              if (vSnap.exists) {
-                final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock + totalQty});
-              }
-            }
-          } else {
-            final prodSnap = oldProductSnaps[productId];
-            if (prodSnap != null && prodSnap.exists) {
-              final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock + totalQty});
-            }
+      // Step B: PERFORM ALL WRITES
+      // 1) Update stock per kodeInduk
+      for (var entry in netStockDeltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final delta = entry.value;
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        for (var ref in refs) {
+          final pSnap = pSnapshots[ref.path];
+          if (pSnap != null && pSnap.exists) {
+            final data = pSnap.data() as Map<String, dynamic>?;
+            final currentStock = (data?['stock'] ?? 0.0).toDouble();
+            final newStock = currentStock + delta;
+            transaction.update(ref, {'stock': newStock});
           }
         }
       }
 
+      // 2) Update ERP Summaries
       if (oldErpRef != null && oldErpSnap != null && (newErpRef == null || oldErpRef.path != newErpRef.path)) {
         _removeFromErpSummary(transaction, oldErpRef, oldErpSnap, oldTr);
-      }
-
-      // Aggregate qty per productId for new items (handles duplicate productIds like normal + bonus)
-      if (newIsDelivered) {
-        final Map<String, double> newTotalQty = {};
-        for (var item in updatedTr.items) {
-          newTotalQty[item.productId] = (newTotalQty[item.productId] ?? 0.0) + item.qty;
-        }
-        for (var entry in newTotalQty.entries) {
-          final productId = entry.key;
-          final totalQty = entry.value;
-          final vars = newVariantSnaps[productId];
-          if (vars != null) {
-            for (var vSnap in vars) {
-              if (vSnap.exists) {
-                final currentStock = (vSnap.data()?['stock'] ?? 0.0).toDouble();
-                transaction.update(vSnap.reference, {'stock': currentStock - totalQty});
-              }
-            }
-          } else {
-            final prodSnap = newProductSnaps[productId];
-            if (prodSnap != null && prodSnap.exists) {
-              final currentStock = (prodSnap.data()?['stock'] ?? 0.0).toDouble();
-              transaction.update(prodSnap.reference, {'stock': currentStock - totalQty});
-            }
-          }
-        }
       }
 
       if (newErpRef != null && (oldErpRef == null || oldErpRef.path != newErpRef.path)) {
         _addToErpSummary(transaction, newErpRef, newErpSnap, updatedTr, newMonthYear!);
       }
 
-      // Write updated transaction doc
+      // 3) Write updated transaction doc
       final Map<String, dynamic> data = updatedTr.toMap();
       data['erpSyncDate'] = updatedTr.erpSyncDate != null 
           ? Timestamp.fromDate(updatedTr.erpSyncDate!) 
@@ -1097,9 +1131,28 @@ class FirebaseService {
     });
   }
 
-  // Delete transaction
+
+  // Delete transaction (with stock restoration if DIKIRIM)
   Future<void> deleteTransaction(dynamic invoiceNo) async {
     final docRef = _db.collection('transactions').doc(invoiceNo.toString());
+
+    final initSnap = await docRef.get();
+    if (!initSnap.exists) {
+      throw Exception("Transaksi tidak ditemukan!");
+    }
+    final initTr = model_tr.Transaction.fromMap(initSnap.data()!, initSnap.id);
+    final bool wasDelivered = (initTr.status == 'DIKIRIM');
+
+    final resolver = await _KodeIndukResolver.create(_db);
+
+    // Aggregate qty per kodeInduk for stock restoration
+    final Map<String, double> totalQtyPerKodeInduk = {};
+    if (wasDelivered) {
+      for (var item in initTr.items) {
+        final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+        totalQtyPerKodeInduk[kInduk] = (totalQtyPerKodeInduk[kInduk] ?? 0.0) + item.qty;
+      }
+    }
 
     await _db.runTransaction((transaction) async {
       // 1. READ ALL DOCUMENTS FIRST
@@ -1108,6 +1161,19 @@ class FirebaseService {
         throw Exception("Transaksi tidak ditemukan!");
       }
       final oldTr = model_tr.Transaction.fromMap(snap.data()!, snap.id);
+
+      // Read product snapshots transactionally
+      final Map<String, DocumentSnapshot> pSnapshots = {};
+      if (wasDelivered) {
+        for (var entry in totalQtyPerKodeInduk.entries) {
+          final kInduk = entry.key;
+          final refs = resolver.getRefsForKodeInduk(kInduk);
+          for (var ref in refs) {
+            final pSnap = await transaction.get(ref);
+            if (pSnap.exists) pSnapshots[ref.path] = pSnap;
+          }
+        }
+      }
 
       // Read ERP snap if erpSyncDate was set
       final String? monthYear = oldTr.erpSyncDate != null ? DateFormat('MM-yyyy').format(oldTr.erpSyncDate!) : null;
@@ -1119,6 +1185,24 @@ class FirebaseService {
       }
 
       // 2. EXECUTE WRITES
+      // Restore stock per kodeInduk
+      if (wasDelivered) {
+        for (var entry in totalQtyPerKodeInduk.entries) {
+          final kInduk = entry.key;
+          final totalQty = entry.value;
+          final refs = resolver.getRefsForKodeInduk(kInduk);
+          for (var ref in refs) {
+            final pSnap = pSnapshots[ref.path];
+            if (pSnap != null && pSnap.exists) {
+              final data = pSnap.data() as Map<String, dynamic>?;
+            final currentStock = (data?['stock'] ?? 0.0).toDouble();
+              transaction.update(ref, {'stock': currentStock + totalQty});
+            }
+          }
+        }
+      }
+
+      // Remove from ERP summary
       if (erpRef != null && erpSnap != null && erpSnap.exists) {
         _removeFromErpSummary(transaction, erpRef, erpSnap, oldTr);
       }
@@ -1126,6 +1210,43 @@ class FirebaseService {
       // Delete the transaction document
       transaction.delete(docRef);
     });
+
+    // Log stock mutations AFTER transaction succeeds (for deleted DIKIRIM invoices)
+    if (wasDelivered && totalQtyPerKodeInduk.isNotEmpty) {
+      final List<StockMutation> mutations = [];
+
+      for (var entry in totalQtyPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final totalQty = entry.value;
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        String pName = kInduk;
+        double currentStockAfter = 0;
+        if (refs.isNotEmpty) {
+          final pSnap = await refs.first.get();
+          if (pSnap.exists) {
+            final data = pSnap.data() as Map<String, dynamic>?;
+            pName = data?['name'] ?? kInduk;
+            currentStockAfter = (data?['stock'] ?? 0.0).toDouble();
+          }
+        }
+        final stockBefore = currentStockAfter - totalQty;
+
+        mutations.add(StockMutation(
+          id: '',
+          kodeInduk: kInduk,
+          productName: pName,
+          type: 'HAPUS_INVOICE',
+          qty: totalQty,
+          stockBefore: stockBefore,
+          stockAfter: currentStockAfter,
+          reference: 'Hapus Invoice #${invoiceNo.toString()}',
+          customerName: initTr.customerName,
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      await _logStockMutations(mutations);
+    }
   }
 
   // ==========================================
@@ -1224,5 +1345,174 @@ class FirebaseService {
           .map((doc) => TransactionReturn.fromMap(doc.data(), doc.id))
           .toList();
     });
+  }
+
+  // ==========================================
+  // OPERATIONAL INVOICES (DEVELOPER ONLY)
+  // ==========================================
+
+  Stream<List<OperationalInvoice>> streamOperationalInvoices() {
+    return _db
+        .collection('operational_invoices')
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => OperationalInvoice.fromMap(doc.data(), doc.id))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  Future<void> saveOperationalInvoice(OperationalInvoice invoice) async {
+    final docRef = invoice.id.isNotEmpty
+        ? _db.collection('operational_invoices').doc(invoice.id)
+        : _db.collection('operational_invoices').doc();
+    await docRef.set(invoice.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteOperationalInvoice(String id) async {
+    await _db.collection('operational_invoices').doc(id).delete();
+  }
+
+  // ==========================================
+  // OPERATIONAL CATEGORIES CRUD (DYNAMIC)
+  // ==========================================
+
+  Stream<List<OperationalCategory>> streamOperationalCategories() {
+    return _db.collection('operational_categories').snapshots().map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => OperationalCategory.fromMap(doc.data(), doc.id))
+          .toList();
+      list.sort((a, b) => a.name.compareTo(b.name));
+      return list;
+    });
+  }
+
+  Future<void> saveOperationalCategory(OperationalCategory category) async {
+    final docRef = category.id.isNotEmpty
+        ? _db.collection('operational_categories').doc(category.id)
+        : _db.collection('operational_categories').doc();
+    await docRef.set(category.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteOperationalCategory(String id) async {
+    await _db.collection('operational_categories').doc(id).delete();
+  }
+
+  // ==========================================
+  // OPERATIONAL PAYMENT METHODS CRUD (DYNAMIC)
+  // ==========================================
+
+  Stream<List<OperationalPaymentMethod>> streamOperationalPaymentMethods() {
+    return _db.collection('operational_payment_methods').snapshots().map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => OperationalPaymentMethod.fromMap(doc.data(), doc.id))
+          .toList();
+      list.sort((a, b) => a.name.compareTo(b.name));
+      return list;
+    });
+  }
+
+  Future<void> saveOperationalPaymentMethod(OperationalPaymentMethod method) async {
+    final docRef = method.id.isNotEmpty
+        ? _db.collection('operational_payment_methods').doc(method.id)
+        : _db.collection('operational_payment_methods').doc();
+    await docRef.set(method.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteOperationalPaymentMethod(String id) async {
+    await _db.collection('operational_payment_methods').doc(id).delete();
+  }
+
+  Future<void> seedDefaultOperationalCategoriesIfEmpty() async {
+    final snap = await _db.collection('operational_categories').get();
+    if (snap.docs.isEmpty) {
+      final defaults = [
+        'Maintenance & Upgrade Server (Firebase / Cloud)',
+        'Pengembangan & Biaya Program (App Dev)',
+        'Domain & Cloud Infrastructure',
+        'Biaya Operasional Maintenance Rutin',
+        'Lainnya',
+      ];
+      final batch = _db.batch();
+      for (var name in defaults) {
+        final ref = _db.collection('operational_categories').doc();
+        batch.set(ref, {
+          'name': name,
+          'description': 'Kategori bawaan sistem',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  Future<void> seedDefaultOperationalPaymentMethodsIfEmpty() async {
+    final snap = await _db.collection('operational_payment_methods').get();
+    if (snap.docs.isEmpty) {
+      final defaults = [
+        'DANA / E-Wallet',
+        'Transfer Bank (BCA/Mandiri)',
+        'Kas / Cash',
+        'Lainnya',
+      ];
+      final batch = _db.batch();
+      for (var name in defaults) {
+        final ref = _db.collection('operational_payment_methods').doc();
+        batch.set(ref, {
+          'name': name,
+          'description': 'Metode pembayaran bawaan sistem',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  }
+}
+
+class _KodeIndukResolver {
+  final Map<String, List<DocumentReference<Map<String, dynamic>>>> kodeIndukToRefs = {};
+  final Map<String, String> productIdToKodeInduk = {};
+  final Map<String, String> productNameToKodeInduk = {};
+
+  static Future<_KodeIndukResolver> create(FirebaseFirestore db) async {
+    final resolver = _KodeIndukResolver();
+    final allProdsQuery = await db.collection('products').get();
+
+    for (var d in allProdsQuery.docs) {
+      final docId = d.id.trim();
+      final data = d.data();
+      final name = (data['name'] ?? '').toString().trim();
+      final rawKodeInduk = (data['kodeInduk'] ?? '').toString().trim();
+      final kodeInduk = rawKodeInduk.isNotEmpty ? rawKodeInduk : docId;
+
+      if (docId.isNotEmpty) {
+        resolver.productIdToKodeInduk[docId.toLowerCase()] = kodeInduk;
+      }
+      if (name.isNotEmpty) {
+        resolver.productNameToKodeInduk[name.toLowerCase()] = kodeInduk;
+      }
+
+      resolver.kodeIndukToRefs.putIfAbsent(kodeInduk, () => []).add(d.reference);
+    }
+    return resolver;
+  }
+
+  String resolveKodeInduk(String productId, String productName) {
+    final cleanId = productId.trim().toLowerCase();
+    final cleanName = productName.trim().toLowerCase();
+
+    if (cleanId.isNotEmpty && productIdToKodeInduk.containsKey(cleanId)) {
+      return productIdToKodeInduk[cleanId]!;
+    }
+    if (cleanName.isNotEmpty && productNameToKodeInduk.containsKey(cleanName)) {
+      return productNameToKodeInduk[cleanName]!;
+    }
+    return productId.trim().isNotEmpty ? productId.trim() : productName.trim();
+  }
+
+  List<DocumentReference<Map<String, dynamic>>> getRefsForKodeInduk(String kodeInduk) {
+    return kodeIndukToRefs[kodeInduk] ?? [];
   }
 }

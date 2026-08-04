@@ -40,8 +40,8 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveProduct(Product product) async {
-    await _dbService.saveProduct(product);
+  Future<void> saveProduct(Product product, {bool logMutation = false, double? oldStock}) async {
+    await _dbService.saveProduct(product, logMutation: logMutation, oldStock: oldStock);
   }
 
   Future<void> deleteProduct(String id) async {

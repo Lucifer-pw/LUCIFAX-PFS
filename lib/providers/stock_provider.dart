@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/stock_entry.dart';
+import '../models/stock_mutation.dart';
 
 class StockProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -108,7 +109,35 @@ class StockProvider with ChangeNotifier {
 
       // Increment stock across all variants with matching kodeInduk
       if (entry.productId.isNotEmpty && entry.qty > 0) {
+        // Read stock before update for mutation logging
+        double stockBefore = 0;
+        String kodeInduk = entry.productId;
+        String productName = entry.productName;
+        final targetDoc = await _db.collection('products').doc(entry.productId).get();
+        if (targetDoc.exists) {
+          stockBefore = ((targetDoc.data()?['stock'] ?? 0.0) as num).toDouble();
+          kodeInduk = (targetDoc.data()?['kodeInduk'] ?? entry.productId).toString();
+          productName = (targetDoc.data()?['name'] ?? entry.productName).toString();
+        }
+
         await _updateStockForProductAndSiblings(entry.productId, entry.qty);
+
+        // Log mutation
+        try {
+          await _db.collection('stock_mutations').add(StockMutation(
+            id: '',
+            kodeInduk: kodeInduk,
+            productName: productName,
+            type: 'INPUT_STOK',
+            qty: entry.qty,
+            stockBefore: stockBefore,
+            stockAfter: stockBefore + entry.qty,
+            reference: 'Input Stok',
+            timestamp: DateTime.now(),
+          ).toFirestore());
+        } catch (e) {
+          debugPrint('Error logging stock mutation: $e');
+        }
       }
 
       notifyListeners();

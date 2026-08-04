@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import '../models/transaction.dart' as model_tr;
 import '../models/product.dart';
 import '../models/customer.dart';
@@ -37,7 +38,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Pagination & Debounce State
   int _currentPage = 1;
-  int _rowsPerPage = 25;
+  int _rowsPerPage = 10;
   Timer? _debounce;
 
   final _rupiahFormatter = NumberFormat.currency(
@@ -305,6 +306,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final priceController = TextEditingController();
     bool isBonus = false;
     int? editingItemIndex;
+    bool isSaving = false;
 
     showDialog(
       context: context,
@@ -821,9 +823,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  onPressed: selectedCustomer == null || editedItems.isEmpty
+                  onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving
                       ? null
                       : () async {
+                          setDialogState(() => isSaving = true);
                           try {
                             final updatedTransaction = model_tr.Transaction(
                               invoiceNo: tr.invoiceNo,
@@ -855,6 +858,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               );
                             }
                           } catch (e) {
+                            setDialogState(() => isSaving = false);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text('Gagal memperbarui: $e'), backgroundColor: Colors.redAccent),
@@ -862,7 +866,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             }
                           }
                         },
-                  child: const Text('Simpan Perubahan'),
+                  child: isSaving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Simpan Perubahan'),
                 ),
               ],
             );
@@ -947,10 +953,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         createdAt: tr.createdAt,
       );
 
+      final String filename = PrintService.generateInvoiceFilename(toPrint);
+      SystemChrome.setApplicationSwitcherDescription(
+        ApplicationSwitcherDescription(label: filename.replaceAll('.pdf', '')),
+      );
+
       if (isDownload) {
         final pdf = await PrintService.buildInvoiceDocument(toPrint);
         final bytes = await pdf.save();
-        final String filename = PrintService.generateInvoiceFilename(toPrint);
         
         await Printing.sharePdf(bytes: bytes, filename: filename);
 
@@ -1441,7 +1451,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       ],
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
+                          onPressed: () => _showPrintDialog(tr, isDownload: true),
                           icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                           label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: OutlinedButton.styleFrom(
@@ -1458,7 +1468,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: false),
+                          onPressed: () => _showPrintDialog(tr, isDownload: false),
                           icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
                           label: const Text('Cetak / Print', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
@@ -1509,7 +1519,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 const SizedBox(width: 8),
               ],
               OutlinedButton.icon(
-                onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: true),
+                onPressed: () => _showPrintDialog(tr, isDownload: true),
                 icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                 label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                 style: OutlinedButton.styleFrom(
@@ -1520,7 +1530,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
-                onPressed: () => _handlePrintOrDownloadPdf(tr, isDownload: false),
+                onPressed: () => _showPrintDialog(tr, isDownload: false),
                 icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
                 label: const Text('Cetak / Print', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                 style: ElevatedButton.styleFrom(
@@ -1654,7 +1664,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     ),
                   ] else ...[
                     const Text(
-                      'Pilih Status Barang Delivered & Tanggal Dikirim:',
+                      'Pilih Status Barang Delivered:',
                       style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                     ),
                     const SizedBox(height: 12),
@@ -1675,29 +1685,31 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         }
                       },
                     ),
-                    const SizedBox(height: 14),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Tanggal Dikirim:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                      subtitle: Text(
-                        DateFormat('dd MMMM yyyy').format(currentDeliveryDate),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    if (currentDeliveryStatus == 'DIKIRIM') ...[
+                      const SizedBox(height: 14),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Tanggal Dikirim:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        subtitle: Text(
+                          DateFormat('dd MMMM yyyy').format(currentDeliveryDate),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                        onTap: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: currentDeliveryDate,
+                            firstDate: DateTime(2025),
+                            lastDate: DateTime(2030),
+                          );
+                          if (pickedDate != null) {
+                            setDialogState(() {
+                              currentDeliveryDate = pickedDate;
+                            });
+                          }
+                        },
                       ),
-                      trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: currentDeliveryDate,
-                          firstDate: DateTime(2025),
-                          lastDate: DateTime(2030),
-                        );
-                        if (pickedDate != null) {
-                          setDialogState(() {
-                            currentDeliveryDate = pickedDate;
-                          });
-                        }
-                      },
-                    ),
+                    ],
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -2600,19 +2612,42 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               }
 
                               // Add item to target invoice with custom Qty & Custom Discount
-                              final double targetItemSubtotal = validMoveQty * origItem.price * (1 - customDisc / 100);
-                              newTargetItems.add(
-                                model_tr.TransactionItem(
+                              // Merge with existing item if same productId already exists in target
+                              final existingIdx = newTargetItems.indexWhere(
+                                (ti) => ti.productId == origItem.productId && ti.isBonus == origItem.isBonus,
+                              );
+                              if (existingIdx >= 0) {
+                                // Merge: combine qty, recalculate weighted average discount & subtotal
+                                final existing = newTargetItems[existingIdx];
+                                final double mergedQty = existing.qty + validMoveQty;
+                                // Weighted average discount: (existQty * existDisc + moveQty * moveDisc) / totalQty
+                                final double weightedDisc = (existing.qty * existing.discountPercent + validMoveQty * customDisc) / mergedQty;
+                                final double mergedSubtotal = mergedQty * origItem.price * (1 - weightedDisc / 100);
+                                newTargetItems[existingIdx] = model_tr.TransactionItem(
                                   productId: origItem.productId,
                                   productName: origItem.productName,
                                   price: origItem.price,
-                                  qty: validMoveQty,
-                                  discountPercent: customDisc,
-                                  subtotal: targetItemSubtotal,
+                                  qty: mergedQty,
+                                  discountPercent: double.parse(weightedDisc.toStringAsFixed(2)),
+                                  subtotal: mergedSubtotal,
                                   sizeGrams: origItem.sizeGrams,
                                   isBonus: origItem.isBonus,
-                                ),
-                              );
+                                );
+                              } else {
+                                final double targetItemSubtotal = validMoveQty * origItem.price * (1 - customDisc / 100);
+                                newTargetItems.add(
+                                  model_tr.TransactionItem(
+                                    productId: origItem.productId,
+                                    productName: origItem.productName,
+                                    price: origItem.price,
+                                    qty: validMoveQty,
+                                    discountPercent: customDisc,
+                                    subtotal: targetItemSubtotal,
+                                    sizeGrams: origItem.sizeGrams,
+                                    isBonus: origItem.isBonus,
+                                  ),
+                                );
+                              }
                             }
 
                              // Recalculate Grand Totals
@@ -2705,8 +2740,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
-  // Print invoice with date options dialog
-  void _showPrintDialog(model_tr.Transaction tr) {
+  // Print or Download invoice with date options dialog
+  void _showPrintDialog(model_tr.Transaction tr, {bool isDownload = false}) {
     int selectedOption = 1; // 1 = Tanggal di Awal, 2 = Input Tanggal Kirim Baru
     DateTime chosenDate = tr.deliveryDate ?? tr.date;
 
@@ -2717,7 +2752,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
-              title: Text('Cetak Invoice #${tr.invoiceNo}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                isDownload ? 'Download Invoice #${tr.invoiceNo}' : 'Cetak Invoice #${tr.invoiceNo}',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2808,19 +2847,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     backgroundColor: const Color(0xFF0284C7),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   ),
-                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16, color: Colors.white),
-                  label: const Text('Cetak PDF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  icon: Icon(
+                    isDownload ? Icons.download_rounded : Icons.picture_as_pdf_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    isDownload ? 'Download PDF' : 'Cetak PDF',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                   onPressed: () async {
                     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
                     Navigator.pop(context);
-                    
+
                     try {
                       model_tr.Transaction toPrint = tr;
 
                       if (selectedOption == 2) {
                         // 1. Update the delivery date in the database
                         await trProvider.updateDeliveryDate(tr.invoiceNo, chosenDate);
-                        
+
                         // 2. Build updated model to print with the new delivery date
                         toPrint = model_tr.Transaction(
                           invoiceNo: tr.invoiceNo,
@@ -2844,22 +2890,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         );
                       }
 
-                      // Trigger system print dialog (Microsoft Print to PDF)
-                      await PrintService.printInvoice(toPrint);
-                      
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("PDF Invoice #${toPrint.invoiceNo} siap dicetak / disimpan!"),
-                            backgroundColor: Colors.teal,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
+                      await _handlePrintOrDownloadPdf(toPrint, isDownload: isDownload);
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal mencetak: $e'), backgroundColor: Colors.redAccent),
+                          SnackBar(content: Text('Gagal memproses PDF: $e'), backgroundColor: Colors.redAccent),
                         );
                       }
                     }
@@ -2967,9 +3002,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final filteredTransactions = trProvider.transactions.where((tr) {
       // 1. Month Filter
       if (_monthFilter != "SEMUA") {
-        final effectiveDate = tr.deliveryDate ?? tr.date;
-        final effectiveMonth = DateFormat('MM-yyyy').format(effectiveDate);
-        if (effectiveMonth != _monthFilter) return false;
+        if (_statusFilter == "ERP_SYNC") {
+          final erpMonth = tr.erpSyncDate != null ? DateFormat('MM-yyyy').format(tr.erpSyncDate!) : null;
+          final delivMonth = DateFormat('MM-yyyy').format(tr.deliveryDate ?? tr.date);
+          if (erpMonth != _monthFilter && delivMonth != _monthFilter) return false;
+        } else {
+          final effectiveDate = tr.deliveryDate ?? tr.date;
+          final effectiveMonth = DateFormat('MM-yyyy').format(effectiveDate);
+          if (effectiveMonth != _monthFilter) return false;
+        }
       }
 
       // 2. Status Filter

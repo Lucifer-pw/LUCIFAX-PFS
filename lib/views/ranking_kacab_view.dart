@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:excel/excel.dart' hide Border;
+import 'package:excel/excel.dart' as excel_pkg;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -279,55 +279,290 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
   }
 
-  /// Export data ranking ke format file Excel (.xlsx) murni
+  String _formatExcelRupiah(double val) {
+    if (val == 0) return 'Rp               -';
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp  ',
+      decimalDigits: 2,
+    );
+    return formatter.format(val);
+  }
+
+  /// Export data ranking ke format file Excel (.xlsx) murni (LAPORAN WEEKLY KACAB)
   Future<void> _exportToExcel(
     List<Map<String, dynamic>> filteredList,
     Map<String, dynamic> computed,
   ) async {
     try {
-      var excel = Excel.createExcel();
-      Sheet sheetObject = excel['Ranking Kacab'];
-      excel.setDefaultSheet('Ranking Kacab');
+      const sheetName = 'LAPORAN WEEKLY KACAB';
+      var excel = excel_pkg.Excel.createExcel();
+      excel_pkg.Sheet sheetObject = excel[sheetName];
+      excel.setDefaultSheet(sheetName);
 
-      // Add Header Row
-      sheetObject.appendRow([
-        TextCellValue('NO'),
-        TextCellValue('OUTLET'),
-        TextCellValue(_month1Name),
-        TextCellValue(_month2Name),
-        TextCellValue(_month3Name),
-        TextCellValue('TOTAL'),
-        TextCellValue('RATA-RATA 3 BULAN'),
-      ]);
+      // Define Border & CellStyles
+      final cellBorder = excel_pkg.Border(
+        borderStyle: excel_pkg.BorderStyle.Thin,
+        borderColorHex: excel_pkg.ExcelColor.fromHexString('#000000'),
+      );
 
-      // Add Data Rows
-      for (final item in filteredList) {
-        sheetObject.appendRow([
-          IntCellValue((item['rank'] as num).toInt()),
-          TextCellValue(item['alias'].toString()),
-          DoubleCellValue(_parseNum(item['month1'])),
-          DoubleCellValue(_parseNum(item['month2'])),
-          DoubleCellValue(_parseNum(item['month3'])),
-          DoubleCellValue(_parseNum(item['total'])),
-          DoubleCellValue(_parseNum(item['average'])),
-        ]);
+      final titleStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 12,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+      );
+
+      final metaStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: excel_pkg.HorizontalAlign.Left,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+      );
+
+      final headerStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final centerDataStyle = excel_pkg.CellStyle(
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final leftDataStyle = excel_pkg.CellStyle(
+        horizontalAlign: excel_pkg.HorizontalAlign.Left,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final rightDataStyle = excel_pkg.CellStyle(
+        horizontalAlign: excel_pkg.HorizontalAlign.Right,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final rightBoldDataStyle = excel_pkg.CellStyle(
+        bold: true,
+        horizontalAlign: excel_pkg.HorizontalAlign.Right,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final footerTitleStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final footerValueStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: excel_pkg.HorizontalAlign.Right,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      // ----------------------------------------------------
+      // ROW 0: TITLE (LAPORAN WEEKLY KACAB)
+      // ----------------------------------------------------
+      var cellTitle = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
+      cellTitle.value = excel_pkg.TextCellValue('LAPORAN WEEKLY KACAB');
+      cellTitle.cellStyle = titleStyle;
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+      );
+
+      // ----------------------------------------------------
+      // ROW 1 & 2: METADATA
+      // ----------------------------------------------------
+      var cellCabang = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1));
+      cellCabang.value = excel_pkg.TextCellValue('Cabang : JAWA TENGAH');
+      cellCabang.cellStyle = metaStyle;
+
+      final m1Date = DateTime(_startYear, _startMonth, 1);
+      final m2Date = DateTime(_startYear, _startMonth + 1, 1);
+      final m3Date = DateTime(_startYear, _startMonth + 2, 1);
+      final m1MonthStr = _getMonthName(m1Date.month).toUpperCase();
+      final m2MonthStr = _getMonthName(m2Date.month).toUpperCase();
+      final m3MonthStr = _getMonthName(m3Date.month).toUpperCase();
+
+      final periodeText = 'Periode : $m1MonthStr ${m1Date.year} - $m3MonthStr ${m3Date.year}';
+
+      var cellPeriode = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2));
+      cellPeriode.value = excel_pkg.TextCellValue(periodeText);
+      cellPeriode.cellStyle = metaStyle;
+
+      // ----------------------------------------------------
+      // ROW 4 & 5: TABLE HEADERS
+      // ----------------------------------------------------
+      // 1. Merge Header cells FIRST so excel package does not clear styles!
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 5),
+      );
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 4),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 5),
+      );
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 4),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 4),
+      );
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 4),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 5),
+      );
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 4),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 5),
+      );
+
+      // 2. Apply headerStyle to ALL 14 cells in the header grid (cols 0..6, rows 4..5)
+      for (int r = 4; r <= 5; r++) {
+        for (int c = 0; c <= 6; c++) {
+          sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r)).cellStyle = headerStyle;
+        }
       }
 
-      // Add Summary Row
-      sheetObject.appendRow([
-        TextCellValue('TOTAL'),
-        TextCellValue('TOTAL GRANDTOTAL (SEMUA)'),
-        DoubleCellValue(_parseNum(computed['gM1'])),
-        DoubleCellValue(_parseNum(computed['gM2'])),
-        DoubleCellValue(_parseNum(computed['gM3'])),
-        DoubleCellValue(_parseNum(computed['gTotal'])),
-        DoubleCellValue(_parseNum(computed['gAverage'])),
-      ]);
+      // 3. Set header text ONLY on the top-left cell of each merged group
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4)).value = excel_pkg.TextCellValue('NO');
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 4)).value = excel_pkg.TextCellValue('OUTLET');
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 4)).value = excel_pkg.TextCellValue('BULAN');
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 5)).value = excel_pkg.TextCellValue(m1MonthStr);
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 5)).value = excel_pkg.TextCellValue(m2MonthStr);
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 5)).value = excel_pkg.TextCellValue(m3MonthStr);
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 4)).value = excel_pkg.TextCellValue('TOTAL');
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 4)).value = excel_pkg.TextCellValue('Rata rata Penjualan 3 Bulan');
 
-      List<int>? fileBytes = excel.save();
+      // ----------------------------------------------------
+      // DATA ROWS (Starting at Row 6)
+      // ----------------------------------------------------
+      int currentRow = 6;
+      for (int i = 0; i < filteredList.length; i++) {
+        final item = filteredList[i];
+        final rank = (item['rank'] as num).toInt();
+        final alias = item['alias'].toString().toUpperCase();
+        final m1Val = _parseNum(item['month1']);
+        final m2Val = _parseNum(item['month2']);
+        final m3Val = _parseNum(item['month3']);
+        final totalVal = _parseNum(item['total']);
+        final avgVal = _parseNum(item['average']);
+
+        // Col 0: NO
+        var cellNo = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
+        cellNo.value = excel_pkg.IntCellValue(rank);
+        cellNo.cellStyle = centerDataStyle;
+
+        // Col 1: OUTLET
+        var cellAlias = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow));
+        cellAlias.value = excel_pkg.TextCellValue(alias);
+        cellAlias.cellStyle = leftDataStyle;
+
+        // Col 2: Month 1
+        var cellM1 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow));
+        cellM1.value = excel_pkg.TextCellValue(_formatExcelRupiah(m1Val));
+        cellM1.cellStyle = rightDataStyle;
+
+        // Col 3: Month 2
+        var cellM2 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentRow));
+        cellM2.value = excel_pkg.TextCellValue(_formatExcelRupiah(m2Val));
+        cellM2.cellStyle = rightDataStyle;
+
+        // Col 4: Month 3
+        var cellM3 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentRow));
+        cellM3.value = excel_pkg.TextCellValue(_formatExcelRupiah(m3Val));
+        cellM3.cellStyle = rightDataStyle;
+
+        // Col 5: TOTAL
+        var cellTot = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentRow));
+        cellTot.value = excel_pkg.TextCellValue(_formatExcelRupiah(totalVal));
+        cellTot.cellStyle = rightDataStyle;
+
+        // Col 6: Rata rata Penjualan 3 Bulan (Bold)
+        var cellAvg = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: currentRow));
+        cellAvg.value = excel_pkg.TextCellValue(_formatExcelRupiah(avgVal));
+        cellAvg.cellStyle = rightBoldDataStyle;
+
+        currentRow++;
+      }
+
+      // ----------------------------------------------------
+      // SUMMARY FOOTER ROW
+      // ----------------------------------------------------
+      final gM1 = _parseNum(computed['gM1']);
+      final gM2 = _parseNum(computed['gM2']);
+      final gM3 = _parseNum(computed['gM3']);
+      final gTotal = _parseNum(computed['gTotal']);
+      final gAverage = _parseNum(computed['gAverage']);
+
+      // 1. Merge Footer Title cells FIRST
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow),
+      );
+
+      // 2. Set Footer Styles for both merged cells (col 0 & col 1)
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow)).cellStyle = footerTitleStyle;
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow)).cellStyle = footerTitleStyle;
+
+      // 3. Set Footer Title text ONLY on col 0
+      sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow)).value = excel_pkg.TextCellValue('TOTAL GRANDTOTAL (SEMUA)');
+
+      void setFooterVal(int col, double val) {
+        var cell = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow));
+        cell.value = excel_pkg.TextCellValue(_formatExcelRupiah(val));
+        cell.cellStyle = footerValueStyle;
+      }
+
+      setFooterVal(2, gM1);
+      setFooterVal(3, gM2);
+      setFooterVal(4, gM3);
+      setFooterVal(5, gTotal);
+      setFooterVal(6, gAverage);
+
+      // Set Column Widths for clean layout
+      sheetObject.setColumnWidth(0, 8.0);
+      sheetObject.setColumnWidth(1, 32.0);
+      sheetObject.setColumnWidth(2, 22.0);
+      sheetObject.setColumnWidth(3, 22.0);
+      sheetObject.setColumnWidth(4, 22.0);
+      sheetObject.setColumnWidth(5, 24.0);
+      sheetObject.setColumnWidth(6, 28.0);
+
+      // Encode excel bytes WITHOUT calling save() so only ONE file is downloaded!
+      List<int>? fileBytes = excel.encode();
       if (fileBytes != null) {
         final bytes = Uint8List.fromList(fileBytes);
-        final fileName = 'Laporan_Kacab_Periode_${_month1Name}_$_month3Name.xlsx'.replaceAll(' ', '_');
+        final fileName = 'Laporan_Weekly_Kacab_${m1MonthStr}_${m3MonthStr}_${m3Date.year}.xlsx';
 
         await Printing.sharePdf(bytes: bytes, filename: fileName);
       }
@@ -594,30 +829,54 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                       ),
                     ),
 
-                  // Tombol Export Excel
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  // FITUR TITIK 3 (OVERFLOW ACTIONS MENU: EXPORT EXCEL & CETAK PDF)
+                  PopupMenuButton<String>(
+                    tooltip: 'Menu Opsi Titik 3 (Export Excel & Cetak PDF)',
+                    offset: const Offset(0, 40),
+                    color: const Color(0xFF1E293B),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
                     ),
-                    onPressed: filtered.isEmpty ? null : () => _exportToExcel(filtered, computed),
-                    icon: const Icon(Icons.table_view_rounded, size: 18),
-                    label: const Text('Export Excel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
-
-                  // Tombol Cetak PDF
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF0284C7)),
+                      ),
+                      child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
                     ),
-                    onPressed: filtered.isEmpty ? null : () => _printPdf(filtered, computed),
-                    icon: const Icon(Icons.print_rounded, size: 18),
-                    label: const Text('Cetak PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    onSelected: (val) {
+                      if (val == 'excel' && filtered.isNotEmpty) {
+                        _exportToExcel(filtered, computed);
+                      } else if (val == 'pdf' && filtered.isNotEmpty) {
+                        _printPdf(filtered, computed);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'excel',
+                        child: Row(
+                          children: [
+                            Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
+                            SizedBox(width: 10),
+                            Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      const PopupMenuItem(
+                        value: 'pdf',
+                        child: Row(
+                          children: [
+                            Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
+                            SizedBox(width: 10),
+                            Text('Cetak PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
 
                   IconButton(
@@ -732,97 +991,130 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.white10),
                         ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              headingRowHeight: 46,
-                              dataRowMinHeight: 48,
-                              dataRowMaxHeight: 52,
-                              headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                              columns: [
-                                const DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                const DataColumn(label: Text('OUTLET', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text(_month1Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text(_month2Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text(_month3Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold))),
-                                const DataColumn(label: Text('TOTAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                                const DataColumn(label: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
-                              ],
-                              rows: [
-                                ...List.generate(filtered.length, (idx) {
-                                  final item = filtered[idx];
-                                  final int rank = (item['rank'] as num).toInt();
-
-                                  Color badgeColor = Colors.white;
-                                  String rankLabel = '$rank';
-                                  if (rank == 1) {
-                                    badgeColor = Colors.amber;
-                                    rankLabel = '🥇 1';
-                                  } else if (rank == 2) {
-                                    badgeColor = Colors.grey.shade300;
-                                    rankLabel = '🥈 2';
-                                  } else if (rank == 3) {
-                                    badgeColor = Colors.amber.shade800;
-                                    rankLabel = '🥉 3';
-                                  }
-
-                                  final rankWidget = Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
-                                    ),
-                                    child: Text(
-                                      rankLabel,
-                                      style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                                    ),
-                                  );
-
-                                  return DataRow(
-                                    color: MaterialStateProperty.resolveWith<Color?>((states) {
-                                      if (rank == 1) return Colors.amber.withOpacity(0.05);
-                                      return idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02);
-                                    }),
-                                    cells: [
-                                      DataCell(rankWidget),
-                                      DataCell(
-                                        Text(
-                                          item['alias'].toString(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                          ),
-                                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: 1080,
+                                child: Column(
+                                  children: [
+                                    // 1. STATIC TABLE HEADER (FIXED AT TOP)
+                                    Container(
+                                      height: 48,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF0F172A),
+                                        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                                       ),
-                                      DataCell(Text(_currency.format(_parseNum(item['month1'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(_currency.format(_parseNum(item['month2'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(_currency.format(_parseNum(item['month3'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                      DataCell(Text(_currency.format(_parseNum(item['total'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Text(_currency.format(_parseNum(item['average'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                    ],
-                                  );
-                                }),
+                                      child: Row(
+                                        children: [
+                                          const SizedBox(width: 70, child: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                          const SizedBox(width: 250, child: Text('OUTLET', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                          SizedBox(width: 140, child: Text(_month1Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                          SizedBox(width: 140, child: Text(_month2Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                          SizedBox(width: 140, child: Text(_month3Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                          const SizedBox(width: 150, child: Text('TOTAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                          const SizedBox(width: 190, child: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                        ],
+                                      ),
+                                    ),
+                                    const Divider(height: 1, color: Colors.white10),
 
-                                // TOTAL SUMMARY ROW
-                                DataRow(
-                                  color: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                  cells: [
-                                    const DataCell(Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    const DataCell(Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                    DataCell(Text(_currency.format(_parseNum(computed['gM1'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(_currency.format(_parseNum(computed['gM2'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(_currency.format(_parseNum(computed['gM3'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                    DataCell(Text(_currency.format(_parseNum(computed['gTotal'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                    DataCell(Text(_currency.format(_parseNum(computed['gAverage'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                    // 2. SCROLLABLE MIDDLE LIST (RANKING CUSTOMER PO ONLY)
+                                    Expanded(
+                                      child: ListView.separated(
+                                        itemCount: filtered.length,
+                                        separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.white10),
+                                        itemBuilder: (context, idx) {
+                                          final item = filtered[idx];
+                                          final int rank = (item['rank'] as num).toInt();
+
+                                          Color badgeColor = Colors.white;
+                                          String rankLabel = '$rank';
+                                          if (rank == 1) {
+                                            badgeColor = Colors.amber;
+                                            rankLabel = '🥇 1';
+                                          } else if (rank == 2) {
+                                            badgeColor = Colors.grey.shade300;
+                                            rankLabel = '🥈 2';
+                                          } else if (rank == 3) {
+                                            badgeColor = Colors.amber.shade800;
+                                            rankLabel = '🥉 3';
+                                          }
+
+                                          final rankWidget = Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: rank <= 3 ? badgeColor.withOpacity(0.2) : Colors.white10,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: rank <= 3 ? Border.all(color: badgeColor, width: 0.8) : null,
+                                            ),
+                                            child: Text(
+                                              rankLabel,
+                                              style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                          );
+
+                                          return Container(
+                                            height: 48,
+                                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                                            color: rank == 1 ? Colors.amber.withOpacity(0.05) : (idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02)),
+                                            child: Row(
+                                              children: [
+                                                SizedBox(width: 70, child: Align(alignment: Alignment.centerLeft, child: rankWidget)),
+                                                SizedBox(
+                                                  width: 250,
+                                                  child: Text(
+                                                    item['alias'].toString(),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 13,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                SizedBox(width: 140, child: Text(_currency.format(_parseNum(item['month1'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                                SizedBox(width: 140, child: Text(_currency.format(_parseNum(item['month2'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                                SizedBox(width: 140, child: Text(_currency.format(_parseNum(item['month3'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                                SizedBox(width: 150, child: Text(_currency.format(_parseNum(item['total'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                                SizedBox(width: 190, child: Text(_currency.format(_parseNum(item['average'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+
+                                    const Divider(height: 1, color: Color(0xFF0284C7)),
+
+                                    // 3. STATIC GRANDTOTAL FOOTER (FIXED AT BOTTOM)
+                                    Container(
+                                      height: 52,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF0F172A),
+                                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const SizedBox(width: 70, child: Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                          const SizedBox(width: 250, child: Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                          SizedBox(width: 140, child: Text(_currency.format(_parseNum(computed['gM1'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                          SizedBox(width: 140, child: Text(_currency.format(_parseNum(computed['gM2'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                          SizedBox(width: 140, child: Text(_currency.format(_parseNum(computed['gM3'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                          SizedBox(width: 150, child: Text(_currency.format(_parseNum(computed['gTotal'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                          SizedBox(width: 190, child: Text(_currency.format(_parseNum(computed['gAverage'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         ),
                       ),
           ),

@@ -170,54 +170,76 @@ class _AttendanceViewState extends State<AttendanceView> {
                 ),
                 const SizedBox(width: 12),
 
-                // Button Kelola Staff
-                ElevatedButton.icon(
-                  onPressed: () => _showManageStaffDialog(context, attProvider),
-                  icon: const Icon(Icons.people_alt_rounded, size: 18, color: Colors.white),
-                  label: const Text('Kelola Staff', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                // 3-Dots Action Menu Button for Absensi Pegawai
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF0284C7)),
                   ),
-                ),
-                const SizedBox(width: 10),
-
-                // Button Input Absensi
-                ElevatedButton.icon(
-                  onPressed: () => _showInputAttendanceDialog(context, attProvider, null),
-                  icon: const Icon(Icons.add_task_rounded, size: 18, color: Colors.white),
-                  label: const Text('Input Absensi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Button Import CSV/Excel
-                ElevatedButton.icon(
-                  onPressed: () => _handleImportCsvExcel(context, attProvider),
-                  icon: const Icon(Icons.file_upload_rounded, size: 18, color: Colors.white),
-                  label: const Text('Import CSV/Excel', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF334155),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Button Kirim WA / PDF
-                ElevatedButton.icon(
-                  onPressed: () => _showSendWaPdfDialog(context, attProvider, filteredRecords, titleMonthYearName),
-                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-                  label: const Text('Kirim WA / PDF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 24),
+                    tooltip: 'Menu Fitur Absensi Pegawai',
+                    color: const Color(0xFF0F172A),
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                    ),
+                    onSelected: (val) {
+                      if (val == 'staff') {
+                        _showManageStaffDialog(context, attProvider);
+                      } else if (val == 'input') {
+                        _showInputAttendanceDialog(context, attProvider, null);
+                      } else if (val == 'import') {
+                        _handleImportCsvExcel(context, attProvider);
+                      } else if (val == 'send') {
+                        _showSendWaPdfDialog(context, attProvider, filteredRecords, titleMonthYearName);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'staff',
+                        child: Row(
+                          children: [
+                            Icon(Icons.people_alt_rounded, color: Color(0xFF38BDF8), size: 20),
+                            SizedBox(width: 12),
+                            Text('Kelola Master Staff', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'input',
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_task_rounded, color: Colors.tealAccent, size: 20),
+                            SizedBox(width: 12),
+                            Text('Input Absensi Pegawai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      const PopupMenuItem(
+                        value: 'import',
+                        child: Row(
+                          children: [
+                            Icon(Icons.file_upload_rounded, color: Color(0xFF38BDF8), size: 20),
+                            SizedBox(width: 12),
+                            Text('Import CSV / Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'send',
+                        child: Row(
+                          children: [
+                            Icon(Icons.send_rounded, color: Color(0xFF4ADE80), size: 20),
+                            SizedBox(width: 12),
+                            Text('Kirim Laporan WA / PDF', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -366,18 +388,37 @@ class _AttendanceViewState extends State<AttendanceView> {
                                               ),
                                             ),
                                             DataCell(
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
-                                                    tooltip: 'Edit Absensi',
-                                                    onPressed: () => _showInputAttendanceDialog(context, attProvider, rec),
+                                              PopupMenuButton<String>(
+                                                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                                                color: const Color(0xFF1E293B),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                onSelected: (value) {
+                                                  if (value == 'edit') {
+                                                    _showInputAttendanceDialog(context, attProvider, rec);
+                                                  } else if (value == 'delete') {
+                                                    _confirmDeleteAttendance(context, attProvider, rec);
+                                                  }
+                                                },
+                                                itemBuilder: (context) => [
+                                                  PopupMenuItem(
+                                                    value: 'edit',
+                                                    child: Row(
+                                                      children: const [
+                                                        Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
+                                                        SizedBox(width: 8),
+                                                        Text('Edit Absensi', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                      ],
+                                                    ),
                                                   ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                                    tooltip: 'Hapus Record',
-                                                    onPressed: () => _confirmDeleteAttendance(context, attProvider, rec),
+                                                  PopupMenuItem(
+                                                    value: 'delete',
+                                                    child: Row(
+                                                      children: const [
+                                                        Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                        SizedBox(width: 8),
+                                                        Text('Hapus Record', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ],
                                               ),
@@ -446,69 +487,156 @@ class _AttendanceViewState extends State<AttendanceView> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
-          title: const Text('Kelola Master Pegawai (Staff)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: SizedBox(
-            width: 600,
-            height: 450,
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showAddEditStaffForm(context, attProvider, null),
-                    icon: const Icon(Icons.person_add_rounded, size: 16, color: Colors.white),
-                    label: const Text('Tambah Pegawai', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: attProvider.staffList.isEmpty
-                      ? const Center(child: Text('Belum ada pegawai terdaftar.', style: TextStyle(color: Color(0xFF64748B))))
-                      : ListView.separated(
-                          itemCount: attProvider.staffList.length,
-                          separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155), height: 1),
-                          itemBuilder: (context, idx) {
-                            final staff = attProvider.staffList[idx];
-                            return ListTile(
-                              leading: const CircleAvatar(
-                                backgroundColor: Color(0xFF0F172A),
-                                child: Icon(Icons.person_rounded, color: Color(0xFF38BDF8), size: 20),
-                              ),
-                              title: Text(staff.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              subtitle: Text(staff.location, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 20),
-                                    onPressed: () => _showAddEditStaffForm(context, attProvider, staff),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                    onPressed: () async {
-                                      await attProvider.deleteStaff(staff.id);
-                                    },
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+        return Consumer<AttendanceProvider>(
+          builder: (context, provider, child) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.badge_rounded, color: Color(0xFF38BDF8)),
+                  SizedBox(width: 10),
+                  Text('Kelola Master Pegawai (Staff)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 600,
+                height: 450,
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showAddEditStaffForm(context, provider, null),
+                        icon: const Icon(Icons.person_add_rounded, size: 16, color: Colors.white),
+                        label: const Text('Tambah Pegawai Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: provider.staffList.isEmpty
+                          ? const Center(
+                              child: Text('Belum ada pegawai terdaftar.', style: TextStyle(color: Color(0xFF64748B))),
+                            )
+                          : ListView.separated(
+                              itemCount: provider.staffList.length,
+                              separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155), height: 1),
+                              itemBuilder: (context, idx) {
+                                final staff = provider.staffList[idx];
+                                return ListTile(
+                                  leading: const CircleAvatar(
+                                    backgroundColor: Color(0xFF0F172A),
+                                    child: Icon(Icons.person_rounded, color: Color(0xFF38BDF8), size: 20),
+                                  ),
+                                  title: Text(staff.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  subtitle: Text(staff.location, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                  trailing: PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
+                                    tooltip: 'Pilihan Aksi Staff',
+                                    color: const Color(0xFF0F172A),
+                                    elevation: 8,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: const BorderSide(color: Color(0xFF334155)),
+                                    ),
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        _showAddEditStaffForm(context, provider, staff);
+                                      } else if (value == 'delete') {
+                                        _confirmDeleteStaff(context, provider, staff);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 18),
+                                            SizedBox(width: 10),
+                                            Text('Edit Data Staff', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                            SizedBox(width: 10),
+                                            Text('Hapus Staff', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Tutup', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Tutup', style: TextStyle(color: Color(0xFF38BDF8))),
-            ),
-          ],
+            );
+          },
         );
       },
+    );
+  }
+
+  void _confirmDeleteStaff(BuildContext context, AttendanceProvider attProvider, Staff staff) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            SizedBox(width: 10),
+            Text('Hapus Pegawai?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus "${staff.name}" (${staff.location}) dari Master Pegawai?',
+          style: const TextStyle(color: Color(0xFF94A3B8)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await attProvider.deleteStaff(staff.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Staff "${staff.name}" telah dihapus.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            },
+            child: const Text('Hapus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -518,42 +646,79 @@ class _AttendanceViewState extends State<AttendanceView> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
-          title: Text(existingStaff == null ? 'Tambah Pegawai Baru' : 'Edit Pegawai', style: const TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(labelText: 'Nama Pegawai', labelStyle: TextStyle(color: Color(0xFF94A3B8))),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: locationCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(labelText: 'Tempat / Cabang (Contoh: Solo-Jateng)', labelStyle: TextStyle(color: Color(0xFF94A3B8))),
-              ),
-            ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text(
+            existingStaff == null ? 'Tambah Pegawai Baru' : 'Edit Data Pegawai',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Nama Pegawai',
+                    labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFF0F172A),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: locationCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Tempat / Cabang (Contoh: Solo-Jateng)',
+                    labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFF0F172A),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B)))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+            ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               onPressed: () async {
-                if (nameCtrl.text.trim().isEmpty) return;
+                final nameStr = nameCtrl.text.trim();
+                final locStr = locationCtrl.text.trim();
+                if (nameStr.isEmpty) return;
+
                 final staff = Staff(
                   id: existingStaff?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                  name: nameCtrl.text.trim(),
-                  location: locationCtrl.text.trim(),
+                  name: nameStr,
+                  location: locStr.isEmpty ? 'Jawa Tengah' : locStr,
                   createdAt: existingStaff?.createdAt ?? DateTime.now(),
                 );
+
+                Navigator.pop(ctx);
                 await attProvider.saveStaff(staff);
-                if (context.mounted) Navigator.pop(context);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF10B981),
+                      content: Text(existingStaff == null ? 'Berhasil menambah pegawai "$nameStr"!' : 'Berhasil memperbarui data pegawai "$nameStr"!'),
+                    ),
+                  );
+                }
               },
-              child: const Text('Simpan'),
+              child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );

@@ -18,6 +18,8 @@ import 'stock_input_view.dart';
 import 'attendance_view.dart';
 import 'user_presence_view.dart';
 import 'kmeans_analysis_view.dart';
+import 'operational_invoice_view.dart';
+import 'monthly_operational_expenses_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -28,12 +30,20 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '1.6.9';
+  String _appVersion = '3.3.13';
+  String _menuSearchQuery = '';
+  final TextEditingController _menuSearchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadVersionAndCheckUpdate();
+  }
+
+  @override
+  void dispose() {
+    _menuSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadVersionAndCheckUpdate() async {
@@ -46,13 +56,13 @@ class _ShellViewState extends State<ShellView> {
         });
       } else if (mounted) {
         setState(() {
-          _appVersion = '1.6.2';
+          _appVersion = '3.3.13';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '1.6.2';
+          _appVersion = '3.3.13';
         });
       }
     }
@@ -176,6 +186,14 @@ class _ShellViewState extends State<ShellView> {
         });
       }
 
+      if (kacabPerms['monthly_operational_expenses'] == true) {
+        items.add({
+          'title': 'Biaya Operasional Bulanan',
+          'icon': Icons.request_quote_rounded,
+          'widget': const MonthlyOperationalExpensesView(),
+        });
+      }
+
       // Safety fallback: If developer turns off all menus, show Histori Transaksi as default
       if (items.isEmpty) {
         items.add({
@@ -254,6 +272,11 @@ class _ShellViewState extends State<ShellView> {
         'icon': Icons.hub_rounded,
         'widget': const KMeansAnalysisView(),
       },
+      {
+        'title': 'Biaya Operasional Bulanan',
+        'icon': Icons.request_quote_rounded,
+        'widget': const MonthlyOperationalExpensesView(),
+      },
     ]);
 
     // Developer-Only Activity & Presence Monitor Screen
@@ -262,6 +285,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Developer Control & Monitor',
         'icon': Icons.sensors_rounded,
         'widget': const UserPresenceView(),
+      });
+      items.add({
+        'title': 'Invoice Operasional Dev',
+        'icon': Icons.receipt_long_rounded,
+        'widget': const OperationalInvoiceView(),
       });
     }
 
@@ -462,41 +490,111 @@ class _ShellViewState extends State<ShellView> {
           ),
         ),
         const Divider(color: Color(0xFF334155), height: 1),
-        const SizedBox(height: 16),
-        // Menu list items
+        const SizedBox(height: 12),
+
+        // Search Menu Input Box
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          child: TextField(
+            controller: _menuSearchController,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+            decoration: InputDecoration(
+              hintText: 'Cari Menu...',
+              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+              suffixIcon: _menuSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, color: Color(0xFF94A3B8), size: 16),
+                      onPressed: () {
+                        _menuSearchController.clear();
+                        setState(() {
+                          _menuSearchQuery = '';
+                        });
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFF0F172A),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10.0),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10.0),
+                borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
+              ),
+            ),
+            onChanged: (val) {
+              setState(() {
+                _menuSearchQuery = val;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Filtered Menu list items
         Expanded(
-          child: ListView.builder(
-            itemCount: navItems.length,
-            itemBuilder: (context, index) {
-              final item = navItems[index];
-              final isSelected = _currentIndex == index;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
-                  selected: isSelected,
-                  selectedTileColor: const Color(0xFF0284C7).withOpacity(0.2),
-                  leading: Icon(
-                    item['icon'],
-                    color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+          child: Builder(
+            builder: (context) {
+              final query = _menuSearchQuery.trim().toLowerCase();
+              final filteredNavItems = <Map<String, dynamic>>[];
+              for (int i = 0; i < navItems.length; i++) {
+                final title = navItems[i]['title'].toString();
+                if (query.isEmpty || title.toLowerCase().contains(query)) {
+                  filteredNavItems.add({'originalIndex': i, 'item': navItems[i]});
+                }
+              }
+
+              if (filteredNavItems.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('Menu tidak ditemukan', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
                   ),
-                  title: Text(
-                    item['title'],
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 13.0,
+                );
+              }
+
+              return ListView.builder(
+                itemCount: filteredNavItems.length,
+                itemBuilder: (context, index) {
+                  final entry = filteredNavItems[index];
+                  final originalIndex = entry['originalIndex'] as int;
+                  final item = entry['item'] as Map<String, dynamic>;
+                  final isSelected = _currentIndex == originalIndex;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 3.0),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
+                      selected: isSelected,
+                      selectedTileColor: const Color(0xFF0284C7).withOpacity(0.2),
+                      leading: Icon(
+                        item['icon'],
+                        color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                        size: 20,
+                      ),
+                      title: Text(
+                        item['title'],
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 13.0,
+                        ),
+                      ),
+                      onTap: () {
+                        setState(() {
+                          _currentIndex = originalIndex;
+                        });
+                        if (Scaffold.of(context).isDrawerOpen) {
+                          Navigator.pop(context); // Close drawer on mobile
+                        }
+                      },
                     ),
-                  ),
-                  onTap: () {
-                    setState(() {
-                      _currentIndex = index;
-                    });
-                    if (Scaffold.of(context).isDrawerOpen) {
-                      Navigator.pop(context); // Close drawer on mobile
-                    }
-                  },
-                ),
+                  );
+                },
               );
             },
           ),

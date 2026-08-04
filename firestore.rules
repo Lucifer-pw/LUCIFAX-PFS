@@ -157,6 +157,51 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 15. OPERATIONAL_INVOICES — Invoice Biaya Operasional (DEVELOPER ONLY)
+    // ═══════════════════════════════════════════════════
+    match /operational_invoices/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 16. MONTHLY_OPERATIONAL_EXPENSES — Biaya Operasional Bulanan
+    // ═══════════════════════════════════════════════════
+    match /monthly_operational_expenses/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 17. STOCK_MUTATIONS — Riwayat mutasi stok (keluar/masuk/retur)
+    // ═══════════════════════════════════════════════════
+    match /stock_mutations/{mutationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 18. OPERATIONAL_CATEGORIES — Kategori Biaya Operasional
+    // ═══════════════════════════════════════════════════
+    match /operational_categories/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 19. OPERATIONAL_PAYMENT_METHODS — Metode Pembayaran Operasional
+    // ═══════════════════════════════════════════════════
+    match /operational_payment_methods/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {

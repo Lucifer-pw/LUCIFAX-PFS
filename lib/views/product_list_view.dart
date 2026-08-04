@@ -1,10 +1,17 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' as excel_pkg;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../models/product.dart';
+import '../models/stock_mutation.dart';
 import '../providers/product_provider.dart';
+import '../services/firebase_service.dart';
 import '../services/import_service.dart';
 
 class ProductListView extends StatefulWidget {
@@ -51,6 +58,44 @@ class _ProductListViewState extends State<ProductListView> {
     if (text.trim().isEmpty) return 0;
     final clean = text.replaceAll('.', '').replaceAll(',', '').replaceAll(RegExp(r'[^\d]'), '').trim();
     return int.tryParse(clean) ?? 0;
+  }
+
+  Widget _buildSummaryBadge(String title, String value, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Text('$title: ', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _buildInputDecoration({required String hint}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+      filled: true,
+      fillColor: const Color(0xFF0F172A),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10.0),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10.0),
+        borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
+      ),
+    );
   }
 
   void _showProductDialog([Product? product]) {
@@ -312,7 +357,11 @@ class _ProductListViewState extends State<ProductListView> {
                           isiKarton: carton,
                           sizeGrams: size,
                         );
-                        await Provider.of<ProductProvider>(context, listen: false).saveProduct(updated);
+                        await Provider.of<ProductProvider>(context, listen: false).saveProduct(
+                          updated,
+                          logMutation: true,
+                          oldStock: localProduct.stock,
+                        );
                       } else {
                         // Create New Product
                         final newProd = Product(
@@ -436,6 +485,253 @@ class _ProductListViewState extends State<ProductListView> {
     }
   }
 
+  // -------------------------------------------------------------------
+  // EXPORT EXCEL (.xlsx)
+  // -------------------------------------------------------------------
+  Future<void> _exportProductsToExcel(List<Product> products) async {
+    try {
+      final sheetName = 'Master Barang';
+      var excel = excel_pkg.Excel.createExcel();
+      excel_pkg.Sheet sheetObject = excel[sheetName];
+      excel.setDefaultSheet(sheetName);
+
+      final cellBorder = excel_pkg.Border(
+        borderStyle: excel_pkg.BorderStyle.Thin,
+        borderColorHex: excel_pkg.ExcelColor.fromHexString('#000000'),
+      );
+
+      final titleStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 14,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+      );
+
+      final headerStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 10,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final centerDataStyle = excel_pkg.CellStyle(
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final leftDataStyle = excel_pkg.CellStyle(
+        horizontalAlign: excel_pkg.HorizontalAlign.Left,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      final rightDataStyle = excel_pkg.CellStyle(
+        horizontalAlign: excel_pkg.HorizontalAlign.Right,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+        topBorder: cellBorder,
+        bottomBorder: cellBorder,
+        leftBorder: cellBorder,
+        rightBorder: cellBorder,
+      );
+
+      // Row 0: Title
+      var cTitle = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
+      cTitle.value = excel_pkg.TextCellValue('DATA MASTER BARANG CABANG JAWA TENGAH - PT PUTRA FIVA SEJAHTERA');
+      cTitle.cellStyle = titleStyle;
+      sheetObject.merge(
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+        excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+      );
+
+      // Row 2: Table Header
+      final headers = ['KODE INDUK', 'NAMA BARANG', 'HARGA UNIT', 'STOK', 'ISI KARTON', 'TOTAL KARTON', 'BERAT (GRAM)'];
+      for (int i = 0; i < headers.length; i++) {
+        var cell = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 2));
+        cell.value = excel_pkg.TextCellValue(headers[i]);
+        cell.cellStyle = headerStyle;
+      }
+
+      int curRow = 3;
+      for (final p in products) {
+        final totalKartonStr = p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '0';
+
+        var c0 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: curRow));
+        c0.value = excel_pkg.TextCellValue(p.kodeInduk);
+        c0.cellStyle = centerDataStyle;
+
+        var c1 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: curRow));
+        c1.value = excel_pkg.TextCellValue(p.name);
+        c1.cellStyle = leftDataStyle;
+
+        var c2 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: curRow));
+        c2.value = excel_pkg.TextCellValue(_rupiahFormatter.format(p.price));
+        c2.cellStyle = rightDataStyle;
+
+        var c3 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: curRow));
+        c3.value = excel_pkg.IntCellValue(p.stock.toInt());
+        c3.cellStyle = centerDataStyle;
+
+        var c4 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: curRow));
+        c4.value = excel_pkg.TextCellValue('${p.isiKarton} Pcs');
+        c4.cellStyle = centerDataStyle;
+
+        var c5 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: curRow));
+        c5.value = excel_pkg.TextCellValue(totalKartonStr);
+        c5.cellStyle = centerDataStyle;
+
+        var c6 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: curRow));
+        c6.value = excel_pkg.TextCellValue('${p.sizeGrams.toStringAsFixed(0)} G');
+        c6.cellStyle = centerDataStyle;
+
+        curRow++;
+      }
+
+      sheetObject.setColumnWidth(0, 16.0);
+      sheetObject.setColumnWidth(1, 45.0);
+      sheetObject.setColumnWidth(2, 18.0);
+      sheetObject.setColumnWidth(3, 10.0);
+      sheetObject.setColumnWidth(4, 14.0);
+      sheetObject.setColumnWidth(5, 16.0);
+      sheetObject.setColumnWidth(6, 14.0);
+
+      List<int>? fileBytes = excel.encode();
+      if (fileBytes != null) {
+        final bytes = Uint8List.fromList(fileBytes);
+        final fileName = 'Master_Barang_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+        await Printing.sharePdf(bytes: bytes, filename: fileName);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal export Excel (.xlsx): $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // CETAK PDF
+  // -------------------------------------------------------------------
+  Future<void> _printProductsPdf(List<Product> products) async {
+    try {
+      final doc = pw.Document();
+      final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+
+      // Deduplicate products by Kode Induk (ambil salah satu saja jika ada Kode Induk yang sama)
+      final Set<String> seenKodeInduk = {};
+      final List<Product> pdfProducts = [];
+
+      for (var p in products) {
+        final key = p.kodeInduk.trim().isNotEmpty ? p.kodeInduk.trim().toUpperCase() : p.id.trim().toUpperCase();
+        if (!seenKodeInduk.contains(key)) {
+          seenKodeInduk.add(key);
+          pdfProducts.add(p);
+        }
+      }
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(24),
+          build: (pw.Context context) {
+            return [
+              // Header Document
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'DATA MASTER BARANG CABANG JAWA TENGAH',
+                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'PT PUTRA FIVA SEJAHTERA',
+                        style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Tanggal Cetak: $dateStr',
+                        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('LUCIFAX PFS', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                      pw.Text('Total Items: ${pdfProducts.length}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(thickness: 1, color: PdfColors.grey400),
+              pw.SizedBox(height: 10),
+
+              // Table
+              pw.TableHelper.fromTextArray(
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+                headerHeight: 24,
+                cellHeight: 20,
+                headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
+                cellStyle: const pw.TextStyle(fontSize: 8.5),
+                cellAlignment: pw.Alignment.centerLeft,
+                cellAlignments: {
+                  0: pw.Alignment.center,
+                  1: pw.Alignment.centerLeft,
+                  2: pw.Alignment.centerRight,
+                  3: pw.Alignment.center,
+                  4: pw.Alignment.center,
+                  5: pw.Alignment.center,
+                  6: pw.Alignment.center,
+                },
+                headers: ['Kode Induk', 'Nama Barang', 'Harga Unit', 'Stok', 'Isi Karton', 'Total Karton', 'Berat'],
+                data: pdfProducts.map((p) {
+                  final totalKartonStr = p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '0';
+                  return [
+                    p.kodeInduk,
+                    p.name,
+                    _rupiahFormatter.format(p.price),
+                    p.stock.toStringAsFixed(0),
+                    '${p.isiKarton} Pcs',
+                    totalKartonStr,
+                    '${p.sizeGrams.toStringAsFixed(0)} G',
+                  ];
+                }).toList(),
+              ),
+            ];
+          },
+        ),
+      );
+
+      final fileName = 'Master_Barang_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => doc.save(),
+        name: fileName,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mencetak PDF: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
@@ -498,28 +794,118 @@ class _ProductListViewState extends State<ProductListView> {
                 ),
                 const SizedBox(width: 16),
                 
-                // Add New Product Button
-                ElevatedButton.icon(
-                  onPressed: () => _showProductDialog(),
-                  icon: const Icon(Icons.add_rounded, color: Colors.white),
-                  label: const Text('Tambah Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                // Global Riwayat Mutasi Stok Button (Box Logo Icon)
+                Tooltip(
+                  message: 'Riwayat Mutasi Stok / Stock Out (Semua Barang)',
+                  child: InkWell(
+                    onTap: () => _showGlobalStockMutationHistory(),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF0284C7)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Riwayat Mutasi Stok',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
 
-                // Import Excel Button
-                ElevatedButton.icon(
-                  onPressed: _importProductsFromExcel,
-                  icon: const Icon(Icons.file_upload_rounded, color: Colors.white),
-                  label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                // 3-Dots Action Menu Button
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF0284C7)),
+                  ),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 24),
+                    tooltip: 'Menu Fitur Master Barang',
+                    color: const Color(0xFF0F172A),
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                    ),
+                    onSelected: (val) {
+                      if (val == 'add') {
+                        _showProductDialog();
+                      } else if (val == 'mutasi') {
+                        _showGlobalStockMutationHistory();
+                      } else if (val == 'import') {
+                        _importProductsFromExcel();
+                      } else if (val == 'export') {
+                        _exportProductsToExcel(filteredProducts);
+                      } else if (val == 'pdf') {
+                        _printProductsPdf(filteredProducts);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'add',
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_circle_outline_rounded, color: Color(0xFF38BDF8), size: 20),
+                            SizedBox(width: 12),
+                            Text('Tambah Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'mutasi',
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
+                            SizedBox(width: 12),
+                            Text('Riwayat Mutasi Stok (Semua)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      const PopupMenuItem(
+                        value: 'import',
+                        child: Row(
+                          children: [
+                            Icon(Icons.file_upload_outlined, color: Colors.tealAccent, size: 20),
+                            SizedBox(width: 12),
+                            Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'export',
+                        child: Row(
+                          children: [
+                            Icon(Icons.table_view_rounded, color: Color(0xFF4ADE80), size: 20),
+                            SizedBox(width: 12),
+                            Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(height: 1),
+                      const PopupMenuItem(
+                        value: 'pdf',
+                        child: Row(
+                          children: [
+                            Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFF87171), size: 20),
+                            SizedBox(width: 12),
+                            Text('Cetak PDF Laporan', style: TextStyle(color: Color(0xFFF87171), fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -572,6 +958,7 @@ class _ProductListViewState extends State<ProductListView> {
                                     DataColumn(label: Text('HARGA UNIT'), numeric: true),
                                     DataColumn(label: Text('STOK'), numeric: true),
                                     DataColumn(label: Text('ISI KARTON'), numeric: true),
+                                    DataColumn(label: Text('TOTAL KARTON'), numeric: true),
                                     DataColumn(label: Text('BERAT'), numeric: true),
                                     DataColumn(label: Text('AKSI')),
                                   ],
@@ -598,6 +985,15 @@ class _ProductListViewState extends State<ProductListView> {
                                           ),
                                         ),
                                         DataCell(Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white))),
+                                        DataCell(
+                                          Text(
+                                            p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '-',
+                                            style: TextStyle(
+                                              color: p.isiKarton > 0 && p.stock > 0 ? const Color(0xFF38BDF8) : Colors.white70,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
                                         DataCell(Text('${p.sizeGrams.toStringAsFixed(0)} G', style: const TextStyle(color: Colors.white))),
                                         DataCell(
                                            PopupMenuButton<String>(
@@ -611,6 +1007,8 @@ class _ProductListViewState extends State<ProductListView> {
                                              onSelected: (value) {
                                                if (value == 'edit') {
                                                  _showProductDialog(p);
+                                               } else if (value == 'history') {
+                                                 _showStockMutationHistory(p);
                                                } else if (value == 'delete') {
                                                  showDialog(
                                                    context: context,
@@ -654,6 +1052,17 @@ class _ProductListViewState extends State<ProductListView> {
                                                  ),
                                                ),
                                                const PopupMenuItem(
+                                                 value: 'history',
+                                                 child: Row(
+                                                   children: [
+                                                     Icon(Icons.history_rounded, color: Color(0xFF38BDF8), size: 18),
+                                                     SizedBox(width: 10),
+                                                     Text('Riwayat Mutasi', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                   ],
+                                                 ),
+                                               ),
+                                               const PopupMenuDivider(height: 1),
+                                               const PopupMenuItem(
                                                  value: 'delete',
                                                  child: Row(
                                                    children: [
@@ -681,41 +1090,744 @@ class _ProductListViewState extends State<ProductListView> {
     );
   }
 
-  Widget _buildSummaryBadge(String title, String value, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 8),
-          Text('$title: ', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
-        ],
-      ),
+  // ==========================================
+  // SINGLE PRODUCT STOCK MUTATION DIALOG
+  // ==========================================
+
+  void _showStockMutationHistory(Product product) {
+    final firebaseService = FirebaseService();
+    String dialogSearchQuery = '';
+    DateTime? selectedDate = DateTime.now(); // Default: TODAY
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isToday = selectedDate != null &&
+                selectedDate!.year == DateTime.now().year &&
+                selectedDate!.month == DateTime.now().month &&
+                selectedDate!.day == DateTime.now().day;
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Riwayat Mutasi Stok',
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${product.name} (${product.kodeInduk})',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Filter Row: Search Text + Single Calendar Date Picker
+                  Row(
+                    children: [
+                      // Text Search Input
+                      Expanded(
+                        child: TextField(
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          decoration: InputDecoration(
+                            hintText: 'Cari invoice, referensi...',
+                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8.0),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              dialogSearchQuery = val.trim().toLowerCase();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Single Date Picker Button
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate ?? DateTime.now(),
+                            firstDate: DateTime(2024),
+                            lastDate: DateTime(2030),
+                            builder: (context, child) {
+                              return Theme(
+                                data: ThemeData.dark().copyWith(
+                                  colorScheme: const ColorScheme.dark(
+                                    primary: Color(0xFF0284C7),
+                                    onPrimary: Colors.white,
+                                    surface: Color(0xFF1E293B),
+                                    onSurface: Colors.white,
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+                          if (picked != null) {
+                            setDialogState(() {
+                              selectedDate = picked;
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                selectedDate == null
+                                    ? 'Semua Tanggal'
+                                    : isToday
+                                        ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
+                                        : DateFormat('dd/MM/yyyy').format(selectedDate!),
+                                style: TextStyle(
+                                  color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (selectedDate != null) ...[
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      selectedDate = null;
+                                    });
+                                  },
+                                  child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 750,
+                height: 420,
+                child: StreamBuilder<List<StockMutation>>(
+                  stream: firebaseService.streamStockMutations(product.kodeInduk, date: selectedDate),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)),
+                      );
+                    }
+                    var mutations = snapshot.data ?? [];
+
+                    // Apply Text Search Filter
+                    if (dialogSearchQuery.isNotEmpty) {
+                      mutations = mutations.where((m) {
+                        return m.reference.toLowerCase().contains(dialogSearchQuery) ||
+                            m.customerName.toLowerCase().contains(dialogSearchQuery) ||
+                            m.type.toLowerCase().contains(dialogSearchQuery);
+                      }).toList();
+                    }
+
+                    if (mutations.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.inbox_rounded, color: Colors.white.withOpacity(0.2), size: 48),
+                            const SizedBox(height: 12),
+                            Text(
+                              selectedDate != null
+                                  ? 'Belum ada mutasi stok pada ${DateFormat('dd/MM/yyyy').format(selectedDate!)}.'
+                                  : 'Belum ada riwayat mutasi stok.',
+                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      child: DataTable(
+                        columnSpacing: 12,
+                        horizontalMargin: 0,
+                        headingRowHeight: 36,
+                        dataRowMinHeight: 34,
+                        dataRowMaxHeight: 50,
+                        headingTextStyle: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                        columns: const [
+                          DataColumn(label: Text('TANGGAL')),
+                          DataColumn(label: Text('JENIS')),
+                          DataColumn(label: Text('QTY'), numeric: true),
+                          DataColumn(label: Text('STOK'), numeric: true),
+                          DataColumn(label: Text('REFERENSI')),
+                        ],
+                        rows: mutations.map((m) {
+                          Color typeColor;
+                          String typeLabel;
+                          IconData typeIcon;
+                          switch (m.type) {
+                            case 'KELUAR':
+                              typeColor = Colors.redAccent;
+                              typeLabel = 'Keluar';
+                              typeIcon = Icons.arrow_downward_rounded;
+                              break;
+                            case 'MASUK':
+                              typeColor = Colors.greenAccent;
+                              typeLabel = 'Masuk';
+                              typeIcon = Icons.arrow_upward_rounded;
+                              break;
+                            case 'RETUR_STATUS':
+                              typeColor = Colors.orangeAccent;
+                              typeLabel = 'Retur Status';
+                              typeIcon = Icons.undo_rounded;
+                              break;
+                            case 'HAPUS_INVOICE':
+                              typeColor = Colors.orangeAccent;
+                              typeLabel = 'Hapus Invoice';
+                              typeIcon = Icons.delete_outline_rounded;
+                              break;
+                            case 'EDIT_MANUAL':
+                              typeColor = const Color(0xFF38BDF8);
+                              typeLabel = 'Edit Manual';
+                              typeIcon = Icons.edit_outlined;
+                              break;
+                            case 'INPUT_STOK':
+                              typeColor = Colors.greenAccent;
+                              typeLabel = 'Input Stok';
+                              typeIcon = Icons.add_box_outlined;
+                              break;
+                            default:
+                              typeColor = const Color(0xFF94A3B8);
+                              typeLabel = m.type;
+                              typeIcon = Icons.swap_vert_rounded;
+                          }
+
+                          final qtyStr = m.qty > 0 ? '+${m.qty.toStringAsFixed(0)}' : m.qty.toStringAsFixed(0);
+
+                          return DataRow(
+                            cells: [
+                              DataCell(Text(
+                                DateFormat('dd/MM/yy HH:mm').format(m.timestamp),
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              )),
+                              DataCell(Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(typeIcon, color: typeColor, size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(typeLabel, style: TextStyle(color: typeColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
+                              )),
+                              DataCell(Text(
+                                qtyStr,
+                                style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 12),
+                              )),
+                              DataCell(Text(
+                                '${m.stockBefore.toStringAsFixed(0)} → ${m.stockAfter.toStringAsFixed(0)}',
+                                style: const TextStyle(color: Colors.white, fontSize: 11),
+                              )),
+                              DataCell(
+                                Tooltip(
+                                  message: m.customerName.isNotEmpty ? '${m.reference}\n${m.customerName}' : m.reference,
+                                  child: Text(
+                                    m.customerName.isNotEmpty ? '${m.reference} (${m.customerName})' : m.reference,
+                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Tutup', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  InputDecoration _buildInputDecoration({required String hint}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-      filled: true,
-      fillColor: const Color(0xFF0F172A),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10.0),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10.0),
-        borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
-      ),
+  // ==========================================
+  // GLOBAL STOCK MUTATION HISTORY DIALOG (SEMUA BARANG)
+  // ==========================================
+
+  void _showGlobalStockMutationHistory() {
+    final firebaseService = FirebaseService();
+    String dialogSearchQuery = '';
+    String selectedType = 'SEMUA';
+    DateTime? selectedDate = DateTime.now(); // Default: TODAY to save Firestore reads!
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isToday = selectedDate != null &&
+                selectedDate!.year == DateTime.now().year &&
+                selectedDate!.month == DateTime.now().month &&
+                selectedDate!.day == DateTime.now().day;
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.5)),
+                        ),
+                        child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Riwayat Mutasi Stok / Stock Out (Semua Barang)',
+                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Pencatatan semua barang keluar, masuk, retur, dan penyesuaian stok terpusat.',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Filter Row: Search Input + Single Date Picker + Type Filter
+                  Row(
+                    children: [
+                      // Text Search Input
+                      Expanded(
+                        flex: 4,
+                        child: TextField(
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama barang, kode, invoice, customer...',
+                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8.0),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              dialogSearchQuery = val.trim().toLowerCase();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Single Date Picker Button (Defaults to TODAY)
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate ?? DateTime.now(),
+                            firstDate: DateTime(2024),
+                            lastDate: DateTime(2030),
+                            builder: (context, child) {
+                              return Theme(
+                                data: ThemeData.dark().copyWith(
+                                  colorScheme: const ColorScheme.dark(
+                                    primary: Color(0xFF0284C7),
+                                    onPrimary: Colors.white,
+                                    surface: Color(0xFF1E293B),
+                                    onSurface: Colors.white,
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+                          if (picked != null) {
+                            setDialogState(() {
+                              selectedDate = picked;
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                selectedDate == null
+                                    ? 'Semua Tanggal'
+                                    : isToday
+                                        ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
+                                        : DateFormat('dd/MM/yyyy').format(selectedDate!),
+                                style: TextStyle(
+                                  color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (selectedDate != null) ...[
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      selectedDate = null;
+                                    });
+                                  },
+                                  child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Dropdown Type Filter
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedType,
+                            dropdownColor: const Color(0xFF0F172A),
+                            style: const TextStyle(color: Colors.white, fontSize: 11),
+                            isDense: true,
+                            items: const [
+                              DropdownMenuItem(value: 'SEMUA', child: Text('Semua Mutasi')),
+                              DropdownMenuItem(value: 'KELUAR', child: Text('🔴 Keluar (Stock Out)')),
+                              DropdownMenuItem(value: 'MASUK', child: Text('🟢 Masuk')),
+                              DropdownMenuItem(value: 'RETUR_STATUS', child: Text('🟠 Retur Status')),
+                              DropdownMenuItem(value: 'EDIT_MANUAL', child: Text('🔵 Edit Manual')),
+                              DropdownMenuItem(value: 'INPUT_STOK', child: Text('🟢 Input Stok')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() {
+                                  selectedType = val;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 900,
+                height: 480,
+                child: StreamBuilder<List<StockMutation>>(
+                  stream: firebaseService.streamAllStockMutations(date: selectedDate),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)),
+                      );
+                    }
+                    var mutations = snapshot.data ?? [];
+
+                    // Apply Type Filter
+                    if (selectedType != 'SEMUA') {
+                      mutations = mutations.where((m) => m.type == selectedType).toList();
+                    }
+
+                    // Apply Text Search Filter
+                    if (dialogSearchQuery.isNotEmpty) {
+                      mutations = mutations.where((m) {
+                        return m.kodeInduk.toLowerCase().contains(dialogSearchQuery) ||
+                            m.productName.toLowerCase().contains(dialogSearchQuery) ||
+                            m.reference.toLowerCase().contains(dialogSearchQuery) ||
+                            m.customerName.toLowerCase().contains(dialogSearchQuery);
+                      }).toList();
+                    }
+
+                    if (mutations.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.inbox_rounded, color: Colors.white.withOpacity(0.2), size: 48),
+                            const SizedBox(height: 12),
+                            Text(
+                              selectedDate != null
+                                  ? 'Belum ada riwayat mutasi stok pada ${DateFormat('dd/MM/yyyy').format(selectedDate!)}.'
+                                  : 'Tidak ada riwayat mutasi stok ditemukan.',
+                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    // Summary Stats
+                    double totalKeluar = 0;
+                    double totalMasuk = 0;
+                    for (var m in mutations) {
+                      if (m.qty < 0) {
+                        totalKeluar += m.qty.abs();
+                      } else {
+                        totalMasuk += m.qty;
+                      }
+                    }
+
+                    return Column(
+                      children: [
+                        // Summary Banner inside Dialog
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Ditemukan: ${mutations.length} Mutasi ${selectedDate != null ? "(${DateFormat('dd/MM/yy').format(selectedDate!)})" : ""}',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Total Stock Out: -${totalKeluar.toStringAsFixed(0)} pcs',
+                                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Text(
+                                    'Total Stock In: +${totalMasuk.toStringAsFixed(0)} pcs',
+                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Table Content
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(minWidth: 860),
+                                child: DataTable(
+                                  columnSpacing: 10,
+                                  horizontalMargin: 0,
+                                  headingRowHeight: 36,
+                                  dataRowMinHeight: 34,
+                                  dataRowMaxHeight: 50,
+                                  headingTextStyle: const TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                  columns: const [
+                                    DataColumn(label: Text('TANGGAL')),
+                                    DataColumn(label: Text('KODE INDUK')),
+                                    DataColumn(label: Text('NAMA BARANG')),
+                                    DataColumn(label: Text('JENIS')),
+                                    DataColumn(label: Text('QTY'), numeric: true),
+                                    DataColumn(label: Text('STOK'), numeric: true),
+                                    DataColumn(label: Text('REFERENSI')),
+                                  ],
+                                  rows: mutations.map((m) {
+                                    Color typeColor;
+                                    String typeLabel;
+                                    IconData typeIcon;
+                                    switch (m.type) {
+                                      case 'KELUAR':
+                                        typeColor = Colors.redAccent;
+                                        typeLabel = 'Keluar';
+                                        typeIcon = Icons.arrow_downward_rounded;
+                                        break;
+                                      case 'MASUK':
+                                        typeColor = Colors.greenAccent;
+                                        typeLabel = 'Masuk';
+                                        typeIcon = Icons.arrow_upward_rounded;
+                                        break;
+                                      case 'RETUR_STATUS':
+                                        typeColor = Colors.orangeAccent;
+                                        typeLabel = 'Retur Status';
+                                        typeIcon = Icons.undo_rounded;
+                                        break;
+                                      case 'HAPUS_INVOICE':
+                                        typeColor = Colors.orangeAccent;
+                                        typeLabel = 'Hapus Invoice';
+                                        typeIcon = Icons.delete_outline_rounded;
+                                        break;
+                                      case 'EDIT_MANUAL':
+                                        typeColor = const Color(0xFF38BDF8);
+                                        typeLabel = 'Edit Manual';
+                                        typeIcon = Icons.edit_outlined;
+                                        break;
+                                      case 'INPUT_STOK':
+                                        typeColor = Colors.greenAccent;
+                                        typeLabel = 'Input Stok';
+                                        typeIcon = Icons.add_box_outlined;
+                                        break;
+                                      default:
+                                        typeColor = const Color(0xFF94A3B8);
+                                        typeLabel = m.type;
+                                        typeIcon = Icons.swap_vert_rounded;
+                                    }
+
+                                    final qtyStr = m.qty > 0 ? '+${m.qty.toStringAsFixed(0)}' : m.qty.toStringAsFixed(0);
+
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(Text(
+                                          DateFormat('dd/MM/yy HH:mm').format(m.timestamp),
+                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                        )),
+                                        DataCell(Text(
+                                          m.kodeInduk,
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                                        )),
+                                        DataCell(Text(
+                                          m.productName,
+                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                        )),
+                                        DataCell(Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(typeIcon, color: typeColor, size: 14),
+                                            const SizedBox(width: 4),
+                                            Text(typeLabel, style: TextStyle(color: typeColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                                          ],
+                                        )),
+                                        DataCell(Text(
+                                          qtyStr,
+                                          style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                        )),
+                                        DataCell(Text(
+                                          '${m.stockBefore.toStringAsFixed(0)} → ${m.stockAfter.toStringAsFixed(0)}',
+                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                        )),
+                                        DataCell(
+                                          Tooltip(
+                                            message: m.customerName.isNotEmpty ? '${m.reference}\n${m.customerName}' : m.reference,
+                                            child: Text(
+                                              m.customerName.isNotEmpty ? '${m.reference} (${m.customerName})' : m.reference,
+                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Tutup', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
