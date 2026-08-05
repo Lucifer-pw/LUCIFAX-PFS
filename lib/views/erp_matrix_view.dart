@@ -110,42 +110,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     final String ownId = prod.id.toString().trim().toLowerCase();
     final String ownName = prod.name.toString().trim().toLowerCase();
 
-    // Collect all product IDs and names that share the exact same kodeInduk as prod
-    final String currentKodeInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
-        ? prod.kodeInduk.toString().trim().toLowerCase()
-        : ownId;
-
-    final siblingProducts = allProducts.where((p) {
-      final k = (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty)
-          ? p.kodeInduk.toString().trim().toLowerCase()
-          : p.id.toString().trim().toLowerCase();
-      return k == currentKodeInduk;
-    }).toList();
-
-    // Determine if this prod is the main (primary) representative for this kodeInduk group.
-    // If prod name contains '(mbg)', or if it is the first sibling in the list, it acts as the primary group item.
-    final bool isPrimaryGroupItem = (siblingProducts.isNotEmpty && siblingProducts.first.id == prod.id) ||
-                                    ownName.contains('(mbg)');
-
-    final Set<String> groupIds = {};
-    final Set<String> groupNames = {};
-    final Set<String> groupKodeInduk = {currentKodeInduk};
-
-    for (var p in siblingProducts) {
-      groupIds.add(p.id.toString().trim().toLowerCase());
-      groupNames.add(p.name.toString().trim().toLowerCase());
-      if (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty) {
-        groupKodeInduk.add(p.kodeInduk.toString().trim().toLowerCase());
-      }
-    }
-
     final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
     final initialStockVal = _initialStocks[prod.id] ?? 0.0;
     final stockBefore = initialStockVal * factor;
 
     double ownTotalPenjualan = 0.0;
     double ownSampleBonus = 0.0;
-    double groupTotalKeluar = 0.0;
 
     for (var r in _erpRecords) {
       if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
@@ -164,35 +134,22 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemMap = Map<String, dynamic>.from(item);
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
-              final itemKodeInduk = (itemMap['kodeInduk'] ?? itemMap['kode_Induk'] ?? '').toString().trim().toLowerCase();
 
+              // Strictly match this product by ID or Name
               final isExactMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
                                    (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
 
-              final isKodeIndukMatch = (itemKodeInduk.isNotEmpty && groupKodeInduk.contains(itemKodeInduk)) ||
-                                       (itemPId.isNotEmpty && (groupIds.contains(itemPId) || groupKodeInduk.contains(itemPId))) ||
-                                       (itemPName.isNotEmpty && groupNames.contains(itemPName));
+              if (isExactMatch) {
+                final qty = (itemMap['qty'] ?? 0.0).toDouble();
+                final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
+                final isBonusItem = itemMap['isBonus'] == true;
+                final val = _showPcs ? qty : weightKg;
 
-              final isGroupMatch = isExactMatch || isKodeIndukMatch;
-
-              // Primary group item consolidates all sales matching its kodeInduk group
-              final isOwnMatch = isExactMatch || (isPrimaryGroupItem && isKodeIndukMatch);
-
-              final qty = (itemMap['qty'] ?? 0.0).toDouble();
-              final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
-              final isBonusItem = itemMap['isBonus'] == true;
-              final val = _showPcs ? qty : weightKg;
-
-              if (isOwnMatch) {
                 if (isSampleInvoice || isBonusItem) {
                   ownSampleBonus += val;
                 } else {
                   ownTotalPenjualan += val;
                 }
-              }
-
-              if (isGroupMatch) {
-                groupTotalKeluar += val;
               }
             }
           }
@@ -201,12 +158,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         final prodSales = r['products'] as Map<String, dynamic>?;
         if (prodSales != null) {
           ownTotalPenjualan += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
-          for (var p in siblingProducts) {
-            groupTotalKeluar += _getProductSoldQty(prodSales, p.id, _showPcs, p.sizeGrams);
-          }
         }
       }
     }
+
+    final totalKeluar = ownTotalPenjualan + ownSampleBonus;
 
     final m1 = (wMap[1] ?? 0.0) * factor;
     final m2 = (wMap[2] ?? 0.0) * factor;
@@ -215,13 +171,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     final m5 = (wMap[5] ?? 0.0) * factor;
     final totalMasuk = m1 + m2 + m3 + m4 + m5;
 
-    final stockAkhir = stockBefore + totalMasuk - groupTotalKeluar;
+    final stockAkhir = stockBefore + totalMasuk - totalKeluar;
 
     return {
       'totalPenjualan': ownTotalPenjualan,
       'stockBefore': stockBefore,
       'sampleBonus': ownSampleBonus,
-      'totalKeluar': groupTotalKeluar,
+      'totalKeluar': totalKeluar,
       'm1': m1,
       'm2': m2,
       'm3': m3,
@@ -233,28 +189,14 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   }
 
   Map<int, double> _getGroupWeeklyMap(dynamic prod, Map weeklyMap, List<dynamic> allProducts) {
-    final String ownId = prod.id.toString().trim().toLowerCase();
-    final String currentKodeInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
-        ? prod.kodeInduk.toString().trim().toLowerCase()
-        : ownId;
-
-    final siblingProducts = allProducts.where((p) {
-      final k = (p.kodeInduk != null && p.kodeInduk.toString().trim().isNotEmpty)
-          ? p.kodeInduk.toString().trim().toLowerCase()
-          : p.id.toString().trim().toLowerCase();
-      return k == currentKodeInduk;
-    }).toList();
-
-    final Map<int, double> groupWMap = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
-    for (var p in siblingProducts) {
-      final pWMap = weeklyMap[p.id];
-      if (pWMap != null) {
-        for (int w = 1; w <= 5; w++) {
-          groupWMap[w] = (groupWMap[w] ?? 0.0) + (pWMap[w] ?? 0.0);
-        }
+    final Map<int, double> pWMap = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+    final prodWMap = weeklyMap[prod.id];
+    if (prodWMap != null) {
+      for (int w = 1; w <= 5; w++) {
+        pWMap[w] = (prodWMap[w] ?? 0.0).toDouble();
       }
     }
-    return groupWMap;
+    return pWMap;
   }
 
   Future<void> _printPdfErp() async {
@@ -659,30 +601,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
     for (var prod in products) {
       final String ownId = prod.id.toString().trim().toLowerCase();
-
-      final String currentKodeInduk = prod.kodeInduk.trim().isNotEmpty
-          ? prod.kodeInduk.trim().toLowerCase()
-          : ownId;
-
-      final siblingProducts = products.where((p) {
-        final k = p.kodeInduk.trim().isNotEmpty
-            ? p.kodeInduk.trim().toLowerCase()
-            : p.id.trim().toLowerCase();
-        return k == currentKodeInduk;
-      }).toList();
-
-      final Set<String> groupIds = {};
-      final Set<String> groupNames = {};
-
-      for (var p in siblingProducts) {
-        groupIds.add(p.id.trim().toLowerCase());
-        groupNames.add(p.name.trim().toLowerCase());
-      }
+      final String ownName = prod.name.toString().trim().toLowerCase();
 
       final initialStockVal = prevInitialStocks[prod.id] ?? 0.0;
       final stockBeforePcs = initialStockVal; // in Pcs
 
-      double groupTotalKeluarPcs = 0.0;
+      double ownTotalKeluarPcs = 0.0;
 
       for (var r in prevErpRecords) {
         final invoices = r['invoices'] as List<dynamic>?;
@@ -696,12 +620,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
                 final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-                final isGroupMatch = (itemPId.isNotEmpty && groupIds.contains(itemPId)) ||
-                                     (itemPName.isNotEmpty && groupNames.contains(itemPName));
+                final isExactMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
+                                     (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
 
-                if (isGroupMatch) {
+                if (isExactMatch) {
                   final qty = (itemMap['qty'] ?? 0.0).toDouble();
-                  groupTotalKeluarPcs += qty;
+                  ownTotalKeluarPcs += qty;
                 }
               }
             }
@@ -709,9 +633,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         } else {
           final prodSales = r['products'] as Map<String, dynamic>?;
           if (prodSales != null) {
-            for (var p in siblingProducts) {
-              groupTotalKeluarPcs += _getProductSoldQty(prodSales, p.id, true, p.sizeGrams);
-            }
+            ownTotalKeluarPcs += _getProductSoldQty(prodSales, prod.id, true, prod.sizeGrams);
           }
         }
       }
@@ -724,7 +646,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       final m5 = wMap[5] ?? 0.0;
       final totalMasukPcs = m1 + m2 + m3 + m4 + m5;
 
-      final stockAkhirPcs = stockBeforePcs + totalMasukPcs - groupTotalKeluarPcs;
+      final stockAkhirPcs = stockBeforePcs + totalMasukPcs - ownTotalKeluarPcs;
       prevStockAkhirMap[prod.id] = stockAkhirPcs;
     }
 
