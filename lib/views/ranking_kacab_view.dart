@@ -727,167 +727,288 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final city = item['city'].toString().toLowerCase();
       return alias.contains(q) || city.contains(q);
     }).toList();
-
-    final selectedKey = '${_startMonth}_$_startYear';
+final selectedKey = '${_startMonth}_$_startYear';
     final hasKey = _periodOptions.any((opt) => opt['value'] == selectedKey);
     final dropdownValue = hasKey ? selectedKey : (_periodOptions.isNotEmpty ? _periodOptions.first['value'] : null);
 
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     return Container(
       color: const Color(0xFF0F172A),
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
+          isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.table_chart_rounded, color: Color(0xFF38BDF8), size: 20),
                         ),
-                        child: const Icon(Icons.table_chart_rounded, color: Color(0xFF38BDF8), size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'LAPORAN WEEKLY KACAB',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-
-              // Actions Header (Filter, Range, Export Excel, Cetak PDF, Refresh)
-              Wrap(
-                spacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  // Filter Source Dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF0284C7)),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'LAPORAN WEEKLY KACAB',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 20),
+                          onPressed: () => setState(() {}),
+                          tooltip: 'Refresh Data',
+                        ),
+                      ],
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _erpSourceFilter,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold),
-                        icon: const Icon(Icons.tune_rounded, color: Color(0xFF38BDF8), size: 18),
-                        items: const [
-                          DropdownMenuItem(value: 'ERP_ONLY', child: Text('Filter: Data Laporan ERP')),
-                          DropdownMenuItem(value: 'ALL_TRANSACTIONS', child: Text('Filter: Semua Transaksi')),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: DropdownButton<String>(
+                              value: _erpSourceFilter,
+                              underline: const SizedBox(),
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              items: const [
+                                DropdownMenuItem(value: 'ERP_ONLY', child: Text('Filter: Data Sudah ERP')),
+                                DropdownMenuItem(value: 'ALL_TRANSACTIONS', child: Text('Filter: Semua Transaksi')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) setState(() => _erpSourceFilter = val);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: DropdownButton<String>(
+                              value: dropdownValue,
+                              underline: const SizedBox(),
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              items: _periodOptions.map((opt) {
+                                return DropdownMenuItem(
+                                  value: opt['value'],
+                                  child: Text(opt['label']!),
+                                );
+                              }).toList(),
+                              onChanged: _onPeriodChanged,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            tooltip: 'Menu Opsi Titik 3',
+                            offset: const Offset(0, 40),
+                            color: const Color(0xFF1E293B),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
+                            ),
+                            icon: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF0284C7)),
+                              ),
+                              child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
+                            ),
+                            onSelected: (val) {
+                              if (val == 'excel' && filtered.isNotEmpty) {
+                                _exportToExcel(filtered, computed);
+                              } else if (val == 'pdf' && filtered.isNotEmpty) {
+                                _printPdf(filtered, computed);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'excel',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuDivider(height: 1),
+                              const PopupMenuItem(
+                                value: 'pdf',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Cetak PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _erpSourceFilter = val);
-                          }
-                        },
                       ),
                     ),
-                  ),
-
-                  // 3-Month Range Selector
-                  if (_periodOptions.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF334155)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: dropdownValue,
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                          icon: const Icon(Icons.date_range_rounded, color: Color(0xFF38BDF8), size: 18),
-                          menuMaxHeight: 400,
-                          items: _periodOptions.map((opt) {
-                            return DropdownMenuItem<String>(
-                              value: opt['value']!,
-                              child: Text(opt['label']!),
-                            );
-                          }).toList(),
-                          onChanged: _onPeriodChanged,
-                        ),
-                      ),
-                    ),
-
-                  // FITUR TITIK 3 (OVERFLOW ACTIONS MENU: EXPORT EXCEL & CETAK PDF)
-                  PopupMenuButton<String>(
-                    tooltip: 'Menu Opsi Titik 3 (Export Excel & Cetak PDF)',
-                    offset: const Offset(0, 40),
-                    color: const Color(0xFF1E293B),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
-                    ),
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF0284C7)),
-                      ),
-                      child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
-                    ),
-                    onSelected: (val) {
-                      if (val == 'excel' && filtered.isNotEmpty) {
-                        _exportToExcel(filtered, computed);
-                      } else if (val == 'pdf' && filtered.isNotEmpty) {
-                        _printPdf(filtered, computed);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'excel',
-                        child: Row(
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
-                            SizedBox(width: 10),
-                            Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.table_chart_rounded, color: Color(0xFF38BDF8), size: 24),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'LAPORAN WEEKLY KACAB',
+                              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
-                      ),
-                      const PopupMenuDivider(height: 1),
-                      const PopupMenuItem(
-                        value: 'pdf',
-                        child: Row(
-                          children: [
-                            Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
-                            SizedBox(width: 10),
-                            Text('Cetak PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+
+                    Wrap(
+                      spacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF0284C7)),
+                          ),
+                          child: DropdownButton<String>(
+                            value: _erpSourceFilter,
+                            underline: const SizedBox(),
+                            dropdownColor: const Color(0xFF1E293B),
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            items: const [
+                              DropdownMenuItem(value: 'ERP_ONLY', child: Text('Filter: Data Sudah ERP')),
+                              DropdownMenuItem(value: 'ALL_TRANSACTIONS', child: Text('Filter: Semua Transaksi')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) setState(() => _erpSourceFilter = val);
+                            },
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF0284C7)),
+                          ),
+                          child: DropdownButton<String>(
+                            value: dropdownValue,
+                            underline: const SizedBox(),
+                            dropdownColor: const Color(0xFF1E293B),
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            items: _periodOptions.map((opt) {
+                              return DropdownMenuItem(
+                                value: opt['value'],
+                                child: Text(opt['label']!),
+                              );
+                            }).toList(),
+                            onChanged: _onPeriodChanged,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: 'Menu Opsi Titik 3',
+                          offset: const Offset(0, 40),
+                          color: const Color(0xFF1E293B),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
+                          ),
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
+                          ),
+                          onSelected: (val) {
+                            if (val == 'excel' && filtered.isNotEmpty) {
+                              _exportToExcel(filtered, computed);
+                            } else if (val == 'pdf' && filtered.isNotEmpty) {
+                              _printPdf(filtered, computed);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'excel',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(height: 1),
+                            const PopupMenuItem(
+                              value: 'pdf',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Cetak PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
-                    onPressed: () => setState(() {}),
-                    tooltip: 'Refresh Data',
-                  ),
-                ],
-              ),
-            ],
-          ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
+                          onPressed: () => setState(() {}),
+                          tooltip: 'Refresh Data',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
           const SizedBox(height: 12),
 
           // Fallback Alert Banner
@@ -916,39 +1037,79 @@ class _RankingKacabViewState extends State<RankingKacabView> {
           ],
 
           // KPI Cards Row
-          Row(
-            children: [
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'TOTAL RATA-RATA 3 BULAN',
-                  value: _currency.format(_parseNum(computed['gAverage'])),
-                  subtitle: 'Total Omset: ${_currency.format(_parseNum(computed['gTotal']))}',
-                  icon: Icons.analytics_rounded,
-                  color: Colors.greenAccent,
+          isMobile
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 220,
+                        child: _buildKpiCard(
+                          title: 'TOTAL RATA-RATA 3 BULAN',
+                          value: _currency.format(_parseNum(computed['gAverage'])),
+                          subtitle: 'Omset: ${_currency.format(_parseNum(computed['gTotal']))}',
+                          icon: Icons.analytics_rounded,
+                          color: Colors.greenAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 200,
+                        child: _buildKpiCard(
+                          title: 'TOKO PERINGKAT #1 🥇',
+                          value: computed['top1Name'].toString(),
+                          subtitle: 'Rata/Bln: ${_currency.format(_parseNum(computed['top1Average']))}',
+                          icon: Icons.emoji_events_rounded,
+                          color: Colors.amberAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 180,
+                        child: _buildKpiCard(
+                          title: 'TOTAL TOKO / OUTLET',
+                          value: '${computed['storeCount']} Toko',
+                          subtitle: 'Semua Toko Masuk Peringkat',
+                          icon: Icons.store_rounded,
+                          color: const Color(0xFF38BDF8),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'TOTAL RATA-RATA 3 BULAN',
+                        value: _currency.format(_parseNum(computed['gAverage'])),
+                        subtitle: 'Total Omset: ${_currency.format(_parseNum(computed['gTotal']))}',
+                        icon: Icons.analytics_rounded,
+                        color: Colors.greenAccent,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'TOKO PERINGKAT #1 🥇',
+                        value: computed['top1Name'].toString(),
+                        subtitle: 'Rata-rata/Bln: ${_currency.format(_parseNum(computed['top1Average']))}',
+                        icon: Icons.emoji_events_rounded,
+                        color: Colors.amberAccent,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'TOTAL TOKO / OUTLET',
+                        value: '${computed['storeCount']} Toko',
+                        subtitle: 'Semua Toko Masuk Peringkat',
+                        icon: Icons.store_rounded,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'TOKO PERINGKAT #1 🥇',
-                  value: computed['top1Name'].toString(),
-                  subtitle: 'Rata-rata/Bln: ${_currency.format(_parseNum(computed['top1Average']))}',
-                  icon: Icons.emoji_events_rounded,
-                  color: Colors.amberAccent,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'TOTAL TOKO / OUTLET',
-                  value: '${computed['storeCount']} Toko',
-                  subtitle: 'Semua Toko Masuk Peringkat',
-                  icon: Icons.store_rounded,
-                  color: const Color(0xFF38BDF8),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 14),
 
           // Search Input Bar

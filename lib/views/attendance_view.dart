@@ -111,6 +111,7 @@ class _AttendanceViewState extends State<AttendanceView> {
     final grandTotalHk = filteredRecords.fold(0.0, (sum, r) => sum + r.totalHk);
 
     final titleMonthYearName = _formatMonthYearTitle(attProvider.selectedMonthYear);
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -247,19 +248,36 @@ class _AttendanceViewState extends State<AttendanceView> {
             const SizedBox(height: 18),
 
             // Summary Metric Cards Row
-            Row(
-              children: [
-                _buildMetricCard('Total Pegawai', '$totalStaff Orang', Icons.people_outline_rounded, const Color(0xFF38BDF8)),
-                const SizedBox(width: 12),
-                _buildMetricCard('Total HK (1-20)', _formatNum(totalHk), Icons.calendar_month_rounded, Colors.greenAccent),
-                const SizedBox(width: 12),
-                _buildMetricCard('Total Off / Sakit / Ijin', '${_formatNum(totalOff)} / ${_formatNum(totalSakit)} / ${_formatNum(totalIjin)}', Icons.event_busy_rounded, Colors.amberAccent),
-                const SizedBox(width: 12),
-                _buildMetricCard('Total Estimasi (21-Akhir)', _formatNum(totalEstimasi), Icons.published_with_changes_rounded, Colors.orangeAccent),
-                const SizedBox(width: 12),
-                _buildMetricCard('Grand Total HK', _formatNum(grandTotalHk), Icons.verified_rounded, const Color(0xFF38BDF8)),
-              ],
-            ),
+            isMobile
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        SizedBox(width: 170, child: _buildMetricCardContent('Total Pegawai', '$totalStaff Orang', Icons.people_outline_rounded, const Color(0xFF38BDF8))),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 170, child: _buildMetricCardContent('Total HK (1-20)', _formatNum(totalHk), Icons.calendar_month_rounded, Colors.greenAccent)),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 220, child: _buildMetricCardContent('Off / Sakit / Ijin', '${_formatNum(totalOff)} / ${_formatNum(totalSakit)} / ${_formatNum(totalIjin)}', Icons.event_busy_rounded, Colors.amberAccent)),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 200, child: _buildMetricCardContent('Total Estimasi', _formatNum(totalEstimasi), Icons.published_with_changes_rounded, Colors.orangeAccent)),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 170, child: _buildMetricCardContent('Grand Total HK', _formatNum(grandTotalHk), Icons.verified_rounded, const Color(0xFF38BDF8))),
+                      ],
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: _buildMetricCardContent('Total Pegawai', '$totalStaff Orang', Icons.people_outline_rounded, const Color(0xFF38BDF8))),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildMetricCardContent('Total HK (1-20)', _formatNum(totalHk), Icons.calendar_month_rounded, Colors.greenAccent)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildMetricCardContent('Total Off / Sakit / Ijin', '${_formatNum(totalOff)} / ${_formatNum(totalSakit)} / ${_formatNum(totalIjin)}', Icons.event_busy_rounded, Colors.amberAccent)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildMetricCardContent('Total Estimasi (21-Akhir)', _formatNum(totalEstimasi), Icons.published_with_changes_rounded, Colors.orangeAccent)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildMetricCardContent('Grand Total HK', _formatNum(grandTotalHk), Icons.verified_rounded, const Color(0xFF38BDF8))),
+                    ],
+                  ),
             const SizedBox(height: 18),
 
             // Search Bar
@@ -446,38 +464,36 @@ class _AttendanceViewState extends State<AttendanceView> {
     return val.toStringAsFixed(1);
   }
 
-  Widget _buildMetricCard(String title, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 22),
+  Widget _buildMetricCardContent(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 2),
-                  Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                ],
-              ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -546,195 +546,367 @@ class _ReceivableListViewState extends State<ReceivableListView> {
 
     // Calculate overall grand total
     final grandTotal = filteredRaw.fold<double>(0.0, (acc, r) => acc + r.nominal);
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12.0 : 20.0, vertical: 14.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header & Top Action Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Kartu Piutang Toko',
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Pencatatan Tagihan & Pelunasan Invoice Cabang',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  // Button Print Kartu Piutang
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF38BDF8),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Kartu Piutang Toko',
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    onPressed: () {
-                      if (filteredRaw.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Tidak ada data piutang untuk dicetak!'), backgroundColor: Colors.redAccent),
-                        );
-                        return;
-                      }
-                      final custName = _selectedCustomerFilter == 'ALL' ? '' : _selectedCustomerFilter;
-                      final city = filteredRaw.firstWhere((r) => r.kota.isNotEmpty, orElse: () => filteredRaw.first).kota;
-                      PrintService.printKartuPiutang(
-                        customerName: custName,
-                        city: city,
-                        items: filteredRaw,
-                      );
-                    },
-                    icon: const Icon(Icons.print_rounded, color: Colors.black, size: 18),
-                    label: Text(
-                      _selectedCustomerFilter == 'ALL'
-                          ? 'Cetak Semua Piutang'
-                          : 'Cetak Piutang ($_selectedCustomerFilter)',
-                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                    const Text(
+                      'Pencatatan Tagihan & Pelunasan Invoice Cabang',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Button Tambah Piutang
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF38BDF8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38BDF8),
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              if (filteredRaw.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Tidak ada data piutang untuk dicetak!'), backgroundColor: Colors.redAccent),
+                                );
+                                return;
+                              }
+                              final custName = _selectedCustomerFilter == 'ALL' ? '' : _selectedCustomerFilter;
+                              final city = filteredRaw.firstWhere((r) => r.kota.isNotEmpty, orElse: () => filteredRaw.first).kota;
+                              PrintService.printKartuPiutang(
+                                customerName: custName,
+                                city: city,
+                                items: filteredRaw,
+                              );
+                            },
+                            icon: const Icon(Icons.print_rounded, color: Colors.black, size: 16),
+                            label: Text(
+                              _selectedCustomerFilter == 'ALL'
+                                  ? 'Cetak Semua'
+                                  : 'Cetak Piutang',
+                              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38BDF8),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => _showAddEditPiutangDialog(),
+                            icon: const Icon(Icons.add_rounded, color: Colors.black, size: 18),
+                            label: const Text('Tambah Piutang', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ),
+                      ],
                     ),
-                    onPressed: () => _showAddEditPiutangDialog(),
-                    icon: const Icon(Icons.add_rounded, color: Colors.black),
-                    label: const Text('Tambah Piutang', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Kartu Piutang Toko',
+                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Pencatatan Tagihan & Pelunasan Invoice Cabang',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () {
+                            if (filteredRaw.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Tidak ada data piutang untuk dicetak!'), backgroundColor: Colors.redAccent),
+                              );
+                              return;
+                            }
+                            final custName = _selectedCustomerFilter == 'ALL' ? '' : _selectedCustomerFilter;
+                            final city = filteredRaw.firstWhere((r) => r.kota.isNotEmpty, orElse: () => filteredRaw.first).kota;
+                            PrintService.printKartuPiutang(
+                              customerName: custName,
+                              city: city,
+                              items: filteredRaw,
+                            );
+                          },
+                          icon: const Icon(Icons.print_rounded, color: Colors.black, size: 18),
+                          label: Text(
+                            _selectedCustomerFilter == 'ALL'
+                                ? 'Cetak Semua Piutang'
+                                : 'Cetak Piutang ($_selectedCustomerFilter)',
+                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () => _showAddEditPiutangDialog(),
+                          icon: const Icon(Icons.add_rounded, color: Colors.black),
+                          label: const Text('Tambah Piutang', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
           const SizedBox(height: 12),
 
-          // Total Summary KPI Cards
-          Row(
-            children: [
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'Total Belum Lunas',
-                  value: currencyFormatter.format(provider.totalUnpaid),
-                  icon: Icons.pending_actions_rounded,
-                  color: Colors.amberAccent,
+          // Total Summary KPI Cards (Scrollable on mobile)
+          isMobile
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 180,
+                        child: _buildKpiCard(
+                          title: 'Total Belum Lunas',
+                          value: currencyFormatter.format(provider.totalUnpaid),
+                          icon: Icons.pending_actions_rounded,
+                          color: Colors.amberAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 180,
+                        child: _buildKpiCard(
+                          title: 'Total Sudah Lunas',
+                          value: currencyFormatter.format(provider.totalPaid),
+                          icon: Icons.check_circle_outline_rounded,
+                          color: Colors.greenAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 200,
+                        child: _buildKpiCard(
+                          title: 'Total Customer & Invoice',
+                          value: '${customerGroups.length} Toko (${provider.receivables.length} Inv)',
+                          icon: Icons.storefront_rounded,
+                          color: const Color(0xFF38BDF8),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'Total Belum Lunas',
+                        value: currencyFormatter.format(provider.totalUnpaid),
+                        icon: Icons.pending_actions_rounded,
+                        color: Colors.amberAccent,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'Total Sudah Lunas',
+                        value: currencyFormatter.format(provider.totalPaid),
+                        icon: Icons.check_circle_outline_rounded,
+                        color: Colors.greenAccent,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'Total Customer & Invoice',
+                        value: '${customerGroups.length} Customer (${provider.receivables.length} Invoice)',
+                        icon: Icons.storefront_rounded,
+                        color: const Color(0xFF38BDF8),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'Total Sudah Lunas',
-                  value: currencyFormatter.format(provider.totalPaid),
-                  icon: Icons.check_circle_outline_rounded,
-                  color: Colors.greenAccent,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'Total Customer & Invoice',
-                  value: '${customerGroups.length} Customer (${provider.receivables.length} Invoice)',
-                  icon: Icons.storefront_rounded,
-                  color: const Color(0xFF38BDF8),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 12),
 
           // Controls Bar (Search, Customer Filter, Status Filter)
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
-              children: [
-                // Search Input
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Cari Toko / Kota / No Invoice...',
-                      hintStyle: TextStyle(color: Color(0xFF64748B)),
-                      prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B)),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Customer / Agen Dropdown Filter
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
-                      const SizedBox(width: 8),
-                      DropdownButton<String>(
-                        value: _selectedCustomerFilter,
-                        underline: const SizedBox(),
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                        items: [
-                          const DropdownMenuItem(value: 'ALL', child: Text('Semua Customer / Toko')),
-                          ...uniqueCustomers.map((cust) {
-                            return DropdownMenuItem(value: cust, child: Text(cust));
-                          }),
+                      TextField(
+                        onChanged: (val) => setState(() => _searchQuery = val),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: const InputDecoration(
+                          hintText: 'Cari Toko / Kota / No Invoice...',
+                          hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                          isDense: true,
+                          border: InputBorder.none,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 16),
+                                  const SizedBox(width: 6),
+                                  DropdownButton<String>(
+                                    value: _selectedCustomerFilter,
+                                    underline: const SizedBox(),
+                                    dropdownColor: const Color(0xFF1E293B),
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    items: [
+                                      const DropdownMenuItem(value: 'ALL', child: Text('Semua Customer / Toko')),
+                                      ...uniqueCustomers.map((cust) {
+                                        return DropdownMenuItem(value: cust, child: Text(cust));
+                                      }),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() => _selectedCustomerFilter = val);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(value: 'ALL', label: Text('Semua', style: TextStyle(fontSize: 11))),
+                                ButtonSegment(value: 'UNPAID', label: Text('Belum Lunas', style: TextStyle(fontSize: 11))),
+                                ButtonSegment(value: 'PAID', label: Text('Lunas', style: TextStyle(fontSize: 11))),
+                              ],
+                              selected: {_statusFilter},
+                              onSelectionChanged: (set) {
+                                setState(() => _statusFilter = set.first);
+                              },
+                              style: ButtonStyle(
+                                foregroundColor: MaterialStateProperty.resolveWith(
+                                  (states) => states.contains(MaterialState.selected) ? Colors.black : Colors.white,
+                                ),
+                                backgroundColor: MaterialStateProperty.resolveWith(
+                                  (states) => states.contains(MaterialState.selected) ? const Color(0xFF38BDF8) : Colors.transparent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextField(
+                          onChanged: (val) => setState(() => _searchQuery = val),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: 'Cari Toko / Kota / No Invoice...',
+                            hintStyle: TextStyle(color: Color(0xFF64748B)),
+                            prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
+                            const SizedBox(width: 8),
+                            DropdownButton<String>(
+                              value: _selectedCustomerFilter,
+                              underline: const SizedBox(),
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              items: [
+                                const DropdownMenuItem(value: 'ALL', child: Text('Semua Customer / Toko')),
+                                ...uniqueCustomers.map((cust) {
+                                  return DropdownMenuItem(value: cust, child: Text(cust));
+                                }),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedCustomerFilter = val);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'ALL', label: Text('Semua')),
+                          ButtonSegment(value: 'UNPAID', label: Text('Belum Lunas')),
+                          ButtonSegment(value: 'PAID', label: Text('Lunas')),
                         ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedCustomerFilter = val);
-                          }
+                        selected: {_statusFilter},
+                        onSelectionChanged: (set) {
+                          setState(() => _statusFilter = set.first);
                         },
+                        style: ButtonStyle(
+                          foregroundColor: MaterialStateProperty.resolveWith(
+                            (states) => states.contains(MaterialState.selected) ? Colors.black : Colors.white,
+                          ),
+                          backgroundColor: MaterialStateProperty.resolveWith(
+                            (states) => states.contains(MaterialState.selected) ? const Color(0xFF38BDF8) : Colors.transparent,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-
-                // Status Segmented Button (ALL, UNPAID, PAID)
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'ALL', label: Text('Semua')),
-                    ButtonSegment(value: 'UNPAID', label: Text('Belum Lunas')),
-                    ButtonSegment(value: 'PAID', label: Text('Lunas')),
-                  ],
-                  selected: {_statusFilter},
-                  onSelectionChanged: (set) {
-                    setState(() => _statusFilter = set.first);
-                  },
-                  style: ButtonStyle(
-                    foregroundColor: MaterialStateProperty.resolveWith(
-                      (states) => states.contains(MaterialState.selected) ? Colors.black : Colors.white,
-                    ),
-                    backgroundColor: MaterialStateProperty.resolveWith(
-                      (states) => states.contains(MaterialState.selected) ? const Color(0xFF38BDF8) : Colors.transparent,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 10),
 
@@ -779,7 +951,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                     });
                                   },
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 16, vertical: 10),
                                     child: Row(
                                       children: [
                                         // Customer Icon & Name & City
@@ -789,101 +961,102 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                             color: const Color(0xFF38BDF8).withOpacity(0.15),
                                             borderRadius: BorderRadius.circular(10),
                                           ),
-                                          child: const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 20),
+                                          child: const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 18),
                                         ),
-                                        const SizedBox(width: 14),
+                                        const SizedBox(width: 10),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Row(
+                                              Wrap(
+                                                crossAxisAlignment: WrapCrossAlignment.center,
+                                                spacing: 6,
+                                                runSpacing: 4,
                                                 children: [
                                                   Text(
                                                     group.customerName,
-                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                                   ),
-                                                  if (group.city.isNotEmpty) ...[
-                                                    const SizedBox(width: 8),
+                                                  if (group.city.isNotEmpty)
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: const Color(0xFF334155),
                                                         borderRadius: BorderRadius.circular(6),
                                                       ),
                                                       child: Text(
                                                         group.city.toUpperCase(),
-                                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold),
                                                       ),
                                                     ),
-                                                  ],
                                                 ],
                                               ),
                                               const SizedBox(height: 4),
-                                              Row(
+                                              Wrap(
+                                                spacing: 6,
+                                                runSpacing: 4,
                                                 children: [
                                                   Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                     decoration: BoxDecoration(
                                                       color: const Color(0xFF38BDF8).withOpacity(0.2),
                                                       borderRadius: BorderRadius.circular(6),
                                                     ),
                                                     child: Text(
-                                                      '${group.items.length} Invoice',
-                                                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                                      '${group.items.length} Inv',
+                                                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
                                                     ),
                                                   ),
-                                                  if (group.unpaidCount > 0) ...[
-                                                    const SizedBox(width: 8),
+                                                  if (group.unpaidCount > 0)
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: Colors.red.withOpacity(0.2),
                                                         borderRadius: BorderRadius.circular(6),
                                                       ),
                                                       child: Text(
                                                         '${group.unpaidCount} Belum Lunas',
-                                                        style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                                        style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold),
                                                       ),
                                                     ),
-                                                  ],
-                                                  if (group.paidCount > 0) ...[
-                                                    const SizedBox(width: 8),
+                                                  if (group.paidCount > 0)
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: Colors.green.withOpacity(0.2),
                                                         borderRadius: BorderRadius.circular(6),
                                                       ),
                                                       child: Text(
                                                         '${group.paidCount} Lunas',
-                                                        style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                                        style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
                                                       ),
                                                     ),
-                                                  ],
                                                 ],
                                               ),
                                             ],
                                           ),
                                         ),
+                                        const SizedBox(width: 8),
 
-                                        // Total Amount & Cetak & Expand Arrow
+                                        // Total Amount & Buttons
                                         Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Column(
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
-                                                const Text('Total Piutang:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                                const Text('Total Piutang:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
                                                 Text(
                                                   currencyFormatter.format(group.totalNominal),
-                                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 14),
+                                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                                                 ),
                                               ],
                                             ),
-                                            const SizedBox(width: 12),
-
-                                            // Quick Print button for this customer
+                                            const SizedBox(width: 4),
                                             IconButton(
-                                              icon: const Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 22),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 20),
                                               tooltip: 'Cetak Kartu Piutang ${group.customerName}',
                                               onPressed: () {
                                                 PrintService.printKartuPiutang(
@@ -893,12 +1066,11 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                                 );
                                               },
                                             ),
-
-                                            // Expand / Collapse Arrow
+                                            const SizedBox(width: 4),
                                             Icon(
                                               isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                                               color: const Color(0xFF94A3B8),
-                                              size: 28,
+                                              size: 20,
                                             ),
                                           ],
                                         ),
