@@ -4671,27 +4671,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                         final textToSend = customMessageCtrl.text;
                         final waAppUrl = 'whatsapp://send?phone=$formattedPhone&text=${Uri.encodeComponent(textToSend)}';
-                        final waWebUrl = 'https://wa.me/$formattedPhone?text=${Uri.encodeComponent(textToSend)}';
 
                         try {
                           final appUri = Uri.parse(waAppUrl);
-                          if (await canLaunchUrl(appUri)) {
-                            await launchUrl(appUri, mode: LaunchMode.externalApplication);
-                          } else {
-                            final webUri = Uri.parse(waWebUrl);
-                            await launchUrl(webUri, mode: LaunchMode.externalApplication);
-                          }
+                          await launchUrl(appUri, webOnlyWindowName: '_self');
                           if (mounted) Navigator.pop(dialogCtx);
                         } catch (e) {
-                          try {
-                            final webUri = Uri.parse(waWebUrl);
-                            await launchUrl(webUri, mode: LaunchMode.externalApplication);
-                            if (mounted) Navigator.pop(dialogCtx);
-                          } catch (err) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal membuka WhatsApp: $err'), backgroundColor: Colors.redAccent),
-                            );
-                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Gagal membuka Aplikasi WhatsApp Desktop: $e'), backgroundColor: Colors.redAccent),
+                          );
                         }
                       },
                       icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
