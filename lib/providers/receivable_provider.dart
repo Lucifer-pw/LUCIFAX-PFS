@@ -32,7 +32,7 @@ class ReceivableProvider with ChangeNotifier {
     try {
       final snapshot = await _db
           .collection('receivables')
-          .orderBy('tglKirim', descending: true)
+          .orderBy('tglKirim', descending: false)
           .get();
 
       _receivables = snapshot.docs

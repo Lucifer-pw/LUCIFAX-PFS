@@ -538,7 +538,8 @@ class _ReceivableListViewState extends State<ReceivableListView> {
 
     final customerGroups = groupedMap.entries.map((entry) {
       final name = entry.key;
-      final items = entry.value;
+      final items = List<Receivable>.from(entry.value)
+        ..sort((a, b) => a.tglKirim.compareTo(b.tglKirim));
       final city = items.firstWhere((r) => r.kota.isNotEmpty, orElse: () => items.first).kota;
       return CustomerGroup(customerName: name, city: city, items: items);
     }).toList();
