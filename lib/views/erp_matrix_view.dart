@@ -1199,99 +1199,102 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
-                const SizedBox(width: 6),
-                const Text('Periode:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                const SizedBox(width: 6),
-                DropdownButton<String>(
-                  value: _selectedMonthYear,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                  underline: const SizedBox(),
-                  items: _getMonthOptions().map((m) {
-                    return DropdownMenuItem<String>(value: m, child: Text(m));
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _selectedMonthYear = val);
-                      _loadErpData();
-                    }
-                  },
-                ),
-                const SizedBox(width: 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                  const SizedBox(width: 6),
+                  const Text('Periode:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                  const SizedBox(width: 6),
+                  DropdownButton<String>(
+                    value: _selectedMonthYear,
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    underline: const SizedBox(),
+                    items: _getMonthOptions().map((m) {
+                      return DropdownMenuItem<String>(value: m, child: Text(m));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedMonthYear = val);
+                        _loadErpData();
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 12),
 
-                // Specific Date Filter (Calendar Picker)
-                _buildDatePickerFilter(),
-                const SizedBox(width: 14),
+                  // Specific Date Filter (Calendar Picker)
+                  _buildDatePickerFilter(),
+                  const SizedBox(width: 14),
 
-                const Icon(Icons.store_rounded, color: Color(0xFF38BDF8), size: 18),
-                const SizedBox(width: 6),
-                const Text('Outlet/Customer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                const SizedBox(width: 6),
-                SearchableCustomerFilter(
-                  selectedCustomer: _selectedCustomer,
-                  customers: customerProvider.customers,
-                  onSelected: (val) => setState(() => _selectedCustomer = val),
-                ),
-                const SizedBox(width: 14),
+                  const Icon(Icons.store_rounded, color: Color(0xFF38BDF8), size: 18),
+                  const SizedBox(width: 6),
+                  const Text('Outlet/Customer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                  const SizedBox(width: 6),
+                  SearchableCustomerFilter(
+                    selectedCustomer: _selectedCustomer,
+                    customers: customerProvider.customers,
+                    onSelected: (val) => setState(() => _selectedCustomer = val),
+                  ),
+                  const SizedBox(width: 14),
 
-                // Product Search
-                SizedBox(
-                  width: 170,
-                  child: TextField(
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: 'Cari barang...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  // Product Search
+                  SizedBox(
+                    width: 170,
+                    child: TextField(
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Cari barang...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      ),
+                      onChanged: (val) => setState(() => _searchQuery = val),
                     ),
-                    onChanged: (val) => setState(() => _searchQuery = val),
                   ),
-                ),
-                const Spacer(),
+                  const SizedBox(width: 14),
 
-                // Toggle Pcs vs Kg
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => setState(() => _showPcs = true),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          backgroundColor: _showPcs ? const Color(0xFF0284C7) : Colors.transparent,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  // Toggle Pcs vs Kg
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => setState(() => _showPcs = true),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            backgroundColor: _showPcs ? const Color(0xFF0284C7) : Colors.transparent,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          child: const Text('PCS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
-                        child: const Text('PCS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => setState(() => _showPcs = false),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          backgroundColor: !_showPcs ? const Color(0xFF0284C7) : Colors.transparent,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ElevatedButton(
+                          onPressed: () => setState(() => _showPcs = false),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            backgroundColor: !_showPcs ? const Color(0xFF0284C7) : Colors.transparent,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          child: const Text('KG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
-                        child: const Text('KG', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),

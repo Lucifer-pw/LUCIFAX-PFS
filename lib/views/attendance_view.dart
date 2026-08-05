@@ -121,130 +121,258 @@ class _AttendanceViewState extends State<AttendanceView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Controls Bar
-            Row(
-              children: [
-                const Icon(Icons.assignment_ind_rounded, color: Color(0xFF38BDF8), size: 28),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Rekap Absensi Pegawai',
-                      style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Cabang Jawa Tengah (Awal Bulan s.d. Tanggal 20)',
-                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-
-                // Month Picker Dropdown
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: monthOptions.contains(attProvider.selectedMonthYear)
-                          ? attProvider.selectedMonthYear
-                          : (monthOptions.isNotEmpty ? monthOptions.first : null),
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      items: monthOptions.map((my) {
-                        return DropdownMenuItem<String>(
-                          value: my,
-                          child: Text(_formatMonthYearTitle(my)),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          attProvider.setMonthYear(val);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // 3-Dots Action Menu Button for Absensi Pegawai
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF0284C7)),
-                  ),
-                  child: PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 24),
-                    tooltip: 'Menu Fitur Absensi Pegawai',
-                    color: const Color(0xFF0F172A),
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
-                    ),
-                    onSelected: (val) {
-                      if (val == 'staff') {
-                        _showManageStaffDialog(context, attProvider);
-                      } else if (val == 'input') {
-                        _showInputAttendanceDialog(context, attProvider, null);
-                      } else if (val == 'import') {
-                        _handleImportCsvExcel(context, attProvider);
-                      } else if (val == 'send') {
-                        _showSendWaPdfDialog(context, attProvider, filteredRecords, titleMonthYearName);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'staff',
-                        child: Row(
-                          children: [
-                            Icon(Icons.people_alt_rounded, color: Color(0xFF38BDF8), size: 20),
-                            SizedBox(width: 12),
-                            Text('Kelola Master Staff', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
+            isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.assignment_ind_rounded, color: Color(0xFF38BDF8), size: 24),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Rekap Absensi Pegawai',
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Cabang Jawa Tengah (Awal Bulan s.d. Tanggal 20)',
+                        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white.withOpacity(0.1)),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: monthOptions.contains(attProvider.selectedMonthYear)
+                                      ? attProvider.selectedMonthYear
+                                      : (monthOptions.isNotEmpty ? monthOptions.first : null),
+                                  dropdownColor: const Color(0xFF1E293B),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                  isExpanded: true,
+                                  items: monthOptions.map((my) {
+                                    return DropdownMenuItem<String>(
+                                      value: my,
+                                      child: Text(_formatMonthYearTitle(my)),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      attProvider.setMonthYear(val);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 22),
+                              tooltip: 'Menu Fitur Absensi Pegawai',
+                              color: const Color(0xFF0F172A),
+                              elevation: 8,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                              ),
+                              onSelected: (val) {
+                                if (val == 'staff') {
+                                  _showManageStaffDialog(context, attProvider);
+                                } else if (val == 'input') {
+                                  _showInputAttendanceDialog(context, attProvider, null);
+                                } else if (val == 'import') {
+                                  _handleImportCsvExcel(context, attProvider);
+                                } else if (val == 'send') {
+                                  _showSendWaPdfDialog(context, attProvider, filteredRecords, titleMonthYearName);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'staff',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.people_alt_rounded, color: Color(0xFF38BDF8), size: 20),
+                                      SizedBox(width: 12),
+                                      Text('Kelola Master Staff', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'input',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.add_task_rounded, color: Colors.tealAccent, size: 20),
+                                      SizedBox(width: 12),
+                                      Text('Input Absensi Pegawai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuDivider(height: 1),
+                                const PopupMenuItem(
+                                  value: 'import',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.file_upload_rounded, color: Color(0xFF38BDF8), size: 20),
+                                      SizedBox(width: 12),
+                                      Text('Import CSV / Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'send',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.send_rounded, color: Color(0xFF4ADE80), size: 20),
+                                      SizedBox(width: 12),
+                                      Text('Kirim Laporan WA / PDF', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      const Icon(Icons.assignment_ind_rounded, color: Color(0xFF38BDF8), size: 28),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Rekap Absensi Pegawai',
+                            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Cabang Jawa Tengah (Awal Bulan s.d. Tanggal 20)',
+                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: monthOptions.contains(attProvider.selectedMonthYear)
+                                ? attProvider.selectedMonthYear
+                                : (monthOptions.isNotEmpty ? monthOptions.first : null),
+                            dropdownColor: const Color(0xFF1E293B),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            items: monthOptions.map((my) {
+                              return DropdownMenuItem<String>(
+                                value: my,
+                                child: Text(_formatMonthYearTitle(my)),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                attProvider.setMonthYear(val);
+                              }
+                            },
+                          ),
                         ),
                       ),
-                      const PopupMenuItem(
-                        value: 'input',
-                        child: Row(
-                          children: [
-                            Icon(Icons.add_task_rounded, color: Colors.tealAccent, size: 20),
-                            SizedBox(width: 12),
-                            Text('Input Absensi Pegawai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF0284C7)),
                         ),
-                      ),
-                      const PopupMenuDivider(height: 1),
-                      const PopupMenuItem(
-                        value: 'import',
-                        child: Row(
-                          children: [
-                            Icon(Icons.file_upload_rounded, color: Color(0xFF38BDF8), size: 20),
-                            SizedBox(width: 12),
-                            Text('Import CSV / Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'send',
-                        child: Row(
-                          children: [
-                            Icon(Icons.send_rounded, color: Color(0xFF4ADE80), size: 20),
-                            SizedBox(width: 12),
-                            Text('Kirim Laporan WA / PDF', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13)),
+                        child: PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 24),
+                          tooltip: 'Menu Fitur Absensi Pegawai',
+                          color: const Color(0xFF0F172A),
+                          elevation: 8,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                          ),
+                          onSelected: (val) {
+                            if (val == 'staff') {
+                              _showManageStaffDialog(context, attProvider);
+                            } else if (val == 'input') {
+                              _showInputAttendanceDialog(context, attProvider, null);
+                            } else if (val == 'import') {
+                              _handleImportCsvExcel(context, attProvider);
+                            } else if (val == 'send') {
+                              _showSendWaPdfDialog(context, attProvider, filteredRecords, titleMonthYearName);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'staff',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.people_alt_rounded, color: Color(0xFF38BDF8), size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Kelola Master Staff', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'input',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.add_task_rounded, color: Colors.tealAccent, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Input Absensi Pegawai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(height: 1),
+                            const PopupMenuItem(
+                              value: 'import',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.file_upload_rounded, color: Color(0xFF38BDF8), size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Import CSV / Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'send',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.send_rounded, color: Color(0xFF4ADE80), size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Kirim Laporan WA / PDF', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
             const SizedBox(height: 18),
 
             // Summary Metric Cards Row

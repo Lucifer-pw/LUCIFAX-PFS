@@ -458,39 +458,82 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Stat Overview Cards
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Silhouette Score',
-                  value: res.silhouetteScore.toStringAsFixed(3),
-                  subtext: res.silhouetteScore > 0.5 ? 'Struktur Cluster Sangat Baik (Strong)' : 'Struktur Cluster Cukup (Fair)',
-                  icon: Icons.auto_awesome_rounded,
-                  color: const Color(0xFF4ADE80),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Inertia / SSE',
-                  value: res.sse.toStringAsFixed(2),
-                  subtext: 'Sum of Squared Errors',
-                  icon: Icons.functions_rounded,
-                  color: const Color(0xFF38BDF8),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  title: 'Jumlah Konvergensi',
-                  value: '${res.totalIterations} Iterasi',
-                  subtext: 'Algoritma konvergen sempurna',
-                  icon: Icons.loop_rounded,
-                  color: Colors.amberAccent,
-                ),
-              ),
-            ],
-          ),
+          Builder(builder: (context) {
+            final isMobile = MediaQuery.of(context).size.width < 768;
+            return isMobile
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 220,
+                          child: _buildMetricCard(
+                            title: 'Silhouette Score',
+                            value: res.silhouetteScore.toStringAsFixed(3),
+                            subtext: res.silhouetteScore > 0.5 ? 'Struktur Baik (Strong)' : 'Struktur Cukup (Fair)',
+                            icon: Icons.auto_awesome_rounded,
+                            color: const Color(0xFF4ADE80),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 220,
+                          child: _buildMetricCard(
+                            title: 'Inertia / SSE',
+                            value: res.sse.toStringAsFixed(2),
+                            subtext: 'Sum of Squared Errors',
+                            icon: Icons.functions_rounded,
+                            color: const Color(0xFF38BDF8),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 220,
+                          child: _buildMetricCard(
+                            title: 'Jumlah Konvergensi',
+                            value: '${res.totalIterations} Iterasi',
+                            subtext: 'Algoritma konvergen',
+                            icon: Icons.loop_rounded,
+                            color: Colors.amberAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetricCard(
+                          title: 'Silhouette Score',
+                          value: res.silhouetteScore.toStringAsFixed(3),
+                          subtext: res.silhouetteScore > 0.5 ? 'Struktur Cluster Sangat Baik (Strong)' : 'Struktur Cluster Cukup (Fair)',
+                          icon: Icons.auto_awesome_rounded,
+                          color: const Color(0xFF4ADE80),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildMetricCard(
+                          title: 'Inertia / SSE',
+                          value: res.sse.toStringAsFixed(2),
+                          subtext: 'Sum of Squared Errors',
+                          icon: Icons.functions_rounded,
+                          color: const Color(0xFF38BDF8),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildMetricCard(
+                          title: 'Jumlah Konvergensi',
+                          value: '${res.totalIterations} Iterasi',
+                          subtext: 'Algoritma konvergen sempurna',
+                          icon: Icons.loop_rounded,
+                          color: Colors.amberAccent,
+                        ),
+                      ),
+                    ],
+                  );
+          }),
           const SizedBox(height: 20),
 
           // Cluster Interpretation Summaries

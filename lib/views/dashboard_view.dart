@@ -212,6 +212,7 @@ class _DashboardViewState extends State<DashboardView> with SingleTickerProvider
     if (_rankData.isEmpty) {
       return const Center(child: Text('Tidak ada data peringkat.', style: TextStyle(color: Color(0xFF64748B))));
     }
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     final barGroups = List.generate(_rankData.length.clamp(0, 10), (i) {
       final val = _rankData[i]['average'] as double;
@@ -324,35 +325,37 @@ class _DashboardViewState extends State<DashboardView> with SingleTickerProvider
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white.withOpacity(0.05)),
               ),
-              child: SingleChildScrollView(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: DataTable(
-                    headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                    headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                    columns: const [
-                      DataColumn(label: Text('No')),
-                      DataColumn(label: Text('Customer')),
-                      DataColumn(label: Text('Agustus')),
-                      DataColumn(label: Text('September')),
-                      DataColumn(label: Text('Oktober')),
-                      DataColumn(label: Text('Total')),
-                      DataColumn(label: Text('Rata-rata')),
-                    ],
-                    rows: List.generate(_rankData.length, (i) {
-                      final item = _rankData[i];
-                      return DataRow(
-                        cells: [
-                          DataCell(Text((i + 1).toString(), style: const TextStyle(color: Color(0xFF64748B)))),
-                          DataCell(Text(item['name'], style: const TextStyle(color: Colors.white))),
-                          DataCell(Text(_rupiahFormatter.format(item['august']), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                          DataCell(Text(_rupiahFormatter.format(item['september']), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                          DataCell(Text(_rupiahFormatter.format(item['october']), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                          DataCell(Text(_rupiahFormatter.format(item['total']), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
-                          DataCell(Text(_rupiahFormatter.format(item['average']), style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold))),
-                        ],
-                      );
-                    }),
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                      headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                      columns: const [
+                        DataColumn(label: Text('No')),
+                        DataColumn(label: Text('Customer')),
+                        DataColumn(label: Text('Agustus')),
+                        DataColumn(label: Text('September')),
+                        DataColumn(label: Text('Oktober')),
+                        DataColumn(label: Text('Total')),
+                        DataColumn(label: Text('Rata-rata')),
+                      ],
+                      rows: List.generate(_rankData.length, (i) {
+                        final item = _rankData[i];
+                        return DataRow(
+                          cells: [
+                            DataCell(Text((i + 1).toString(), style: const TextStyle(color: Color(0xFF64748B)))),
+                            DataCell(Text(item['name'], style: const TextStyle(color: Colors.white))),
+                            DataCell(Text(_rupiahFormatter.format(item['august']), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                            DataCell(Text(_rupiahFormatter.format(item['september']), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                            DataCell(Text(_rupiahFormatter.format(item['october']), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                            DataCell(Text(_rupiahFormatter.format(item['total']), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                            DataCell(Text(_rupiahFormatter.format(item['average']), style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold))),
+                          ],
+                        );
+                      }),
+                    ),
                   ),
                 ),
               ),
@@ -368,6 +371,7 @@ class _DashboardViewState extends State<DashboardView> with SingleTickerProvider
     if (_classData.isEmpty) {
       return const Center(child: Text('Tidak ada data klasifikasi.', style: TextStyle(color: Color(0xFF64748B))));
     }
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     final int totalCount = _classData.length;
     final int larisCount = _classData.where((item) => item['prediction'] == 'Laris').length;
@@ -381,98 +385,186 @@ class _DashboardViewState extends State<DashboardView> with SingleTickerProvider
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          Row(
-            children: [
-              // Pie Chart proportion
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: 200,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: PieChart(
-                          PieChartData(
-                            sectionsSpace: 4,
-                            centerSpaceRadius: 36,
-                            sections: [
-                              PieChartSectionData(
-                                value: larisCount.toDouble(),
-                                title: '${((larisCount/totalCount)*100).toStringAsFixed(0)}%',
-                                color: Colors.greenAccent,
-                                radius: 48,
-                                titleStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                              ),
-                              PieChartSectionData(
-                                value: tidakLarisCount.toDouble(),
-                                title: '${((tidakLarisCount/totalCount)*100).toStringAsFixed(0)}%',
-                                color: Colors.redAccent,
-                                radius: 48,
-                                titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                            ],
+          // Pie Chart + Accuracy Card
+          isMobile
+            ? Column(
+                children: [
+                  // Pie Chart
+                  Container(
+                    height: 180,
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: PieChart(
+                            PieChartData(
+                              sectionsSpace: 4,
+                              centerSpaceRadius: 30,
+                              sections: [
+                                PieChartSectionData(
+                                  value: larisCount.toDouble(),
+                                  title: '${((larisCount/totalCount)*100).toStringAsFixed(0)}%',
+                                  color: Colors.greenAccent,
+                                  radius: 40,
+                                  titleStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                                PieChartSectionData(
+                                  value: tidakLarisCount.toDouble(),
+                                  title: '${((tidakLarisCount/totalCount)*100).toStringAsFixed(0)}%',
+                                  color: Colors.redAccent,
+                                  radius: 40,
+                                  titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLegendRow('Laris (>= 50 Pcs)', Colors.greenAccent, larisCount),
+                            const SizedBox(height: 8),
+                            _buildLegendRow('Tidak Laris (< 50)', Colors.redAccent, tidakLarisCount),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Accuracy Card
+                  Container(
+                    height: 140,
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 28),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'AKURASI PREDIKSI',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${accuracy.toStringAsFixed(1)}%',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 28),
+                        ),
+                        Text(
+                          'Sesuai label manual: $correctPredictions/$totalCount produk',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  // Pie Chart proportion
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      height: 200,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
                       ),
-                      const SizedBox(width: 16),
-                      // Chart Legend
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          _buildLegendRow('Laris (>= 50 Pcs)', Colors.greenAccent, larisCount),
-                          const SizedBox(height: 8),
-                          _buildLegendRow('Tidak Laris (< 50)', Colors.redAccent, tidakLarisCount),
+                          Expanded(
+                            child: PieChart(
+                              PieChartData(
+                                sectionsSpace: 4,
+                                centerSpaceRadius: 36,
+                                sections: [
+                                  PieChartSectionData(
+                                    value: larisCount.toDouble(),
+                                    title: '${((larisCount/totalCount)*100).toStringAsFixed(0)}%',
+                                    color: Colors.greenAccent,
+                                    radius: 48,
+                                    titleStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                  ),
+                                  PieChartSectionData(
+                                    value: tidakLarisCount.toDouble(),
+                                    title: '${((tidakLarisCount/totalCount)*100).toStringAsFixed(0)}%',
+                                    color: Colors.redAccent,
+                                    radius: 48,
+                                    titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          // Chart Legend
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildLegendRow('Laris (>= 50 Pcs)', Colors.greenAccent, larisCount),
+                              const SizedBox(height: 8),
+                              _buildLegendRow('Tidak Laris (< 50)', Colors.redAccent, tidakLarisCount),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 20),
+                  
+                  // Accuracy Card
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      height: 200,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 36),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'AKURASI PREDIKSI',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${accuracy.toStringAsFixed(1)}%',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 32),
+                          ),
+                          Text(
+                            'Sesuai label manual: $correctPredictions/$totalCount produk',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 20),
-              
-              // Accuracy Card
-              Expanded(
-                flex: 1,
-                child: Container(
-                  height: 200,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 36),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'AKURASI PREDIKSI',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.0),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${accuracy.toStringAsFixed(1)}%',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 32),
-                      ),
-                      Text(
-                        'Sesuai label manual: $correctPredictions/$totalCount produk',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 20),
 
           // Datatable of Classification List
@@ -483,66 +575,68 @@ class _DashboardViewState extends State<DashboardView> with SingleTickerProvider
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white.withOpacity(0.05)),
               ),
-              child: SingleChildScrollView(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: DataTable(
-                    headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                    headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                    columns: const [
-                      DataColumn(label: Text('Kode')),
-                      DataColumn(label: Text('Nama Produk')),
-                      DataColumn(label: Text('Total Pcs (3 Bln)'), numeric: true),
-                      DataColumn(label: Text('Omset Estimasi'), numeric: true),
-                      DataColumn(label: Text('Prediksi (Qty)')),
-                      DataColumn(label: Text('Label Manual (Omset)')),
-                    ],
-                    rows: _classData.map((item) {
-                      final predLaris = item['prediction'] == 'Laris';
-                      final manualLaris = item['labelManual'] == 'Laris';
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(item['productId'], style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
-                          DataCell(Text(item['name'], style: const TextStyle(color: Colors.white, fontSize: 12))),
-                          DataCell(Text(item['pcs'].toStringAsFixed(0), style: const TextStyle(color: Colors.white))),
-                          DataCell(Text(_rupiahFormatter.format(item['income']), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: predLaris ? Colors.greenAccent.withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                item['prediction'],
-                                style: TextStyle(
-                                  color: predLaris ? Colors.greenAccent : Colors.redAccent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                      headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                      columns: const [
+                        DataColumn(label: Text('Kode')),
+                        DataColumn(label: Text('Nama Produk')),
+                        DataColumn(label: Text('Total Pcs (3 Bln)'), numeric: true),
+                        DataColumn(label: Text('Omset Estimasi'), numeric: true),
+                        DataColumn(label: Text('Prediksi (Qty)')),
+                        DataColumn(label: Text('Label Manual (Omset)')),
+                      ],
+                      rows: _classData.map((item) {
+                        final predLaris = item['prediction'] == 'Laris';
+                        final manualLaris = item['labelManual'] == 'Laris';
+                        return DataRow(
+                          cells: [
+                            DataCell(Text(item['productId'], style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                            DataCell(Text(item['name'], style: const TextStyle(color: Colors.white, fontSize: 12))),
+                            DataCell(Text(item['pcs'].toStringAsFixed(0), style: const TextStyle(color: Colors.white))),
+                            DataCell(Text(_rupiahFormatter.format(item['income']), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                            DataCell(
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: predLaris ? Colors.greenAccent.withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  item['prediction'],
+                                  style: TextStyle(
+                                    color: predLaris ? Colors.greenAccent : Colors.redAccent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: manualLaris ? Colors.greenAccent.withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                item['labelManual'],
-                                style: TextStyle(
-                                  color: manualLaris ? Colors.greenAccent : Colors.redAccent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
+                            DataCell(
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: manualLaris ? Colors.greenAccent.withOpacity(0.15) : Colors.redAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  item['labelManual'],
+                                  style: TextStyle(
+                                    color: manualLaris ? Colors.greenAccent : Colors.redAccent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                          ],
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
               ),
