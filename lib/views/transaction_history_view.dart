@@ -3311,7 +3311,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         SizedBox(
           height: 44,
           child: ElevatedButton.icon(
-            onPressed: () => _showShareWhatsappErpModal(context, filteredTransactions),
+            onPressed: () => _showShareWhatsappErpModal(context, trProvider.transactions),
             icon: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 16),
             label: const Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(

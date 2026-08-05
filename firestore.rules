@@ -202,6 +202,15 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 20. WA_CONTACTS — Daftar Kontak WhatsApp
+    // ═══════════════════════════════════════════════════
+    match /wa_contacts/{contactId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {
