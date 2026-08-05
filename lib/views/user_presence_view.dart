@@ -182,8 +182,10 @@ class _UserPresenceViewState extends State<UserPresenceView> {
       );
     }
 
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -191,31 +193,31 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 12,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Row(
                     children: [
-                      Icon(Icons.developer_board_rounded, color: Color(0xFF38BDF8), size: 28),
-                      SizedBox(width: 10),
+                      Icon(Icons.developer_board_rounded, color: const Color(0xFF38BDF8), size: isMobile ? 22 : 28),
+                      const SizedBox(width: 8),
                       Text(
                         'Developer Control & Monitor',
-                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: isMobile ? 18 : 24, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    'Monitoring Aktivitas User Real-Time & Pengaturan Akses Menu Role KACAB (Developer Only)',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                    'Monitoring Aktivitas User Real-Time & Pengaturan Akses Menu Role KACAB',
+                    style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 11 : 14),
                   ),
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFF38BDF8).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -225,53 +227,59 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 10,
-                      height: 10,
+                      width: 8,
+                      height: 8,
                       decoration: const BoxDecoration(
                         color: Color(0xFF4ADE80),
                         shape: BoxShape.circle,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     const Text(
                       'DEVELOPER MODE ACTIVE',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 10),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isMobile ? 12 : 20),
 
-          // Tab Bar Selector
-          Row(
-            children: [
-              _buildTabButton(
-                index: 0,
-                icon: Icons.sensors_rounded,
-                label: 'User Online Monitor',
-              ),
-              const SizedBox(width: 12),
-              _buildTabButton(
-                index: 1,
-                icon: Icons.admin_panel_settings_rounded,
-                label: 'Hak Akses Role KACAB',
-              ),
-              const SizedBox(width: 12),
-              _buildTabButton(
-                index: 2,
-                icon: Icons.receipt_long_rounded,
-                label: 'Invoice Operasional Dev',
-              ),
-            ],
+          // Horizontal Scrollable Tab Bar Selector for Mobile & Desktop
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildTabButton(
+                  index: 0,
+                  icon: Icons.sensors_rounded,
+                  label: 'User Online Monitor',
+                  isMobile: isMobile,
+                ),
+                const SizedBox(width: 8),
+                _buildTabButton(
+                  index: 1,
+                  icon: Icons.admin_panel_settings_rounded,
+                  label: 'Hak Akses Role KACAB',
+                  isMobile: isMobile,
+                ),
+                const SizedBox(width: 8),
+                _buildTabButton(
+                  index: 2,
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Invoice Operasional Dev',
+                  isMobile: isMobile,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isMobile ? 12 : 20),
 
           // Tab Contents
           Expanded(
             child: _selectedTab == 0
-                ? _buildUserPresenceTab(authProvider, currentUser)
+                ? _buildUserPresenceTab(authProvider, currentUser, isMobile)
                 : _selectedTab == 1
                     ? _buildKacabPermissionsTab(rolePermissionsProvider)
                     : const OperationalInvoiceView(),
@@ -281,14 +289,14 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     );
   }
 
-  Widget _buildTabButton({required int index, required IconData icon, required String label}) {
+  Widget _buildTabButton({required int index, required IconData icon, required String label, required bool isMobile}) {
     final isSelected = _selectedTab == index;
     return InkWell(
       onTap: () => setState(() => _selectedTab = index),
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18, vertical: isMobile ? 8 : 12),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(10),
@@ -310,16 +318,16 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           children: [
             Icon(
               icon,
-              size: 18,
+              size: isMobile ? 15 : 18,
               color: isSelected ? Colors.white : const Color(0xFF94A3B8),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 14,
+                fontSize: isMobile ? 12 : 14,
               ),
             ),
           ],
@@ -329,7 +337,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
   }
 
   // TAB 1: User Presence Monitor
-  Widget _buildUserPresenceTab(AuthProvider authProvider, UserProfile? currentUser) {
+  Widget _buildUserPresenceTab(AuthProvider authProvider, UserProfile? currentUser, bool isMobile) {
     return StreamBuilder<List<UserProfile>>(
       stream: authProvider.getUsersStream(),
       builder: (context, snapshot) {
@@ -361,45 +369,79 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
         return Column(
           children: [
-            // Summary Stat Cards
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    title: 'User Online / Aktif',
-                    value: '${onlineUsers.length}',
-                    icon: Icons.online_prediction_rounded,
-                    color: const Color(0xFF4ADE80),
-                    subtext: 'Sedang membuka aplikasi',
+            // Summary Stat Cards (Responsive Stack on Mobile)
+            isMobile
+                ? Column(
+                    children: [
+                      _buildStatCard(
+                        title: 'User Online / Aktif',
+                        value: '${onlineUsers.length}',
+                        icon: Icons.online_prediction_rounded,
+                        color: const Color(0xFF4ADE80),
+                        subtext: 'Sedang membuka aplikasi',
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStatCard(
+                        title: 'User Offline',
+                        value: '${offlineUsers.length}',
+                        icon: Icons.power_settings_new_rounded,
+                        color: const Color(0xFF94A3B8),
+                        subtext: 'Tutup app / tidak aktif',
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStatCard(
+                        title: 'Total Akun Terdaftar',
+                        value: '${users.length}',
+                        icon: Icons.people_alt_rounded,
+                        color: const Color(0xFF38BDF8),
+                        subtext: 'Seluruh akun di sistem',
+                        isMobile: isMobile,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'User Online / Aktif',
+                          value: '${onlineUsers.length}',
+                          icon: Icons.online_prediction_rounded,
+                          color: const Color(0xFF4ADE80),
+                          subtext: 'Sedang membuka aplikasi',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'User Offline',
+                          value: '${offlineUsers.length}',
+                          icon: Icons.power_settings_new_rounded,
+                          color: const Color(0xFF94A3B8),
+                          subtext: 'Tutup app / tidak aktif',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Total Akun Terdaftar',
+                          value: '${users.length}',
+                          icon: Icons.people_alt_rounded,
+                          color: const Color(0xFF38BDF8),
+                          subtext: 'Seluruh akun di sistem',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    title: 'User Offline',
-                    value: '${offlineUsers.length}',
-                    icon: Icons.power_settings_new_rounded,
-                    color: const Color(0xFF94A3B8),
-                    subtext: 'Tutup app / tidak aktif',
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    title: 'Total Akun Terdaftar',
-                    value: '${users.length}',
-                    icon: Icons.people_alt_rounded,
-                    color: const Color(0xFF38BDF8),
-                    subtext: 'Seluruh akun di sistem',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+            SizedBox(height: isMobile ? 10 : 20),
 
             // Controls & Filter Bar
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(isMobile ? 10 : 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(12),
@@ -409,15 +451,15 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                 children: [
                   Expanded(
                     child: TextField(
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: Colors.white, fontSize: isMobile ? 12 : 14),
                       decoration: InputDecoration(
                         hintText: 'Cari berdasarkan nama, username, atau role...',
-                        hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8)),
+                        hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 12 : 14),
+                        prefixIcon: Icon(Icons.search, color: const Color(0xFF38BDF8), size: isMobile ? 18 : 22),
                         filled: true,
                         fillColor: const Color(0xFF0F172A),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: isMobile ? 8 : 12),
                       ),
                       onChanged: (val) => setState(() => _searchQuery = val.trim()),
                     ),
@@ -425,7 +467,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isMobile ? 10 : 16),
 
             // User List Table
             Expanded(
@@ -453,125 +495,146 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                             final roleColor = _getRoleColor(u.role);
                             final isSelf = currentUser != null && u.uid == currentUser.uid;
 
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                              leading: Stack(
+                            return Container(
+                              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 10 : 12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  CircleAvatar(
-                                    backgroundColor: roleColor.withOpacity(0.2),
-                                    child: Text(
-                                      u.name.isNotEmpty ? u.name[0].toUpperCase() : 'U',
-                                      style: TextStyle(color: roleColor, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    right: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFF64748B),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: const Color(0xFF1E293B), width: 2),
+                                  // User Avatar
+                                  Stack(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: isMobile ? 18 : 22,
+                                        backgroundColor: roleColor.withOpacity(0.2),
+                                        child: Text(
+                                          u.name.isNotEmpty ? u.name[0].toUpperCase() : 'U',
+                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: isMobile ? 14 : 16),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              title: Row(
-                                children: [
-                                  Text(
-                                    u.name,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '@${u.username}',
-                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                                  ),
-                                  if (isSelf) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF38BDF8).withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text('ANDA', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: roleColor.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: roleColor.withOpacity(0.3)),
-                                      ),
-                                      child: Text(
-                                        _getRoleLabel(u.role),
-                                        style: TextStyle(color: roleColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Icon(Icons.login_rounded, size: 14, color: Color(0xFF64748B)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Login: ${_formatDateTime(u.lastLogin)}',
-                                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isOnline ? const Color(0xFF4ADE80).withOpacity(0.15) : const Color(0xFF334155),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isOnline ? const Color(0xFF4ADE80).withOpacity(0.4) : Colors.transparent,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 8,
-                                          height: 8,
+                                      Positioned(
+                                        right: 0,
+                                        bottom: 0,
+                                        child: Container(
+                                          width: isMobile ? 10 : 12,
+                                          height: isMobile ? 10 : 12,
                                           decoration: BoxDecoration(
                                             color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFF64748B),
                                             shape: BoxShape.circle,
+                                            border: Border.all(color: const Color(0xFF1E293B), width: 2),
                                           ),
                                         ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          isOnline ? 'ONLINE' : 'OFFLINE',
-                                          style: TextStyle(
-                                            color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFF94A3B8),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                          ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 12),
+
+                                  // User Info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                u.name,
+                                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 13 : 15),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              '@${u.username}',
+                                              style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 11 : 13),
+                                            ),
+                                            if (isSelf) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF38BDF8).withOpacity(0.2),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: const Text('ANDA', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 9, fontWeight: FontWeight.bold)),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Wrap(
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          spacing: 8,
+                                          runSpacing: 4,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: roleColor.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: roleColor.withOpacity(0.3)),
+                                              ),
+                                              child: Text(
+                                                _getRoleLabel(u.role),
+                                                style: TextStyle(color: roleColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                            Text(
+                                              'Login: ${_formatDateTime(u.lastLogin)}',
+                                              style: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 10 : 12),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Aktif: ${_formatRelativeTime(u.lastSeen, isOnline)}',
-                                    style: TextStyle(
-                                      color: isOnline ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                                      fontSize: 11,
-                                    ),
+                                  const SizedBox(width: 8),
+
+                                  // Status Badge
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: isMobile ? 2.5 : 4),
+                                        decoration: BoxDecoration(
+                                          color: isOnline ? const Color(0xFF4ADE80).withOpacity(0.15) : const Color(0xFF334155),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isOnline ? const Color(0xFF4ADE80).withOpacity(0.4) : Colors.transparent,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 6,
+                                              height: 6,
+                                              decoration: BoxDecoration(
+                                                color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFF64748B),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              isOnline ? 'ONLINE' : 'OFFLINE',
+                                              style: TextStyle(
+                                                color: isOnline ? const Color(0xFF4ADE80) : const Color(0xFF94A3B8),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: isMobile ? 9 : 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _formatRelativeTime(u.lastSeen, isOnline),
+                                        style: TextStyle(
+                                          color: isOnline ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                          fontSize: isMobile ? 9 : 11,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -806,9 +869,10 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     required IconData icon,
     required Color color,
     required String subtext,
+    bool isMobile = false,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isMobile ? 10 : 16),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
@@ -817,22 +881,32 @@ class _UserPresenceViewState extends State<UserPresenceView> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isMobile ? 8 : 12),
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: isMobile ? 18 : 24),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: isMobile ? 10 : 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 11 : 12, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 2),
-                Text(value, style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(subtext, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                Text(value, style: TextStyle(color: color, fontSize: isMobile ? 18 : 22, fontWeight: FontWeight.bold)),
+                Text(
+                  subtext,
+                  style: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 9 : 10),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),

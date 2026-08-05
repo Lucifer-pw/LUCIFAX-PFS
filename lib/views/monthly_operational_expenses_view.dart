@@ -1244,240 +1244,462 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final isKacab = authProvider.currentUser?.role.toLowerCase() == 'kacab';
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Container(
       color: const Color(0xFF0F172A),
-      padding: const EdgeInsets.all(20.0),
+      padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header Row (Static Top Header)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.request_quote_rounded, color: Color(0xFF38BDF8), size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'BIAYA OPERASIONAL BULANAN (BO BULANAN)',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Cabang: JAWA TENGAH | Periode: $_monthYearTitle',
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-
-              // Month Selector, Year Selector & Titik 3 Overflow Menu
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  // Month Picker
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF0284C7)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _selectedMonth,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
-                        icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
-                        items: List.generate(12, (i) {
-                          return DropdownMenuItem(
-                            value: i + 1,
-                            child: Text('Bulan: ${_monthNames[i]}'),
-                          );
-                        }),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedMonth = val);
-                            _loadExpenseData();
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-
-                  // Year Picker
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _selectedYear,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 16),
-                        items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) {
-                          return DropdownMenuItem(value: y, child: Text('$y'));
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedYear = val);
-                            _loadExpenseData();
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-
-                  // FITUR TITIK 3 (OVERFLOW ACTIONS MENU)
-                  PopupMenuButton<String>(
-                    tooltip: 'Menu Opsi Titik 3 (Cari & Download)',
-                    offset: const Offset(0, 40),
-                    color: const Color(0xFF1E293B),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
-                    ),
-                    icon: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF0284C7)),
-                      ),
-                      child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
-                    ),
-                    onSelected: (val) {
-                      if (val == 'search') {
-                        _showMonthYearSearchDialog();
-                      } else if (val == 'excel') {
-                        _exportToExcel();
-                      } else if (val == 'pdf') {
-                        _printPdf();
-                      } else if (val == 'import') {
-                        _importFromExcel();
-                      } else if (val == 'reset') {
-                        _confirmResetToDefault();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'search',
-                        child: Row(
-                          children: [
-                            Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
-                            SizedBox(width: 10),
-                            Text('Cari berdasarkan Bulan & Tahun', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuDivider(height: 1),
-                      const PopupMenuItem(
-                        value: 'excel',
-                        child: Row(
-                          children: [
-                            Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
-                            SizedBox(width: 10),
-                            Text('Download Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'pdf',
-                        child: Row(
-                          children: [
-                            Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
-                            SizedBox(width: 10),
-                            Text('Download PDF', style: TextStyle(color: Colors.white, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      if (!isKacab) ...[
-                        const PopupMenuDivider(height: 1),
-                        const PopupMenuItem(
-                          value: 'import',
-                          child: Row(
-                            children: [
-                              Icon(Icons.file_upload_outlined, color: Colors.amberAccent, size: 18),
-                              SizedBox(width: 10),
-                              Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold)),
-                            ],
+          isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
                           ),
+                          child: const Icon(Icons.request_quote_rounded, color: Color(0xFF38BDF8), size: 18),
                         ),
-                        const PopupMenuDivider(height: 1),
-                        const PopupMenuItem(
-                          value: 'reset',
-                          child: Row(
-                            children: [
-                              Icon(Icons.restart_alt_rounded, color: Colors.redAccent, size: 18),
-                              SizedBox(width: 10),
-                              Text('Reset ke Template Default', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
-                            ],
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'BIAYA OPERASIONAL BULANAN',
+                            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Cabang: JAWA TENGAH | Periode: $_monthYearTitle',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        // Month Picker
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: _selectedMonth,
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 14),
+                                isExpanded: true,
+                                items: List.generate(12, (i) {
+                                  return DropdownMenuItem(
+                                    value: i + 1,
+                                    child: Text('Bulan: ${_monthNames[i]}'),
+                                  );
+                                }),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedMonth = val);
+                                    _loadExpenseData();
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Year Picker
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int>(
+                              value: _selectedYear,
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 14),
+                              items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) {
+                                return DropdownMenuItem(value: y, child: Text('$y'));
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedYear = val);
+                                  _loadExpenseData();
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Overflow Menu Button
+                        PopupMenuButton<String>(
+                          tooltip: 'Menu Opsi',
+                          offset: const Offset(0, 40),
+                          color: const Color(0xFF1E293B),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
+                          ),
+                          icon: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 16),
+                          ),
+                          onSelected: (val) {
+                            if (val == 'search') {
+                              _showMonthYearSearchDialog();
+                            } else if (val == 'excel') {
+                              _exportToExcel();
+                            } else if (val == 'pdf') {
+                              _printPdf();
+                            } else if (val == 'import') {
+                              _importFromExcel();
+                            } else if (val == 'reset') {
+                              _confirmResetToDefault();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'search',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Cari berdasarkan Bulan & Tahun', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(height: 1),
+                            const PopupMenuItem(
+                              value: 'excel',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Download Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'pdf',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Download PDF', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            if (!isKacab) ...[
+                              const PopupMenuDivider(height: 1),
+                              const PopupMenuItem(
+                                value: 'import',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.file_upload_outlined, color: Colors.amberAccent, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuDivider(height: 1),
+                              const PopupMenuItem(
+                                value: 'reset',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.restart_alt_rounded, color: Colors.redAccent, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Reset ke Template Default', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.request_quote_rounded, color: Color(0xFF38BDF8), size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'BIAYA OPERASIONAL BULANAN (BO BULANAN)',
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Cabang: JAWA TENGAH | Periode: $_monthYearTitle',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
 
-          // KPI Cards Row (Static Top Summary Cards)
-          Row(
-            children: [
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'TOTAL BIAYA OPERASIONAL',
-                  value: _currency.format(_totalOperational),
-                  subtitle: '${_operationalItems.length} Item Pengeluaran',
-                  icon: Icons.receipt_rounded,
-                  color: const Color(0xFF38BDF8),
+                    // Month Selector, Year Selector & Titik 3 Overflow Menu
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        // Month Picker
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF0284C7)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int>(
+                              value: _selectedMonth,
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                              icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                              items: List.generate(12, (i) {
+                                return DropdownMenuItem(
+                                  value: i + 1,
+                                  child: Text('Bulan: ${_monthNames[i]}'),
+                                );
+                              }),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedMonth = val);
+                                  _loadExpenseData();
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+
+                        // Year Picker
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int>(
+                              value: _selectedYear,
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 16),
+                              items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) {
+                                return DropdownMenuItem(value: y, child: Text('$y'));
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedYear = val);
+                                  _loadExpenseData();
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+
+                        // FITUR TITIK 3 (OVERFLOW ACTIONS MENU)
+                        PopupMenuButton<String>(
+                          tooltip: 'Menu Opsi Titik 3 (Cari & Download)',
+                          offset: const Offset(0, 40),
+                          color: const Color(0xFF1E293B),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(color: Color(0xFF0284C7), width: 1.2),
+                          ),
+                          icon: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
+                          ),
+                          onSelected: (val) {
+                            if (val == 'search') {
+                              _showMonthYearSearchDialog();
+                            } else if (val == 'excel') {
+                              _exportToExcel();
+                            } else if (val == 'pdf') {
+                              _printPdf();
+                            } else if (val == 'import') {
+                              _importFromExcel();
+                            } else if (val == 'reset') {
+                              _confirmResetToDefault();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'search',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Cari berdasarkan Bulan & Tahun', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(height: 1),
+                            const PopupMenuItem(
+                              value: 'excel',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Download Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'pdf',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Download PDF', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            if (!isKacab) ...[
+                              const PopupMenuDivider(height: 1),
+                              const PopupMenuItem(
+                                value: 'import',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.file_upload_outlined, color: Colors.amberAccent, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuDivider(height: 1),
+                              const PopupMenuItem(
+                                value: 'reset',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.restart_alt_rounded, color: Colors.redAccent, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Reset ke Template Default', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'TOTAL BIAYA OF COUNTRY',
-                  value: _currency.format(_totalOfCountry),
-                  subtitle: '${_ofCountryItems.length} Lokasi Luarkota',
-                  icon: Icons.commute_rounded,
-                  color: Colors.amberAccent,
+          SizedBox(height: isMobile ? 8 : 10),
+
+          // KPI Cards (Responsive Stack on Mobile, Row on Desktop)
+          isMobile
+              ? Column(
+                  children: [
+                    _buildKpiCard(
+                      title: 'TOTAL BIAYA OPERASIONAL',
+                      value: _currency.format(_totalOperational),
+                      subtitle: '${_operationalItems.length} Item Pengeluaran',
+                      icon: Icons.receipt_rounded,
+                      color: const Color(0xFF38BDF8),
+                      isMobile: isMobile,
+                    ),
+                    const SizedBox(height: 6),
+                    _buildKpiCard(
+                      title: 'TOTAL BIAYA OF COUNTRY',
+                      value: _currency.format(_totalOfCountry),
+                      subtitle: '${_ofCountryItems.length} Lokasi Luarkota',
+                      icon: Icons.commute_rounded,
+                      color: Colors.amberAccent,
+                      isMobile: isMobile,
+                    ),
+                    const SizedBox(height: 6),
+                    _buildKpiCard(
+                      title: 'TOTAL GRANDTOTAL (SEMUA)',
+                      value: _currency.format(_grandTotal),
+                      subtitle: 'Total Tagihan Bulan $_monthYearTitle',
+                      icon: Icons.monetization_on_rounded,
+                      color: Colors.greenAccent,
+                      isMobile: isMobile,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'TOTAL BIAYA OPERASIONAL',
+                        value: _currency.format(_totalOperational),
+                        subtitle: '${_operationalItems.length} Item Pengeluaran',
+                        icon: Icons.receipt_rounded,
+                        color: const Color(0xFF38BDF8),
+                        isMobile: isMobile,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'TOTAL BIAYA OF COUNTRY',
+                        value: _currency.format(_totalOfCountry),
+                        subtitle: '${_ofCountryItems.length} Lokasi Luarkota',
+                        icon: Icons.commute_rounded,
+                        color: Colors.amberAccent,
+                        isMobile: isMobile,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'TOTAL GRANDTOTAL (SEMUA)',
+                        value: _currency.format(_grandTotal),
+                        subtitle: 'Total Tagihan Bulan $_monthYearTitle',
+                        icon: Icons.monetization_on_rounded,
+                        color: Colors.greenAccent,
+                        isMobile: isMobile,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'TOTAL GRANDTOTAL (SEMUA)',
-                  value: _currency.format(_grandTotal),
-                  subtitle: 'Total Tagihan Bulan $_monthYearTitle',
-                  icon: Icons.monetization_on_rounded,
-                  color: Colors.greenAccent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          SizedBox(height: isMobile ? 8 : 12),
 
           // MAIN BODY SECTION: ALL FITS IN ONE SINGLE SCREEN VIEW!
           Expanded(
@@ -1836,7 +2058,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
 
           // GRAND TOTAL BANNER AT BOTTOM (FIT DI DASAR 1 LAYAR PENGGUNA)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
@@ -1847,19 +2069,24 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.monetization_on_rounded, color: Colors.greenAccent, size: 22),
-                    SizedBox(width: 10),
-                    Text(
-                      'TOTAL GRANDTOTAL (SEMUA BIAYA OPERASIONAL)',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.monetization_on_rounded, color: Colors.greenAccent, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'TOTAL GRANDTOTAL (SEMUA BIAYA OPERASIONAL)',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Text(
                   _currency.format(_grandTotal),
-                  style: const TextStyle(color: Colors.greenAccent, fontSize: 17, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Colors.greenAccent, fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1875,9 +2102,10 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
     required String subtitle,
     required IconData icon,
     required Color color,
+    bool isMobile = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 8 : 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(10),
@@ -1886,31 +2114,37 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(isMobile ? 7 : 10),
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color, size: isMobile ? 18 : 22),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: isMobile ? 8 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  style: TextStyle(color: color, fontSize: isMobile ? 9 : 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 14 : 16, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                  style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 9 : 10),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
