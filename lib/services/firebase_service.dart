@@ -1495,7 +1495,7 @@ class FirebaseService {
     final snap = await _db.collection('wa_contacts').get();
     if (snap.docs.isEmpty) {
       final defaults = [
-        {'name': 'Bu Silvi', 'phone': '08123456789', 'role': 'Admin ERP'},
+        {'name': 'Bu Silvi', 'phone': '08123456789', 'role': 'Admin ERP', 'template': 'siang Bu Silvi'},
       ];
       final batch = _db.batch();
       for (var c in defaults) {
@@ -1504,6 +1504,7 @@ class FirebaseService {
           'name': c['name'],
           'phone': c['phone'],
           'role': c['role'],
+          'template': c['template'],
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }

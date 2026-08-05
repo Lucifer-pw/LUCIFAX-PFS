@@ -4241,9 +4241,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   void _showShareWhatsappErpModal(BuildContext context, List<model_tr.Transaction> trList) {
     _firebaseService.seedDefaultWaContactsIfEmpty();
 
-    // Default to ERP synced transactions or all transactions in current filter
-    final erpSyncedTrs = trList.where((t) => t.erpSyncDate != null).toList();
-    final initialTrs = erpSyncedTrs.isNotEmpty ? erpSyncedTrs : trList;
+    // Use all transactions in current list directly without date restrictions
+    final initialTrs = trList;
 
     WaContact? selectedContact;
     final phoneCtrl = TextEditingController();
@@ -4278,20 +4277,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return 'TOKO';
     }
 
-    String generateText(String greeting, String contactName, DateTime dt, List<model_tr.Transaction> items) {
+    String generateText(String greeting, WaContact? contact, DateTime dt, List<model_tr.Transaction> items) {
       final dateStr = formatIndoDate(dt);
       final countStr = '${items.length} invoice';
 
       final buffer = StringBuffer();
-      final cName = contactName.trim();
-      final greet = greeting.trim();
-
-      if (greet.isNotEmpty && cName.isNotEmpty) {
-        buffer.writeln('$greet $cName');
-      } else if (cName.isNotEmpty) {
-        buffer.writeln('siang $cName');
+      
+      // If contact has custom template set, use it!
+      if (contact != null && contact.template.trim().isNotEmpty) {
+        buffer.writeln(contact.template.trim());
       } else {
-        buffer.writeln('siang');
+        final cName = (contact?.name ?? '').trim();
+        final greet = greeting.trim();
+
+        if (greet.isNotEmpty && cName.isNotEmpty) {
+          buffer.writeln('$greet $cName');
+        } else if (cName.isNotEmpty) {
+          buffer.writeln('siang $cName');
+        } else {
+          buffer.writeln('siang');
+        }
       }
 
       buffer.writeln('untuk list erp hari ini $dateStr ada : $countStr');
@@ -4323,13 +4328,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   phoneCtrl.text = selectedContact!.phone;
                 }
 
-                // Filtered list based on search bar
+                // Filtered list based strictly on search bar (No Invoice / Nama Customer)
                 final searchLower = searchInvoiceQuery.toLowerCase().trim();
                 final displayedInvoices = initialTrs.where((t) {
                   if (searchLower.isEmpty) return true;
                   final storeName = getStoreName(t).toLowerCase();
+                  final aliasName = t.aliasName.toLowerCase();
                   final invNo = t.invoiceNo.toString().toLowerCase();
-                  return storeName.contains(searchLower) || invNo.contains(searchLower);
+                  return storeName.contains(searchLower) || aliasName.contains(searchLower) || invNo.contains(searchLower);
                 }).toList();
 
                 // Filter selected transactions
@@ -4337,8 +4343,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                 // Re-generate text preview unless user edited manually
                 if (!userEditedMessage) {
-                  final contactName = selectedContact?.name ?? '';
-                  final generatedMsg = generateText(selectedGreeting, contactName, selectedDate, activeTrs);
+                  final generatedMsg = generateText(selectedGreeting, selectedContact, selectedDate, activeTrs);
                   customMessageCtrl.text = generatedMsg;
                 }
 
@@ -4400,7 +4405,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 items: contacts.map((c) {
                                   return DropdownMenuItem<WaContact>(
                                     value: c,
-                                    child: Text('${c.name} (${c.phone})${c.role.isNotEmpty ? ' - ${c.role}' : ''}', overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      '${c.name} (${c.phone})${c.role.isNotEmpty ? ' - ${c.role}' : ''}${c.template.isNotEmpty ? ' [Template]' : ''}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   );
                                 }).toList(),
                                 onChanged: (val) {
@@ -4408,7 +4416,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     setDialogState(() {
                                       selectedContact = val;
                                       phoneCtrl.text = val.phone;
-                                      userEditedMessage = false; // Reset to generate auto template for new contact
+                                      userEditedMessage = false; // Reset to auto populate template
                                     });
                                   }
                                 },
@@ -4489,54 +4497,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           ),
                           const SizedBox(height: 14),
 
-                          // 3. DATE SELECTOR & INVOICE COUNT
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Daftar Invoice Terpilih (${activeTrs.length} dari ${initialTrs.length} Total):',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              InkWell(
-                                onTap: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: selectedDate,
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime(2030),
-                                  );
-                                  if (picked != null) {
-                                    setDialogState(() {
-                                      selectedDate = picked;
-                                      userEditedMessage = false;
-                                    });
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0F172A),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 14),
-                                      const SizedBox(width: 6),
-                                      Text(formatIndoDate(selectedDate), style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
+                          // 3. INVOICE COUNT HEADER (WITHOUT DATE FILTER)
+                          Text(
+                            'Daftar Invoice Terpilih (${activeTrs.length} dari ${initialTrs.length} Total):',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 8),
 
-                          // SEARCH INPUT FOR INVOICE LIST
+                          // SEARCH INPUT FOR INVOICE LIST (STRICTLY SEARCH BY NO INVOICE / NAMA CUSTOMER)
                           TextField(
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                             decoration: InputDecoration(
-                              hintText: 'Cari Nama Toko / No Invoice...',
+                              hintText: 'Cari Nama Customer (NINE FF, PARIS FF) / No Invoice...',
                               hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
                               prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
                               filled: true,
@@ -4695,6 +4667,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final roleCtrl = TextEditingController();
+    final templateCtrl = TextEditingController();
     String? editingContactId;
     bool isSaving = false;
 
@@ -4728,7 +4701,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     ],
                   ),
                   content: SizedBox(
-                    width: 480,
+                    width: 520,
                     child: SingleChildScrollView(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -4800,65 +4773,89 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       ),
                                     ),
                                     const SizedBox(width: 10),
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8)),
-                                      onPressed: isSaving
-                                          ? null
-                                          : () async {
-                                              final name = nameCtrl.text.trim();
-                                              final phone = phoneCtrl.text.trim();
-                                              final role = roleCtrl.text.trim();
-                                              if (name.isEmpty || phone.isEmpty) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Nama dan Nomor WA tidak boleh kosong!'), backgroundColor: Colors.redAccent),
-                                                );
-                                                return;
-                                              }
-
-                                              setDialogState(() => isSaving = true);
-
-                                              try {
-                                                final contact = WaContact(
-                                                  id: editingContactId ?? '',
-                                                  name: name,
-                                                  phone: phone,
-                                                  role: role,
-                                                );
-                                                await _firebaseService.saveWaContact(contact);
-
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(editingContactId != null ? '✅ Kontak "$name" berhasil diperbarui!' : '✅ Kontak "$name" berhasil disimpan!'),
-                                                    backgroundColor: Colors.teal,
-                                                    duration: const Duration(seconds: 2),
-                                                  ),
-                                                );
-
-                                                setDialogState(() {
-                                                  nameCtrl.clear();
-                                                  phoneCtrl.clear();
-                                                  roleCtrl.clear();
-                                                  editingContactId = null;
-                                                  isSaving = false;
-                                                });
-                                              } catch (e) {
-                                                setDialogState(() => isSaving = false);
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('Gagal menyimpan kontak: $e'), backgroundColor: Colors.redAccent),
-                                                );
-                                              }
-                                            },
-                                      icon: isSaving
-                                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                                          : Icon(editingContactId != null ? Icons.check_rounded : Icons.add_rounded, color: Colors.black, size: 16),
-                                      label: Text(
-                                        isSaving
-                                            ? 'Menyimpan...'
-                                            : (editingContactId != null ? 'Update' : 'Simpan'),
-                                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: templateCtrl,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                                        decoration: InputDecoration(
+                                          labelText: 'Template Sapaan (e.g. siang Bu Silvi)',
+                                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                          filled: true,
+                                          fillColor: const Color(0xFF1E293B),
+                                          isDense: true,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                        ),
                                       ),
                                     ),
                                   ],
+                                ),
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF38BDF8),
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                    ),
+                                    onPressed: isSaving
+                                        ? null
+                                        : () async {
+                                            final name = nameCtrl.text.trim();
+                                            final phone = phoneCtrl.text.trim();
+                                            final role = roleCtrl.text.trim();
+                                            final tmpl = templateCtrl.text.trim();
+                                            if (name.isEmpty || phone.isEmpty) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Nama dan Nomor WA tidak boleh kosong!'), backgroundColor: Colors.redAccent),
+                                              );
+                                              return;
+                                            }
+
+                                            setDialogState(() => isSaving = true);
+
+                                            try {
+                                              final contact = WaContact(
+                                                id: editingContactId ?? '',
+                                                name: name,
+                                                phone: phone,
+                                                role: role,
+                                                template: tmpl,
+                                              );
+                                              await _firebaseService.saveWaContact(contact);
+
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(editingContactId != null ? '✅ Kontak "$name" berhasil diperbarui!' : '✅ Kontak "$name" berhasil disimpan!'),
+                                                  backgroundColor: Colors.teal,
+                                                  duration: const Duration(seconds: 2),
+                                                ),
+                                              );
+
+                                              setDialogState(() {
+                                                nameCtrl.clear();
+                                                phoneCtrl.clear();
+                                                roleCtrl.clear();
+                                                templateCtrl.clear();
+                                                editingContactId = null;
+                                                isSaving = false;
+                                              });
+                                            } catch (e) {
+                                              setDialogState(() => isSaving = false);
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('Gagal menyimpan kontak: $e'), backgroundColor: Colors.redAccent),
+                                              );
+                                            }
+                                          },
+                                    icon: isSaving
+                                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                        : Icon(editingContactId != null ? Icons.check_rounded : Icons.add_rounded, color: Colors.black, size: 16),
+                                    label: Text(
+                                      isSaving
+                                          ? 'Menyimpan...'
+                                          : (editingContactId != null ? 'Update Kontak' : 'Simpan Kontak'),
+                                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -4881,6 +4878,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   itemCount: contacts.length,
                                   itemBuilder: (context, index) {
                                     final item = contacts[index];
+                                    final subDetails = [
+                                      item.phone,
+                                      if (item.role.isNotEmpty) item.role,
+                                      if (item.template.isNotEmpty) 'Template: ${item.template}',
+                                    ].join(' • ');
+
                                     return Card(
                                       color: const Color(0xFF0F172A),
                                       margin: const EdgeInsets.only(bottom: 8),
@@ -4893,7 +4896,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           child: Icon(Icons.person_rounded, color: Colors.white, size: 16),
                                         ),
                                         title: Text(item.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                        subtitle: Text('${item.phone}${item.role.isNotEmpty ? ' • ${item.role}' : ''}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                        subtitle: Text(subDetails, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                                         trailing: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
@@ -4905,6 +4908,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   nameCtrl.text = item.name;
                                                   phoneCtrl.text = item.phone;
                                                   roleCtrl.text = item.role;
+                                                  templateCtrl.text = item.template;
                                                 });
                                               },
                                             ),
