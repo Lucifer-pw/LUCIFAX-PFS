@@ -949,118 +949,108 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
 
                 // Table Content Area
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minWidth: constraints.maxWidth,
-                            minHeight: constraints.maxHeight,
-                          ),
-                          child: SizedBox(
-                            width: 1020,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Static Header Row (Gambar 3 - Statis, Tidak Ter-scroll)
-                                Container(
-                                  color: const Color(0xFF0F172A),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  child: Row(
-                                    children: const [
-                                      SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 210, child: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 75, child: Text('STOK\nAWAL', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 90, child: Text('BARANG\nMASUK', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 85, child: Text('KELUAR\nFISIK', textAlign: TextAlign.right, style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 85, child: Text('KELUAR\nERP', textAlign: TextAlign.right, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 110, child: Text('STOK OPNAME\n(ERP)', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 110, child: Text('STOK FISIK\n(MASTER)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 85, child: Text('SELISIH', textAlign: TextAlign.right, style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                      SizedBox(width: 90, child: Center(child: Text('STATUS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
-                                    ],
-                                  ),
-                                ),
-                                const Divider(color: Color(0xFF334155), height: 1),
-
-                                // Scrollable Product Rows (Gambar 4 - Hanya ini yang ter-scroll secara vertikal)
-                                Expanded(
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.vertical,
-                                    child: Column(
-                                      children: _allPoints.asMap().entries.map((entry) {
-                                        final index = entry.key + 1;
-                                        final p = entry.value;
-                                        final double selisih = p.selisihOpname;
-
-                                        Color statusColor;
-                                        String statusText;
-                                        if (selisih.abs() < 0.5) {
-                                          statusColor = const Color(0xFF4ADE80);
-                                          statusText = 'COCOK';
-                                        } else if (selisih > 0) {
-                                          statusColor = Colors.amberAccent;
-                                          statusText = 'PLUS (+)';
-                                        } else {
-                                          statusColor = Colors.redAccent;
-                                          statusText = 'MINUS (-)';
-                                        }
-
-                                        return Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                          decoration: const BoxDecoration(
-                                            border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
-                                              SizedBox(
-                                                width: 210,
-                                                child: Text(
-                                                  p.productName,
-                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              SizedBox(width: 75, child: Text(p.stokAwal.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                              SizedBox(width: 90, child: Text('+${p.barangMasuk.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12))),
-                                              SizedBox(width: 85, child: Text('-${p.barangKeluarFisik.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
-                                              SizedBox(width: 85, child: Text('-${p.barangKeluarERP.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                              SizedBox(width: 110, child: Text(p.stokOpnameERP.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                              SizedBox(width: 110, child: Text(p.stokFisik.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-                                              SizedBox(width: 85, child: Text('${selisih >= 0 ? "+" : ""}${selisih.toStringAsFixed(0)}', textAlign: TextAlign.right, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
-                                              SizedBox(
-                                                width: 90,
-                                                child: Center(
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                                    decoration: BoxDecoration(
-                                                      color: statusColor.withOpacity(0.15),
-                                                      borderRadius: BorderRadius.circular(6),
-                                                      border: Border.all(color: statusColor.withOpacity(0.4)),
-                                                    ),
-                                                    child: Text(
-                                                      statusText,
-                                                      style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: 1020,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Static Header Row (Gambar 3 - Statis, Tidak Ter-scroll)
+                          Container(
+                            color: const Color(0xFF0F172A),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Row(
+                              children: const [
+                                SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 210, child: Text('NAMA PRODUK', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 75, child: Text('STOK\nAWAL', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 90, child: Text('BARANG\nMASUK', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 85, child: Text('KELUAR\nFISIK', textAlign: TextAlign.right, style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 85, child: Text('KELUAR\nERP', textAlign: TextAlign.right, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 110, child: Text('STOK OPNAME\n(ERP)', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 110, child: Text('STOK FISIK\n(MASTER)', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 85, child: Text('SELISIH', textAlign: TextAlign.right, style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                SizedBox(width: 90, child: Center(child: Text('STATUS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
                               ],
                             ),
                           ),
-                        ),
-                      );
-                    },
+                          const Divider(color: Color(0xFF334155), height: 1),
+
+                          // Scrollable Product Rows (Gambar 4 - Hanya ini yang ter-scroll secara vertikal)
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: Column(
+                                children: _allPoints.asMap().entries.map((entry) {
+                                  final index = entry.key + 1;
+                                  final p = entry.value;
+                                  final double selisih = p.selisihOpname;
+
+                                  Color statusColor;
+                                  String statusText;
+                                  if (selisih.abs() < 0.5) {
+                                    statusColor = const Color(0xFF4ADE80);
+                                    statusText = 'COCOK';
+                                  } else if (selisih > 0) {
+                                    statusColor = Colors.amberAccent;
+                                    statusText = 'PLUS (+)';
+                                  } else {
+                                    statusColor = Colors.redAccent;
+                                    statusText = 'MINUS (-)';
+                                  }
+
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    decoration: const BoxDecoration(
+                                      border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(
+                                          width: 210,
+                                          child: Text(
+                                            p.productName,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        SizedBox(width: 75, child: Text(p.stokAwal.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                        SizedBox(width: 90, child: Text('+${p.barangMasuk.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(width: 85, child: Text('-${p.barangKeluarFisik.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+                                        SizedBox(width: 85, child: Text('-${p.barangKeluarERP.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(width: 110, child: Text(p.stokOpnameERP.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(width: 110, child: Text(p.stokFisik.toStringAsFixed(0), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(width: 85, child: Text('${selisih >= 0 ? "+" : ""}${selisih.toStringAsFixed(0)}', textAlign: TextAlign.right, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(
+                                          width: 90,
+                                          child: Center(
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: statusColor.withOpacity(0.4)),
+                                              ),
+                                              child: Text(
+                                                statusText,
+                                                style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1150,106 +1140,99 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                         ),
                       )
                     : Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(minWidth: constraints.maxWidth, minHeight: constraints.maxHeight),
-                                child: SizedBox(
-                                  width: 1100,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      // Static Header Row
-                                      Container(
-                                        color: const Color(0xFF0F172A),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        child: Row(
-                                          children: const [
-                                            SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 140, child: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 150, child: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 120, child: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 220, child: Text('DETAIL ITEM BARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 130, child: Text('LAMA DELAY (HARI)', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 140, child: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 140, child: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                          ],
-                                        ),
-                                      ),
-                                      const Divider(color: Color(0xFF334155), height: 1),
-
-                                      // Scrollable Data Rows
-                                      Expanded(
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.vertical,
-                                          child: Column(
-                                            children: pendingDeliveries.asMap().entries.map((entry) {
-                                              final index = entry.key + 1;
-                                              final tr = entry.value;
-                                              final delivDate = tr.deliveryDate ?? tr.date;
-                                              final delayDays = now.difference(delivDate).inDays;
-                                              final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
-
-                                              Color statusColor = const Color(0xFF4ADE80);
-                                              String statusText = 'Normal (< 7 Hari)';
-
-                                              if (delayDays >= 30 || delayMonths >= 1) {
-                                                statusColor = Colors.redAccent;
-                                                statusText = 'Kritis (> 30 Hari)';
-                                              } else if (delayDays >= 7) {
-                                                statusColor = Colors.amberAccent;
-                                                statusText = 'Perhatian (7-30 Hari)';
-                                              }
-
-                                              final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
-                                              final String displayCustomer = tr.aliasName.trim().isNotEmpty
-                                                  ? tr.aliasName
-                                                  : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
-
-                                              return Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                                decoration: const BoxDecoration(
-                                                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    SizedBox(width: 140, child: Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    SizedBox(width: 150, child: Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                                                    SizedBox(width: 120, child: Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontSize: 12))),
-                                                    SizedBox(width: 220, child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11))),
-                                                    SizedBox(width: 130, child: Text('$delayDays Hari', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    SizedBox(width: 140, child: Text('$delayMonths Bulan', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    SizedBox(
-                                                      width: 140,
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                        decoration: BoxDecoration(
-                                                          color: statusColor.withOpacity(0.15),
-                                                          borderRadius: BorderRadius.circular(6),
-                                                          border: Border.all(color: statusColor.withOpacity(0.4)),
-                                                        ),
-                                                        child: Text(
-                                                          statusText,
-                                                          style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ),
-                                      ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: 1100,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Static Header Row
+                                Container(
+                                  color: const Color(0xFF0F172A),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(
+                                    children: const [
+                                      SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 140, child: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 150, child: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 120, child: Text('TGL DIKIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 220, child: Text('DETAIL ITEM BARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 130, child: Text('LAMA DELAY (HARI)', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 140, child: Text('LAMA DELAY (BULAN)', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 140, child: Text('STATUS AGING', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
                                     ],
                                   ),
                                 ),
-                              ),
-                            );
-                          },
+                                const Divider(color: Color(0xFF334155), height: 1),
+
+                                // Scrollable Data Rows
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.vertical,
+                                    child: Column(
+                                      children: pendingDeliveries.asMap().entries.map((entry) {
+                                        final index = entry.key + 1;
+                                        final tr = entry.value;
+                                        final delivDate = tr.deliveryDate ?? tr.date;
+                                        final delayDays = now.difference(delivDate).inDays;
+                                        final delayMonths = (now.year - delivDate.year) * 12 + (now.month - delivDate.month);
+
+                                        Color statusColor = const Color(0xFF4ADE80);
+                                        String statusText = 'Normal (< 7 Hari)';
+
+                                        if (delayDays >= 30 || delayMonths >= 1) {
+                                          statusColor = Colors.redAccent;
+                                          statusText = 'Kritis (> 30 Hari)';
+                                        } else if (delayDays >= 7) {
+                                          statusColor = Colors.amberAccent;
+                                          statusText = 'Perhatian (7-30 Hari)';
+                                        }
+
+                                        final itemsText = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+                                        final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                            ? tr.aliasName
+                                            : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          decoration: const BoxDecoration(
+                                            border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 140, child: Text(tr.invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 150, child: Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                                              SizedBox(width: 120, child: Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontSize: 12))),
+                                              SizedBox(width: 220, child: Text(itemsText, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                                              SizedBox(width: 130, child: Text('$delayDays Hari', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(width: 140, child: Text('$delayMonths Bulan', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(
+                                                width: 140,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor.withOpacity(0.15),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: statusColor.withOpacity(0.4)),
+                                                  ),
+                                                  child: Text(
+                                                    statusText,
+                                                    style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
               ],
@@ -1589,122 +1572,115 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                         ),
                       )
                     : Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(minWidth: constraints.maxWidth, minHeight: constraints.maxHeight),
-                                child: SizedBox(
-                                  width: 1200,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      // Static Header Row
-                                      Container(
-                                        color: const Color(0xFF0F172A),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        child: Row(
-                                          children: const [
-                                            SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 140, child: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 150, child: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 110, child: Text('TGL KIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 110, child: Text('TGL INVOICE ERP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 240, child: Text('RINCIAN BARANG (ITEM & QTY)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            SizedBox(width: 90, child: Text('TOTAL QTY', textAlign: TextAlign.right, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
-                                            Expanded(child: Text('KATEGORI PENYEBAB SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                          ],
-                                        ),
-                                      ),
-                                      const Divider(color: Color(0xFF334155), height: 1),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: 1200,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Static Header Row
+                                Container(
+                                  color: const Color(0xFF0F172A),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(
+                                    children: const [
+                                      SizedBox(width: 40, child: Text('NO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 140, child: Text('NO. INVOICE / PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 150, child: Text('PELANGGAN / OUTLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 110, child: Text('TGL KIRIM FISIK', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 110, child: Text('TGL INVOICE ERP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 240, child: Text('RINCIAN BARANG (ITEM & QTY)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      SizedBox(width: 90, child: Text('TOTAL QTY', textAlign: TextAlign.right, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      Expanded(child: Text('KATEGORI PENYEBAB SELISIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(color: Color(0xFF334155), height: 1),
 
-                                      // Scrollable Data Rows
-                                      Expanded(
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.vertical,
-                                          child: Column(
-                                            children: filteredPOs.asMap().entries.map((entry) {
-                                              final index = entry.key + 1;
-                                              final map = entry.value;
-                                              final tr = map['transaction'];
-                                              final delivDate = map['delivDate'] as DateTime;
-                                              final causeCategory = map['causeCategory'] as String;
-                                              final causeColor = map['causeColor'] as Color;
-                                              final isPending = map['isPendingDelivery'] as bool;
-                                              final double totalQty = map['totalQty'] as double;
+                                // Scrollable Data Rows
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.vertical,
+                                    child: Column(
+                                      children: filteredPOs.asMap().entries.map((entry) {
+                                        final index = entry.key + 1;
+                                        final map = entry.value;
+                                        final tr = map['transaction'];
+                                        final delivDate = map['delivDate'] as DateTime;
+                                        final causeCategory = map['causeCategory'] as String;
+                                        final causeColor = map['causeColor'] as Color;
+                                        final isPending = map['isPendingDelivery'] as bool;
+                                        final double totalQty = map['totalQty'] as double;
 
-                                              final String invoiceNo = tr.invoiceNo;
-                                              final String statusTransfer = (tr.statusTransfer != null && tr.statusTransfer.isNotEmpty) ? tr.statusTransfer : 'UNPAID';
-                                              final String displayCustomer = tr.aliasName.trim().isNotEmpty
-                                                  ? tr.aliasName
-                                                  : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
-                                              final itemsSummary = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
+                                        final String invoiceNo = tr.invoiceNo;
+                                        final String statusTransfer = (tr.statusTransfer != null && tr.statusTransfer.isNotEmpty) ? tr.statusTransfer : 'UNPAID';
+                                        final String displayCustomer = tr.aliasName.trim().isNotEmpty
+                                            ? tr.aliasName
+                                            : (tr.customerName.trim().isNotEmpty ? tr.customerName : 'Pelanggan Umum');
+                                        final itemsSummary = tr.items.map((it) => '${it.productName} (${it.qty.toStringAsFixed(0)} pcs)').join(', ');
 
-                                              return Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                                decoration: const BoxDecoration(
-                                                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
-                                                ),
-                                                child: Row(
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          decoration: const BoxDecoration(
+                                            border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(
+                                                width: 140,
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    SizedBox(width: 40, child: Text('$index', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    SizedBox(
-                                                      width: 140,
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          Text(invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                                          Text(
-                                                            statusTransfer.toUpperCase(),
-                                                            style: TextStyle(
-                                                              color: statusTransfer.toUpperCase() == 'PAID' ? const Color(0xFF4ADE80) : Colors.amberAccent,
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.bold,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 150, child: Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                                                    SizedBox(width: 110, child: Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    SizedBox(
-                                                      width: 110,
-                                                      child: Text(
-                                                        map['erpDateDisplay'] as String,
-                                                        style: TextStyle(color: isPending ? Colors.redAccent : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 240, child: Text(itemsSummary, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11))),
-                                                    SizedBox(width: 90, child: Text('${totalQty.toStringAsFixed(0)} pcs', textAlign: TextAlign.right, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                                    Expanded(
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                        decoration: BoxDecoration(
-                                                          color: causeColor.withOpacity(0.15),
-                                                          borderRadius: BorderRadius.circular(6),
-                                                          border: Border.all(color: causeColor.withOpacity(0.4)),
-                                                        ),
-                                                        child: Text(
-                                                          causeCategory,
-                                                          style: TextStyle(color: causeColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                                        ),
+                                                    Text(invoiceNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                                    Text(
+                                                      statusTransfer.toUpperCase(),
+                                                      style: TextStyle(
+                                                        color: statusTransfer.toUpperCase() == 'PAID' ? const Color(0xFF4ADE80) : Colors.amberAccent,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
                                                       ),
                                                     ),
                                                   ],
                                                 ),
-                                              );
-                                            }).toList(),
+                                              ),
+                                              SizedBox(width: 150, child: Text(displayCustomer, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                                              SizedBox(width: 110, child: Text(DateFormat('dd-MM-yyyy').format(delivDate), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              SizedBox(
+                                                width: 110,
+                                                child: Text(
+                                                  map['erpDateDisplay'] as String,
+                                                  style: TextStyle(color: isPending ? Colors.redAccent : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                                ),
+                                              ),
+                                              SizedBox(width: 240, child: Text(itemsSummary, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                                              SizedBox(width: 90, child: Text('${totalQty.toStringAsFixed(0)} pcs', textAlign: TextAlign.right, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                              Expanded(
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: causeColor.withOpacity(0.15),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: causeColor.withOpacity(0.4)),
+                                                  ),
+                                                  child: Text(
+                                                    causeCategory,
+                                                    style: TextStyle(color: causeColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                      ),
-                                    ],
+                                        );
+                                      }).toList(),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
+                              ],
+                            ),
+                          ),
                         ),
                       ),
               ],
