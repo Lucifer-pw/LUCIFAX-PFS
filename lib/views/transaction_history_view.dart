@@ -4249,8 +4249,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     String selectedGreeting = 'siang';
     DateTime selectedDate = DateTime.now();
     
-    // Default selection: select ALL items by default so user can filter using search
-    final Set<String> selectedInvoiceNos = initialTrs.map((t) => t.invoiceNo.toString()).toSet();
+    // Default selection: empty by default so it doesn't automatically dump all invoices
+    final Set<String> selectedInvoiceNos = <String>{};
     final customMessageCtrl = TextEditingController();
     String searchInvoiceQuery = '';
     bool userEditedMessage = false;
@@ -4283,9 +4283,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
       final buffer = StringBuffer();
       
-      // If contact has custom template set, use it!
+      // If contact has custom template set in Kelola Kontak, use it!
       if (contact != null && contact.template.trim().isNotEmpty) {
-        buffer.writeln(contact.template.trim());
+        String templateLine = contact.template.trim();
+        templateLine = templateLine
+            .replaceAll('{tanggal}', dateStr)
+            .replaceAll('{jumlah}', '${items.length}')
+            .replaceAll('{nama}', contact.name);
+        buffer.writeln(templateLine);
       } else {
         final cName = (contact?.name ?? '').trim();
         final greet = greeting.trim();
@@ -4498,9 +4503,40 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           const SizedBox(height: 14),
 
                           // 3. INVOICE COUNT HEADER (WITHOUT DATE FILTER)
-                          Text(
-                            'Daftar Invoice Terpilih (${activeTrs.length} dari ${initialTrs.length} Total):',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Daftar Invoice Terpilih (${activeTrs.length} dari ${initialTrs.length} Total):',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Row(
+                                children: [
+                                  if (displayedInvoices.isNotEmpty)
+                                    TextButton(
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          for (var t in displayedInvoices) {
+                                            selectedInvoiceNos.add(t.invoiceNo.toString());
+                                          }
+                                          userEditedMessage = false;
+                                        });
+                                      },
+                                      child: const Text('Pilih Hasil Cari', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                  if (selectedInvoiceNos.isNotEmpty)
+                                    TextButton(
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          selectedInvoiceNos.clear();
+                                          userEditedMessage = false;
+                                        });
+                                      },
+                                      child: const Text('Kosongkan', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
 
