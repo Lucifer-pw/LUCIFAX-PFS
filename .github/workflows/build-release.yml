@@ -55,9 +55,12 @@ jobs:
         with:
           name: app-release-apk
 
+      - name: Rename APK file
+        run: mv app-release.apk Lucifax-PFS_${{ github.ref_name }}.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: 'LUCIFAX PFS ${{ github.ref_name }}'
-          files: app-release.apk
+          files: Lucifax-PFS_${{ github.ref_name }}.apk
           generate_release_notes: true
