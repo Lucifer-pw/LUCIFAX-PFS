@@ -4274,8 +4274,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     }
 
     String getStoreName(model_tr.Transaction tr) {
-      if (tr.customerName.trim().isNotEmpty) return tr.customerName.trim();
       if (tr.aliasName.trim().isNotEmpty) return tr.aliasName.trim();
+      if (tr.customerName.trim().isNotEmpty) return tr.customerName.trim();
       return 'TOKO';
     }
 
@@ -4670,20 +4670,28 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         }
 
                         final textToSend = customMessageCtrl.text;
-                        final url = 'https://wa.me/$formattedPhone?text=${Uri.encodeComponent(textToSend)}';
+                        final waAppUrl = 'whatsapp://send?phone=$formattedPhone&text=${Uri.encodeComponent(textToSend)}';
+                        final waWebUrl = 'https://wa.me/$formattedPhone?text=${Uri.encodeComponent(textToSend)}';
 
                         try {
-                          final uri = Uri.parse(url);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          final appUri = Uri.parse(waAppUrl);
+                          if (await canLaunchUrl(appUri)) {
+                            await launchUrl(appUri, mode: LaunchMode.externalApplication);
                           } else {
-                            await launchUrl(uri);
+                            final webUri = Uri.parse(waWebUrl);
+                            await launchUrl(webUri, mode: LaunchMode.externalApplication);
                           }
                           if (mounted) Navigator.pop(dialogCtx);
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Gagal membuka WhatsApp: $e'), backgroundColor: Colors.redAccent),
-                          );
+                          try {
+                            final webUri = Uri.parse(waWebUrl);
+                            await launchUrl(webUri, mode: LaunchMode.externalApplication);
+                            if (mounted) Navigator.pop(dialogCtx);
+                          } catch (err) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Gagal membuka WhatsApp: $err'), backgroundColor: Colors.redAccent),
+                            );
+                          }
                         }
                       },
                       icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
