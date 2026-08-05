@@ -1462,147 +1462,156 @@ class _ProductListViewState extends State<ProductListView> {
                   const SizedBox(height: 14),
 
                   // Filter Row: Search Input + Single Date Picker + Type Filter
-                  Row(
-                    children: [
-                      // Text Search Input
-                      Expanded(
-                        flex: 4,
-                        child: TextField(
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                          decoration: InputDecoration(
-                            hintText: 'Cari nama barang, kode, invoice, customer...',
-                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8.0),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          onChanged: (val) {
-                            setDialogState(() {
-                              dialogSearchQuery = val.trim().toLowerCase();
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Single Date Picker Button (Defaults to TODAY)
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDate ?? DateTime.now(),
-                            firstDate: DateTime(2024),
-                            lastDate: DateTime(2030),
-                            builder: (context, child) {
-                              return Theme(
-                                data: ThemeData.dark().copyWith(
-                                  colorScheme: const ColorScheme.dark(
-                                    primary: Color(0xFF0284C7),
-                                    onPrimary: Colors.white,
-                                    surface: Color(0xFF1E293B),
-                                    onSurface: Colors.white,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
-                          );
-                          if (picked != null) {
-                            setDialogState(() {
-                              selectedDate = picked;
-                            });
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                selectedDate == null
-                                    ? 'Semua Tanggal'
-                                    : isToday
-                                        ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
-                                        : DateFormat('dd/MM/yyyy').format(selectedDate!),
-                                style: TextStyle(
-                                  color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                  Builder(
+                    builder: (context) {
+                      final isMobile = MediaQuery.of(context).size.width < 768;
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          // Text Search Input
+                          SizedBox(
+                            width: isMobile ? double.infinity : 320,
+                            child: TextField(
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              decoration: InputDecoration(
+                                hintText: 'Cari nama barang, kode, invoice...',
+                                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                filled: true,
+                                fillColor: const Color(0xFF0F172A),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                  borderSide: BorderSide.none,
                                 ),
                               ),
-                              if (selectedDate != null) ...[
-                                const SizedBox(width: 4),
-                                GestureDetector(
-                                  onTap: () {
-                                    setDialogState(() {
-                                      selectedDate = null;
-                                    });
-                                  },
-                                  child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Dropdown Type Filter
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedType,
-                            dropdownColor: const Color(0xFF0F172A),
-                            style: const TextStyle(color: Colors.white, fontSize: 11),
-                            isDense: true,
-                            items: const [
-                              DropdownMenuItem(value: 'SEMUA', child: Text('Semua Mutasi')),
-                              DropdownMenuItem(value: 'KELUAR', child: Text('🔴 Keluar (Stock Out)')),
-                              DropdownMenuItem(value: 'MASUK', child: Text('🟢 Masuk')),
-                              DropdownMenuItem(value: 'RETUR_STATUS', child: Text('🟠 Retur Status')),
-                              DropdownMenuItem(value: 'EDIT_MANUAL', child: Text('🔵 Edit Manual')),
-                              DropdownMenuItem(value: 'INPUT_STOK', child: Text('🟢 Input Stok')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
+                              onChanged: (val) {
                                 setDialogState(() {
-                                  selectedType = val;
+                                  dialogSearchQuery = val.trim().toLowerCase();
+                                });
+                              },
+                            ),
+                          ),
+
+                          // Single Date Picker Button (Defaults to TODAY)
+                          InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate ?? DateTime.now(),
+                                firstDate: DateTime(2024),
+                                lastDate: DateTime(2030),
+                                builder: (context, child) {
+                                  return Theme(
+                                    data: ThemeData.dark().copyWith(
+                                      colorScheme: const ColorScheme.dark(
+                                        primary: Color(0xFF0284C7),
+                                        onPrimary: Colors.white,
+                                        surface: Color(0xFF1E293B),
+                                        onSurface: Colors.white,
+                                      ),
+                                    ),
+                                    child: child!,
+                                  );
+                                },
+                              );
+                              if (picked != null) {
+                                setDialogState(() {
+                                  selectedDate = picked;
                                 });
                               }
                             },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    selectedDate == null
+                                        ? 'Semua Tanggal'
+                                        : isToday
+                                            ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
+                                            : DateFormat('dd/MM/yyyy').format(selectedDate!),
+                                    style: TextStyle(
+                                      color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (selectedDate != null) ...[
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setDialogState(() {
+                                          selectedDate = null;
+                                        });
+                                      },
+                                      child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
+
+                          // Dropdown Type Filter
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: selectedType,
+                                dropdownColor: const Color(0xFF0F172A),
+                                style: const TextStyle(color: Colors.white, fontSize: 11),
+                                isDense: true,
+                                items: const [
+                                  DropdownMenuItem(value: 'SEMUA', child: Text('Semua Mutasi')),
+                                  DropdownMenuItem(value: 'KELUAR', child: Text('🔴 Keluar (Stock Out)')),
+                                  DropdownMenuItem(value: 'MASUK', child: Text('🟢 Masuk')),
+                                  DropdownMenuItem(value: 'RETUR_STATUS', child: Text('🟠 Retur Status')),
+                                  DropdownMenuItem(value: 'EDIT_MANUAL', child: Text('🔵 Edit Manual')),
+                                  DropdownMenuItem(value: 'INPUT_STOK', child: Text('🟢 Input Stok')),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      selectedType = val;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
-              content: SizedBox(
-                width: 900,
-                height: 480,
-                child: StreamBuilder<List<StockMutation>>(
+              content: Builder(
+                builder: (context) {
+                  final isMobile = MediaQuery.of(context).size.width < 768;
+                  return SizedBox(
+                    width: 900,
+                    height: isMobile ? MediaQuery.of(context).size.height * 0.55 : 480,
+                    child: StreamBuilder<List<StockMutation>>(
                   stream: firebaseService.streamAllStockMutations(date: selectedDate),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1817,8 +1826,10 @@ class _ProductListViewState extends State<ProductListView> {
                     );
                   },
                 ),
-              ),
-              actions: [
+              );
+            },
+          ),
+          actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Tutup', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),

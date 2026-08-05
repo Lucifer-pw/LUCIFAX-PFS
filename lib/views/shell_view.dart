@@ -319,6 +319,7 @@ class _ShellViewState extends State<ShellView> {
       _currentIndex = 0;
     }
 
+    final isMobile = MediaQuery.of(context).size.width < 768;
     final isLargeScreen = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
@@ -328,13 +329,19 @@ class _ShellViewState extends State<ShellView> {
         elevation: 0,
         title: Text(
           navItems[_currentIndex]['title'],
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: isMobile ? 15 : 18,
+          ),
         ),
         actions: [
           // Update check button with badge
           if (updateProvider.hasUpdate)
             Padding(
-              padding: const EdgeInsets.only(right: 4.0),
+              padding: const EdgeInsets.only(right: 2.0),
               child: IconButton(
                 icon: const Badge(
                   backgroundColor: Colors.redAccent,
@@ -351,18 +358,18 @@ class _ShellViewState extends State<ShellView> {
             )
           else
             Padding(
-              padding: const EdgeInsets.only(right: 4.0),
+              padding: const EdgeInsets.only(right: 2.0),
               child: IconButton(
                 icon: updateProvider.isChecking
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Color(0xFF64748B),
                         ),
                       )
-                    : const Icon(Icons.refresh_rounded, color: Color(0xFF64748B)),
+                    : const Icon(Icons.refresh_rounded, color: Color(0xFF64748B), size: 20),
                 tooltip: 'Cek Update',
                 onPressed: updateProvider.isChecking
                     ? null
@@ -387,34 +394,41 @@ class _ShellViewState extends State<ShellView> {
 
           // User profile chips and sign-out
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 6.0 : 12.0),
             child: Row(
               children: [
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      user.name,
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      user.role.toUpperCase(),
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 12),
+                if (!isMobile) ...[
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        user.name,
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        user.role.toUpperCase(),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 CircleAvatar(
+                  radius: isMobile ? 14 : 18,
                   backgroundColor: const Color(0xFF334155),
                   child: Text(
                     user.name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: const Color(0xFF38BDF8),
+                      fontWeight: FontWeight.bold,
+                      fontSize: isMobile ? 12 : 14,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: isMobile ? 2 : 6),
                 IconButton(
-                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                  icon: Icon(Icons.logout_rounded, color: Colors.redAccent, size: isMobile ? 20 : 24),
                   tooltip: 'Keluar',
                   onPressed: () async {
                     await authProvider.signOut();

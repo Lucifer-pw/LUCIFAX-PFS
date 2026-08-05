@@ -1932,20 +1932,21 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                 style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                             ),
-                            title: Row(
+                            title: Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Text(
                                   currencyFormatter.format(invTotal),
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
-                                const SizedBox(width: 10),
                                 if (invDate != null)
                                   Text(
                                     dateFormatter.format(invDate),
                                     style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
                                   ),
-                                if (erpInputDate != null) ...[
-                                  const SizedBox(width: 8),
+                                if (erpInputDate != null)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -1958,7 +1959,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                                       style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
                                     ),
                                   ),
-                                ],
                               ],
                             ),
                             subtitle: Text(

@@ -262,8 +262,10 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                   ),
                 ],
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   // Period Selector
                   Builder(
@@ -285,7 +287,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       }
 
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E293B),
                           borderRadius: BorderRadius.circular(10),
@@ -295,7 +297,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                           child: DropdownButton<String>(
                             value: _selectedMonthYear,
                             dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             items: monthOptionsList.map((m) {
                               return DropdownMenuItem(value: m, child: Text(m == 'Semua Periode (Semua Histori)' ? m : 'Periode: $m'));
                             }).toList(),
@@ -310,11 +312,10 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       );
                     },
                   ),
-                  const SizedBox(width: 12),
 
                   // K-Cluster Selector
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E293B),
                       borderRadius: BorderRadius.circular(10),
@@ -324,7 +325,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       child: DropdownButton<int>(
                         value: _clusterK,
                         dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                         items: [2, 3, 4].map((k) {
                           return DropdownMenuItem(value: k, child: Text('Cluster K = $k'));
                         }).toList(),
@@ -339,7 +340,6 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
 
                   // Refresh Button
                   Material(
@@ -348,7 +348,7 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                       onTap: _isProcessing ? null : () => _loadAndProcessData(),
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E293B),
                           borderRadius: BorderRadius.circular(10),
@@ -356,14 +356,14 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
                         ),
                         child: _isProcessing
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 18,
+                                height: 18,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   color: Color(0xFF38BDF8),
                                 ),
                               )
-                            : const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 20),
+                            : const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 18),
                       ),
                     ),
                   ),
@@ -1473,87 +1473,96 @@ class _KMeansAnalysisViewState extends State<KMeansAnalysisView> {
         const SizedBox(height: 10),
 
         // Filters Card: Product Dropdown & Search Input (Compact)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF334155)),
-          ),
-          child: Wrap(
-            spacing: 14,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              // Product Filter Dropdown
-              Row(
-                mainAxisSize: MainAxisSize.min,
+        Builder(
+          builder: (context) {
+            final isMobile = MediaQuery.of(context).size.width < 768;
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
-                  const SizedBox(width: 6),
-                  const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: products.any((p) => p.name == _poAuditProductFilter || p.id == _poAuditProductFilter)
-                            ? _poAuditProductFilter
-                            : 'Semua Produk',
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                        items: [
-                          const DropdownMenuItem(value: 'Semua Produk', child: Text('Semua Produk (Semua Barang)')),
-                          ...products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _poAuditProductFilter = val);
-                          }
-                        },
+                  // Product Filter Dropdown
+                  Row(
+                    mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.filter_alt_rounded, color: Color(0xFF38BDF8), size: 18),
+                      const SizedBox(width: 6),
+                      const Text('Filter Barang:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: isMobile ? 1 : 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value: products.any((p) => p.name == _poAuditProductFilter || p.id == _poAuditProductFilter)
+                                  ? _poAuditProductFilter
+                                  : 'Semua Produk',
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                              items: [
+                                const DropdownMenuItem(value: 'Semua Produk', child: Text('Semua Produk (Semua Barang)', overflow: TextOverflow.ellipsis)),
+                                ...products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name, overflow: TextOverflow.ellipsis))),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _poAuditProductFilter = val);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
                       ),
+                    ],
+                  ),
+
+                  // Search Bar
+                  SizedBox(
+                    width: isMobile ? double.infinity : 280,
+                    height: 36,
+                    child: TextField(
+                      controller: _poAuditSearchController,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Cari No. PO, Pelanggan, atau Produk...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 16),
+                        suffixIcon: _poAuditSearchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.white54, size: 14),
+                                onPressed: () {
+                                  _poAuditSearchController.clear();
+                                  setState(() {});
+                                },
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                      ),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],
               ),
-
-              // Search Bar
-              SizedBox(
-                width: 280,
-                height: 36,
-                child: TextField(
-                  controller: _poAuditSearchController,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'Cari No. PO, Pelanggan, atau Produk...',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 16),
-                    suffixIcon: _poAuditSearchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.white54, size: 14),
-                            onPressed: () {
-                              _poAuditSearchController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                    filled: true,
-                    fillColor: const Color(0xFF0F172A),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
         const SizedBox(height: 10),
 
