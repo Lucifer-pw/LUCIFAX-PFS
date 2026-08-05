@@ -3306,21 +3306,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             },
           ),
         ),
-        const SizedBox(width: 12),
-        // Kirim WA List ERP Button
-        SizedBox(
-          height: 44,
-          child: ElevatedButton.icon(
-            onPressed: () => _showShareWhatsappErpModal(context, trProvider.transactions),
-            icon: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 16),
-            label: const Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF25D366),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        if (isDeveloper) ...[
+          const SizedBox(width: 12),
+          // Kirim WA List ERP Button (Developer Only)
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () => _showShareWhatsappErpModal(context, trProvider.transactions),
+              icon: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 16),
+              label: const Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
-        ),
+        ],
         if (!isKacab) ...[
           const SizedBox(width: 12),
           // Import Excel Button
