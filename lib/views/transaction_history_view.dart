@@ -4249,8 +4249,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final phoneCtrl = TextEditingController();
     String selectedGreeting = 'siang';
     DateTime selectedDate = DateTime.now();
+    
+    // Default selection: select ALL items by default so user can filter using search
     final Set<String> selectedInvoiceNos = initialTrs.map((t) => t.invoiceNo.toString()).toSet();
     final customMessageCtrl = TextEditingController();
+    String searchInvoiceQuery = '';
+    bool userEditedMessage = false;
 
     String cleanPhone(String raw) {
       String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
@@ -4266,6 +4270,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
       ];
       return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+    }
+
+    String getStoreName(model_tr.Transaction tr) {
+      if (tr.customerName.trim().isNotEmpty) return tr.customerName.trim();
+      if (tr.aliasName.trim().isNotEmpty) return tr.aliasName.trim();
+      return 'TOKO';
     }
 
     String generateText(String greeting, String contactName, DateTime dt, List<model_tr.Transaction> items) {
@@ -4289,7 +4299,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       for (int i = 0; i < items.length; i++) {
         final tr = items[i];
         final invClean = tr.invoiceNo.toString().replaceAll('#', '');
-        buffer.writeln('${i + 1}. ${tr.customerName} ($invClean)');
+        final storeName = getStoreName(tr);
+        buffer.writeln('${i + 1}. $storeName ($invClean)');
       }
 
       buffer.write('Terimakasih');
@@ -4312,13 +4323,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   phoneCtrl.text = selectedContact!.phone;
                 }
 
+                // Filtered list based on search bar
+                final searchLower = searchInvoiceQuery.toLowerCase().trim();
+                final displayedInvoices = initialTrs.where((t) {
+                  if (searchLower.isEmpty) return true;
+                  final storeName = getStoreName(t).toLowerCase();
+                  final invNo = t.invoiceNo.toString().toLowerCase();
+                  return storeName.contains(searchLower) || invNo.contains(searchLower);
+                }).toList();
+
                 // Filter selected transactions
                 final activeTrs = initialTrs.where((t) => selectedInvoiceNos.contains(t.invoiceNo.toString())).toList();
 
-                // Re-generate text preview
-                final contactName = selectedContact?.name ?? '';
-                final generatedMsg = generateText(selectedGreeting, contactName, selectedDate, activeTrs);
-                customMessageCtrl.text = generatedMsg;
+                // Re-generate text preview unless user edited manually
+                if (!userEditedMessage) {
+                  final contactName = selectedContact?.name ?? '';
+                  final generatedMsg = generateText(selectedGreeting, contactName, selectedDate, activeTrs);
+                  customMessageCtrl.text = generatedMsg;
+                }
 
                 return AlertDialog(
                   backgroundColor: const Color(0xFF1E293B),
@@ -4386,6 +4408,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     setDialogState(() {
                                       selectedContact = val;
                                       phoneCtrl.text = val.phone;
+                                      userEditedMessage = false; // Reset to generate auto template for new contact
                                     });
                                   }
                                 },
@@ -4449,7 +4472,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                             DropdownMenuItem(value: 'selamat siang', child: Text('selamat siang')),
                                           ],
                                           onChanged: (val) {
-                                            if (val != null) setDialogState(() => selectedGreeting = val);
+                                            if (val != null) {
+                                              setDialogState(() {
+                                                selectedGreeting = val;
+                                                userEditedMessage = false;
+                                              });
+                                            }
                                           },
                                         ),
                                       ),
@@ -4466,7 +4494,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Daftar Invoice Terpilih (${activeTrs.length} Invoice):',
+                                'Daftar Invoice Terpilih (${activeTrs.length} dari ${initialTrs.length} Total):',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               InkWell(
@@ -4478,7 +4506,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     lastDate: DateTime(2030),
                                   );
                                   if (picked != null) {
-                                    setDialogState(() => selectedDate = picked);
+                                    setDialogState(() {
+                                      selectedDate = picked;
+                                      userEditedMessage = false;
+                                    });
                                   }
                                 },
                                 child: Container(
@@ -4501,40 +4532,72 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           ),
                           const SizedBox(height: 8),
 
+                          // SEARCH INPUT FOR INVOICE LIST
+                          TextField(
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                            decoration: InputDecoration(
+                              hintText: 'Cari Nama Toko / No Invoice...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                            ),
+                            onChanged: (val) {
+                              setDialogState(() {
+                                searchInvoiceQuery = val;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 6),
+
                           // Checklist of invoices
                           Container(
-                            constraints: const BoxConstraints(maxHeight: 140),
+                            constraints: const BoxConstraints(maxHeight: 160),
                             decoration: BoxDecoration(
                               color: const Color(0xFF0F172A),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: initialTrs.length,
-                              itemBuilder: (context, idx) {
-                                final tr = initialTrs[idx];
-                                final invStr = tr.invoiceNo.toString();
-                                final isChecked = selectedInvoiceNos.contains(invStr);
-                                return CheckboxListTile(
-                                  dense: true,
-                                  activeColor: const Color(0xFF25D366),
-                                  title: Text(
-                                    '${tr.customerName} (#${tr.invoiceNo.toString().replaceAll('#', '')})',
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                            child: displayedInvoices.isEmpty
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12.0),
+                                    child: Center(
+                                      child: Text('Invoice tidak ditemukan.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: displayedInvoices.length,
+                                    itemBuilder: (context, idx) {
+                                      final tr = displayedInvoices[idx];
+                                      final invStr = tr.invoiceNo.toString();
+                                      final invClean = invStr.replaceAll('#', '');
+                                      final isChecked = selectedInvoiceNos.contains(invStr);
+                                      final storeName = getStoreName(tr);
+
+                                      return CheckboxListTile(
+                                        dense: true,
+                                        activeColor: const Color(0xFF25D366),
+                                        title: Text(
+                                          '$storeName ($invClean)',
+                                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        ),
+                                        value: isChecked,
+                                        onChanged: (val) {
+                                          setDialogState(() {
+                                            if (val == true) {
+                                              selectedInvoiceNos.add(invStr);
+                                            } else {
+                                              selectedInvoiceNos.remove(invStr);
+                                            }
+                                            userEditedMessage = false;
+                                          });
+                                        },
+                                      );
+                                    },
                                   ),
-                                  value: isChecked,
-                                  onChanged: (val) {
-                                    setDialogState(() {
-                                      if (val == true) {
-                                        selectedInvoiceNos.add(invStr);
-                                      } else {
-                                        selectedInvoiceNos.remove(invStr);
-                                      }
-                                    });
-                                  },
-                                );
-                              },
-                            ),
                           ),
                           const SizedBox(height: 14),
 
@@ -4565,6 +4628,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               fillColor: const Color(0xFF0F172A),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
                             ),
+                            onChanged: (val) {
+                              userEditedMessage = true;
+                            },
                           ),
                         ],
                       ),
@@ -4630,6 +4696,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final phoneCtrl = TextEditingController();
     final roleCtrl = TextEditingController();
     String? editingContactId;
+    bool isSaving = false;
 
     await showDialog(
       context: context,
@@ -4735,28 +4802,61 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     const SizedBox(width: 10),
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8)),
-                                      onPressed: () async {
-                                        final name = nameCtrl.text.trim();
-                                        final phone = phoneCtrl.text.trim();
-                                        final role = roleCtrl.text.trim();
-                                        if (name.isEmpty || phone.isEmpty) return;
+                                      onPressed: isSaving
+                                          ? null
+                                          : () async {
+                                              final name = nameCtrl.text.trim();
+                                              final phone = phoneCtrl.text.trim();
+                                              final role = roleCtrl.text.trim();
+                                              if (name.isEmpty || phone.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Nama dan Nomor WA tidak boleh kosong!'), backgroundColor: Colors.redAccent),
+                                                );
+                                                return;
+                                              }
 
-                                        final contact = WaContact(
-                                          id: editingContactId ?? '',
-                                          name: name,
-                                          phone: phone,
-                                          role: role,
-                                        );
-                                        await _firebaseService.saveWaContact(contact);
-                                        setDialogState(() {
-                                          nameCtrl.clear();
-                                          phoneCtrl.clear();
-                                          roleCtrl.clear();
-                                          editingContactId = null;
-                                        });
-                                      },
-                                      icon: Icon(editingContactId != null ? Icons.check_rounded : Icons.add_rounded, color: Colors.black, size: 16),
-                                      label: Text(editingContactId != null ? 'Update' : 'Simpan', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                                              setDialogState(() => isSaving = true);
+
+                                              try {
+                                                final contact = WaContact(
+                                                  id: editingContactId ?? '',
+                                                  name: name,
+                                                  phone: phone,
+                                                  role: role,
+                                                );
+                                                await _firebaseService.saveWaContact(contact);
+
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(editingContactId != null ? '✅ Kontak "$name" berhasil diperbarui!' : '✅ Kontak "$name" berhasil disimpan!'),
+                                                    backgroundColor: Colors.teal,
+                                                    duration: const Duration(seconds: 2),
+                                                  ),
+                                                );
+
+                                                setDialogState(() {
+                                                  nameCtrl.clear();
+                                                  phoneCtrl.clear();
+                                                  roleCtrl.clear();
+                                                  editingContactId = null;
+                                                  isSaving = false;
+                                                });
+                                              } catch (e) {
+                                                setDialogState(() => isSaving = false);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Gagal menyimpan kontak: $e'), backgroundColor: Colors.redAccent),
+                                                );
+                                              }
+                                            },
+                                      icon: isSaving
+                                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                          : Icon(editingContactId != null ? Icons.check_rounded : Icons.add_rounded, color: Colors.black, size: 16),
+                                      label: Text(
+                                        isSaving
+                                            ? 'Menyimpan...'
+                                            : (editingContactId != null ? 'Update' : 'Simpan'),
+                                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -4812,6 +4912,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
                                               onPressed: () async {
                                                 await _firebaseService.deleteWaContact(item.id);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Kontak "${item.name}" berhasil dihapus.'), backgroundColor: Colors.orange),
+                                                );
                                               },
                                             ),
                                           ],
