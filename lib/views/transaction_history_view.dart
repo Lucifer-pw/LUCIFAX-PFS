@@ -17,6 +17,8 @@ import '../services/print_service.dart';
 import '../services/import_service.dart';
 import '../services/firebase_service.dart';
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/wa_contact.dart';
 import 'transaction_entry_view.dart';
 import 'return_transaction_dialog.dart';
 
@@ -3304,6 +3306,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             },
           ),
         ),
+        const SizedBox(width: 12),
+        // Kirim WA List ERP Button
+        SizedBox(
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () => _showShareWhatsappErpModal(context, filteredTransactions),
+            icon: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 16),
+            label: const Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
         if (!isKacab) ...[
           const SizedBox(width: 12),
           // Import Excel Button
@@ -4213,6 +4230,606 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         borderRadius: BorderRadius.circular(10.0),
         borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.0),
       ),
+    );
+  }
+
+  final FirebaseService _firebaseService = FirebaseService();
+
+  // ==========================================
+  // WHATSAPP SHARE ERP LIST DIALOG
+  // ==========================================
+  void _showShareWhatsappErpModal(BuildContext context, List<model_tr.Transaction> trList) {
+    _firebaseService.seedDefaultWaContactsIfEmpty();
+
+    // Default to ERP synced transactions or all transactions in current filter
+    final erpSyncedTrs = trList.where((t) => t.erpSyncDate != null).toList();
+    final initialTrs = erpSyncedTrs.isNotEmpty ? erpSyncedTrs : trList;
+
+    WaContact? selectedContact;
+    final phoneCtrl = TextEditingController();
+    String selectedGreeting = 'siang';
+    DateTime selectedDate = DateTime.now();
+    final Set<String> selectedInvoiceNos = initialTrs.map((t) => t.invoiceNo.toString()).toSet();
+    final customMessageCtrl = TextEditingController();
+
+    String cleanPhone(String raw) {
+      String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.startsWith('0')) {
+        digits = '62${digits.substring(1)}';
+      }
+      return digits;
+    }
+
+    String formatIndoDate(DateTime dt) {
+      final months = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei',
+        'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+    }
+
+    String generateText(String greeting, String contactName, DateTime dt, List<model_tr.Transaction> items) {
+      final dateStr = formatIndoDate(dt);
+      final countStr = '${items.length} invoice';
+
+      final buffer = StringBuffer();
+      final cName = contactName.trim();
+      final greet = greeting.trim();
+
+      if (greet.isNotEmpty && cName.isNotEmpty) {
+        buffer.writeln('$greet $cName');
+      } else if (cName.isNotEmpty) {
+        buffer.writeln('siang $cName');
+      } else {
+        buffer.writeln('siang');
+      }
+
+      buffer.writeln('untuk list erp hari ini $dateStr ada : $countStr');
+
+      for (int i = 0; i < items.length; i++) {
+        final tr = items[i];
+        final invClean = tr.invoiceNo.toString().replaceAll('#', '');
+        buffer.writeln('${i + 1}. ${tr.customerName} ($invClean)');
+      }
+
+      buffer.write('Terimakasih');
+      return buffer.toString();
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StreamBuilder<List<WaContact>>(
+          stream: _firebaseService.streamWaContacts(),
+          builder: (context, snapshot) {
+            final contacts = snapshot.data ?? [];
+
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                // Auto select first contact if none selected
+                if (selectedContact == null && contacts.isNotEmpty) {
+                  selectedContact = contacts.first;
+                  phoneCtrl.text = selectedContact!.phone;
+                }
+
+                // Filter selected transactions
+                final activeTrs = initialTrs.where((t) => selectedInvoiceNos.contains(t.invoiceNo.toString())).toList();
+
+                // Re-generate text preview
+                final contactName = selectedContact?.name ?? '';
+                final generatedMsg = generateText(selectedGreeting, contactName, selectedDate, activeTrs);
+                customMessageCtrl.text = generatedMsg;
+
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.mark_chat_read_rounded, color: Color(0xFF25D366), size: 24),
+                          SizedBox(width: 10),
+                          Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                        onPressed: () => Navigator.pop(dialogCtx),
+                      ),
+                    ],
+                  ),
+                  content: SizedBox(
+                    width: 580,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 1. SELECT CONTACT & MANAGE CONTACTS
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Pilih Kontak WhatsApp *', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                              TextButton.icon(
+                                onPressed: () async {
+                                  await _showManageWaContactsDialog(context);
+                                  setDialogState(() {});
+                                },
+                                icon: const Icon(Icons.person_add_rounded, color: Color(0xFF38BDF8), size: 14),
+                                label: const Text('Kelola Daftar Kontak', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<WaContact>(
+                                isExpanded: true,
+                                value: contacts.contains(selectedContact) ? selectedContact : (contacts.isNotEmpty ? contacts.first : null),
+                                dropdownColor: const Color(0xFF0F172A),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                hint: const Text('Pilih dari daftar kontak...', style: TextStyle(color: Color(0xFF64748B))),
+                                items: contacts.map((c) {
+                                  return DropdownMenuItem<WaContact>(
+                                    value: c,
+                                    child: Text('${c.name} (${c.phone})${c.role.isNotEmpty ? ' - ${c.role}' : ''}', overflow: TextOverflow.ellipsis),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      selectedContact = val;
+                                      phoneCtrl.text = val.phone;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // 2. PHONE NUMBER INPUT & SALAM
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Nomor WhatsApp (Tujuan)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 6),
+                                    TextFormField(
+                                      controller: phoneCtrl,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                                      decoration: InputDecoration(
+                                        hintText: '08123456789',
+                                        hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                                        filled: true,
+                                        fillColor: const Color(0xFF0F172A),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                      ),
+                                      onChanged: (v) => setDialogState(() {}),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Salam Sapaan', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F172A),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: DropdownButtonHideUnderline(
+                                        child: DropdownButton<String>(
+                                          isExpanded: true,
+                                          value: selectedGreeting,
+                                          dropdownColor: const Color(0xFF0F172A),
+                                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                                          items: const [
+                                            DropdownMenuItem(value: 'siang', child: Text('siang')),
+                                            DropdownMenuItem(value: 'pagi', child: Text('pagi')),
+                                            DropdownMenuItem(value: 'sore', child: Text('sore')),
+                                            DropdownMenuItem(value: 'malam', child: Text('malam')),
+                                            DropdownMenuItem(value: 'halo', child: Text('halo')),
+                                            DropdownMenuItem(value: 'selamat siang', child: Text('selamat siang')),
+                                          ],
+                                          onChanged: (val) {
+                                            if (val != null) setDialogState(() => selectedGreeting = val);
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 3. DATE SELECTOR & INVOICE COUNT
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Daftar Invoice Terpilih (${activeTrs.length} Invoice):',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDate,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setDialogState(() => selectedDate = picked);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F172A),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 14),
+                                      const SizedBox(width: 6),
+                                      Text(formatIndoDate(selectedDate), style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Checklist of invoices
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 140),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: initialTrs.length,
+                              itemBuilder: (context, idx) {
+                                final tr = initialTrs[idx];
+                                final invStr = tr.invoiceNo.toString();
+                                final isChecked = selectedInvoiceNos.contains(invStr);
+                                return CheckboxListTile(
+                                  dense: true,
+                                  activeColor: const Color(0xFF25D366),
+                                  title: Text(
+                                    '${tr.customerName} (#${tr.invoiceNo.toString().replaceAll('#', '')})',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  ),
+                                  value: isChecked,
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      if (val == true) {
+                                        selectedInvoiceNos.add(invStr);
+                                      } else {
+                                        selectedInvoiceNos.remove(invStr);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 4. PREVIEW MESSAGE TEXT AREA
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Pratinjau Teks Pesan WhatsApp:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                              IconButton(
+                                icon: const Icon(Icons.copy_rounded, color: Color(0xFF38BDF8), size: 16),
+                                tooltip: 'Salin Teks Pesan',
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: customMessageCtrl.text));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Teks pesan WhatsApp berhasil disalin!'), backgroundColor: Colors.teal),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: customMessageCtrl,
+                            maxLines: 7,
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontFamily: 'monospace'),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () async {
+                        final rawPhone = phoneCtrl.text.trim();
+                        final formattedPhone = cleanPhone(rawPhone);
+
+                        if (formattedPhone.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Isi nomor WhatsApp tujuan terlebih dahulu!'), backgroundColor: Colors.redAccent),
+                          );
+                          return;
+                        }
+
+                        final textToSend = customMessageCtrl.text;
+                        final url = 'https://wa.me/$formattedPhone?text=${Uri.encodeComponent(textToSend)}';
+
+                        try {
+                          final uri = Uri.parse(url);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            await launchUrl(uri);
+                          }
+                          if (mounted) Navigator.pop(dialogCtx);
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Gagal membuka WhatsApp: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                      label: const Text('Kirim via WhatsApp', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ==========================================
+  // MANAGE WA CONTACTS CRUD DIALOG
+  // ==========================================
+  Future<void> _showManageWaContactsDialog(BuildContext context) async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final roleCtrl = TextEditingController();
+    String? editingContactId;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StreamBuilder<List<WaContact>>(
+          stream: _firebaseService.streamWaContacts(),
+          builder: (context, snapshot) {
+            final contacts = snapshot.data ?? [];
+
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.contacts_rounded, color: Color(0xFF38BDF8), size: 20),
+                          SizedBox(width: 10),
+                          Text('Kelola Daftar Kontak WA', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  content: SizedBox(
+                    width: 480,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Form Input Kontak
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  editingContactId != null ? 'Edit Kontak' : 'Tambah Kontak Baru',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: nameCtrl,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                                        decoration: InputDecoration(
+                                          labelText: 'Nama Kontak (e.g. Bu Silvi)',
+                                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                          filled: true,
+                                          fillColor: const Color(0xFF1E293B),
+                                          isDense: true,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: phoneCtrl,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                                        decoration: InputDecoration(
+                                          labelText: 'Nomor WA (e.g. 08123456789)',
+                                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                          filled: true,
+                                          fillColor: const Color(0xFF1E293B),
+                                          isDense: true,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: roleCtrl,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                                        decoration: InputDecoration(
+                                          labelText: 'Peran / Jabatan (Opsional)',
+                                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                          filled: true,
+                                          fillColor: const Color(0xFF1E293B),
+                                          isDense: true,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8)),
+                                      onPressed: () async {
+                                        final name = nameCtrl.text.trim();
+                                        final phone = phoneCtrl.text.trim();
+                                        final role = roleCtrl.text.trim();
+                                        if (name.isEmpty || phone.isEmpty) return;
+
+                                        final contact = WaContact(
+                                          id: editingContactId ?? '',
+                                          name: name,
+                                          phone: phone,
+                                          role: role,
+                                        );
+                                        await _firebaseService.saveWaContact(contact);
+                                        setDialogState(() {
+                                          nameCtrl.clear();
+                                          phoneCtrl.clear();
+                                          roleCtrl.clear();
+                                          editingContactId = null;
+                                        });
+                                      },
+                                      icon: Icon(editingContactId != null ? Icons.check_rounded : Icons.add_rounded, color: Colors.black, size: 16),
+                                      label: Text(editingContactId != null ? 'Update' : 'Simpan', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Lista Kontak Tersimpan
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('Daftar Kontak Tersimpan:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                          const SizedBox(height: 8),
+                          contacts.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text('Belum ada kontak tersimpan.', style: TextStyle(color: Color(0xFF64748B))),
+                                )
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: contacts.length,
+                                  itemBuilder: (context, index) {
+                                    final item = contacts[index];
+                                    return Card(
+                                      color: const Color(0xFF0F172A),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: const CircleAvatar(
+                                          backgroundColor: Color(0xFF25D366),
+                                          radius: 14,
+                                          child: Icon(Icons.person_rounded, color: Colors.white, size: 16),
+                                        ),
+                                        title: Text(item.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        subtitle: Text('${item.phone}${item.role.isNotEmpty ? ' • ${item.role}' : ''}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 18),
+                                              onPressed: () {
+                                                setDialogState(() {
+                                                  editingContactId = item.id;
+                                                  nameCtrl.text = item.name;
+                                                  phoneCtrl.text = item.phone;
+                                                  roleCtrl.text = item.role;
+                                                });
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                              onPressed: () async {
+                                                await _firebaseService.deleteWaContact(item.id);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

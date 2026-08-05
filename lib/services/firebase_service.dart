@@ -10,6 +10,7 @@ import '../models/operational_invoice.dart';
 import '../models/operational_category.dart';
 import '../models/operational_payment_method.dart';
 import '../models/stock_mutation.dart';
+import '../models/wa_contact.dart';
 import 'package:intl/intl.dart';
 
 class FirebaseService {
@@ -1464,6 +1465,46 @@ class FirebaseService {
           'name': name,
           'description': 'Metode pembayaran bawaan sistem',
           'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  // ==========================================
+  // WA CONTACTS (PERSISTENT CONTACT LIST FOR WHATSAPP SHARE)
+  // ==========================================
+  Stream<List<WaContact>> streamWaContacts() {
+    return _db.collection('wa_contacts').orderBy('name').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => WaContact.fromFirestore(doc)).toList();
+    });
+  }
+
+  Future<void> saveWaContact(WaContact contact) async {
+    final ref = contact.id.isNotEmpty
+        ? _db.collection('wa_contacts').doc(contact.id)
+        : _db.collection('wa_contacts').doc();
+    await ref.set(contact.toFirestore(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteWaContact(String id) async {
+    await _db.collection('wa_contacts').doc(id).delete();
+  }
+
+  Future<void> seedDefaultWaContactsIfEmpty() async {
+    final snap = await _db.collection('wa_contacts').get();
+    if (snap.docs.isEmpty) {
+      final defaults = [
+        {'name': 'Bu Silvi', 'phone': '08123456789', 'role': 'Admin ERP'},
+      ];
+      final batch = _db.batch();
+      for (var c in defaults) {
+        final ref = _db.collection('wa_contacts').doc();
+        batch.set(ref, {
+          'name': c['name'],
+          'phone': c['phone'],
+          'role': c['role'],
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       }
       await batch.commit();
