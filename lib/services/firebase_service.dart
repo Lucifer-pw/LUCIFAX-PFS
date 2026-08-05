@@ -891,15 +891,12 @@ class FirebaseService {
     }
 
     try {
-      final erpSnap = await _db.collection('erp_summary').get();
+      final erpSnap = await _db.collection('erp_summary').where('monthYear', isEqualTo: monthYear).get();
       for (var doc in erpSnap.docs) {
         final data = doc.data();
-        final docMonthYear = data['monthYear']?.toString() ?? '';
-        if (docMonthYear == monthYear || doc.id.startsWith('${monthYear}_')) {
-          final cId = (data['customerId'] ?? '').toString();
-          if (cId.isNotEmpty && !customerErpMap.containsKey(cId)) {
-            customerErpMap[cId] = data;
-          }
+        final cId = (data['customerId'] ?? '').toString();
+        if (cId.isNotEmpty && !customerErpMap.containsKey(cId)) {
+          customerErpMap[cId] = data;
         }
       }
     } catch (e) {
