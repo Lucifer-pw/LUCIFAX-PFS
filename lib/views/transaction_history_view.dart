@@ -4241,8 +4241,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   void _showShareWhatsappErpModal(BuildContext context, List<model_tr.Transaction> trList) {
     _firebaseService.seedDefaultWaContactsIfEmpty();
 
-    // Use all transactions in current list directly without date restrictions
-    final initialTrs = trList;
+    // Use Provider transactions if trList is empty, ensuring invoice list is never 0 total
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final allTrs = trProvider.transactions.isNotEmpty ? trProvider.transactions : trList;
+    final initialTrs = allTrs;
 
     WaContact? selectedContact;
     final phoneCtrl = TextEditingController();
@@ -4283,29 +4285,28 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
       final buffer = StringBuffer();
       
-      // If contact has custom template set in Kelola Kontak, use it!
+      // 1. Header Sapaan Line (from Kelola Daftar Kontak Template or construct from greeting + name)
+      String headerLine = '';
       if (contact != null && contact.template.trim().isNotEmpty) {
-        String templateLine = contact.template.trim();
-        templateLine = templateLine
-            .replaceAll('{tanggal}', dateStr)
-            .replaceAll('{jumlah}', '${items.length}')
-            .replaceAll('{nama}', contact.name);
-        buffer.writeln(templateLine);
-      } else {
-        final cName = (contact?.name ?? '').trim();
-        final greet = greeting.trim();
-
-        if (greet.isNotEmpty && cName.isNotEmpty) {
-          buffer.writeln('$greet $cName');
-        } else if (cName.isNotEmpty) {
-          buffer.writeln('siang $cName');
-        } else {
-          buffer.writeln('siang');
+        String rawTemplate = contact.template.trim();
+        if (rawTemplate.toLowerCase().contains('untuk list erp')) {
+          rawTemplate = rawTemplate.split(RegExp(r'untuk list erp', caseSensitive: false))[0].trim();
         }
+        headerLine = rawTemplate.isEmpty ? '${greeting.trim()} ${contact.name.trim()}' : rawTemplate;
+      } else if (contact != null && contact.name.trim().isNotEmpty) {
+        final greet = greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
+        headerLine = '$greet ${contact.name.trim()}';
+      } else {
+        final greet = greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
+        headerLine = greet;
       }
 
+      buffer.writeln(headerLine);
+
+      // 2. Summary Line
       buffer.writeln('untuk list erp hari ini $dateStr ada : $countStr');
 
+      // 3. Invoice Items List
       for (int i = 0; i < items.length; i++) {
         final tr = items[i];
         final invClean = tr.invoiceNo.toString().replaceAll('#', '');
@@ -4313,7 +4314,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         buffer.writeln('${i + 1}. $storeName ($invClean)');
       }
 
+      // 4. Closing
       buffer.write('Terimakasih');
+
       return buffer.toString();
     }
 
