@@ -257,222 +257,224 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
           // Main Responsive Grid
           Expanded(
             child: isMobile
-                ? Column(
-                    children: [
-                      // Form Card (Top on mobile)
-                      Container(
-                        padding: const EdgeInsets.all(16.0),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.05)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: const [
-                                Icon(Icons.add_box_rounded, color: Color(0xFF38BDF8), size: 20),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Form Entry Stok Masuk',
-                                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-
-                            // NAMA BARANG
-                            const Text('PILIH PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            DropdownButtonFormField<Product>(
-                              value: _selectedProduct,
-                              isExpanded: true,
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFF0F172A),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
-                              ),
-                              hint: const Text('-- Pilih Barang --', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-                              items: products.map((prod) {
-                                return DropdownMenuItem<Product>(
-                                  value: prod,
-                                  child: Text('${prod.name} (Stok: ${prod.stock.toInt()})', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) _selectProduct(val);
-                              },
-                            ),
-                            const SizedBox(height: 10),
-
-                            // HARGA SATUAN
-                            const Text('HARGA SATUAN', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F172A),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                _selectedProduct != null
-                                    ? currencyFormatter.format(_selectedProduct!.price)
-                                    : 'Rp 0',
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 14),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-
-                            // MINGGU & TANGGAL
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('MINGGU KE-', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      DropdownButtonFormField<int>(
-                                        value: _selectedWeek,
-                                        dropdownColor: const Color(0xFF1E293B),
-                                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: const Color(0xFF0F172A),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                                        ),
-                                        items: [1, 2, 3, 4, 5].map((w) {
-                                          return DropdownMenuItem<int>(
-                                            value: w,
-                                            child: Text('Minggu $w', style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                          );
-                                        }).toList(),
-                                        onChanged: (val) {
-                                          if (val != null) setState(() => _selectedWeek = val);
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('TANGGAL ENTRY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      InkWell(
-                                        onTap: () async {
-                                          final picked = await showDatePicker(
-                                            context: context,
-                                            initialDate: _selectedDate,
-                                            firstDate: DateTime(2020),
-                                            lastDate: DateTime(2030),
-                                          );
-                                          if (picked != null) {
-                                            setState(() => _selectedDate = picked);
-                                          }
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0F172A),
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  dateFormatter.format(_selectedDate),
-                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF38BDF8)),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-
-                            // INPUT STOK BARANG
-                            const Text('JUMLAH STOK MASUK (PCS)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: _stockInputController,
-                              focusNode: _qtyFocusNode,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFF0F172A),
-                                hintText: 'Misal: 100',
-                                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // SIMPAN BUTTON
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _isSavingStock ? const Color(0xFF334155) : const Color(0xFF38BDF8),
-                                  foregroundColor: _isSavingStock ? Colors.white70 : Colors.black,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                onPressed: _isSavingStock ? null : _saveStockInput,
-                                icon: _isSavingStock
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)),
-                                      )
-                                    : const Icon(Icons.save_rounded, color: Colors.black, size: 18),
-                                label: Text(
-                                  _isSavingStock ? 'Memproses...' : 'Simpan Stok Masuk',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isSavingStock ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Table & Log Tabs (Below on mobile)
-                      Expanded(
-                        child: Container(
+                ? SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // Form Card (Top on mobile)
+                        Container(
+                          padding: const EdgeInsets.all(16.0),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1E293B),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: Colors.white.withOpacity(0.05)),
                           ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.add_box_rounded, color: Color(0xFF38BDF8), size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Form Entry Stok Masuk',
+                                      style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+
+                              // NAMA BARANG
+                              const Text('PILIH PRODUK', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              DropdownButtonFormField<Product>(
+                                value: _selectedProduct,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0xFF0F172A),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                                ),
+                                hint: const Text('-- Pilih Barang --', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                                items: products.map((prod) {
+                                  return DropdownMenuItem<Product>(
+                                    value: prod,
+                                    child: Text('${prod.name} (Stok: ${prod.stock.toInt()})', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) _selectProduct(val);
+                                },
+                              ),
+                              const SizedBox(height: 10),
+
+                              // HARGA SATUAN
+                              const Text('HARGA SATUAN', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  _selectedProduct != null
+                                      ? currencyFormatter.format(_selectedProduct!.price)
+                                      : 'Rp 0',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+
+                              // MINGGU & TANGGAL
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('MINGGU KE-', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 4),
+                                        DropdownButtonFormField<int>(
+                                          value: _selectedWeek,
+                                          dropdownColor: const Color(0xFF1E293B),
+                                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                                          decoration: InputDecoration(
+                                            filled: true,
+                                            fillColor: const Color(0xFF0F172A),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                          ),
+                                          items: [1, 2, 3, 4, 5].map((w) {
+                                            return DropdownMenuItem<int>(
+                                              value: w,
+                                              child: Text('Minggu $w', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) {
+                                            if (val != null) setState(() => _selectedWeek = val);
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('TANGGAL ENTRY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 4),
+                                        InkWell(
+                                          onTap: () async {
+                                            final picked = await showDatePicker(
+                                              context: context,
+                                              initialDate: _selectedDate,
+                                              firstDate: DateTime(2020),
+                                              lastDate: DateTime(2030),
+                                            );
+                                            if (picked != null) {
+                                              setState(() => _selectedDate = picked);
+                                            }
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF0F172A),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    dateFormatter.format(_selectedDate),
+                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF38BDF8)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+
+                              // INPUT STOK BARANG
+                              const Text('JUMLAH STOK MASUK (PCS)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller: _stockInputController,
+                                focusNode: _qtyFocusNode,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0xFF0F172A),
+                                  hintText: 'Misal: 100',
+                                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+
+                              // SIMPAN BUTTON
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _isSavingStock ? const Color(0xFF334155) : const Color(0xFF38BDF8),
+                                    foregroundColor: _isSavingStock ? Colors.white70 : Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  onPressed: _isSavingStock ? null : _saveStockInput,
+                                  icon: _isSavingStock
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)),
+                                        )
+                                      : const Icon(Icons.save_rounded, color: Colors.black, size: 18),
+                                  label: Text(
+                                    _isSavingStock ? 'Memproses...' : 'Simpan Stok Masuk',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: _isSavingStock ? Colors.white : Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Table & Log Tabs (Below on mobile - scrollable container)
+                        SizedBox(
+                          height: 520,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white.withOpacity(0.05)),
+                            ),
+                            child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               // Tab Bar Header
@@ -635,7 +637,8 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                         ),
                       ),
                     ],
-                  )
+                  ),
+                )
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

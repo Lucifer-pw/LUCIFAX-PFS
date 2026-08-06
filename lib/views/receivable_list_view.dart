@@ -1145,92 +1145,95 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                   ),
 
                                   // INVOICE TABLE FOR THIS CUSTOMER
-                                  DataTable(
-                                    headingRowHeight: 36,
-                                    dataRowMaxHeight: 42,
-                                    columnSpacing: 24,
-                                    columns: const [
-                                      DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataColumn(label: Text('NO INVOICE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataColumn(label: Text('TANGGAL KIRIM', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataColumn(label: Text('NOMINAL', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataColumn(label: Text('STATUS', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                      DataColumn(label: Text('AKSI', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                    ],
-                                    rows: List.generate(group.items.length, (idx) {
-                                      final item = group.items[idx];
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text('${idx + 1}', style: const TextStyle(color: Colors.white, fontSize: 13))),
-                                          DataCell(Text(item.noInvoice, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                          DataCell(Text(dateFormatter.format(item.tglKirim), style: const TextStyle(color: Colors.white70, fontSize: 13))),
-                                          DataCell(Text(currencyFormatter.format(item.nominal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))),
-                                          DataCell(
-                                            InkWell(
-                                              onTap: () => provider.toggleLunas(item.id, item.isLunas),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: item.isLunas ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                  border: Border.all(color: item.isLunas ? Colors.greenAccent : Colors.redAccent),
-                                                ),
-                                                child: Text(
-                                                  item.isLunas ? 'LUNAS' : 'BELUM LUNAS',
-                                                  style: TextStyle(
-                                                    color: item.isLunas ? Colors.greenAccent : Colors.redAccent,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 11,
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      headingRowHeight: 36,
+                                      dataRowMaxHeight: 42,
+                                      columnSpacing: isMobile ? 14 : 24,
+                                      columns: const [
+                                        DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('NO INVOICE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('TANGGAL KIRIM', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('NOMINAL', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('STATUS', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('AKSI', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                      ],
+                                      rows: List.generate(group.items.length, (idx) {
+                                        final item = group.items[idx];
+                                        return DataRow(
+                                          cells: [
+                                            DataCell(Text('${idx + 1}', style: const TextStyle(color: Colors.white, fontSize: 13))),
+                                            DataCell(Text(item.noInvoice, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                            DataCell(Text(dateFormatter.format(item.tglKirim), style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                                            DataCell(Text(currencyFormatter.format(item.nominal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))),
+                                            DataCell(
+                                              InkWell(
+                                                onTap: () => provider.toggleLunas(item.id, item.isLunas),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: item.isLunas ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: item.isLunas ? Colors.greenAccent : Colors.redAccent),
+                                                  ),
+                                                  child: Text(
+                                                    item.isLunas ? 'LUNAS' : 'BELUM LUNAS',
+                                                    style: TextStyle(
+                                                      color: item.isLunas ? Colors.greenAccent : Colors.redAccent,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 11,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          DataCell(
-                                            PopupMenuButton<String>(
-                                              icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
-                                              color: const Color(0xFF1E293B),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              onSelected: (value) {
-                                                if (value == 'edit') {
-                                                  _showAddEditPiutangDialog(item);
-                                                } else if (value == 'delete') {
-                                                  _confirmDeletePiutang(context, provider, item);
-                                                }
-                                              },
-                                              itemBuilder: (context) => [
-                                                PopupMenuItem(
-                                                  value: 'edit',
-                                                  child: Row(
-                                                    children: const [
-                                                      Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
-                                                      SizedBox(width: 8),
-                                                      Text('Edit Piutang', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                    ],
+                                            DataCell(
+                                              PopupMenuButton<String>(
+                                                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                                                color: const Color(0xFF1E293B),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                onSelected: (value) {
+                                                  if (value == 'edit') {
+                                                    _showAddEditPiutangDialog(item);
+                                                  } else if (value == 'delete') {
+                                                    _confirmDeletePiutang(context, provider, item);
+                                                  }
+                                                },
+                                                itemBuilder: (context) => [
+                                                  PopupMenuItem(
+                                                    value: 'edit',
+                                                    child: Row(
+                                                      children: const [
+                                                        Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 18),
+                                                        SizedBox(width: 8),
+                                                        Text('Edit Piutang', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                      ],
+                                                    ),
                                                   ),
-                                                ),
-                                                PopupMenuItem(
-                                                  value: 'delete',
-                                                  child: Row(
-                                                    children: const [
-                                                      Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                                      SizedBox(width: 8),
-                                                      Text('Hapus Piutang', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
-                                                    ],
+                                                  PopupMenuItem(
+                                                    value: 'delete',
+                                                    child: Row(
+                                                      children: const [
+                                                        Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                        SizedBox(width: 8),
+                                                        Text('Hapus Piutang', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                                      ],
+                                                    ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                        ],
-                                      );
-                                    }),
+                                          ],
+                                        );
+                                      }),
+                                    ),
                                   ),
 
                                   // FOOTER GRAND TOTAL UNTUK CUSTOMER INI
                                   Container(
                                     width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                    padding: EdgeInsets.symmetric(vertical: 10, horizontal: isMobile ? 10 : 16),
                                     decoration: const BoxDecoration(
                                       color: Color(0xFF0F172A),
                                       borderRadius: BorderRadius.only(
@@ -1238,61 +1241,123 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                         bottomRight: Radius.circular(14),
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFF38BDF8),
-                                            foregroundColor: Colors.black,
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          ),
-                                          onPressed: () {
-                                            PrintService.printKartuPiutang(
-                                              customerName: group.customerName,
-                                              city: group.city,
-                                              items: group.items,
-                                            );
-                                          },
-                                          icon: const Icon(Icons.print_rounded, color: Colors.black, size: 18),
-                                          label: Text(
-                                            'Cetak Kartu (${group.customerName})',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                          ),
-                                        ),
-                                        Row(
-                                          children: [
-                                            Text(
-                                              'GRAND TOTAL (${group.customerName.toUpperCase()}) :',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                                letterSpacing: 0.8,
+                                    child: isMobile
+                                        ? Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      'GRAND TOTAL (${group.customerName.toUpperCase()}) :',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 11,
+                                                        letterSpacing: 0.5,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF38BDF8).withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                                    ),
+                                                    child: Text(
+                                                      currencyFormatter.format(group.totalNominal),
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF38BDF8),
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF38BDF8).withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                              ),
-                                              child: Text(
-                                                currencyFormatter.format(group.totalNominal),
-                                                style: const TextStyle(
-                                                  color: Color(0xFF38BDF8),
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
+                                              const SizedBox(height: 8),
+                                              ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF38BDF8),
+                                                  foregroundColor: Colors.black,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                onPressed: () {
+                                                  PrintService.printKartuPiutang(
+                                                    customerName: group.customerName,
+                                                    city: group.city,
+                                                    items: group.items,
+                                                  );
+                                                },
+                                                icon: const Icon(Icons.print_rounded, color: Colors.black, size: 16),
+                                                label: Text(
+                                                  'Cetak Kartu (${group.customerName})',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
+                                            ],
+                                          )
+                                        : Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF38BDF8),
+                                                  foregroundColor: Colors.black,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                onPressed: () {
+                                                  PrintService.printKartuPiutang(
+                                                    customerName: group.customerName,
+                                                    city: group.city,
+                                                    items: group.items,
+                                                  );
+                                                },
+                                                icon: const Icon(Icons.print_rounded, color: Colors.black, size: 18),
+                                                label: Text(
+                                                  'Cetak Kartu (${group.customerName})',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                                ),
+                                              ),
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    'GRAND TOTAL (${group.customerName.toUpperCase()}) :',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 13,
+                                                      letterSpacing: 0.8,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF38BDF8).withOpacity(0.15),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                                    ),
+                                                    child: Text(
+                                                      currencyFormatter.format(group.totalNominal),
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF38BDF8),
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
                                   ),
                                 ],
                               ],
