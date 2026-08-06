@@ -2232,6 +2232,120 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  // Unified Update Status Dialog (Consolidating Barang, Bayar, and ERP)
+  void _showUnifiedUpdateStatusDialog(model_tr.Transaction tr) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amberAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.published_with_changes_rounded, color: Colors.amberAccent, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Update Status Invoice #${tr.invoiceNo}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName,
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.local_shipping_outlined, color: Colors.greenAccent, size: 20),
+                  ),
+                  title: const Text('Update Status Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('Status saat ini: ${tr.status}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showUpdateDeliveryStatusDialog(tr);
+                  },
+                ),
+                const Divider(color: Color(0xFF334155), height: 1),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.tealAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 20),
+                  ),
+                  title: const Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('Status transfer: ${tr.statusTransfer}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showUpdateStatusDialog(tr);
+                  },
+                ),
+                const Divider(color: Color(0xFF334155), height: 1),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amberAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 20),
+                  ),
+                  title: const Text('Update Status ERP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text(
+                    tr.erpSyncDate != null ? 'Synced ERP (${DateFormat("dd-MM-yyyy").format(tr.erpSyncDate!)})' : 'Belum Sync ERP',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showUpdateErpStatusDialog(tr);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Move or merge items from source invoice to target invoice
   void _showMoveInvoiceItemsDialog(model_tr.Transaction sourceTr) {
     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
@@ -3622,12 +3736,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                             _showReturnProductDialog(tr);
                                                           } else if (action == 'move_items') {
                                                             _showMoveInvoiceItemsDialog(tr);
-                                                          } else if (action == 'delivery') {
-                                                            _showUpdateDeliveryStatusDialog(tr);
-                                                          } else if (action == 'payment') {
-                                                            _showUpdateStatusDialog(tr);
-                                                          } else if (action == 'erp') {
-                                                            _showUpdateErpStatusDialog(tr);
+                                                          } else if (action == 'update_status') {
+                                                            _showUnifiedUpdateStatusDialog(tr);
                                                           } else if (action == 'edit') {
                                                             _showEditTransactionDialog(tr);
                                                           } else if (action == 'print') {
@@ -3681,32 +3791,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                               ),
                                                             ),
                                                             const PopupMenuItem(
-                                                              value: 'delivery',
+                                                              value: 'update_status',
                                                               child: Row(
                                                                 children: [
-                                                                  Icon(Icons.local_shipping_outlined, color: Colors.greenAccent, size: 18),
+                                                                  Icon(Icons.published_with_changes_rounded, color: Colors.amberAccent, size: 18),
                                                                   SizedBox(width: 10),
-                                                                  Text('Update Status Barang', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            const PopupMenuItem(
-                                                              value: 'payment',
-                                                              child: Row(
-                                                                children: [
-                                                                  Icon(Icons.payment_rounded, color: Colors.tealAccent, size: 18),
-                                                                  SizedBox(width: 10),
-                                                                  Text('Update Status Bayar', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            const PopupMenuItem(
-                                                              value: 'erp',
-                                                              child: Row(
-                                                                children: [
-                                                                  Icon(Icons.inventory_rounded, color: Colors.amberAccent, size: 18),
-                                                                  SizedBox(width: 10),
-                                                                  Text('Update Status ERP', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                  Text('Update Status', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                                                                 ],
                                                               ),
                                                             ),

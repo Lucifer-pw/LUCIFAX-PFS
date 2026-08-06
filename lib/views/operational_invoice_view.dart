@@ -112,97 +112,175 @@ class _OperationalInvoiceViewState extends State<OperationalInvoiceView> {
       );
     }
 
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Header & Title
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF0284C7), Color(0xFF0EA5E9)],
+            isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF0284C7), Color(0xFF0EA5E9)],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            borderRadius: BorderRadius.circular(10),
+                            child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 18),
                           ),
-                          child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'LUCIFAX Operational Billing',
-                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'LUCIFAX Operational Billing',
+                                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  'Resi Klaim Operasional (Multi-Item)',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            Text(
-                              'Sistem pencatatan & cetak resi klaim operasional resmi LUCIFAX PFS (Multi-Item & Dynamic Master)',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _showManageCategoriesDialog(context),
+                            icon: const Icon(Icons.category_rounded, color: Color(0xFF38BDF8), size: 14),
+                            label: const Text('Kategori', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                Row(
-                  children: [
-                    // Button Kelola Kategori
-                    OutlinedButton.icon(
-                      onPressed: () => _showManageCategoriesDialog(context),
-                      icon: const Icon(Icons.category_rounded, color: Color(0xFF38BDF8), size: 16),
-                      label: const Text('Kelola Kategori', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _showManagePaymentMethodsDialog(context),
+                            icon: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF38BDF8), size: 14),
+                            label: const Text('Metode Bayar', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () => _showCreateInvoiceDialog(context, user.name.isNotEmpty ? user.name : user.username),
+                            icon: const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                            label: const Text('Buat Invoice', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF118EEA),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 2,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Button Kelola Metode Bayar
-                    OutlinedButton.icon(
-                      onPressed: () => _showManagePaymentMethodsDialog(context),
-                      icon: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF38BDF8), size: 16),
-                      label: const Text('Kelola Metode Bayar', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF0284C7), Color(0xFF0EA5E9)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'LUCIFAX Operational Billing',
+                                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    'Sistem pencatatan & cetak resi klaim operasional resmi LUCIFAX PFS (Multi-Item & Dynamic Master)',
+                                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
 
-                    // Button Buat Invoice Operasional
-                    ElevatedButton.icon(
-                      onPressed: () => _showCreateInvoiceDialog(context, user.name.isNotEmpty ? user.name : user.username),
-                      icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                      label: const Text('Buat Invoice Operasional', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF118EEA),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 3,
+                      Row(
+                        children: [
+                          // Button Kelola Kategori
+                          OutlinedButton.icon(
+                            onPressed: () => _showManageCategoriesDialog(context),
+                            icon: const Icon(Icons.category_rounded, color: Color(0xFF38BDF8), size: 16),
+                            label: const Text('Kelola Kategori', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // Button Kelola Metode Bayar
+                          OutlinedButton.icon(
+                            onPressed: () => _showManagePaymentMethodsDialog(context),
+                            icon: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF38BDF8), size: 16),
+                            label: const Text('Kelola Metode Bayar', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Button Buat Invoice Operasional
+                          ElevatedButton.icon(
+                            onPressed: () => _showCreateInvoiceDialog(context, user.name.isNotEmpty ? user.name : user.username),
+                            icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                            label: const Text('Buat Invoice Operasional', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF118EEA),
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 3,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                    ],
+                  ),
 
-            const SizedBox(height: 20),
+            SizedBox(height: isMobile ? 10 : 20),
 
             // Search & Category Filter Bar
             StreamBuilder<List<OperationalCategory>>(
@@ -211,62 +289,115 @@ class _OperationalInvoiceViewState extends State<OperationalInvoiceView> {
                 final customCats = (catSnap.data ?? []).map((c) => c.name).toList();
                 final allCats = customCats.isNotEmpty ? customCats : _defaultCategories;
 
-                return Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Cari invoice, rincian item, atau nominal...',
-                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF118EEA), size: 18),
-                          filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF334155)),
+                return isMobile
+                    ? Column(
+                        children: [
+                          TextField(
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                            decoration: InputDecoration(
+                              hintText: 'Cari invoice, rincian item, atau nominal...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF118EEA), size: 16),
+                              filled: true,
+                              fillColor: const Color(0xFF1E293B),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                            ),
+                            onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF334155)),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedCategoryFilter,
+                                dropdownColor: const Color(0xFF1E293B),
+                                isExpanded: true,
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                items: ['SEMUA', ...allCats].map((cat) {
+                                  return DropdownMenuItem<String>(
+                                    value: cat,
+                                    child: Text(cat == 'SEMUA' ? 'Semua Kategori' : cat),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedCategoryFilter = val);
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                        onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF334155)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedCategoryFilter,
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          items: ['SEMUA', ...allCats].map((cat) {
-                            return DropdownMenuItem<String>(
-                              value: cat,
-                              child: Text(cat == 'SEMUA' ? 'Semua Kategori' : cat),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => _selectedCategoryFilter = val);
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                );
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: 'Cari invoice, rincian item, atau nominal...',
+                                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF118EEA), size: 18),
+                                filled: true,
+                                fillColor: const Color(0xFF1E293B),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                                ),
+                              ),
+                              onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedCategoryFilter,
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                items: ['SEMUA', ...allCats].map((cat) {
+                                  return DropdownMenuItem<String>(
+                                    value: cat,
+                                    child: Text(cat == 'SEMUA' ? 'Semua Kategori' : cat),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedCategoryFilter = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
               },
             ),
 
-            const SizedBox(height: 20),
+            SizedBox(height: isMobile ? 10 : 20),
 
             // Invoices List Stream
             Expanded(
@@ -325,7 +456,7 @@ class _OperationalInvoiceViewState extends State<OperationalInvoiceView> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final inv = filtered[index];
-                      return _buildInvoiceCard(context, inv);
+                      return _buildInvoiceCard(context, inv, isMobile);
                     },
                   );
                 },
@@ -337,7 +468,153 @@ class _OperationalInvoiceViewState extends State<OperationalInvoiceView> {
     );
   }
 
-  Widget _buildInvoiceCard(BuildContext context, OperationalInvoice inv) {
+  Widget _buildInvoiceCard(BuildContext context, OperationalInvoice inv, bool isMobile) {
+    if (isMobile) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF334155)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Resi + Badges + Popup Menu
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF118EEA).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF118EEA), size: 16),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Resi: #${inv.invoiceNo}',
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (inv.items.length > 1) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0EA5E9).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF0EA5E9), width: 0.8),
+                    ),
+                    child: Text(
+                      '${inv.items.length} Item',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 9),
+                    ),
+                  ),
+                ],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (inv.status == 'LUNAS' ? Colors.teal : Colors.amber).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: inv.status == 'LUNAS' ? Colors.teal : Colors.amber, width: 0.8),
+                  ),
+                  child: Text(
+                    inv.status,
+                    style: TextStyle(
+                      color: inv.status == 'LUNAS' ? Colors.tealAccent : Colors.amberAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 9,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 20),
+                  color: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'view':
+                        _showLucifaxReceiptModal(context, inv);
+                        break;
+                      case 'edit':
+                        _showCreateInvoiceDialog(context, inv.createdBy, inv);
+                        break;
+                      case 'delete':
+                        _confirmDeleteInvoice(context, inv.id);
+                        break;
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.receipt_rounded, color: Color(0xFF38BDF8), size: 16),
+                          SizedBox(width: 8),
+                          Text('Lihat / Cetak Resi', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 16),
+                          SizedBox(width: 8),
+                          Text('Edit Invoice', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                          SizedBox(width: 8),
+                          Text('Hapus Invoice', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+
+            // Title
+            Text(
+              inv.title,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+
+            // Bottom Row: Date & Total Amount
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('dd MMM yyyy, HH:mm').format(inv.date),
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                ),
+                Text(
+                  currencyFormatter.format(inv.amount),
+                  style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

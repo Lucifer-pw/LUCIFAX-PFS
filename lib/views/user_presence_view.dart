@@ -264,13 +264,6 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   label: 'Hak Akses Role KACAB',
                   isMobile: isMobile,
                 ),
-                const SizedBox(width: 8),
-                _buildTabButton(
-                  index: 2,
-                  icon: Icons.receipt_long_rounded,
-                  label: 'Invoice Operasional Dev',
-                  isMobile: isMobile,
-                ),
               ],
             ),
           ),
@@ -280,9 +273,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           Expanded(
             child: _selectedTab == 0
                 ? _buildUserPresenceTab(authProvider, currentUser, isMobile)
-                : _selectedTab == 1
-                    ? _buildKacabPermissionsTab(rolePermissionsProvider)
-                    : const OperationalInvoiceView(),
+                : _buildKacabPermissionsTab(rolePermissionsProvider, isMobile),
           ),
         ],
       ),
@@ -651,7 +642,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
   }
 
   // TAB 2: Role KACAB Menu Permissions Control
-  Widget _buildKacabPermissionsTab(RolePermissionsProvider permissionsProvider) {
+  Widget _buildKacabPermissionsTab(RolePermissionsProvider permissionsProvider, bool isMobile) {
     final perms = permissionsProvider.kacabPermissions;
     final activeCount = perms.values.where((v) => v == true).length;
 
@@ -659,107 +650,186 @@ class _UserPresenceViewState extends State<UserPresenceView> {
       children: [
         // Top Banner Card
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isMobile ? 12 : 20),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFF334155)),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.amberAccent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
-                ),
-                child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 32),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
+          child: isMobile
+              ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Text(
-                          'Pengaturan Menu Sidebar untuk Role KACAB',
-                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.amberAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                          ),
+                          child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 22),
                         ),
                         const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.amberAccent.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '$activeCount / ${_kacabFeatures.length} Menu Aktif',
-                            style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Hak Akses Role KACAB',
+                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amberAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '$activeCount / ${_kacabFeatures.length} Menu Aktif',
+                                  style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     const Text(
                       'Aktifkan (ON) atau matikan (OFF) fitur yang akan ditampilkan di sidebar navigasi akun KACAB / Manager secara real-time.',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                    ),
+                    const SizedBox(height: 10),
+                    // Quick Bulk Toggle Buttons
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => permissionsProvider.setAllKacabPermissions(true),
+                          icon: const Icon(Icons.select_all_rounded, size: 14),
+                          label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF4ADE80),
+                            side: const BorderSide(color: Color(0xFF4ADE80)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => permissionsProvider.resetKacabToDefault(),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 14),
+                          label: const Text('Reset Default', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orangeAccent,
+                            side: const BorderSide(color: Colors.orangeAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.amberAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                      ),
+                      child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 32),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'Pengaturan Menu Sidebar untuk Role KACAB',
+                                style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.amberAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$activeCount / ${_kacabFeatures.length} Menu Aktif',
+                                  style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Aktifkan (ON) atau matikan (OFF) fitur yang akan ditampilkan di sidebar navigasi akun KACAB / Manager secara real-time.',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Quick Bulk Toggle Buttons
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => permissionsProvider.setAllKacabPermissions(true),
+                          icon: const Icon(Icons.select_all_rounded, size: 16),
+                          label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF4ADE80),
+                            side: const BorderSide(color: Color(0xFF4ADE80)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => permissionsProvider.resetKacabToDefault(),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                          label: const Text('Reset Default (Histori Saja)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orangeAccent,
+                            side: const BorderSide(color: Colors.orangeAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 16),
-
-              // Quick Bulk Toggle Buttons
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => permissionsProvider.setAllKacabPermissions(true),
-                    icon: const Icon(Icons.select_all_rounded, size: 16),
-                    label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4ADE80),
-                      side: const BorderSide(color: Color(0xFF4ADE80)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => permissionsProvider.resetKacabToDefault(),
-                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                    label: const Text('Reset Default (Histori Saja)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orangeAccent,
-                      side: const BorderSide(color: Colors.orangeAccent),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isMobile ? 10 : 16),
 
         // Grid List of Features
         Expanded(
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isMobile ? 8 : 12),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFF334155)),
             ),
             child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 500,
-                mainAxisExtent: 110,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: isMobile ? 600 : 500,
+                mainAxisExtent: isMobile ? 100 : 110,
+                crossAxisSpacing: isMobile ? 8 : 12,
+                mainAxisSpacing: isMobile ? 8 : 12,
               ),
               itemCount: _kacabFeatures.length,
               itemBuilder: (context, index) {
@@ -772,7 +842,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: isMobile ? 8 : 12),
                   decoration: BoxDecoration(
                     color: isEnabled ? const Color(0xFF0F172A) : const Color(0xFF1E293B).withOpacity(0.6),
                     borderRadius: BorderRadius.circular(10),
@@ -784,7 +854,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: EdgeInsets.all(isMobile ? 8 : 10),
                         decoration: BoxDecoration(
                           color: isEnabled ? const Color(0xFF38BDF8).withOpacity(0.15) : const Color(0xFF334155).withOpacity(0.5),
                           borderRadius: BorderRadius.circular(10),
@@ -792,10 +862,10 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         child: Icon(
                           icon,
                           color: isEnabled ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                          size: 24,
+                          size: isMobile ? 20 : 24,
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      SizedBox(width: isMobile ? 10 : 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -803,17 +873,20 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  title,
-                                  style: TextStyle(
-                                    color: isEnabled ? Colors.white : const Color(0xFF94A3B8),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
+                                Flexible(
+                                  child: Text(
+                                    title,
+                                    style: TextStyle(
+                                      color: isEnabled ? Colors.white : const Color(0xFF94A3B8),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: isMobile ? 13 : 15,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
                                     color: isEnabled ? const Color(0xFF4ADE80).withOpacity(0.2) : const Color(0xFF334155),
                                     borderRadius: BorderRadius.circular(4),
@@ -822,21 +895,21 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                     isEnabled ? 'ON' : 'OFF',
                                     style: TextStyle(
                                       color: isEnabled ? const Color(0xFF4ADE80) : const Color(0xFF64748B),
-                                      fontSize: 10,
+                                      fontSize: 9,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               desc,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: isEnabled ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                fontSize: 11,
+                                fontSize: isMobile ? 10 : 11,
                               ),
                             ),
                           ],
