@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/role_permissions_provider.dart';
 import '../models/user_profile.dart';
-import 'operational_invoice_view.dart';
 
 class UserPresenceView extends StatefulWidget {
   const UserPresenceView({super.key});

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
-import 'package:pdf/pdf.dart';
 import '../models/operational_invoice.dart';
 import '../models/operational_category.dart';
 import '../models/operational_payment_method.dart';
