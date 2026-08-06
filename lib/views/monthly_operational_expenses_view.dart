@@ -1709,70 +1709,135 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // TABLE 1 SECTION HEADER & LIVE SEARCH BAR
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '1. BIAYA OPERASIONAL BULAN $_monthYearTitle',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                          ),
+                      isMobile
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '1. BIAYA OPERASIONAL BULAN $_monthYearTitle',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Container(
+                                        height: 34,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1E293B),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFF0284C7)),
+                                        ),
+                                        child: TextField(
+                                          controller: _searchController,
+                                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                                          decoration: InputDecoration(
+                                            hintText: 'Cari nama biaya / rute...',
+                                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
+                                            suffixIcon: _searchQuery.isNotEmpty
+                                                ? IconButton(
+                                                    icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 14),
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _searchController.clear();
+                                                        _searchQuery = '';
+                                                      });
+                                                    },
+                                                  )
+                                                : null,
+                                            border: InputBorder.none,
+                                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                                          ),
+                                          onChanged: (val) {
+                                            setState(() => _searchQuery = val.trim().toLowerCase());
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    if (!isKacab) ...[
+                                      const SizedBox(width: 6),
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1E293B),
+                                          foregroundColor: const Color(0xFF38BDF8),
+                                          side: const BorderSide(color: Color(0xFF0284C7)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                        ),
+                                        onPressed: () => _showItemDialog(isOfCountry: false),
+                                        icon: const Icon(Icons.add_rounded, size: 14),
+                                        label: const Text('+ Item', style: TextStyle(fontSize: 11)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '1. BIAYA OPERASIONAL BULAN $_monthYearTitle',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
 
-                          Wrap(
-                            spacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              // Live Search Input Box
-                              Container(
-                                width: 220,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF0284C7)),
+                                Wrap(
+                                  spacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    // Live Search Input Box
+                                    Container(
+                                      width: 220,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1E293B),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFF0284C7)),
+                                      ),
+                                      child: TextField(
+                                        controller: _searchController,
+                                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                                        decoration: InputDecoration(
+                                          hintText: 'Cari nama biaya / rute...',
+                                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
+                                          suffixIcon: _searchQuery.isNotEmpty
+                                              ? IconButton(
+                                                  icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 14),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _searchController.clear();
+                                                      _searchQuery = '';
+                                                    });
+                                                  },
+                                                )
+                                              : null,
+                                          border: InputBorder.none,
+                                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                        onChanged: (val) {
+                                          setState(() => _searchQuery = val.trim().toLowerCase());
+                                        },
+                                      ),
+                                    ),
+                                    if (!isKacab)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1E293B),
+                                          foregroundColor: const Color(0xFF38BDF8),
+                                          side: const BorderSide(color: Color(0xFF0284C7)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                        ),
+                                        onPressed: () => _showItemDialog(isOfCountry: false),
+                                        icon: const Icon(Icons.add_rounded, size: 14),
+                                        label: const Text('Tambah Item Biaya', style: TextStyle(fontSize: 11)),
+                                      ),
+                                  ],
                                 ),
-                                child: TextField(
-                                  controller: _searchController,
-                                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 10 : 11),
-                                  decoration: InputDecoration(
-                                    hintText: isMobile ? 'Cari...' : 'Cari nama biaya / rute...',
-                                    hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 10 : 11),
-                                    prefixIcon: Icon(Icons.search_rounded, color: const Color(0xFF38BDF8), size: isMobile ? 14 : 16),
-                                    suffixIcon: _searchQuery.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 14),
-                                            onPressed: () {
-                                              setState(() {
-                                                _searchController.clear();
-                                                _searchQuery = '';
-                                              });
-                                            },
-                                          )
-                                        : null,
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                                  ),
-                                  onChanged: (val) {
-                                    setState(() => _searchQuery = val.trim().toLowerCase());
-                                  },
-                                ),
-                              ),
-                              if (!isKacab)
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1E293B),
-                                    foregroundColor: const Color(0xFF38BDF8),
-                                    side: const BorderSide(color: Color(0xFF0284C7)),
-                                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 6 : 10, vertical: 8),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                  ),
-                                  onPressed: () => _showItemDialog(isOfCountry: false),
-                                  icon: const Icon(Icons.add_rounded, size: 14),
-                                  label: Text(isMobile ? '+ Item' : 'Tambah Item Biaya', style: TextStyle(fontSize: isMobile ? 10 : 11)),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
+                              ],
+                            ),
                       const SizedBox(height: 6),
 
                       // TABLE 1 CONTAINER WITH INNER SCROLLABLE DATA LIST

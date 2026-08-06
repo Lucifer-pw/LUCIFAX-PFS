@@ -189,70 +189,41 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header Bar
-          isMobile
-              ? Column(
+          // Header Bar (Desktop Only - Mobile header is inside SingleChildScrollView)
+          if (!isMobile) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
+                  children: const [
+                    Text(
                       'Input Stok Mingguan',
-                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Pilih produk & isi stok masuk mingguan',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E293B),
-                          foregroundColor: const Color(0xFF38BDF8),
-                          side: const BorderSide(color: Color(0xFF38BDF8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: _printPdf,
-                        icon: const Icon(Icons.print_rounded, size: 16),
-                        label: const Text('Cetak Laporan PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Input Stok Mingguan',
-                          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Klik barang di daftar sebelah kanan untuk langsung memilih & mengisi stok masuk',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                        ),
-                      ],
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: const Color(0xFF38BDF8),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _printPdf,
-                      icon: const Icon(Icons.print_rounded, size: 18),
-                      label: const Text('Cetak Laporan PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 4),
+                    Text(
+                      'Klik barang di daftar sebelah kanan untuk langsung memilih & mengisi stok masuk',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                     ),
                   ],
                 ),
-          const SizedBox(height: 14),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E293B),
+                    foregroundColor: const Color(0xFF38BDF8),
+                    side: const BorderSide(color: Color(0xFF38BDF8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _printPdf,
+                  icon: const Icon(Icons.print_rounded, size: 18),
+                  label: const Text('Cetak Laporan PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // Main Responsive Grid
           Expanded(
@@ -260,6 +231,38 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                 ? SingleChildScrollView(
                     child: Column(
                       children: [
+                        // Mobile Header Bar (Inside ScrollView so it scrolls away gracefully)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Input Stok Mingguan',
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Pilih produk & isi stok masuk mingguan',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1E293B),
+                                  foregroundColor: const Color(0xFF38BDF8),
+                                  side: const BorderSide(color: Color(0xFF38BDF8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: _printPdf,
+                                icon: const Icon(Icons.print_rounded, size: 16),
+                                label: const Text('Cetak Laporan PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
                         // Form Card (Top on mobile)
                         Container(
                           padding: const EdgeInsets.all(16.0),
@@ -465,9 +468,9 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                         ),
                         const SizedBox(height: 12),
 
-                        // Table & Log Tabs (Below on mobile - scrollable container)
+                        // Table & Log Tabs (Below on mobile - expanded scrollable container)
                         SizedBox(
-                          height: 520,
+                          height: 880,
                           child: Container(
                             decoration: BoxDecoration(
                               color: const Color(0xFF1E293B),
