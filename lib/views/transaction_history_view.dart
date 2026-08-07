@@ -782,30 +782,50 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           onTap: () => selectItemForEditing(index),
                           child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: Icon(Icons.edit_outlined, color: isEditing ? Colors.amberAccent : Colors.cyanAccent, size: 16),
-                                tooltip: 'Edit Item Ini',
-                                onPressed: () => selectItemForEditing(index),
+                        Center(
+                          child: PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_vert_rounded,
+                              color: isEditing ? Colors.amberAccent : const Color(0xFF94A3B8),
+                              size: 20,
+                            ),
+                            color: const Color(0xFF1E293B),
+                            elevation: 8,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                selectItemForEditing(index);
+                              } else if (value == 'delete') {
+                                setDialogState(() {
+                                  if (editingItemIndex == index) {
+                                    cancelItemEditing();
+                                  } else if (editingItemIndex != null && editingItemIndex! > index) {
+                                    editingItemIndex = editingItemIndex! - 1;
+                                  }
+                                  editedItems.removeAt(index);
+                                });
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem<String>(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, color: Colors.cyanAccent, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Edit Item', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
-                                tooltip: 'Hapus Item',
-                                onPressed: () {
-                                  setDialogState(() {
-                                    if (editingItemIndex == index) {
-                                      cancelItemEditing();
-                                    } else if (editingItemIndex != null && editingItemIndex! > index) {
-                                      editingItemIndex = editingItemIndex! - 1;
-                                    }
-                                    editedItems.removeAt(index);
-                                  });
-                                },
+                              const PopupMenuItem<String>(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Hapus Item', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
