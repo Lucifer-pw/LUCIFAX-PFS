@@ -729,6 +729,93 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
             // Widget for Items Table
             Widget buildItemsTable() {
+              final tableContent = Table(
+                columnWidths: isMobile
+                    ? const {
+                        0: FixedColumnWidth(170),
+                        1: FixedColumnWidth(50),
+                        2: FixedColumnWidth(85),
+                        3: FixedColumnWidth(95),
+                        4: FixedColumnWidth(75),
+                      }
+                    : const {
+                        0: FlexColumnWidth(2.3),
+                        1: FlexColumnWidth(0.7),
+                        2: FlexColumnWidth(1.2),
+                        3: FlexColumnWidth(1.2),
+                        4: FlexColumnWidth(0.9),
+                      },
+                children: [
+                  TableRow(
+                    decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+                    children: [
+                      _buildTableCell('Nama Barang', isHeader: true),
+                      _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                      _buildTableCell('Harga', isHeader: true, align: TextAlign.right),
+                      _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                      _buildTableCell('Aksi', isHeader: true, align: TextAlign.center),
+                    ],
+                  ),
+                  ...editedItems.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    final isEditing = (editingItemIndex == index);
+
+                    return TableRow(
+                      decoration: BoxDecoration(
+                        color: isEditing ? Colors.amber.withOpacity(0.15) : null,
+                      ),
+                      children: [
+                        InkWell(
+                          onTap: () => selectItemForEditing(index),
+                          child: _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                        ),
+                        InkWell(
+                          onTap: () => selectItemForEditing(index),
+                          child: _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                        ),
+                        InkWell(
+                          onTap: () => selectItemForEditing(index),
+                          child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                        ),
+                        InkWell(
+                          onTap: () => selectItemForEditing(index),
+                          child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.edit_outlined, color: isEditing ? Colors.amberAccent : Colors.cyanAccent, size: 16),
+                                tooltip: 'Edit Item Ini',
+                                onPressed: () => selectItemForEditing(index),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                tooltip: 'Hapus Item',
+                                onPressed: () {
+                                  setDialogState(() {
+                                    if (editingItemIndex == index) {
+                                      cancelItemEditing();
+                                    } else if (editingItemIndex != null && editingItemIndex! > index) {
+                                      editingItemIndex = editingItemIndex! - 1;
+                                    }
+                                    editedItems.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              );
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -759,98 +846,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             thumbVisibility: true,
                             child: SingleChildScrollView(
                               scrollDirection: Axis.vertical,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minWidth: isMobile ? 480 : 0),
-                                  child: Table(
-                                    columnWidths: isMobile
-                                        ? const {
-                                            0: FixedColumnWidth(170),
-                                            1: FixedColumnWidth(50),
-                                            2: FixedColumnWidth(85),
-                                            3: FixedColumnWidth(95),
-                                            4: FixedColumnWidth(75),
-                                          }
-                                        : const {
-                                            0: FlexColumnWidth(2.3),
-                                            1: FlexColumnWidth(0.7),
-                                            2: FlexColumnWidth(1.2),
-                                            3: FlexColumnWidth(1.2),
-                                            4: FlexColumnWidth(0.9),
-                                          },
-                                    children: [
-                                      TableRow(
-                                        decoration: const BoxDecoration(color: Color(0xFF1E293B)),
-                                        children: [
-                                          _buildTableCell('Nama Barang', isHeader: true),
-                                          _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
-                                          _buildTableCell('Harga', isHeader: true, align: TextAlign.right),
-                                          _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
-                                          _buildTableCell('Aksi', isHeader: true, align: TextAlign.center),
-                                        ],
+                              child: isMobile
+                                  ? SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(minWidth: 480),
+                                        child: tableContent,
                                       ),
-                                      ...editedItems.asMap().entries.map((entry) {
-                                        final index = entry.key;
-                                        final item = entry.value;
-                                        final isEditing = (editingItemIndex == index);
-
-                                        return TableRow(
-                                          decoration: BoxDecoration(
-                                            color: isEditing ? Colors.amber.withOpacity(0.15) : null,
-                                          ),
-                                          children: [
-                                            InkWell(
-                                              onTap: () => selectItemForEditing(index),
-                                              child: _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
-                                            ),
-                                            InkWell(
-                                              onTap: () => selectItemForEditing(index),
-                                              child: _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                            ),
-                                            InkWell(
-                                              onTap: () => selectItemForEditing(index),
-                                              child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
-                                            ),
-                                            InkWell(
-                                              onTap: () => selectItemForEditing(index),
-                                              child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
-                                            ),
-                                            Padding(
-                                              padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  IconButton(
-                                                    icon: Icon(Icons.edit_outlined, color: isEditing ? Colors.amberAccent : Colors.cyanAccent, size: 16),
-                                                    tooltip: 'Edit Item Ini',
-                                                    onPressed: () => selectItemForEditing(index),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
-                                                    tooltip: 'Hapus Item',
-                                                    onPressed: () {
-                                                      setDialogState(() {
-                                                        if (editingItemIndex == index) {
-                                                          cancelItemEditing();
-                                                        } else if (editingItemIndex != null && editingItemIndex! > index) {
-                                                          editingItemIndex = editingItemIndex! - 1;
-                                                        }
-                                                        editedItems.removeAt(index);
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      }),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                                    )
+                                  : tableContent,
                             ),
                           ),
                   ),
