@@ -29,6 +29,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
   String _searchQuery = '';
   TabController? _tabController;
   String _historyFilterMonthYear = DateFormat('MM-yyyy').format(DateTime.now());
+  int? _historyFilterWeek; // null = Semua Minggu (M1-M5), 1..5 = filter by specific week
   bool _isSavingStock = false;
 
   @override
@@ -1099,7 +1100,22 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
       }
     }
 
-    final activeWeeks = [5, 4, 3, 2, 1].where((w) => (groupedByWeek[w] ?? []).isNotEmpty).toList();
+    final allActiveWeeks = [1, 2, 3, 4, 5].where((w) => (groupedByWeek[w] ?? []).isNotEmpty).toList();
+    final activeWeeks = _historyFilterWeek != null
+        ? ((groupedByWeek[_historyFilterWeek!] ?? []).isNotEmpty ? [_historyFilterWeek!] : <int>[])
+        : allActiveWeeks;
+
+    final displayedQty = _historyFilterWeek != null
+        ? (weekTotals[_historyFilterWeek!] ?? 0.0)
+        : totalMonthQty;
+
+    final displayedEntriesCount = _historyFilterWeek != null
+        ? (groupedByWeek[_historyFilterWeek!]?.length ?? 0)
+        : filteredEntries.length;
+
+    final displayedPeriodText = _historyFilterWeek != null
+        ? 'Total Input Stok (Minggu $_historyFilterWeek • ${_formatMonthName(_historyFilterMonthYear)})'
+        : 'Total Input Stok (${_formatMonthName(_historyFilterMonthYear)})';
 
     return Column(
       children: [
@@ -1146,6 +1162,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                           if (val != null) {
                             setState(() {
                               _historyFilterMonthYear = val;
+                              _historyFilterWeek = null; // Reset week filter on month change
                             });
                           }
                         },
@@ -1168,28 +1185,33 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Total Input Stok (${_formatMonthName(_historyFilterMonthYear)})',
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '+${NumberFormat('#,###').format(totalMonthQty)} Pcs',
-                        style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayedPeriodText,
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '+${NumberFormat('#,###').format(displayedQty)} Pcs',
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0284C7).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
                     ),
                     child: Text(
-                      '${filteredEntries.length} Entri',
+                      '$displayedEntriesCount Entri',
                       style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -1197,32 +1219,109 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
               ),
               const SizedBox(height: 10),
 
-              // Weekly Breakdown Pills (M1 .. M5)
+              // Weekly Breakdown Interactive Filter Pills (Semua & M1 .. M5)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: [1, 2, 3, 4, 5].map((w) {
-                    final sumW = weekTotals[w] ?? 0.0;
-                    return Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: sumW > 0 ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF1E293B),
+                  children: [
+                    // Pill: Semua Minggu (M1-M5)
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _historyFilterWeek = null;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _historyFilterWeek == null
+                              ? const Color(0xFF0284C7).withOpacity(0.35)
+                              : const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: _historyFilterWeek == null
+                                ? const Color(0xFF38BDF8)
+                                : const Color(0xFF334155),
+                            width: _historyFilterWeek == null ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_historyFilterWeek == null) ...[
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 13),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              'Semua (M1-M5): +${totalMonthQty.toInt()} Pcs',
+                              style: TextStyle(
+                                color: _historyFilterWeek == null ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Pills: M1 .. M5
+                    ...[1, 2, 3, 4, 5].map((w) {
+                      final sumW = weekTotals[w] ?? 0.0;
+                      final isSelected = _historyFilterWeek == w;
+                      final hasData = sumW > 0;
+
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (_historyFilterWeek == w) {
+                              _historyFilterWeek = null; // Toggle back to all weeks
+                            } else {
+                              _historyFilterWeek = w;
+                            }
+                          });
+                        },
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: sumW > 0 ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF0284C7).withOpacity(0.35)
+                                : (hasData ? const Color(0xFF0284C7).withOpacity(0.12) : const Color(0xFF1E293B)),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF38BDF8)
+                                  : (hasData ? const Color(0xFF0284C7).withOpacity(0.5) : const Color(0xFF334155)),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isSelected) ...[
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 13),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                'M$w: +${sumW.toInt()} Pcs',
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? const Color(0xFF38BDF8)
+                                      : (hasData ? Colors.white : const Color(0xFF64748B)),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'M$w: +${sumW.toInt()} Pcs',
-                        style: TextStyle(
-                          color: sumW > 0 ? Colors.white : const Color(0xFF64748B),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ],

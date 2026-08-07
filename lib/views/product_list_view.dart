@@ -1297,13 +1297,17 @@ class _ProductListViewState extends State<ProductListView> {
                           fontSize: 11,
                         ),
                         columns: const [
+                          DataColumn(label: Text('NO')),
                           DataColumn(label: Text('TANGGAL')),
+                          DataColumn(label: Text('ISI PER KARTON'), numeric: true),
                           DataColumn(label: Text('JENIS')),
                           DataColumn(label: Text('QTY'), numeric: true),
                           DataColumn(label: Text('STOK'), numeric: true),
                           DataColumn(label: Text('REFERENSI')),
                         ],
-                        rows: mutations.map((m) {
+                        rows: mutations.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final m = entry.value;
                           Color typeColor;
                           String typeLabel;
                           IconData typeIcon;
@@ -1349,8 +1353,16 @@ class _ProductListViewState extends State<ProductListView> {
                           return DataRow(
                             cells: [
                               DataCell(Text(
+                                '${idx + 1}',
+                                style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
+                              )),
+                              DataCell(Text(
                                 DateFormat('dd/MM/yy HH:mm').format(m.timestamp),
                                 style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              )),
+                              DataCell(Text(
+                                product.isiKarton > 0 ? '${product.isiKarton} Pcs' : '-',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                               )),
                               DataCell(Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -1609,7 +1621,7 @@ class _ProductListViewState extends State<ProductListView> {
                 builder: (context) {
                   final isMobile = MediaQuery.of(context).size.width < 768;
                   return SizedBox(
-                    width: 900,
+                    width: 950,
                     height: isMobile ? MediaQuery.of(context).size.height * 0.55 : 480,
                     child: StreamBuilder<List<StockMutation>>(
                   stream: firebaseService.streamAllStockMutations(date: selectedDate),
@@ -1668,6 +1680,9 @@ class _ProductListViewState extends State<ProductListView> {
                       }
                     }
 
+                    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+                    final prodMap = {for (var p in productProvider.products) p.kodeInduk: p};
+
                     return Column(
                       children: [
                         // Summary Banner inside Dialog
@@ -1710,7 +1725,7 @@ class _ProductListViewState extends State<ProductListView> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(minWidth: 860),
+                                constraints: const BoxConstraints(minWidth: 940),
                                 child: DataTable(
                                   columnSpacing: 10,
                                   horizontalMargin: 0,
@@ -1723,15 +1738,31 @@ class _ProductListViewState extends State<ProductListView> {
                                     fontSize: 11,
                                   ),
                                   columns: const [
+                                    DataColumn(label: Text('NO')),
                                     DataColumn(label: Text('TANGGAL')),
                                     DataColumn(label: Text('KODE INDUK')),
                                     DataColumn(label: Text('NAMA BARANG')),
+                                    DataColumn(label: Text('ISI PER KARTON'), numeric: true),
                                     DataColumn(label: Text('JENIS')),
                                     DataColumn(label: Text('QTY'), numeric: true),
                                     DataColumn(label: Text('STOK'), numeric: true),
                                     DataColumn(label: Text('REFERENSI')),
                                   ],
-                                  rows: mutations.map((m) {
+                                  rows: mutations.asMap().entries.map((entry) {
+                                    final idx = entry.key;
+                                    final m = entry.value;
+
+                                    Product? p = prodMap[m.kodeInduk];
+                                    if (p == null) {
+                                      for (var prod in productProvider.products) {
+                                        if (prod.name.toLowerCase() == m.productName.toLowerCase() || prod.kodeInduk == m.kodeInduk) {
+                                          p = prod;
+                                          break;
+                                        }
+                                      }
+                                    }
+                                    final isiKarton = p?.isiKarton ?? 0;
+
                                     Color typeColor;
                                     String typeLabel;
                                     IconData typeIcon;
@@ -1777,6 +1808,10 @@ class _ProductListViewState extends State<ProductListView> {
                                     return DataRow(
                                       cells: [
                                         DataCell(Text(
+                                          '${idx + 1}',
+                                          style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
+                                        )),
+                                        DataCell(Text(
                                           DateFormat('dd/MM/yy HH:mm').format(m.timestamp),
                                           style: const TextStyle(color: Colors.white70, fontSize: 11),
                                         )),
@@ -1787,6 +1822,10 @@ class _ProductListViewState extends State<ProductListView> {
                                         DataCell(Text(
                                           m.productName,
                                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                        )),
+                                        DataCell(Text(
+                                          isiKarton > 0 ? '$isiKarton Pcs' : '-',
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                         )),
                                         DataCell(Row(
                                           mainAxisSize: MainAxisSize.min,
