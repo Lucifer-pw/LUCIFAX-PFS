@@ -749,180 +749,342 @@ class _ProductListViewState extends State<ProductListView> {
     final inStockItems = productProvider.products.where((p) => p.stock > 0).length;
     final outOfStockItems = productProvider.products.where((p) => p.stock <= 0).length;
 
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Top Toolbar: Search Bar + Summary Badges + Action Buttons
-            Row(
-              children: [
-                // Search Input Field
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Cari barang berdasarkan nama atau kode induk...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, color: Color(0xFF94A3B8), size: 20),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchQuery = '';
-                                });
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12.0),
-                        borderSide: BorderSide.none,
+            if (isMobile) ...[
+              Row(
+                children: [
+                  // Search Input Field
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Cari barang / kode...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, color: Color(0xFF94A3B8), size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10.0),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
-                    ),
-                    onChanged: (val) {
-                      setState(() {
-                        _searchQuery = val;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                
-                // Global Riwayat Mutasi Stok Button (Box Logo Icon)
-                Tooltip(
-                  message: 'Riwayat Mutasi Stok / Stock Out (Semua Barang)',
-                  child: InkWell(
-                    onTap: () => _showGlobalStockMutationHistory(),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF0284C7)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Riwayat Mutasi Stok',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                        ],
-                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val;
+                        });
+                      },
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 8),
 
-                // 3-Dots Action Menu Button
-                Container(
+                  // 3-Dots Action Menu Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF0284C7)),
+                    ),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 22),
+                      tooltip: 'Menu Fitur Master Barang',
+                      color: const Color(0xFF0F172A),
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                      ),
+                      onSelected: (val) {
+                        if (val == 'add') {
+                          _showProductDialog();
+                        } else if (val == 'mutasi') {
+                          _showGlobalStockMutationHistory();
+                        } else if (val == 'import') {
+                          _importProductsFromExcel();
+                        } else if (val == 'export') {
+                          _exportProductsToExcel(filteredProducts);
+                        } else if (val == 'pdf') {
+                          _printProductsPdf(filteredProducts);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'add',
+                          child: Row(
+                            children: [
+                              Icon(Icons.add_circle_outline_rounded, color: Color(0xFF38BDF8), size: 20),
+                              SizedBox(width: 12),
+                              Text('Tambah Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'mutasi',
+                          child: Row(
+                            children: [
+                              Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
+                              SizedBox(width: 12),
+                              Text('Riwayat Mutasi Stok (Semua)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(height: 1),
+                        const PopupMenuItem(
+                          value: 'import',
+                          child: Row(
+                            children: [
+                              Icon(Icons.file_upload_outlined, color: Colors.tealAccent, size: 20),
+                              SizedBox(width: 12),
+                              Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'export',
+                          child: Row(
+                            children: [
+                              Icon(Icons.table_view_rounded, color: Color(0xFF4ADE80), size: 20),
+                              SizedBox(width: 12),
+                              Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(height: 1),
+                        const PopupMenuItem(
+                          value: 'pdf',
+                          child: Row(
+                            children: [
+                              Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFF87171), size: 20),
+                              SizedBox(width: 12),
+                              Text('Cetak PDF Laporan', style: TextStyle(color: Color(0xFFF87171), fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Full-width Riwayat Mutasi Stok Button on Mobile
+              InkWell(
+                onTap: () => _showGlobalStockMutationHistory(),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFF0284C7)),
                   ),
-                  child: PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 24),
-                    tooltip: 'Menu Fitur Master Barang',
-                    color: const Color(0xFF0F172A),
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
-                    ),
-                    onSelected: (val) {
-                      if (val == 'add') {
-                        _showProductDialog();
-                      } else if (val == 'mutasi') {
-                        _showGlobalStockMutationHistory();
-                      } else if (val == 'import') {
-                        _importProductsFromExcel();
-                      } else if (val == 'export') {
-                        _exportProductsToExcel(filteredProducts);
-                      } else if (val == 'pdf') {
-                        _printProductsPdf(filteredProducts);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'add',
-                        child: Row(
-                          children: [
-                            Icon(Icons.add_circle_outline_rounded, color: Color(0xFF38BDF8), size: 20),
-                            SizedBox(width: 12),
-                            Text('Tambah Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'mutasi',
-                        child: Row(
-                          children: [
-                            Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
-                            SizedBox(width: 12),
-                            Text('Riwayat Mutasi Stok (Semua)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuDivider(height: 1),
-                      const PopupMenuItem(
-                        value: 'import',
-                        child: Row(
-                          children: [
-                            Icon(Icons.file_upload_outlined, color: Colors.tealAccent, size: 20),
-                            SizedBox(width: 12),
-                            Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'export',
-                        child: Row(
-                          children: [
-                            Icon(Icons.table_view_rounded, color: Color(0xFF4ADE80), size: 20),
-                            SizedBox(width: 12),
-                            Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuDivider(height: 1),
-                      const PopupMenuItem(
-                        value: 'pdf',
-                        child: Row(
-                          children: [
-                            Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFF87171), size: 20),
-                            SizedBox(width: 12),
-                            Text('Cetak PDF Laporan', style: TextStyle(color: Color(0xFFF87171), fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
-                        ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Riwayat Mutasi Stok (Semua)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
+            ] else ...[
+              // Desktop Toolbar Row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Cari barang berdasarkan nama atau kode induk...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, color: Color(0xFF94A3B8), size: 20),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // Global Riwayat Mutasi Stok Button (Box Logo Icon)
+                  Tooltip(
+                    message: 'Riwayat Mutasi Stok / Stock Out (Semua Barang)',
+                    child: InkWell(
+                      onTap: () => _showGlobalStockMutationHistory(),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF0284C7)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Riwayat Mutasi Stok',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // 3-Dots Action Menu Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF0284C7)),
+                    ),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 24),
+                      tooltip: 'Menu Fitur Master Barang',
+                      color: const Color(0xFF0F172A),
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                      ),
+                      onSelected: (val) {
+                        if (val == 'add') {
+                          _showProductDialog();
+                        } else if (val == 'mutasi') {
+                          _showGlobalStockMutationHistory();
+                        } else if (val == 'import') {
+                          _importProductsFromExcel();
+                        } else if (val == 'export') {
+                          _exportProductsToExcel(filteredProducts);
+                        } else if (val == 'pdf') {
+                          _printProductsPdf(filteredProducts);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'add',
+                          child: Row(
+                            children: [
+                              Icon(Icons.add_circle_outline_rounded, color: Color(0xFF38BDF8), size: 20),
+                              SizedBox(width: 12),
+                              Text('Tambah Barang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'mutasi',
+                          child: Row(
+                            children: [
+                              Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
+                              SizedBox(width: 12),
+                              Text('Riwayat Mutasi Stok (Semua)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(height: 1),
+                        const PopupMenuItem(
+                          value: 'import',
+                          child: Row(
+                            children: [
+                              Icon(Icons.file_upload_outlined, color: Colors.tealAccent, size: 20),
+                              SizedBox(width: 12),
+                              Text('Import Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'export',
+                          child: Row(
+                            children: [
+                              Icon(Icons.table_view_rounded, color: Color(0xFF4ADE80), size: 20),
+                              SizedBox(width: 12),
+                              Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(height: 1),
+                        const PopupMenuItem(
+                          value: 'pdf',
+                          child: Row(
+                            children: [
+                              Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFF87171), size: 20),
+                              SizedBox(width: 12),
+                              Text('Cetak PDF Laporan', style: TextStyle(color: Color(0xFFF87171), fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+
+            // Summary Badges Banner (Scrollable horizontally on mobile)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildSummaryBadge('Total Master Barang', '$totalItems Produk', const Color(0xFF38BDF8), Icons.inventory_2_rounded),
+                  const SizedBox(width: 10),
+                  _buildSummaryBadge('Stok Tersedia', '$inStockItems Produk', Colors.greenAccent, Icons.check_circle_outline_rounded),
+                  const SizedBox(width: 10),
+                  _buildSummaryBadge('Stok Habis (0)', '$outOfStockItems Produk', outOfStockItems > 0 ? Colors.redAccent : const Color(0xFF64748B), Icons.warning_amber_rounded),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
-
-            // Summary Badges Banner
-            Row(
-              children: [
-                _buildSummaryBadge('Total Master Barang', '$totalItems Produk', const Color(0xFF38BDF8), Icons.inventory_2_rounded),
-                const SizedBox(width: 12),
-                _buildSummaryBadge('Stok Tersedia', '$inStockItems Produk', Colors.greenAccent, Icons.check_circle_outline_rounded),
-                const SizedBox(width: 12),
-                _buildSummaryBadge('Stok Habis (0)', '$outOfStockItems Produk', outOfStockItems > 0 ? Colors.redAccent : const Color(0xFF64748B), Icons.warning_amber_rounded),
-              ],
-            ),
-            const SizedBox(height: 16),
 
             // Products Table View with Horizontal & Vertical Scrolling
             Expanded(
@@ -1457,8 +1619,14 @@ class _ProductListViewState extends State<ProductListView> {
                 selectedDate!.month == DateTime.now().month &&
                 selectedDate!.day == DateTime.now().day;
 
+            final isMobile = MediaQuery.of(context).size.width < 768;
+
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 24,
+                vertical: isMobile ? 12 : 24,
+              ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1472,27 +1640,29 @@ class _ProductListViewState extends State<ProductListView> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.5)),
                         ),
-                        child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 22),
+                        child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 20),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text(
-                              'Riwayat Mutasi Stok / Stock Out (Semua Barang)',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              isMobile ? 'Riwayat Mutasi Stok' : 'Riwayat Mutasi Stok / Stock Out (Semua Barang)',
+                              style: TextStyle(color: Colors.white, fontSize: isMobile ? 14 : 16, fontWeight: FontWeight.bold),
                             ),
-                            SizedBox(height: 2),
+                            const SizedBox(height: 2),
                             Text(
                               'Pencatatan semua barang keluar, masuk, retur, dan penyesuaian stok terpusat.',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                              style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 10 : 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 20),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
@@ -1500,146 +1670,141 @@ class _ProductListViewState extends State<ProductListView> {
                   const SizedBox(height: 14),
 
                   // Filter Row: Search Input + Single Date Picker + Type Filter
-                  Builder(
-                    builder: (context) {
-                      final isMobile = MediaQuery.of(context).size.width < 768;
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          // Text Search Input
-                          SizedBox(
-                            width: isMobile ? double.infinity : 320,
-                            child: TextField(
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                              decoration: InputDecoration(
-                                hintText: 'Cari nama barang, kode, invoice...',
-                                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                filled: true,
-                                fillColor: const Color(0xFF0F172A),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8.0),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                              onChanged: (val) {
-                                setDialogState(() {
-                                  dialogSearchQuery = val.trim().toLowerCase();
-                                });
-                              },
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Text Search Input
+                      SizedBox(
+                        width: isMobile ? double.infinity : 320,
+                        child: TextField(
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama barang, kode, invoice...',
+                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8.0),
+                              borderSide: BorderSide.none,
                             ),
                           ),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              dialogSearchQuery = val.trim().toLowerCase();
+                            });
+                          },
+                        ),
+                      ),
 
-                          // Single Date Picker Button (Defaults to TODAY)
-                          InkWell(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: selectedDate ?? DateTime.now(),
-                                firstDate: DateTime(2024),
-                                lastDate: DateTime(2030),
-                                builder: (context, child) {
-                                  return Theme(
-                                    data: ThemeData.dark().copyWith(
-                                      colorScheme: const ColorScheme.dark(
-                                        primary: Color(0xFF0284C7),
-                                        onPrimary: Colors.white,
-                                        surface: Color(0xFF1E293B),
-                                        onSurface: Colors.white,
-                                      ),
-                                    ),
-                                    child: child!,
-                                  );
-                                },
+                      // Single Date Picker Button (Defaults to TODAY)
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate ?? DateTime.now(),
+                            firstDate: DateTime(2024),
+                            lastDate: DateTime(2030),
+                            builder: (context, child) {
+                              return Theme(
+                                data: ThemeData.dark().copyWith(
+                                  colorScheme: const ColorScheme.dark(
+                                    primary: Color(0xFF0284C7),
+                                    onPrimary: Colors.white,
+                                    surface: Color(0xFF1E293B),
+                                    onSurface: Colors.white,
+                                  ),
+                                ),
+                                child: child!,
                               );
-                              if (picked != null) {
+                            },
+                          );
+                          if (picked != null) {
+                            setDialogState(() {
+                              selectedDate = picked;
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                selectedDate == null
+                                    ? 'Semua Tanggal'
+                                    : isToday
+                                        ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
+                                        : DateFormat('dd/MM/yyyy').format(selectedDate!),
+                                style: TextStyle(
+                                  color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (selectedDate != null) ...[
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      selectedDate = null;
+                                    });
+                                  },
+                                  child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Dropdown Type Filter
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedType,
+                            dropdownColor: const Color(0xFF0F172A),
+                            style: const TextStyle(color: Colors.white, fontSize: 11),
+                            isDense: true,
+                            items: const [
+                              DropdownMenuItem(value: 'SEMUA', child: Text('Semua Mutasi')),
+                              DropdownMenuItem(value: 'KELUAR', child: Text('🔴 Keluar (Stock Out)')),
+                              DropdownMenuItem(value: 'MASUK', child: Text('🟢 Masuk')),
+                              DropdownMenuItem(value: 'RETUR_STATUS', child: Text('🟠 Retur Status')),
+                              DropdownMenuItem(value: 'EDIT_MANUAL', child: Text('🔵 Edit Manual')),
+                              DropdownMenuItem(value: 'INPUT_STOK', child: Text('🟢 Input Stok')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
                                 setDialogState(() {
-                                  selectedDate = picked;
+                                  selectedType = val;
                                 });
                               }
                             },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    selectedDate == null
-                                        ? 'Semua Tanggal'
-                                        : isToday
-                                            ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
-                                            : DateFormat('dd/MM/yyyy').format(selectedDate!),
-                                    style: TextStyle(
-                                      color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  if (selectedDate != null) ...[
-                                    const SizedBox(width: 4),
-                                    GestureDetector(
-                                      onTap: () {
-                                        setDialogState(() {
-                                          selectedDate = null;
-                                        });
-                                      },
-                                      child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
                           ),
-
-                          // Dropdown Type Filter
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF334155)),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: selectedType,
-                                dropdownColor: const Color(0xFF0F172A),
-                                style: const TextStyle(color: Colors.white, fontSize: 11),
-                                isDense: true,
-                                items: const [
-                                  DropdownMenuItem(value: 'SEMUA', child: Text('Semua Mutasi')),
-                                  DropdownMenuItem(value: 'KELUAR', child: Text('🔴 Keluar (Stock Out)')),
-                                  DropdownMenuItem(value: 'MASUK', child: Text('🟢 Masuk')),
-                                  DropdownMenuItem(value: 'RETUR_STATUS', child: Text('🟠 Retur Status')),
-                                  DropdownMenuItem(value: 'EDIT_MANUAL', child: Text('🔵 Edit Manual')),
-                                  DropdownMenuItem(value: 'INPUT_STOK', child: Text('🟢 Input Stok')),
-                                ],
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setDialogState(() {
-                                      selectedType = val;
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1648,7 +1813,7 @@ class _ProductListViewState extends State<ProductListView> {
                   final isMobile = MediaQuery.of(context).size.width < 768;
                   return SizedBox(
                     width: isMobile ? double.maxFinite : 1240,
-                    height: isMobile ? MediaQuery.of(context).size.height * 0.55 : 480,
+                    height: isMobile ? MediaQuery.of(context).size.height * 0.6 : 480,
                     child: StreamBuilder<List<StockMutation>>(
                   stream: firebaseService.streamAllStockMutations(date: selectedDate),
                   builder: (context, snapshot) {
@@ -1720,28 +1885,52 @@ class _ProductListViewState extends State<ProductListView> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: const Color(0xFF334155)),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Ditemukan: ${mutations.length} Mutasi ${selectedDate != null ? "(${DateFormat('dd/MM/yy').format(selectedDate!)})" : ""}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                              ),
-                              Row(
-                                children: [
-                                  Text(
-                                    'Total Stock Out: -${totalKeluar.toStringAsFixed(0)} pcs',
-                                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Text(
-                                    'Total Stock In: +${totalMasuk.toStringAsFixed(0)} pcs',
-                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                          child: isMobile
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ditemukan: ${mutations.length} Mutasi ${selectedDate != null ? "(${DateFormat('dd/MM/yy').format(selectedDate!)})" : ""}',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Stock Out: -${totalKeluar.toStringAsFixed(0)} pcs',
+                                          style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        Text(
+                                          'Stock In: +${totalMasuk.toStringAsFixed(0)} pcs',
+                                          style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Ditemukan: ${mutations.length} Mutasi ${selectedDate != null ? "(${DateFormat('dd/MM/yy').format(selectedDate!)})" : ""}',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Total Stock Out: -${totalKeluar.toStringAsFixed(0)} pcs',
+                                          style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Text(
+                                          'Total Stock In: +${totalMasuk.toStringAsFixed(0)} pcs',
+                                          style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                         ),
 
                         // Table Content
