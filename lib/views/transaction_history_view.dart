@@ -1150,6 +1150,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
     final isMobile = MediaQuery.of(context).size.width < 600;
 
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final prodMap = {for (var p in productProvider.products) p.name.toLowerCase().trim(): p};
+    final prodCodeMap = {for (var p in productProvider.products) p.kodeInduk.toLowerCase().trim(): p};
+    final prodIdMap = {for (var p in productProvider.products) p.id: p};
+
+    double grandTotalKarton = 0.0;
+    for (var item in tr.items) {
+      Product? product = prodMap[item.productName.toLowerCase().trim()] ??
+          prodCodeMap[item.productId.toLowerCase().trim()] ??
+          prodIdMap[item.productId];
+      final isiKarton = product?.isiKarton ?? 0;
+      if (isiKarton > 0 && item.qty > 0) {
+        grandTotalKarton += (item.qty / isiKarton);
+      }
+    }
+    final grandTotalKartonStr = (grandTotalKarton % 1 == 0
+            ? grandTotalKarton.toInt().toString()
+            : grandTotalKarton.toStringAsFixed(1)) +
+        ' Ktn';
+
     showDialog(
       context: context,
       builder: (context) {
@@ -1184,7 +1204,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ],
           ),
           content: SizedBox(
-            width: isMobile ? double.maxFinite : 900,
+            width: isMobile ? double.maxFinite : 920,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1318,22 +1338,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 child: Table(
                                   columnWidths: isMobile
                                       ? const {
-                                          0: FixedColumnWidth(210),
-                                          1: FixedColumnWidth(55),
-                                          2: FixedColumnWidth(95),
-                                          3: FixedColumnWidth(105),
-                                          4: FixedColumnWidth(65),
-                                          5: FixedColumnWidth(100),
-                                          6: FixedColumnWidth(130),
+                                          0: FixedColumnWidth(190),
+                                          1: FixedColumnWidth(50),
+                                          2: FixedColumnWidth(75),
+                                          3: FixedColumnWidth(90),
+                                          4: FixedColumnWidth(100),
+                                          5: FixedColumnWidth(60),
+                                          6: FixedColumnWidth(95),
+                                          7: FixedColumnWidth(125),
                                         }
                                       : const {
-                                          0: FlexColumnWidth(2.6), // Nama Barang (Spacious)
-                                          1: FlexColumnWidth(0.7), // Qty
-                                          2: FlexColumnWidth(1.1), // Harga Unit
-                                          3: FlexColumnWidth(1.2), // Total
-                                          4: FlexColumnWidth(0.8), // Disc %
-                                          5: FlexColumnWidth(1.1), // Disc Rp
-                                          6: FlexColumnWidth(1.4), // Subtotal
+                                          0: FlexColumnWidth(2.4), // Nama Barang (Spacious)
+                                          1: FlexColumnWidth(0.65), // Qty
+                                          2: FlexColumnWidth(0.85), // Total Karton
+                                          3: FlexColumnWidth(1.1), // Harga Unit
+                                          4: FlexColumnWidth(1.2), // Total
+                                          5: FlexColumnWidth(0.75), // Disc %
+                                          6: FlexColumnWidth(1.1), // Disc Rp
+                                          7: FlexColumnWidth(1.4), // Subtotal
                                         },
                                   children: [
                                     TableRow(
@@ -1341,6 +1363,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       children: [
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                                        _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Total', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
@@ -1355,6 +1378,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
                                       final isEven = index % 2 == 0;
 
+                                      Product? product = prodMap[item.productName.toLowerCase().trim()] ??
+                                          prodCodeMap[item.productId.toLowerCase().trim()] ??
+                                          prodIdMap[item.productId];
+                                      final isiKarton = product?.isiKarton ?? 0;
+                                      final totalKarton = (isiKarton > 0 && item.qty > 0) ? (item.qty / isiKarton) : 0.0;
+                                      final totalKartonStr = (isiKarton > 0 && item.qty > 0)
+                                          ? ((totalKarton % 1 == 0 ? totalKarton.toInt().toString() : totalKarton.toStringAsFixed(1)) + ' Ktn')
+                                          : '-';
+
                                       return TableRow(
                                         decoration: BoxDecoration(
                                           color: isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
@@ -1363,6 +1395,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         children: [
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                          _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
@@ -1440,22 +1473,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 child: Table(
                                   columnWidths: isMobile
                                       ? const {
-                                          0: FixedColumnWidth(210),
-                                          1: FixedColumnWidth(55),
-                                          2: FixedColumnWidth(95),
-                                          3: FixedColumnWidth(105),
-                                          4: FixedColumnWidth(65),
-                                          5: FixedColumnWidth(100),
-                                          6: FixedColumnWidth(130),
+                                          0: FixedColumnWidth(190),
+                                          1: FixedColumnWidth(50),
+                                          2: FixedColumnWidth(75),
+                                          3: FixedColumnWidth(90),
+                                          4: FixedColumnWidth(100),
+                                          5: FixedColumnWidth(60),
+                                          6: FixedColumnWidth(95),
+                                          7: FixedColumnWidth(125),
                                         }
                                       : const {
-                                          0: FlexColumnWidth(2.6),
-                                          1: FlexColumnWidth(0.7),
-                                          2: FlexColumnWidth(1.1),
-                                          3: FlexColumnWidth(1.2),
-                                          4: FlexColumnWidth(0.8),
-                                          5: FlexColumnWidth(1.1),
-                                          6: FlexColumnWidth(1.4),
+                                          0: FlexColumnWidth(2.4),
+                                          1: FlexColumnWidth(0.65),
+                                          2: FlexColumnWidth(0.85),
+                                          3: FlexColumnWidth(1.1),
+                                          4: FlexColumnWidth(1.2),
+                                          5: FlexColumnWidth(0.75),
+                                          6: FlexColumnWidth(1.1),
+                                          7: FlexColumnWidth(1.4),
                                         },
                                   children: [
                                     TableRow(
@@ -1463,6 +1498,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       children: [
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                                        _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Total', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
@@ -1476,6 +1512,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                       final isEven = index % 2 == 0;
                                       final totalBeforeDisc = item.isBonus ? 0.0 : item.qty * item.price;
                                       final discRp = item.isBonus ? 0.0 : totalBeforeDisc * (item.discountPercent / 100);
+
+                                      Product? product = prodMap[item.productName.toLowerCase().trim()] ??
+                                          prodCodeMap[item.productId.toLowerCase().trim()] ??
+                                          prodIdMap[item.productId];
+                                      final isiKarton = product?.isiKarton ?? 0;
+                                      final totalKarton = (isiKarton > 0 && item.qty > 0) ? (item.qty / isiKarton) : 0.0;
+                                      final totalKartonStr = (isiKarton > 0 && item.qty > 0)
+                                          ? ((totalKarton % 1 == 0 ? totalKarton.toInt().toString() : totalKarton.toStringAsFixed(1)) + ' Ktn')
+                                          : '-';
+
                                       return TableRow(
                                         decoration: BoxDecoration(
                                           color: isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
@@ -1484,6 +1530,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         children: [
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                          _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
@@ -1505,7 +1552,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                 const SizedBox(height: 12),
 
-                // Bottom Summary Footer (Catatan & Highlighted GRAND TOTAL) - PINNED AT BOTTOM!
+                // Bottom Summary Footer (Catatan, GrandTotal Karton & Highlighted GRAND TOTAL) - PINNED AT BOTTOM!
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1545,6 +1592,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           if (tr.note.isEmpty)
                             const Text(
@@ -1553,13 +1601,41 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             )
                           else
                             const Spacer(),
-                          Row(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text(
-                                _rupiahFormatter.format(tr.grandTotal),
-                                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'GrandTotal Karton: ',
+                                    style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                    ),
+                                    child: Text(
+                                      grandTotalKartonStr,
+                                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text(
+                                    _rupiahFormatter.format(tr.grandTotal),
+                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
