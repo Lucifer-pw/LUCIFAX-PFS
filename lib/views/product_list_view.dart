@@ -1300,6 +1300,7 @@ class _ProductListViewState extends State<ProductListView> {
                           DataColumn(label: Text('NO')),
                           DataColumn(label: Text('TANGGAL')),
                           DataColumn(label: Text('ISI PER KARTON'), numeric: true),
+                          DataColumn(label: Text('TOTAL KARTON'), numeric: true),
                           DataColumn(label: Text('JENIS')),
                           DataColumn(label: Text('QTY'), numeric: true),
                           DataColumn(label: Text('STOK'), numeric: true),
@@ -1350,6 +1351,15 @@ class _ProductListViewState extends State<ProductListView> {
 
                           final qtyStr = m.qty > 0 ? '+${m.qty.toStringAsFixed(0)}' : m.qty.toStringAsFixed(0);
 
+                          String totalKartonStr = '-';
+                          if (product.isiKarton > 0 && m.qty != 0) {
+                            final totalKtn = m.qty / product.isiKarton;
+                            final formattedKtn = (totalKtn.abs() % 1 == 0)
+                                ? totalKtn.toInt().toString()
+                                : totalKtn.toStringAsFixed(1);
+                            totalKartonStr = totalKtn > 0 ? '+$formattedKtn Ktn' : '$formattedKtn Ktn';
+                          }
+
                           return DataRow(
                             cells: [
                               DataCell(Text(
@@ -1363,6 +1373,10 @@ class _ProductListViewState extends State<ProductListView> {
                               DataCell(Text(
                                 product.isiKarton > 0 ? '${product.isiKarton} Pcs' : '-',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                              )),
+                              DataCell(Text(
+                                totalKartonStr,
+                                style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 11),
                               )),
                               DataCell(Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -1725,7 +1739,7 @@ class _ProductListViewState extends State<ProductListView> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(minWidth: 940),
+                                constraints: const BoxConstraints(minWidth: 1040),
                                 child: DataTable(
                                   columnSpacing: 10,
                                   horizontalMargin: 0,
@@ -1743,6 +1757,7 @@ class _ProductListViewState extends State<ProductListView> {
                                     DataColumn(label: Text('KODE INDUK')),
                                     DataColumn(label: Text('NAMA BARANG')),
                                     DataColumn(label: Text('ISI PER KARTON'), numeric: true),
+                                    DataColumn(label: Text('TOTAL KARTON'), numeric: true),
                                     DataColumn(label: Text('JENIS')),
                                     DataColumn(label: Text('QTY'), numeric: true),
                                     DataColumn(label: Text('STOK'), numeric: true),
@@ -1805,6 +1820,15 @@ class _ProductListViewState extends State<ProductListView> {
 
                                     final qtyStr = m.qty > 0 ? '+${m.qty.toStringAsFixed(0)}' : m.qty.toStringAsFixed(0);
 
+                                    String totalKartonStr = '-';
+                                    if (isiKarton > 0 && m.qty != 0) {
+                                      final totalKtn = m.qty / isiKarton;
+                                      final formattedKtn = (totalKtn.abs() % 1 == 0)
+                                          ? totalKtn.toInt().toString()
+                                          : totalKtn.toStringAsFixed(1);
+                                      totalKartonStr = totalKtn > 0 ? '+$formattedKtn Ktn' : '$formattedKtn Ktn';
+                                    }
+
                                     return DataRow(
                                       cells: [
                                         DataCell(Text(
@@ -1826,6 +1850,10 @@ class _ProductListViewState extends State<ProductListView> {
                                         DataCell(Text(
                                           isiKarton > 0 ? '$isiKarton Pcs' : '-',
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                        )),
+                                        DataCell(Text(
+                                          totalKartonStr,
+                                          style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 11),
                                         )),
                                         DataCell(Row(
                                           mainAxisSize: MainAxisSize.min,
