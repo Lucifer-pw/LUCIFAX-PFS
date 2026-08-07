@@ -1187,7 +1187,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF0284C7).withOpacity(0.2),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
                     ),
                     child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 22),
                   ),
@@ -1205,12 +1204,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ],
           ),
           content: SizedBox(
-            width: isMobile ? double.maxFinite : 960,
+            width: isMobile ? double.maxFinite : 920,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Information Header Box (Polished Card Layout)
+                // Information Header Box
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -1224,17 +1223,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!),
                         const SizedBox(height: 6),
                         _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}'),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
-                            const SizedBox(width: 8),
                             Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
-                        const Divider(color: Color(0xFF1E293B), height: 1),
-                        const SizedBox(height: 8),
+                        const Divider(color: Color(0xFF1E293B)),
+                        const SizedBox(height: 6),
                         _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date)),
                         const SizedBox(height: 6),
                         _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'),
@@ -1247,116 +1245,47 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)),
                         ],
                       ] else ...[
-                        // Desktop: 2-Column Balanced Header
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Left Column: Customer & Location
-                            Expanded(
-                              flex: 6,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text('Pelanggan:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w600)),
-                                            const SizedBox(height: 2),
-                                            Text(customerInfo['fullDisplay']!, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Icon(Icons.location_on_outlined, color: Color(0xFFF43F5E), size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text('Kota/Provinsi:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w600)),
-                                            const SizedBox(height: 2),
-                                            Text('${tr.city}, ${tr.province}', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w500)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 20),
-                            // Right Column: Status Badges & Dates Grid
-                            Expanded(
-                              flex: 5,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      _buildDetailRow('Status Kirim:', tr.status, isBadge: true),
-                                      const SizedBox(width: 12),
-                                      _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 4,
-                                    alignment: WrapAlignment.end,
-                                    children: [
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.calendar_today_rounded, size: 12, color: Color(0xFF94A3B8)),
-                                          const SizedBox(width: 4),
-                                          Text('Tgl Inv: ${DateFormat('dd-MM-yyyy').format(tr.date)}', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
-                                        ],
-                                      ),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.local_shipping_outlined, size: 12, color: Color(0xFF94A3B8)),
-                                          const SizedBox(width: 4),
-                                          Text('Tgl Kirim: ${(tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-'}', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
-                                        ],
-                                      ),
-                                      if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.payment_rounded, size: 12, color: Colors.tealAccent),
-                                            const SizedBox(width: 4),
-                                            Text('PAID: ${DateFormat('dd-MM-yyyy').format(tr.transferDate!)}', style: const TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                      if (tr.erpSyncDate != null)
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.cloud_done_outlined, size: 12, color: Colors.amberAccent),
-                                            const SizedBox(width: 4),
-                                            Text('ERP: ${DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)}', style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
+                            Expanded(child: _buildDetailRow('Pelanggan:', customerInfo['fullDisplay']!)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDetailRow('Kota/Provinsi:', '${tr.city}, ${tr.province}')),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Divider(color: Color(0xFF1E293B)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: _buildDetailRow('Tgl Invoice:', DateFormat('dd-MM-yyyy').format(tr.date))),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDetailRow('Tgl Kirim:', (tr.status == 'DIKIRIM' && tr.deliveryDate != null) ? DateFormat('dd-MM-yyyy').format(tr.deliveryDate!) : '-')),
+                          ],
+                        ),
+                        if ((tr.statusTransfer == 'PAID' && tr.transferDate != null) || tr.erpSyncDate != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              if (tr.statusTransfer == 'PAID' && tr.transferDate != null)
+                                Expanded(child: _buildDetailRow('Tgl PAID:', DateFormat('dd-MM-yyyy').format(tr.transferDate!)))
+                              else
+                                const Spacer(),
+                              const SizedBox(width: 16),
+                              if (tr.erpSyncDate != null)
+                                Expanded(child: _buildDetailRow('Tgl ERP:', DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)))
+                              else
+                                const Spacer(),
+                            ],
+                          ),
+                        ],
                       ],
                     ],
                   ),
@@ -1384,7 +1313,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ),
                 const SizedBox(height: 8),
 
-                // Table Container with Internal Scroll
+                // Table Container with Internal Scroll (ONLY THIS TABLE SCROLLS!)
                 Flexible(
                   child: Container(
                     width: double.infinity,
@@ -1410,7 +1339,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   columnWidths: isMobile
                                       ? const {
                                           0: FixedColumnWidth(190),
-                                          1: FixedColumnWidth(55),
+                                          1: FixedColumnWidth(50),
                                           2: FixedColumnWidth(75),
                                           3: FixedColumnWidth(90),
                                           4: FixedColumnWidth(100),
@@ -1419,14 +1348,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           7: FixedColumnWidth(125),
                                         }
                                       : const {
-                                          0: FlexColumnWidth(2.6), // Nama Barang
+                                          0: FlexColumnWidth(2.4), // Nama Barang (Spacious)
                                           1: FlexColumnWidth(0.65), // Qty
                                           2: FlexColumnWidth(0.85), // Total Karton
                                           3: FlexColumnWidth(1.1), // Harga Unit
                                           4: FlexColumnWidth(1.2), // Total
                                           5: FlexColumnWidth(0.75), // Disc %
                                           6: FlexColumnWidth(1.1), // Disc Rp
-                                          7: FlexColumnWidth(1.35), // Subtotal
+                                          7: FlexColumnWidth(1.4), // Subtotal
                                         },
                                   children: [
                                     TableRow(
@@ -1464,42 +1393,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
                                         ),
                                         children: [
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        item.productName,
-                                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                                                      ),
-                                                    ),
-                                                    if (item.isBonus) ...[
-                                                      const SizedBox(width: 4),
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.greenAccent.withOpacity(0.2),
-                                                          borderRadius: BorderRadius.circular(4),
-                                                          border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
-                                                        ),
-                                                        child: const Text('BONUS', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '(${item.weightKg.toStringAsFixed(2)} kg)',
-                                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
+                                          _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
@@ -1521,7 +1415,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                 ),
 
-                // Moved Items History Section
+                // Moved Items History Section (shown only if items were moved)
                 if (tr.movedItems.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Row(
@@ -1580,7 +1474,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   columnWidths: isMobile
                                       ? const {
                                           0: FixedColumnWidth(190),
-                                          1: FixedColumnWidth(55),
+                                          1: FixedColumnWidth(50),
                                           2: FixedColumnWidth(75),
                                           3: FixedColumnWidth(90),
                                           4: FixedColumnWidth(100),
@@ -1589,14 +1483,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           7: FixedColumnWidth(125),
                                         }
                                       : const {
-                                          0: FlexColumnWidth(2.6),
+                                          0: FlexColumnWidth(2.4),
                                           1: FlexColumnWidth(0.65),
                                           2: FlexColumnWidth(0.85),
                                           3: FlexColumnWidth(1.1),
                                           4: FlexColumnWidth(1.2),
                                           5: FlexColumnWidth(0.75),
                                           6: FlexColumnWidth(1.1),
-                                          7: FlexColumnWidth(1.35),
+                                          7: FlexColumnWidth(1.4),
                                         },
                                   children: [
                                     TableRow(
@@ -1634,42 +1528,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
                                         ),
                                         children: [
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        item.productName,
-                                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                                                      ),
-                                                    ),
-                                                    if (item.isBonus) ...[
-                                                      const SizedBox(width: 4),
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.greenAccent.withOpacity(0.2),
-                                                          borderRadius: BorderRadius.circular(4),
-                                                          border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
-                                                        ),
-                                                        child: const Text('BONUS', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '(${item.weightKg.toStringAsFixed(2)} kg)',
-                                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
+                                          _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
@@ -1693,99 +1552,94 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                 const SizedBox(height: 12),
 
-                // Bottom Summary Footer (Catatan & Harmonious GRAND TOTAL)
+                // Bottom Summary Footer (Catatan, GrandTotal Karton & Highlighted GRAND TOTAL) - PINNED AT BOTTOM!
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFF334155)),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Left side: Note
-                      Expanded(
-                        child: tr.note.isNotEmpty
-                            ? Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Text(
-                                          'Catatan / Keterangan:',
-                                          style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        SelectableText(
-                                          tr.note,
-                                          style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.3),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const Row(
-                                children: [
-                                  Icon(Icons.notes_rounded, color: Color(0xFF64748B), size: 16),
-                                  SizedBox(width: 6),
-                                  Text('Catatan: -', style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic)),
-                                ],
-                              ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Right side: Totals Card
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B).withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155).withOpacity(0.7)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
+                      if (tr.note.isNotEmpty) ...[
+                        const Row(
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'GrandTotal Karton: ',
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0284C7).withOpacity(0.25),
-                                    borderRadius: BorderRadius.circular(5),
-                                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
-                                  ),
-                                  child: Text(
-                                    grandTotalKartonStr,
-                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text(
-                                  _rupiahFormatter.format(tr.grandTotal),
-                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
-                                ),
-                              ],
+                            Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Catatan / Keterangan:',
+                              style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B).withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF334155).withOpacity(0.5)),
+                          ),
+                          child: SelectableText(
+                            tr.note,
+                            style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (tr.note.isEmpty)
+                            const Text(
+                              'Catatan: -',
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic),
+                            )
+                          else
+                            const Spacer(),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'GrandTotal Karton: ',
+                                    style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                    ),
+                                    child: Text(
+                                      grandTotalKartonStr,
+                                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text(
+                                    _rupiahFormatter.format(tr.grandTotal),
+                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1825,7 +1679,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                           label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                            side: const BorderSide(color: Colors.redAccent),
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
@@ -1836,24 +1690,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      if (!isKacab) ...[
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              _showMoveInvoiceItemsDialog(tr);
-                            },
-                            icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
-                            label: const Text('Pindah / Gabung', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () => _showPrintDialog(tr, isDownload: false),
@@ -1871,7 +1707,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Tutup', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                    child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
               )
@@ -1930,7 +1766,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               const SizedBox(width: 8),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Tutup', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ],
           ],
