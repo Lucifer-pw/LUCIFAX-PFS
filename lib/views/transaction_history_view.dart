@@ -1552,94 +1552,106 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                 const SizedBox(height: 12),
 
-                // Bottom Summary Footer (Catatan, GrandTotal Karton & Highlighted GRAND TOTAL) - PINNED AT BOTTOM!
+                // Bottom Summary Footer (Catatan & Harmonious GRAND TOTAL)
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFF334155)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      if (tr.note.isNotEmpty) ...[
-                        const Row(
+                      // Left: Note / Catatan
+                      Expanded(
+                        child: tr.note.isNotEmpty
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text(
+                                          'Catatan / Keterangan:',
+                                          style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        SelectableText(
+                                          tr.note,
+                                          style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.3),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : const Row(
+                                children: [
+                                  Icon(Icons.notes_rounded, color: Color(0xFF64748B), size: 16),
+                                  SizedBox(width: 6),
+                                  Text('Catatan: -', style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic)),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Right: Clean Totals Card
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Catatan / Keterangan:',
-                              style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'GrandTotal Karton: ',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600, fontSize: 11),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0284C7).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                  ),
+                                  child: Text(
+                                    grandTotalKartonStr,
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text(
+                                  _rupiahFormatter.format(tr.grandTotal),
+                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B).withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF334155).withOpacity(0.5)),
-                          ),
-                          child: SelectableText(
-                            tr.note,
-                            style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (tr.note.isEmpty)
-                            const Text(
-                              'Catatan: -',
-                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic),
-                            )
-                          else
-                            const Spacer(),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    'GrandTotal Karton: ',
-                                    style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0284C7).withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                    ),
-                                    child: Text(
-                                      grandTotalKartonStr,
-                                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  Text(
-                                    _rupiahFormatter.format(tr.grandTotal),
-                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -1679,7 +1691,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                           label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.redAccent),
+                            side: const BorderSide(color: Colors.redAccent, width: 1.5),
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
@@ -1690,6 +1702,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
+                      if (!isKacab) ...[
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _showMoveInvoiceItemsDialog(tr);
+                            },
+                            icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
+                            label: const Text('Pindah / Gabung', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () => _showPrintDialog(tr, isDownload: false),
@@ -1705,9 +1735,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  TextButton(
+                  OutlinedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF475569)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Tutup', style: TextStyle(color: Color(0xFFCBD5E1), fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               )
@@ -1764,9 +1799,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton(
+              OutlinedButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Tutup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF475569)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Tutup', style: TextStyle(color: Color(0xFFCBD5E1), fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ],
           ],
