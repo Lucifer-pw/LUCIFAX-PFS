@@ -1241,176 +1241,188 @@ class _ProductListViewState extends State<ProductListView> {
                   ),
                 ],
               ),
-              content: SizedBox(
-                width: 750,
-                height: 420,
-                child: StreamBuilder<List<StockMutation>>(
-                  stream: firebaseService.streamStockMutations(product.kodeInduk, date: selectedDate),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
-                    }
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)),
-                      );
-                    }
-                    var mutations = snapshot.data ?? [];
-
-                    // Apply Text Search Filter
-                    if (dialogSearchQuery.isNotEmpty) {
-                      mutations = mutations.where((m) {
-                        return m.reference.toLowerCase().contains(dialogSearchQuery) ||
-                            m.customerName.toLowerCase().contains(dialogSearchQuery) ||
-                            m.type.toLowerCase().contains(dialogSearchQuery);
-                      }).toList();
-                    }
-
-                    if (mutations.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.inbox_rounded, color: Colors.white.withOpacity(0.2), size: 48),
-                            const SizedBox(height: 12),
-                            Text(
-                              selectedDate != null
-                                  ? 'Belum ada mutasi stok pada ${DateFormat('dd/MM/yyyy').format(selectedDate!)}.'
-                                  : 'Belum ada riwayat mutasi stok.',
-                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return SingleChildScrollView(
-                      child: DataTable(
-                        columnSpacing: 12,
-                        horizontalMargin: 0,
-                        headingRowHeight: 36,
-                        dataRowMinHeight: 34,
-                        dataRowMaxHeight: 50,
-                        headingTextStyle: const TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
-                        columns: const [
-                          DataColumn(label: Text('NO')),
-                          DataColumn(label: Text('TANGGAL')),
-                          DataColumn(label: Text('ISI PER KARTON'), numeric: true),
-                          DataColumn(label: Text('TOTAL KARTON'), numeric: true),
-                          DataColumn(label: Text('JENIS')),
-                          DataColumn(label: Text('QTY'), numeric: true),
-                          DataColumn(label: Text('STOK'), numeric: true),
-                          DataColumn(label: Text('REFERENSI')),
-                        ],
-                        rows: mutations.asMap().entries.map((entry) {
-                          final idx = entry.key;
-                          final m = entry.value;
-                          Color typeColor;
-                          String typeLabel;
-                          IconData typeIcon;
-                          switch (m.type) {
-                            case 'KELUAR':
-                              typeColor = Colors.redAccent;
-                              typeLabel = 'Keluar';
-                              typeIcon = Icons.arrow_downward_rounded;
-                              break;
-                            case 'MASUK':
-                              typeColor = Colors.greenAccent;
-                              typeLabel = 'Masuk';
-                              typeIcon = Icons.arrow_upward_rounded;
-                              break;
-                            case 'RETUR_STATUS':
-                              typeColor = Colors.orangeAccent;
-                              typeLabel = 'Retur Status';
-                              typeIcon = Icons.undo_rounded;
-                              break;
-                            case 'HAPUS_INVOICE':
-                              typeColor = Colors.orangeAccent;
-                              typeLabel = 'Hapus Invoice';
-                              typeIcon = Icons.delete_outline_rounded;
-                              break;
-                            case 'EDIT_MANUAL':
-                              typeColor = const Color(0xFF38BDF8);
-                              typeLabel = 'Edit Manual';
-                              typeIcon = Icons.edit_outlined;
-                              break;
-                            case 'INPUT_STOK':
-                              typeColor = Colors.greenAccent;
-                              typeLabel = 'Input Stok';
-                              typeIcon = Icons.add_box_outlined;
-                              break;
-                            default:
-                              typeColor = const Color(0xFF94A3B8);
-                              typeLabel = m.type;
-                              typeIcon = Icons.swap_vert_rounded;
-                          }
-
-                          final qtyStr = m.qty > 0 ? '+${m.qty.toStringAsFixed(0)}' : m.qty.toStringAsFixed(0);
-
-                          String totalKartonStr = '-';
-                          if (product.isiKarton > 0 && m.qty != 0) {
-                            final totalKtn = m.qty / product.isiKarton;
-                            final formattedKtn = (totalKtn.abs() % 1 == 0)
-                                ? totalKtn.toInt().toString()
-                                : totalKtn.toStringAsFixed(1);
-                            totalKartonStr = totalKtn > 0 ? '+$formattedKtn Ktn' : '$formattedKtn Ktn';
-                          }
-
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(
-                                '${idx + 1}',
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
-                              )),
-                              DataCell(Text(
-                                DateFormat('dd/MM/yy HH:mm').format(m.timestamp),
-                                style: const TextStyle(color: Colors.white70, fontSize: 11),
-                              )),
-                              DataCell(Text(
-                                product.isiKarton > 0 ? '${product.isiKarton} Pcs' : '-',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                              )),
-                              DataCell(Text(
-                                totalKartonStr,
-                                style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                              )),
-                              DataCell(Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(typeIcon, color: typeColor, size: 14),
-                                  const SizedBox(width: 4),
-                                  Text(typeLabel, style: TextStyle(color: typeColor, fontSize: 11, fontWeight: FontWeight.bold)),
-                                ],
-                              )),
-                              DataCell(Text(
-                                qtyStr,
-                                style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 12),
-                              )),
-                              DataCell(Text(
-                                '${m.stockBefore.toStringAsFixed(0)} → ${m.stockAfter.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Colors.white, fontSize: 11),
-                              )),
-                              DataCell(
-                                Tooltip(
-                                  message: m.customerName.isNotEmpty ? '${m.reference}\n${m.customerName}' : m.reference,
-                                  child: Text(
-                                    m.customerName.isNotEmpty ? '${m.reference} (${m.customerName})' : m.reference,
-                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ],
+              content: Builder(
+                builder: (context) {
+                  final isMobile = MediaQuery.of(context).size.width < 768;
+                  return SizedBox(
+                    width: isMobile ? double.maxFinite : 980,
+                    height: 440,
+                    child: StreamBuilder<List<StockMutation>>(
+                      stream: firebaseService.streamStockMutations(product.kodeInduk, date: selectedDate),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                        }
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)),
                           );
-                        }).toList(),
-                      ),
-                    );
-                  },
-                ),
+                        }
+                        var mutations = snapshot.data ?? [];
+
+                        // Apply Text Search Filter
+                        if (dialogSearchQuery.isNotEmpty) {
+                          mutations = mutations.where((m) {
+                            return m.reference.toLowerCase().contains(dialogSearchQuery) ||
+                                m.customerName.toLowerCase().contains(dialogSearchQuery) ||
+                                m.type.toLowerCase().contains(dialogSearchQuery);
+                          }).toList();
+                        }
+
+                        if (mutations.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.inbox_rounded, color: Colors.white.withOpacity(0.2), size: 48),
+                                SizedBox(height: 12),
+                                Text(
+                                  selectedDate != null
+                                      ? 'Belum ada mutasi stok pada ${DateFormat('dd/MM/yyyy').format(selectedDate!)}.'
+                                      : 'Belum ada riwayat mutasi stok.',
+                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 880),
+                              child: DataTable(
+                                columnSpacing: 12,
+                                horizontalMargin: 0,
+                                headingRowHeight: 36,
+                                dataRowMinHeight: 34,
+                                dataRowMaxHeight: 50,
+                                headingTextStyle: const TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                                columns: const [
+                                  DataColumn(label: Text('NO')),
+                                  DataColumn(label: Text('TANGGAL')),
+                                  DataColumn(label: Text('ISI PER KARTON'), numeric: true),
+                                  DataColumn(label: Text('JENIS')),
+                                  DataColumn(label: Text('QTY'), numeric: true),
+                                  DataColumn(label: Text('TOTAL KARTON'), numeric: true),
+                                  DataColumn(label: Text('STOK'), numeric: true),
+                                  DataColumn(label: Text('REFERENSI')),
+                                ],
+                                rows: mutations.asMap().entries.map((entry) {
+                                  final idx = entry.key;
+                                  final m = entry.value;
+                                  Color typeColor;
+                                  String typeLabel;
+                                  IconData typeIcon;
+                                  switch (m.type) {
+                                    case 'KELUAR':
+                                      typeColor = Colors.redAccent;
+                                      typeLabel = 'Keluar';
+                                      typeIcon = Icons.arrow_downward_rounded;
+                                      break;
+                                    case 'MASUK':
+                                      typeColor = Colors.greenAccent;
+                                      typeLabel = 'Masuk';
+                                      typeIcon = Icons.arrow_upward_rounded;
+                                      break;
+                                    case 'RETUR_STATUS':
+                                      typeColor = Colors.orangeAccent;
+                                      typeLabel = 'Retur Status';
+                                      typeIcon = Icons.undo_rounded;
+                                      break;
+                                    case 'HAPUS_INVOICE':
+                                      typeColor = Colors.orangeAccent;
+                                      typeLabel = 'Hapus Invoice';
+                                      typeIcon = Icons.delete_outline_rounded;
+                                      break;
+                                    case 'EDIT_MANUAL':
+                                      typeColor = const Color(0xFF38BDF8);
+                                      typeLabel = 'Edit Manual';
+                                      typeIcon = Icons.edit_outlined;
+                                      break;
+                                    case 'INPUT_STOK':
+                                      typeColor = Colors.greenAccent;
+                                      typeLabel = 'Input Stok';
+                                      typeIcon = Icons.add_box_outlined;
+                                      break;
+                                    default:
+                                      typeColor = const Color(0xFF94A3B8);
+                                      typeLabel = m.type;
+                                      typeIcon = Icons.swap_vert_rounded;
+                                  }
+
+                                  final qtyStr = m.qty > 0 ? '+${m.qty.toStringAsFixed(0)}' : m.qty.toStringAsFixed(0);
+
+                                  String totalKartonStr = '-';
+                                  if (product.isiKarton > 0 && m.qty != 0) {
+                                    final totalKtn = m.qty / product.isiKarton;
+                                    final formattedKtn = (totalKtn.abs() % 1 == 0)
+                                        ? totalKtn.toInt().toString()
+                                        : totalKtn.toStringAsFixed(1);
+                                    totalKartonStr = totalKtn > 0 ? '+$formattedKtn Ktn' : '$formattedKtn Ktn';
+                                  }
+
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(
+                                        '${idx + 1}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
+                                      )),
+                                      DataCell(Text(
+                                        DateFormat('dd/MM/yy HH:mm').format(m.timestamp),
+                                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                      )),
+                                      DataCell(Text(
+                                        product.isiKarton > 0 ? '${product.isiKarton} Pcs' : '-',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                      )),
+                                      DataCell(Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(typeIcon, color: typeColor, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text(typeLabel, style: TextStyle(color: typeColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        ],
+                                      )),
+                                      DataCell(Text(
+                                        qtyStr,
+                                        style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                      )),
+                                      DataCell(Text(
+                                        totalKartonStr,
+                                        style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                      )),
+                                      DataCell(Text(
+                                        '${m.stockBefore.toStringAsFixed(0)} → ${m.stockAfter.toStringAsFixed(0)}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                                      )),
+                                      DataCell(
+                                        Tooltip(
+                                          message: m.customerName.isNotEmpty ? '${m.reference}\n${m.customerName}' : m.reference,
+                                          child: Text(
+                                            m.customerName.isNotEmpty ? '${m.reference} (${m.customerName})' : m.reference,
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
               actions: [
                 TextButton(
@@ -1635,7 +1647,7 @@ class _ProductListViewState extends State<ProductListView> {
                 builder: (context) {
                   final isMobile = MediaQuery.of(context).size.width < 768;
                   return SizedBox(
-                    width: 950,
+                    width: isMobile ? double.maxFinite : 1240,
                     height: isMobile ? MediaQuery.of(context).size.height * 0.55 : 480,
                     child: StreamBuilder<List<StockMutation>>(
                   stream: firebaseService.streamAllStockMutations(date: selectedDate),
@@ -1739,7 +1751,7 @@ class _ProductListViewState extends State<ProductListView> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(minWidth: 1040),
+                                constraints: const BoxConstraints(minWidth: 1120),
                                 child: DataTable(
                                   columnSpacing: 10,
                                   horizontalMargin: 0,
@@ -1757,9 +1769,9 @@ class _ProductListViewState extends State<ProductListView> {
                                     DataColumn(label: Text('KODE INDUK')),
                                     DataColumn(label: Text('NAMA BARANG')),
                                     DataColumn(label: Text('ISI PER KARTON'), numeric: true),
-                                    DataColumn(label: Text('TOTAL KARTON'), numeric: true),
                                     DataColumn(label: Text('JENIS')),
                                     DataColumn(label: Text('QTY'), numeric: true),
+                                    DataColumn(label: Text('TOTAL KARTON'), numeric: true),
                                     DataColumn(label: Text('STOK'), numeric: true),
                                     DataColumn(label: Text('REFERENSI')),
                                   ],
@@ -1851,10 +1863,6 @@ class _ProductListViewState extends State<ProductListView> {
                                           isiKarton > 0 ? '$isiKarton Pcs' : '-',
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                         )),
-                                        DataCell(Text(
-                                          totalKartonStr,
-                                          style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 11),
-                                        )),
                                         DataCell(Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
@@ -1866,6 +1874,10 @@ class _ProductListViewState extends State<ProductListView> {
                                         DataCell(Text(
                                           qtyStr,
                                           style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                        )),
+                                        DataCell(Text(
+                                          totalKartonStr,
+                                          style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 11),
                                         )),
                                         DataCell(Text(
                                           '${m.stockBefore.toStringAsFixed(0)} → ${m.stockAfter.toStringAsFixed(0)}',
