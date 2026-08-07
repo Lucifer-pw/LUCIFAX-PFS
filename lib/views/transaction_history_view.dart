@@ -449,429 +449,552 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   );
                 });
               }
-
               // Clear product picker inputs
               cancelItemEditing();
             }
 
-            return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
-              title: Text('Edit Transaksi #${tr.invoiceNo}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              content: SizedBox(
-                width: 980,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left Form Panel
-                    Expanded(
-                      flex: 4,
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Data Transaksi:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                            const SizedBox(height: 10),
-                            SearchableCustomerField(
-                              selectedCustomer: selectedCustomer,
-                              customers: customers,
-                              onSelected: (c) {
-                                setDialogState(() {
-                                  selectedCustomer = c;
-                                });
-                              },
-                            ),
-                            if (selectedCustomer != null) ...[
-                              const SizedBox(height: 8),
-                              _buildDetailRow('ID Customer', selectedCustomer!.id),
-                              _buildDetailRow('Alamat', selectedCustomer!.address),
-                              _buildDetailRow('Kota/Provinsi', '${selectedCustomer!.city}, ${selectedCustomer!.province}'),
-                            ],
-                            const SizedBox(height: 12),
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                              subtitle: Text(
-                                DateFormat('dd MMMM yyyy').format(deliveryDate),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 18),
-                              onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: deliveryDate,
-                                  firstDate: DateTime(2025),
-                                  lastDate: DateTime(2030),
-                                );
-                                if (picked != null) {
-                                  setDialogState(() {
-                                    deliveryDate = picked;
-                                  });
-                                }
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: noteController,
-                              maxLines: 2,
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                              decoration: _buildInputDecoration(hint: 'Catatan / Keterangan...'),
-                            ),
-                            const SizedBox(height: 16),
-                            const Divider(color: Color(0xFF334155)),
-                            const SizedBox(height: 10),
-                            const Text('Pilih & Tambah Produk:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                            const SizedBox(height: 10),
-                            SearchableProductField(
-                              selectedProduct: selectedProduct,
-                              products: products,
-                              onSelected: (p) {
-                                setDialogState(() {
-                                  selectedProduct = p;
-                                  if (p != null) {
-                                    priceController.text = p.price.toStringAsFixed(0);
-                                  } else {
-                                    priceController.clear();
-                                  }
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  selectedProduct != null
-                                      ? 'Harga Master: ${_rupiahFormatter.format(selectedProduct!.price)}'
-                                      : 'Harga Master: Rp 0',
-                                  style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11),
-                                ),
-                                Text(
-                                  selectedProduct != null
-                                      ? 'Stok: ${selectedProduct!.stock.toStringAsFixed(0)} pcs'
-                                      : 'Stok: -',
-                                  style: TextStyle(
-                                    color: (selectedProduct != null && selectedProduct!.stock <= 0) ? Colors.redAccent : Colors.greenAccent,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: priceController,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                              decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: qtyController,
-                                    keyboardType: TextInputType.number,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                    decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: discountController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                    decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            GestureDetector(
-                              onTap: () {
-                                setDialogState(() {
-                                  isBonus = !isBonus;
-                                  if (isBonus) {
-                                    priceController.text = '0';
-                                    discountController.text = '0';
-                                  } else if (selectedProduct != null) {
-                                    priceController.text = selectedProduct!.price.toStringAsFixed(0);
-                                    discountController.text = '0';
-                                  }
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isBonus ? Colors.green.withOpacity(0.15) : const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isBonus ? Colors.greenAccent : const Color(0xFF334155),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isBonus ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                                      color: isBonus ? Colors.greenAccent : const Color(0xFF64748B),
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'BONUS (Gratis / Harga Rp 0)',
-                                      style: TextStyle(
-                                        color: isBonus ? Colors.greenAccent : const Color(0xFF94A3B8),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                             const SizedBox(height: 14),
-                             if (editingItemIndex != null) ...[
-                               Container(
-                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                 decoration: BoxDecoration(
-                                   color: const Color(0xFF451A03),
-                                   borderRadius: BorderRadius.circular(8),
-                                   border: Border.all(color: Colors.amberAccent, width: 1.5),
-                                 ),
-                                 child: Row(
-                                   children: [
-                                     const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 18),
-                                     const SizedBox(width: 8),
-                                     Expanded(
-                                       child: Text(
-                                         'Sedang Mengedit Item #${editingItemIndex! + 1}',
-                                         style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.w900),
-                                       ),
-                                     ),
-                                     InkWell(
-                                       onTap: cancelItemEditing,
-                                       child: Container(
-                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                         decoration: BoxDecoration(
-                                           color: Colors.red[900],
-                                           borderRadius: BorderRadius.circular(6),
-                                           border: Border.all(color: Colors.redAccent),
-                                         ),
-                                         child: const Text(
-                                           '✕ Batal Edit',
-                                           style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                         ),
-                                       ),
-                                     ),
-                                   ],
-                                 ),
-                               ),
-                               const SizedBox(height: 8),
-                             ],
-                             ElevatedButton.icon(
-                               onPressed: addItem,
-                               icon: Icon(editingItemIndex != null ? Icons.save_rounded : Icons.add_rounded, size: 18, color: Colors.white),
-                               label: Text(
-                                 editingItemIndex != null
-                                     ? 'Simpan Perubahan Item'
-                                     : (isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice'),
-                                 style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
-                               ),
-                               style: ElevatedButton.styleFrom(
-                                 minimumSize: const Size.fromHeight(44),
-                                 backgroundColor: editingItemIndex != null
-                                     ? const Color(0xFFD97706)
-                                     : (isBonus ? Colors.green[700] : const Color(0xFF0284C7)),
-                               ),
-                             ),
-                          ],
+            final isMobile = MediaQuery.of(context).size.width < 768;
+
+            Future<void> submitChanges() async {
+              setDialogState(() => isSaving = true);
+              try {
+                final updatedTransaction = model_tr.Transaction(
+                  invoiceNo: tr.invoiceNo,
+                  customerId: selectedCustomer!.id,
+                  customerName: selectedCustomer!.customerName,
+                  aliasName: selectedCustomer!.aliasName,
+                  date: tr.date,
+                  deliveryDate: deliveryDate,
+                  city: selectedCustomer!.city,
+                  province: selectedCustomer!.province,
+                  country: selectedCustomer!.country,
+                  items: editedItems,
+                  grandTotal: grandTotal,
+                  note: noteController.text.trim(),
+                  status: tr.status,
+                  statusTransfer: tr.statusTransfer,
+                  transferDate: tr.transferDate,
+                  erpSyncDate: tr.erpSyncDate,
+                  createdBy: tr.createdBy,
+                  createdAt: tr.createdAt,
+                );
+
+                await Provider.of<TransactionProvider>(context, listen: false).updateTransaction(updatedTransaction);
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Transaksi berhasil diperbarui.'), backgroundColor: Colors.teal),
+                  );
+                }
+              } catch (e) {
+                setDialogState(() => isSaving = false);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Gagal memperbarui: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            }
+
+            // Widget for Data Transaksi Form
+            Widget buildTransactionForm() {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Data Transaksi:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 10),
+                  SearchableCustomerField(
+                    selectedCustomer: selectedCustomer,
+                    customers: customers,
+                    onSelected: (c) {
+                      setDialogState(() {
+                        selectedCustomer = c;
+                      });
+                    },
+                  ),
+                  if (selectedCustomer != null) ...[
+                    const SizedBox(height: 8),
+                    _buildDetailRow('ID Customer', selectedCustomer!.id),
+                    _buildDetailRow('Alamat', selectedCustomer!.address),
+                    _buildDetailRow('Kota/Provinsi', '${selectedCustomer!.city}, ${selectedCustomer!.province}'),
+                  ],
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                    subtitle: Text(
+                      DateFormat('dd MMMM yyyy').format(deliveryDate),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 18),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: deliveryDate,
+                        firstDate: DateTime(2025),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          deliveryDate = picked;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: noteController,
+                    maxLines: 2,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: _buildInputDecoration(hint: 'Catatan / Keterangan...'),
+                  ),
+                ],
+              );
+            }
+
+            // Widget for Product Selection & Inputs Form
+            Widget buildProductForm() {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Pilih & Tambah Produk:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 10),
+                  SearchableProductField(
+                    selectedProduct: selectedProduct,
+                    products: products,
+                    onSelected: (p) {
+                      setDialogState(() {
+                        selectedProduct = p;
+                        if (p != null) {
+                          priceController.text = p.price.toStringAsFixed(0);
+                        } else {
+                          priceController.clear();
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        selectedProduct != null
+                            ? 'Harga Master: ${_rupiahFormatter.format(selectedProduct!.price)}'
+                            : 'Harga Master: Rp 0',
+                        style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 11),
+                      ),
+                      Text(
+                        selectedProduct != null
+                            ? 'Stok: ${selectedProduct!.stock.toStringAsFixed(0)} pcs'
+                            : 'Stok: -',
+                        style: TextStyle(
+                          color: (selectedProduct != null && selectedProduct!.stock <= 0) ? Colors.redAccent : Colors.greenAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 20),
-                    // Right Table Panel
-                    Expanded(
-                      flex: 5,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: qtyController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: discountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () {
+                      setDialogState(() {
+                        isBonus = !isBonus;
+                        if (isBonus) {
+                          priceController.text = '0';
+                          discountController.text = '0';
+                        } else if (selectedProduct != null) {
+                          priceController.text = selectedProduct!.price.toStringAsFixed(0);
+                          discountController.text = '0';
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isBonus ? Colors.green.withOpacity(0.15) : const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isBonus ? Colors.greenAccent : const Color(0xFF334155),
+                        ),
+                      ),
+                      child: Row(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Daftar Item:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text(
-                                '${editedItems.length} / 14 Item',
-                                style: TextStyle(
-                                  color: editedItems.length >= 14 ? Colors.redAccent : const Color(0xFF38BDF8),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                          Icon(
+                            isBonus ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                            color: isBonus ? Colors.greenAccent : const Color(0xFF64748B),
+                            size: 20,
                           ),
-                          const SizedBox(height: 10),
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F172A),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: editedItems.isEmpty
-                                  ? const Center(child: Text('Belum ada item', style: TextStyle(color: Color(0xFF64748B))))
-                                  : SingleChildScrollView(
-                                      child: Table(
-                                        columnWidths: const {
-                                          0: FlexColumnWidth(2.3),
-                                          1: FlexColumnWidth(0.7),
-                                          2: FlexColumnWidth(1.2),
-                                          3: FlexColumnWidth(1.2),
-                                          4: FlexColumnWidth(0.9),
-                                        },
-                                        children: [
-                                          TableRow(
-                                            decoration: const BoxDecoration(color: Color(0xFF1E293B)),
-                                            children: [
-                                              _buildTableCell('Nama Barang', isHeader: true),
-                                              _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
-                                              _buildTableCell('Harga', isHeader: true, align: TextAlign.right),
-                                              _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
-                                              _buildTableCell('Aksi', isHeader: true, align: TextAlign.center),
-                                            ],
-                                          ),
-                                          ...editedItems.asMap().entries.map((entry) {
-                                            final index = entry.key;
-                                            final item = entry.value;
-                                            final isEditing = (editingItemIndex == index);
-
-                                            return TableRow(
-                                              decoration: BoxDecoration(
-                                                color: isEditing ? Colors.amber.withOpacity(0.15) : null,
-                                              ),
-                                              children: [
-                                                InkWell(
-                                                  onTap: () => selectItemForEditing(index),
-                                                  child: _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
-                                                ),
-                                                InkWell(
-                                                  onTap: () => selectItemForEditing(index),
-                                                  child: _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
-                                                ),
-                                                InkWell(
-                                                  onTap: () => selectItemForEditing(index),
-                                                  child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
-                                                ),
-                                                InkWell(
-                                                  onTap: () => selectItemForEditing(index),
-                                                  child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
-                                                ),
-                                                Padding(
-                                                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    children: [
-                                                      IconButton(
-                                                        icon: Icon(Icons.edit_outlined, color: isEditing ? Colors.amberAccent : Colors.cyanAccent, size: 16),
-                                                        tooltip: 'Edit Item Ini',
-                                                        onPressed: () => selectItemForEditing(index),
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
-                                                        tooltip: 'Hapus Item',
-                                                        onPressed: () {
-                                                          setDialogState(() {
-                                                            if (editingItemIndex == index) {
-                                                              cancelItemEditing();
-                                                            } else if (editingItemIndex != null && editingItemIndex! > index) {
-                                                              editingItemIndex = editingItemIndex! - 1;
-                                                            }
-                                                            editedItems.removeAt(index);
-                                                          });
-                                                        },
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            );
-                                          }),
-                                        ],
-                                      ),
-                                    ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'BONUS (Gratis / Harga Rp 0)',
+                            style: TextStyle(
+                              color: isBonus ? Colors.greenAccent : const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('TOTAL AKHIR:', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text(
-                                _rupiahFormatter.format(grandTotal),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (editingItemIndex != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF451A03),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amberAccent, width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Sedang Mengedit Item #${editingItemIndex! + 1}',
+                              style: const TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: cancelItemEditing,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red[900],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.redAccent),
+                              ),
+                              child: const Text(
+                                '✕ Batal Edit',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  ElevatedButton.icon(
+                    onPressed: addItem,
+                    icon: Icon(editingItemIndex != null ? Icons.save_rounded : Icons.add_rounded, size: 18, color: Colors.white),
+                    label: Text(
+                      editingItemIndex != null
+                          ? 'Simpan Perubahan Item'
+                          : (isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice'),
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                      backgroundColor: editingItemIndex != null
+                          ? const Color(0xFFD97706)
+                          : (isBonus ? Colors.green[700] : const Color(0xFF0284C7)),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            // Widget for Items Table
+            Widget buildItemsTable() {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Daftar Item:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        '${editedItems.length} / 14 Item',
+                        style: TextStyle(
+                          color: editedItems.length >= 14 ? Colors.redAccent : const Color(0xFF38BDF8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    constraints: BoxConstraints(maxHeight: isMobile ? 260 : 360),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: editedItems.isEmpty
+                        ? const Center(child: Text('Belum ada item', style: TextStyle(color: Color(0xFF64748B))))
+                        : Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minWidth: isMobile ? 480 : 0),
+                                  child: Table(
+                                    columnWidths: isMobile
+                                        ? const {
+                                            0: FixedColumnWidth(170),
+                                            1: FixedColumnWidth(50),
+                                            2: FixedColumnWidth(85),
+                                            3: FixedColumnWidth(95),
+                                            4: FixedColumnWidth(75),
+                                          }
+                                        : const {
+                                            0: FlexColumnWidth(2.3),
+                                            1: FlexColumnWidth(0.7),
+                                            2: FlexColumnWidth(1.2),
+                                            3: FlexColumnWidth(1.2),
+                                            4: FlexColumnWidth(0.9),
+                                          },
+                                    children: [
+                                      TableRow(
+                                        decoration: const BoxDecoration(color: Color(0xFF1E293B)),
+                                        children: [
+                                          _buildTableCell('Nama Barang', isHeader: true),
+                                          _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
+                                          _buildTableCell('Harga', isHeader: true, align: TextAlign.right),
+                                          _buildTableCell('Subtotal', isHeader: true, align: TextAlign.right),
+                                          _buildTableCell('Aksi', isHeader: true, align: TextAlign.center),
+                                        ],
+                                      ),
+                                      ...editedItems.asMap().entries.map((entry) {
+                                        final index = entry.key;
+                                        final item = entry.value;
+                                        final isEditing = (editingItemIndex == index);
+
+                                        return TableRow(
+                                          decoration: BoxDecoration(
+                                            color: isEditing ? Colors.amber.withOpacity(0.15) : null,
+                                          ),
+                                          children: [
+                                            InkWell(
+                                              onTap: () => selectItemForEditing(index),
+                                              child: _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                            ),
+                                            InkWell(
+                                              onTap: () => selectItemForEditing(index),
+                                              child: _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
+                                            ),
+                                            InkWell(
+                                              onTap: () => selectItemForEditing(index),
+                                              child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                            ),
+                                            InkWell(
+                                              onTap: () => selectItemForEditing(index),
+                                              child: _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal), align: TextAlign.right, isBold: true),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  IconButton(
+                                                    icon: Icon(Icons.edit_outlined, color: isEditing ? Colors.amberAccent : Colors.cyanAccent, size: 16),
+                                                    tooltip: 'Edit Item Ini',
+                                                    onPressed: () => selectItemForEditing(index),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                                    tooltip: 'Hapus Item',
+                                                    onPressed: () {
+                                                      setDialogState(() {
+                                                        if (editingItemIndex == index) {
+                                                          cancelItemEditing();
+                                                        } else if (editingItemIndex != null && editingItemIndex! > index) {
+                                                          editingItemIndex = editingItemIndex! - 1;
+                                                        }
+                                                        editedItems.removeAt(index);
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              );
+            }
+
+            // Widget for Grand Total Footer
+            Widget buildTotalFooter() {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('TOTAL AKHIR:', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(
+                      _rupiahFormatter.format(grandTotal),
+                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
                   ],
                 ),
+              );
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: EdgeInsets.all(isMobile ? 12 : 20),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Edit Transaksi #${tr.invoiceNo}',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 15 : 18),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving
-                      ? null
-                      : () async {
-                          setDialogState(() => isSaving = true);
-                          try {
-                            final updatedTransaction = model_tr.Transaction(
-                              invoiceNo: tr.invoiceNo,
-                              customerId: selectedCustomer!.id,
-                              customerName: selectedCustomer!.customerName,
-                              aliasName: selectedCustomer!.aliasName,
-                              date: tr.date,
-                              deliveryDate: deliveryDate,
-                              city: selectedCustomer!.city,
-                              province: selectedCustomer!.province,
-                              country: selectedCustomer!.country,
-                              items: editedItems,
-                              grandTotal: grandTotal,
-                              note: noteController.text.trim(),
-                              status: tr.status,
-                              statusTransfer: tr.statusTransfer,
-                              transferDate: tr.transferDate,
-                              erpSyncDate: tr.erpSyncDate,
-                              createdBy: tr.createdBy,
-                              createdAt: tr.createdAt,
-                            );
-
-                            await Provider.of<TransactionProvider>(context, listen: false).updateTransaction(updatedTransaction);
-
-                            if (context.mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Transaksi berhasil diperbarui.'), backgroundColor: Colors.teal),
-                              );
-                            }
-                          } catch (e) {
-                            setDialogState(() => isSaving = false);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Gagal memperbarui: $e'), backgroundColor: Colors.redAccent),
-                              );
-                            }
-                          }
-                        },
-                  child: isSaving
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Simpan Perubahan'),
-                ),
-              ],
+              content: SizedBox(
+                width: isMobile ? double.maxFinite : 980,
+                child: isMobile
+                    ? SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            buildTransactionForm(),
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFF334155)),
+                            const SizedBox(height: 10),
+                            buildProductForm(),
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFF334155)),
+                            const SizedBox(height: 10),
+                            buildItemsTable(),
+                            const SizedBox(height: 14),
+                            buildTotalFooter(),
+                          ],
+                        ),
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left Form Panel
+                          Expanded(
+                            flex: 4,
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  buildTransactionForm(),
+                                  const SizedBox(height: 16),
+                                  const Divider(color: Color(0xFF334155)),
+                                  const SizedBox(height: 10),
+                                  buildProductForm(),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          // Right Table Panel
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: buildItemsTable()),
+                                const SizedBox(height: 12),
+                                buildTotalFooter(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              actions: isMobile
+                  ? [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0284C7),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving ? null : submitChanges,
+                              child: isSaving
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Text('Simpan Perubahan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                        ],
+                      )
+                    ]
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                        onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving ? null : submitChanges,
+                        child: isSaving
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Simpan Perubahan'),
+                      ),
+                    ],
             );
           },
         );
