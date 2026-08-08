@@ -3393,6 +3393,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       if (_statusFilter != "SEMUA") {
         if (_statusFilter == "DIKIRIM" || _statusFilter == "PENDING") {
           if (tr.status != _statusFilter) return false;
+        } else if (_statusFilter == "DIPINDAH") {
+          final isMoved = tr.status == 'DIPINDAH' ||
+              tr.note.startsWith('DIPINDAH') ||
+              tr.movedToInvoice.isNotEmpty ||
+              tr.movedItems.isNotEmpty;
+          if (!isMoved) return false;
         } else if (_statusFilter == "UNPAID" || _statusFilter == "PAID") {
           if (tr.statusTransfer != _statusFilter) return false;
         } else if (_statusFilter == "ERP_SYNC") {
@@ -3592,6 +3598,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "DIKIRIM", child: Text("KIRIM: DIKIRIM", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "DIPINDAH", child: Text("STATUS: DIPINDAH", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "ERP_SYNC", child: Text("ERP: SUDAH SYNC", overflow: TextOverflow.ellipsis)),
