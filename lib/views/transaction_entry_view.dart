@@ -256,6 +256,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
 
     final isDesktop = MediaQuery.of(context).size.width > 1000;
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     final leftPanel = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -609,7 +610,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       children: [
         // Cart Title / Constraints Banner
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -647,91 +648,111 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
           ),
         ),
 
-        // Table of items
+        // Table of items with responsive horizontal scroll
         Container(
           color: const Color(0xFF1E293B),
-          constraints: const BoxConstraints(minHeight: 250, maxHeight: 400),
+          constraints: BoxConstraints(minHeight: isMobile ? 160 : 220, maxHeight: 400),
           child: trProvider.cartItems.isEmpty
               ? const Center(
-                  child: Text(
-                    'Transaksi kosong. Tambah barang terlebih dahulu.',
-                    style: TextStyle(color: Color(0xFF64748B)),
+                  child: Padding(
+                    padding: EdgeInsets.all(24.0),
+                    child: Text(
+                      'Transaksi kosong. Tambah barang terlebih dahulu.',
+                      style: TextStyle(color: Color(0xFF64748B), fontStyle: FontStyle.italic),
+                    ),
                   ),
                 )
-              : SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: DataTable(
-                    horizontalMargin: 12,
-                    columnSpacing: 10,
-                    headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                    columns: const [
-                      DataColumn(label: Text('Produk')),
-                      DataColumn(label: Text('Qty'), numeric: true),
-                      DataColumn(label: Text('Harga'), numeric: true),
-                      DataColumn(label: Text('Disc'), numeric: true),
-                      DataColumn(label: Text('Subtotal'), numeric: true),
-                      DataColumn(label: Text('')),
-                    ],
-                    rows: trProvider.cartItems.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final item = entry.value;
-                      return DataRow(
-                        cells: [
-                          DataCell(
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Flexible(
-                                      child: Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12), overflow: TextOverflow.ellipsis),
-                                    ),
-                                    if (item.isBonus) ...[
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: Colors.greenAccent.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
-                                        ),
-                                        child: const Text('BONUS', style: TextStyle(color: Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+              : LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: DataTable(
+                          horizontalMargin: isMobile ? 10 : 14,
+                          columnSpacing: isMobile ? 12 : 16,
+                          headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                          columns: const [
+                            DataColumn(label: Text('Produk')),
+                            DataColumn(label: Text('Qty'), numeric: true),
+                            DataColumn(label: Text('Harga'), numeric: true),
+                            DataColumn(label: Text('Disc'), numeric: true),
+                            DataColumn(label: Text('Subtotal'), numeric: true),
+                            DataColumn(label: Text('')),
+                          ],
+                          rows: trProvider.cartItems.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final item = entry.value;
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              item.productName,
+                                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (item.isBonus) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: Colors.greenAccent.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
+                                              ),
+                                              child: const Text('BONUS', style: TextStyle(color: Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ],
+                                        ],
                                       ),
+                                      Text('${item.weightKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
                                     ],
-                                  ],
+                                  ),
                                 ),
-                                Text('${item.weightKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                                DataCell(Text(item.qty.toStringAsFixed(0), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                DataCell(Text(
+                                  item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price),
+                                  style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12),
+                                )),
+                                DataCell(Text(
+                                  item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                )),
+                                DataCell(Text(
+                                  item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal),
+                                  style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                )),
+                                DataCell(
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                    onPressed: () => trProvider.removeFromCart(item.productId, index: idx),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ),
                               ],
-                            ),
-                          ),
-                          DataCell(Text(item.qty.toStringAsFixed(0), style: const TextStyle(color: Colors.white))),
-                          DataCell(Text(
-                            item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price),
-                            style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12),
-                          )),
-                          DataCell(Text(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), style: const TextStyle(color: Colors.white))),
-                          DataCell(Text(
-                            item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.subtotal),
-                            style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                          )),
-                          DataCell(
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                              onPressed: () => trProvider.removeFromCart(item.productId, index: idx),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
         ),
 
         // Note & Submit Card
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isMobile ? 14 : 20),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
@@ -744,26 +765,36 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               TextFormField(
                 controller: _noteController,
                 maxLines: 2,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: _buildInputDecoration(hint: 'Masukkan Catatan / Keterangan...', icon: Icons.notes_rounded),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
 
-              // Grand total display
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'GRAND TOTAL:',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  Text(
-                    _rupiahFormatter.format(trProvider.grandTotal),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22, letterSpacing: 0.5),
-                  ),
-                ],
+              // Grand total highlight card
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'GRAND TOTAL:',
+                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    Text(
+                      _rupiahFormatter.format(trProvider.grandTotal),
+                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Action Buttons
               Row(
                 children: [
                   Expanded(
@@ -772,30 +803,32 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                           ? null
                           : () async => await _submitOnly(trProvider, user.uid),
                       icon: _isSaving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.save_rounded, color: Colors.white),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
+                        minimumSize: const Size.fromHeight(48),
                         backgroundColor: _isSaving ? Colors.teal[800] : Colors.teal[600],
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: trProvider.cartItems.isEmpty || _selectedCustomer == null || _isSaving
                           ? null
                           : () async => await _submitAndPrint(trProvider, user.uid),
                       icon: _isSaving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.print_rounded, color: Colors.white),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.print_rounded, color: Colors.white, size: 18),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
+                        minimumSize: const Size.fromHeight(48),
                         backgroundColor: _isSaving ? const Color(0xFF015B8C) : const Color(0xFF0284C7),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                     ),
                   ),
@@ -827,11 +860,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       );
     } else {
       return SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
         child: Column(
           children: [
             leftPanel,
-            const SizedBox(height: 24),
+            SizedBox(height: isMobile ? 16 : 24),
             rightPanel,
           ],
         ),
@@ -841,8 +874,9 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
 
   // Builder for form input cards
   Widget _buildFormSection({required String title, required IconData icon, required Widget child}) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
     return Container(
-      padding: const EdgeInsets.all(20.0),
+      padding: EdgeInsets.all(isMobile ? 14.0 : 20.0),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12.0),

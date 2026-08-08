@@ -1552,106 +1552,96 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                 const SizedBox(height: 12),
 
-                // Bottom Summary Footer (Catatan & Harmonious GRAND TOTAL)
+                // 1. Dedicated Note / Catatan Card (Full Width)
+                if (tr.note.isNotEmpty) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.35)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 15),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Catatan / Keterangan:',
+                              style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          tr.note,
+                          style: const TextStyle(color: Color(0xFFF1F5F9), fontSize: 12, height: 1.35),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                // 2. Dedicated Grand Total Card (Full Width)
                 Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFF334155)),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Left: Note / Catatan
-                      Expanded(
-                        child: tr.note.isNotEmpty
-                            ? Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0284C7).withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Icon(Icons.sticky_note_2_outlined, color: Color(0xFF38BDF8), size: 16),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Text(
-                                          'Catatan / Keterangan:',
-                                          style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        SelectableText(
-                                          tr.note,
-                                          style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.3),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const Row(
-                                children: [
-                                  Icon(Icons.notes_rounded, color: Color(0xFF64748B), size: 16),
-                                  SizedBox(width: 6),
-                                  Text('Catatan: -', style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontStyle: FontStyle.italic)),
-                                ],
-                              ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'GrandTotal Karton:',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                            ),
+                            child: Text(
+                              grandTotalKartonStr,
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      // Right: Clean Totals Card
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'GrandTotal Karton: ',
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600, fontSize: 11),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0284C7).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(5),
-                                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                  ),
-                                  child: Text(
-                                    grandTotalKartonStr,
-                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('GRAND TOTAL: ', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text(
-                                  _rupiahFormatter.format(tr.grandTotal),
-                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 6),
+                      const Divider(color: Color(0xFF1E293B), height: 1),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'GRAND TOTAL:',
+                            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          Text(
+                            _rupiahFormatter.format(tr.grandTotal),
+                            style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 17),
+                          ),
+                        ],
                       ),
                     ],
                   ),
