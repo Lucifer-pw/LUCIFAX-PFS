@@ -60,4 +60,4 @@ jobs:
         with:
           name: 'LUCIFAX PFS ${{ github.ref_name }}'
           files: Lucifax-PFS_${{ github.ref_name }}.apk
-          generate_release_notes: true
+          generate_release_notes: false

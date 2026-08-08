@@ -195,9 +195,9 @@ class UpdateDialog extends StatelessWidget {
                     thumbVisibility: true,
                     child: SingleChildScrollView(
                       child: Text(
-                        info.releaseNotes,
+                        UpdateService.cleanReleaseNotes(info.releaseNotes),
                         style: const TextStyle(
-                          color: mutedText,
+                          color: Colors.white70,
                           fontSize: 13,
                           height: 1.6,
                         ),

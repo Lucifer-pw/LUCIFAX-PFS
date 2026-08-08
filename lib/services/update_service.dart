@@ -64,7 +64,8 @@ class UpdateService {
 
       if (tagName.isEmpty) return null;
 
-      final String releaseNotes = json['body'] as String? ?? 'Tidak ada catatan rilis.';
+      final String rawNotes = json['body'] as String? ?? '';
+      final String releaseNotes = cleanReleaseNotes(rawNotes);
       final String htmlUrl = json['html_url'] as String? ?? '';
 
       // Find the first APK asset
@@ -98,6 +99,64 @@ class UpdateService {
       // Gracefully handle any errors (network issues, JSON parsing, etc.)
       return null;
     }
+  }
+
+  /// Sanitizes release notes by removing any GitHub repository URLs, changelog links,
+  /// @mentions, and commit references so only the actual feature descriptions/fixes remain.
+  static String cleanReleaseNotes(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return '• Pembaruan sistem & performa aplikasi\n• Perbaikan antarmuka dan kestabilan transaksi';
+    }
+
+    final lines = raw.split('\n');
+    final cleanedLines = <String>[];
+
+    for (var line in lines) {
+      String trimmed = line.trim();
+
+      // Remove lines that are just headers for changelogs or links
+      if (trimmed.toLowerCase().contains('full changelog') ||
+          trimmed.toLowerCase().contains('github.com') ||
+          trimmed.startsWith('http://') ||
+          trimmed.startsWith('https://')) {
+        continue;
+      }
+
+      // Remove markdown links like [text](https://github.com/...) -> text
+      trimmed = trimmed.replaceAll(RegExp(r'\[([^\]]+)\]\(https?://[^\)]+\)'), r'$1');
+      // Remove raw URLs
+      trimmed = trimmed.replaceAll(RegExp(r'https?://\S+'), '');
+      // Remove trailing 'by @user in' or 'by @user'
+      trimmed = trimmed.replaceAll(RegExp(r'by\s+@[\w-]+\s*in.*$', caseSensitive: false), '');
+      trimmed = trimmed.replaceAll(RegExp(r'by\s+@[\w-]+', caseSensitive: false), '');
+      // Remove remaining 'in #' or PR references
+      trimmed = trimmed.replaceAll(RegExp(r'in\s*#\d+', caseSensitive: false), '');
+
+      trimmed = trimmed.trim();
+
+      // If line is now just empty or bullet symbol, skip
+      if (trimmed.isEmpty || trimmed == '*' || trimmed == '-' || trimmed == '•' || trimmed == '**') {
+        continue;
+      }
+
+      // Remove heading hashes if present
+      if (trimmed.startsWith('## What\'s Changed') || trimmed.startsWith('# What\'s Changed')) {
+        continue;
+      }
+
+      // Ensure bullet formatting if it was a list item
+      if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+        trimmed = '• ' + trimmed.substring(2).trim();
+      }
+
+      cleanedLines.add(trimmed);
+    }
+
+    final result = cleanedLines.join('\n').trim();
+    if (result.isEmpty) {
+      return '• Pembaruan sistem & performa aplikasi\n• Perbaikan antarmuka dan kestabilan transaksi';
+    }
+    return result;
   }
 
   /// Opens the download URL in the system browser so the user can download
