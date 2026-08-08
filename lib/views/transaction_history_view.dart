@@ -1338,29 +1338,32 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 child: Table(
                                   columnWidths: isMobile
                                       ? const {
-                                          0: FixedColumnWidth(190),
-                                          1: FixedColumnWidth(50),
-                                          2: FixedColumnWidth(75),
-                                          3: FixedColumnWidth(90),
-                                          4: FixedColumnWidth(100),
-                                          5: FixedColumnWidth(60),
-                                          6: FixedColumnWidth(95),
-                                          7: FixedColumnWidth(125),
+                                          0: FixedColumnWidth(35), // No
+                                          1: FixedColumnWidth(190), // Nama Barang
+                                          2: FixedColumnWidth(50), // Qty
+                                          3: FixedColumnWidth(75), // Total Karton
+                                          4: FixedColumnWidth(90), // Harga Unit
+                                          5: FixedColumnWidth(100), // Total
+                                          6: FixedColumnWidth(60), // Disc (%)
+                                          7: FixedColumnWidth(95), // Disc (Rp)
+                                          8: FixedColumnWidth(125), // Subtotal
                                         }
                                       : const {
-                                          0: FlexColumnWidth(2.4), // Nama Barang (Spacious)
-                                          1: FlexColumnWidth(0.65), // Qty
-                                          2: FlexColumnWidth(0.85), // Total Karton
-                                          3: FlexColumnWidth(1.1), // Harga Unit
-                                          4: FlexColumnWidth(1.2), // Total
-                                          5: FlexColumnWidth(0.75), // Disc %
-                                          6: FlexColumnWidth(1.1), // Disc Rp
-                                          7: FlexColumnWidth(1.4), // Subtotal
+                                          0: FlexColumnWidth(0.35), // No
+                                          1: FlexColumnWidth(2.3), // Nama Barang (Spacious)
+                                          2: FlexColumnWidth(0.65), // Qty
+                                          3: FlexColumnWidth(0.85), // Total Karton
+                                          4: FlexColumnWidth(1.1), // Harga Unit
+                                          5: FlexColumnWidth(1.2), // Total
+                                          6: FlexColumnWidth(0.75), // Disc %
+                                          7: FlexColumnWidth(1.1), // Disc Rp
+                                          8: FlexColumnWidth(1.4), // Subtotal
                                         },
                                   children: [
                                     TableRow(
                                       decoration: const BoxDecoration(color: Color(0xFF1E293B)),
                                       children: [
+                                        _buildTableCell('No', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
@@ -1393,6 +1396,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
                                         ),
                                         children: [
+                                          _buildTableCell('${index + 1}', align: TextAlign.center),
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
@@ -1473,29 +1477,32 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 child: Table(
                                   columnWidths: isMobile
                                       ? const {
-                                          0: FixedColumnWidth(190),
-                                          1: FixedColumnWidth(50),
-                                          2: FixedColumnWidth(75),
-                                          3: FixedColumnWidth(90),
-                                          4: FixedColumnWidth(100),
-                                          5: FixedColumnWidth(60),
-                                          6: FixedColumnWidth(95),
-                                          7: FixedColumnWidth(125),
+                                          0: FixedColumnWidth(35),
+                                          1: FixedColumnWidth(190),
+                                          2: FixedColumnWidth(50),
+                                          3: FixedColumnWidth(75),
+                                          4: FixedColumnWidth(90),
+                                          5: FixedColumnWidth(100),
+                                          6: FixedColumnWidth(60),
+                                          7: FixedColumnWidth(95),
+                                          8: FixedColumnWidth(125),
                                         }
                                       : const {
-                                          0: FlexColumnWidth(2.4),
-                                          1: FlexColumnWidth(0.65),
-                                          2: FlexColumnWidth(0.85),
-                                          3: FlexColumnWidth(1.1),
-                                          4: FlexColumnWidth(1.2),
-                                          5: FlexColumnWidth(0.75),
-                                          6: FlexColumnWidth(1.1),
-                                          7: FlexColumnWidth(1.4),
+                                          0: FlexColumnWidth(0.35),
+                                          1: FlexColumnWidth(2.3),
+                                          2: FlexColumnWidth(0.65),
+                                          3: FlexColumnWidth(0.85),
+                                          4: FlexColumnWidth(1.1),
+                                          5: FlexColumnWidth(1.2),
+                                          6: FlexColumnWidth(0.75),
+                                          7: FlexColumnWidth(1.1),
+                                          8: FlexColumnWidth(1.4),
                                         },
                                   children: [
                                     TableRow(
                                       decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.12)),
                                       children: [
+                                        _buildTableCell('No', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
@@ -1528,6 +1535,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.04))),
                                         ),
                                         children: [
+                                          _buildTableCell('${index + 1}', align: TextAlign.center),
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
