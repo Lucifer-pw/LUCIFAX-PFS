@@ -41,12 +41,159 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   int _currentPage = 1;
   int _rowsPerPage = 10;
   Timer? _debounce;
+  final FirebaseService _firebaseService = FirebaseService();
 
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
     decimalDigits: 0,
   );
+
+  void _showEditTargetDialog(String initialMonth, double currentTarget) {
+    final TextEditingController targetController = TextEditingController(
+      text: currentTarget.toInt().toString(),
+    );
+    String targetMonth = initialMonth;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFF38BDF8), width: 1.2),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF38BDF8).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.track_changes_rounded, color: Color(0xFF38BDF8), size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Atur Target Bulanan',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Target Penjualan Cabang Jawa Tengah',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Periode Target:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        DropdownButton<String>(
+                          value: targetMonth,
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                          underline: const SizedBox(),
+                          items: _getMonthFilterOptions(
+                            Provider.of<TransactionProvider>(context, listen: false).transactions,
+                          ).where((m) => m != "SEMUA").map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                          onChanged: (val) async {
+                            if (val != null) {
+                              setDialogState(() => targetMonth = val);
+                              final t = await _firebaseService.getMonthlyTarget(val);
+                              targetController.text = t.toInt().toString();
+                              setDialogState(() {});
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Nominal Target (Rp):', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: targetController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      prefixText: 'Rp ',
+                      prefixStyle: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      hintText: '310947810',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '* Target tersimpan di database dan berlaku untuk seluruh laporan cabang.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: const Text('Simpan Target'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0284C7),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                onPressed: () async {
+                  final cleanStr = targetController.text.replaceAll(RegExp(r'[^0-9]'), '');
+                  final val = double.tryParse(cleanStr) ?? 0.0;
+                  if (val <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Nominal target harus lebih dari 0!'), backgroundColor: Colors.orange),
+                    );
+                    return;
+                  }
+                  await _firebaseService.setMonthlyTarget(targetMonth, val);
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Target $targetMonth berhasil disimpan: ${_rupiahFormatter.format(val)}'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   List<String> _getMonthFilterOptions(List<model_tr.Transaction> transactions) {
     final Set<String> months = {};
@@ -4417,6 +4564,112 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+
+          // Target Bulanan & Pencapaian Card
+          Builder(
+            builder: (context) {
+              final activeMonth = _monthFilter == "SEMUA"
+                  ? DateFormat('MM-yyyy').format(DateTime.now())
+                  : _monthFilter;
+
+              return StreamBuilder<double>(
+                stream: _firebaseService.streamMonthlyTarget(activeMonth),
+                builder: (context, snapshot) {
+                  final targetAmount = snapshot.data ?? 310947810.0;
+                  final pct = targetAmount > 0 ? (totalShippedRp / targetAmount) * 100 : 0.0;
+                  final diff = totalShippedRp - targetAmount;
+                  final pctColor = pct >= 100
+                      ? Colors.greenAccent
+                      : (pct >= 50 ? const Color(0xFF38BDF8) : const Color(0xFFA78BFA));
+
+                  return Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.flag_rounded, color: Color(0xFFF59E0B), size: 14),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'TARGET BULAN ($activeMonth)',
+                                  style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            InkWell(
+                              onTap: () => _showEditTargetDialog(activeMonth, targetAmount),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.edit_rounded, color: Color(0xFFF59E0B), size: 10),
+                                    SizedBox(width: 3),
+                                    Text('Edit', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _rupiahFormatter.format(targetAmount),
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '${pct.toStringAsFixed(1)}%',
+                              style: TextStyle(color: pctColor, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: (pct / 100).clamp(0.0, 1.0),
+                            minHeight: 4,
+                            backgroundColor: const Color(0xFF1E293B),
+                            valueColor: AlwaysStoppedAnimation<Color>(pctColor),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          diff >= 0
+                              ? 'Surplus ${_rupiahFormatter.format(diff)}'
+                              : 'Sisa ${_rupiahFormatter.format(diff.abs())}',
+                          style: TextStyle(
+                            color: diff >= 0 ? Colors.greenAccent : const Color(0xFF94A3B8),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
           const SizedBox(height: 12),
 
           // Search Field for summary
@@ -4591,8 +4844,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       ),
     );
   }
-
-  final FirebaseService _firebaseService = FirebaseService();
 
   // ==========================================
   // WHATSAPP SHARE ERP LIST DIALOG

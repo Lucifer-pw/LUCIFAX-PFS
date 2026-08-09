@@ -12,6 +12,7 @@ import '../providers/product_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/stock_provider.dart';
 import '../models/customer.dart';
+import '../services/firebase_service.dart';
 
 class ErpMatrixView extends StatefulWidget {
   const ErpMatrixView({super.key});
@@ -23,6 +24,7 @@ class ErpMatrixView extends StatefulWidget {
 class _ErpMatrixViewState extends State<ErpMatrixView> {
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   final dateFormatter = DateFormat('dd-MM-yyyy');
+  final FirebaseService _firebaseService = FirebaseService();
 
   String _selectedMonthYear = "";
   DateTime? _selectedDate;
@@ -31,6 +33,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
   bool _showPcs = true; // true = Pcs, false = Kg
   List<Map<String, dynamic>> _erpRecords = [];
   Map<String, double> _initialStocks = {};
+  double _monthlyTarget = 310947810.0;
   bool _loadingErp = false;
   int _activeTab = 0; // 0 = Stok Matrix, 1 = Detail Invoice ERP
 
@@ -59,10 +62,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       await stockProvider.fetchStockEntries();
       final data = await trProvider.getMonthlyErpSummary(_selectedMonthYear);
       final initialStocks = await stockProvider.fetchInitialStocks(_selectedMonthYear);
+      final target = await _firebaseService.getMonthlyTarget(_selectedMonthYear);
 
       setState(() {
         _erpRecords = data;
         _initialStocks = initialStocks;
+        _monthlyTarget = target;
       });
     } catch (e) {
       debugPrint("Error loading ERP summary: $e");
@@ -711,6 +716,153 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     }
   }
 
+  void _showEditTargetDialog() {
+    final TextEditingController targetController = TextEditingController(
+      text: _monthlyTarget.toInt().toString(),
+    );
+    String targetMonth = _selectedMonthYear;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFF38BDF8), width: 1.2),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF38BDF8).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.track_changes_rounded, color: Color(0xFF38BDF8), size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Atur Target Bulanan',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Target Penjualan Cabang Jawa Tengah',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  // Periode Picker
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Periode Target:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        DropdownButton<String>(
+                          value: targetMonth,
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                          underline: const SizedBox(),
+                          items: _getMonthOptions().map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                          onChanged: (val) async {
+                            if (val != null) {
+                              setDialogState(() => targetMonth = val);
+                              final t = await _firebaseService.getMonthlyTarget(val);
+                              targetController.text = t.toInt().toString();
+                              setDialogState(() {});
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Nominal Target (Rp):', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: targetController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      prefixText: 'Rp ',
+                      prefixStyle: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      hintText: '310947810',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '* Target tersimpan di database dan berlaku untuk seluruh laporan cabang.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: const Text('Simpan Target'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0284C7),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                onPressed: () async {
+                  final cleanStr = targetController.text.replaceAll(RegExp(r'[^0-9]'), '');
+                  final val = double.tryParse(cleanStr) ?? 0.0;
+                  if (val <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Nominal target harus lebih dari 0!'), backgroundColor: Colors.orange),
+                    );
+                    return;
+                  }
+                  await _firebaseService.setMonthlyTarget(targetMonth, val);
+                  if (targetMonth == _selectedMonthYear) {
+                    setState(() => _monthlyTarget = val);
+                  }
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Target $targetMonth berhasil disimpan: ${currencyFormatter.format(val)}'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showSetInitialStockDialog() {
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final stockProvider = Provider.of<StockProvider>(context, listen: false);
@@ -1122,6 +1274,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 ),
                 onSelected: (val) {
                   if (val == 'set_initial') _showSetInitialStockDialog();
+                  if (val == 'set_target') _showEditTargetDialog();
                   if (val == 'copy_prev') _copyPrevMonthStockAkhir();
                   if (val == 'refresh') {
                     productProvider.fetchProducts();
@@ -1134,6 +1287,16 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                   if (val == 'export_excel') _exportToExcelErp();
                 },
                 itemBuilder: (ctx) => [
+                  const PopupMenuItem<String>(
+                    value: 'set_target',
+                    child: Row(
+                      children: [
+                        Icon(Icons.flag_rounded, color: Color(0xFFF59E0B), size: 18),
+                        SizedBox(width: 10),
+                        Text('Atur Target Bulanan', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem<String>(
                     value: 'set_initial',
                     child: Row(
@@ -1664,29 +1827,33 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
     return Column(
       children: [
-        // Summary Cards for Total Income & Total Weight (Kg)
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: 20),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 950;
+            final targetAmount = _monthlyTarget;
+            final achievementPct = targetAmount > 0 ? (grandTotalIncome / targetAmount) * 100 : 0.0;
+            final diffAmount = grandTotalIncome - targetAmount;
+
+            Widget cardIncome = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(width: 10),
-                    Column(
+                    child: const Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Total Income ERP', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
@@ -1694,34 +1861,35 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                         Text(
                           currencyFormatter.format(grandTotalIncome),
                           style: const TextStyle(color: Colors.greenAccent, fontSize: 15, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.scale_rounded, color: Color(0xFF38BDF8), size: 20),
+            );
+
+            Widget cardWeight = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0284C7).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(width: 10),
-                    Column(
+                    child: const Icon(Icons.scale_rounded, color: Color(0xFF38BDF8), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Total Berat ERP (Kg)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
@@ -1729,14 +1897,167 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                         Text(
                           '${grandTotalWeightKg.toStringAsFixed(2)} Kg',
                           style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 15, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+
+            Widget cardTarget = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.35)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.flag_rounded, color: Color(0xFFF59E0B), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Target Bulan ($_selectedMonthYear)',
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          currencyFormatter.format(targetAmount),
+                          style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 15, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  InkWell(
+                    onTap: _showEditTargetDialog,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+                      ),
+                      child: const Icon(Icons.edit_rounded, color: Color(0xFFF59E0B), size: 14),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            Color pctColor = achievementPct >= 100
+                ? Colors.greenAccent
+                : (achievementPct >= 50 ? const Color(0xFF38BDF8) : const Color(0xFFA78BFA));
+
+            Widget cardAchievement = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: pctColor.withOpacity(0.35)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: pctColor.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.insights_rounded, color: pctColor, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Pencapaian Target', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                            Text(
+                              '${achievementPct.toStringAsFixed(1)}%',
+                              style: TextStyle(color: pctColor, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: (achievementPct / 100).clamp(0.0, 1.0),
+                            minHeight: 5,
+                            backgroundColor: const Color(0xFF0F172A),
+                            valueColor: AlwaysStoppedAnimation<Color>(pctColor),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          diffAmount >= 0
+                              ? 'Surplus ${currencyFormatter.format(diffAmount)}'
+                              : 'Sisa ${currencyFormatter.format(diffAmount.abs())}',
+                          style: TextStyle(
+                            color: diffAmount >= 0 ? Colors.greenAccent : const Color(0xFF94A3B8),
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (isWide) {
+              return Row(
+                children: [
+                  Expanded(child: cardIncome),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardWeight),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardTarget),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardAchievement),
+                ],
+              );
+            } else {
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: cardIncome),
+                      const SizedBox(width: 10),
+                      Expanded(child: cardWeight),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: cardTarget),
+                      const SizedBox(width: 10),
+                      Expanded(child: cardAchievement),
+                    ],
+                  ),
+                ],
+              );
+            }
+          },
         ),
         const SizedBox(height: 10),
         Expanded(

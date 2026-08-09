@@ -1513,6 +1513,49 @@ class FirebaseService {
       await batch.commit();
     }
   }
+
+  // ==========================================
+  // MONTHLY TARGETS (TARGET BULANAN PER-AREA/PERIODE)
+  // ==========================================
+
+  Stream<double> streamMonthlyTarget(String monthYear, {double defaultTarget = 310947810.0}) {
+    final cleanMonth = monthYear.trim();
+    if (cleanMonth.isEmpty || cleanMonth == 'SEMUA') {
+      return Stream.value(defaultTarget);
+    }
+    return _db.collection('monthly_targets').doc(cleanMonth).snapshots().map((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final val = snapshot.data()!['targetAmount'];
+        if (val is num) return val.toDouble();
+      }
+      return defaultTarget;
+    });
+  }
+
+  Future<double> getMonthlyTarget(String monthYear, {double defaultTarget = 310947810.0}) async {
+    final cleanMonth = monthYear.trim();
+    if (cleanMonth.isEmpty || cleanMonth == 'SEMUA') return defaultTarget;
+    try {
+      final doc = await _db.collection('monthly_targets').doc(cleanMonth).get();
+      if (doc.exists && doc.data() != null) {
+        final val = doc.data()!['targetAmount'];
+        if (val is num) return val.toDouble();
+      }
+    } catch (_) {}
+    return defaultTarget;
+  }
+
+  Future<void> setMonthlyTarget(String monthYear, double targetAmount, {String updatedBy = 'LUCIFAX (DEV)'}) async {
+    final cleanMonth = monthYear.trim();
+    if (cleanMonth.isEmpty || cleanMonth == 'SEMUA') return;
+    await _db.collection('monthly_targets').doc(cleanMonth).set({
+      'monthYear': cleanMonth,
+      'targetAmount': targetAmount,
+      'area': 'JAWA TENGAH',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': updatedBy,
+    }, SetOptions(merge: true));
+  }
 }
 
 class _KodeIndukResolver {
