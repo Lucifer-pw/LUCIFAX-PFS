@@ -313,7 +313,7 @@ class OperationalInvoicePdfService {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       _buildSignatureBox('Mengetahui / Menyetujui,', '( Kepala Cabang Jawa Tengah )', 'Joko Setiawan', fontBold, fontRegular, textDark, textGray),
-                      _buildSignatureBox('Penagih,', '( Developer )', 'LUCIFAX (DEV)', fontBold, fontRegular, textDark, textGray),
+                      _buildSignatureBox('Penyedia Layanan,', '( Developer )', 'LUCIFAX (DEV)', fontBold, fontRegular, textDark, textGray),
                     ],
                   ),
 
