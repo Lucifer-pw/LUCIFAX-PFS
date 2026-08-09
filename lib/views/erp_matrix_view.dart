@@ -1856,7 +1856,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             final diffAmount = grandTotalIncome - targetAmount;
 
             Widget cardIncome = Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: isWide ? 14 : 10, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(12),
@@ -1865,24 +1865,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isWide ? 8 : 6),
                     decoration: BoxDecoration(
                       color: Colors.green.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: 20),
+                    child: Icon(Icons.attach_money_rounded, color: Colors.greenAccent, size: isWide ? 20 : 16),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: isWide ? 10 : 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Income ERP', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                        Text('Total Income ERP', style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isWide ? 11 : 9.5, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
-                        Text(
-                          currencyFormatter.format(grandTotalIncome),
-                          style: const TextStyle(color: Colors.greenAccent, fontSize: 15, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            currencyFormatter.format(grandTotalIncome),
+                            style: TextStyle(color: Colors.greenAccent, fontSize: isWide ? 15 : 13.5, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
@@ -1892,7 +1895,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             );
 
             Widget cardWeight = Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: isWide ? 14 : 10, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(12),
@@ -1901,24 +1904,27 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isWide ? 8 : 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0284C7).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.scale_rounded, color: Color(0xFF38BDF8), size: 20),
+                    child: Icon(Icons.scale_rounded, color: const Color(0xFF38BDF8), size: isWide ? 20 : 16),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: isWide ? 10 : 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Berat ERP (Kg)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                        Text(isWide ? 'Total Berat ERP (Kg)' : 'Total Berat (Kg)', style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isWide ? 11 : 9.5, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
-                        Text(
-                          '${grandTotalWeightKg.toStringAsFixed(2)} Kg',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 15, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${grandTotalWeightKg.toStringAsFixed(2)} Kg',
+                            style: TextStyle(color: const Color(0xFF38BDF8), fontSize: isWide ? 15 : 13.5, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
@@ -1928,7 +1934,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             );
 
             Widget cardTarget = Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: isWide ? 14 : 10, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(12),
@@ -1937,32 +1943,36 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isWide ? 8 : 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF59E0B).withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.flag_rounded, color: Color(0xFFF59E0B), size: 20),
+                    child: Icon(Icons.flag_rounded, color: const Color(0xFFF59E0B), size: isWide ? 20 : 16),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: isWide ? 10 : 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Target Bulan ($_selectedMonthYear)',
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600),
+                          isWide ? 'Target Bulan ($_selectedMonthYear)' : 'Target ($_selectedMonthYear)',
+                          style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isWide ? 11 : 9.5, fontWeight: FontWeight.w600),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          currencyFormatter.format(targetAmount),
-                          style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 15, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            currencyFormatter.format(targetAmount),
+                            style: TextStyle(color: const Color(0xFFF59E0B), fontSize: isWide ? 15 : 13.5, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 4),
                   InkWell(
                     onTap: _showEditTargetDialog,
                     borderRadius: BorderRadius.circular(6),
@@ -1973,7 +1983,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
                       ),
-                      child: const Icon(Icons.edit_rounded, color: Color(0xFFF59E0B), size: 14),
+                      child: const Icon(Icons.edit_rounded, color: Color(0xFFF59E0B), size: 13),
                     ),
                   ),
                 ],
@@ -1985,7 +1995,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 : (achievementPct >= 50 ? const Color(0xFF38BDF8) : const Color(0xFFA78BFA));
 
             Widget cardAchievement = Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: isWide ? 14 : 10, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(12),
@@ -1994,14 +2004,14 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isWide ? 8 : 6),
                     decoration: BoxDecoration(
                       color: pctColor.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(Icons.insights_rounded, color: pctColor, size: 20),
+                    child: Icon(Icons.insights_rounded, color: pctColor, size: isWide ? 20 : 16),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: isWide ? 10 : 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2009,10 +2019,17 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Pencapaian Target', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+                            Expanded(
+                              child: Text(
+                                isWide ? 'Pencapaian Target' : 'Pencapaian',
+                                style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isWide ? 11 : 9.5, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
                             Text(
                               '${achievementPct.toStringAsFixed(1)}%',
-                              style: TextStyle(color: pctColor, fontSize: 13, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: pctColor, fontSize: isWide ? 13 : 12, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -2033,7 +2050,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                               : 'Sisa ${currencyFormatter.format(diffAmount.abs())}',
                           style: TextStyle(
                             color: diffAmount >= 0 ? Colors.greenAccent : const Color(0xFF94A3B8),
-                            fontSize: 9.5,
+                            fontSize: isWide ? 9.5 : 8.5,
                             fontWeight: FontWeight.w500,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -2063,15 +2080,15 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                   Row(
                     children: [
                       Expanded(child: cardIncome),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(child: cardWeight),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(child: cardTarget),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(child: cardAchievement),
                     ],
                   ),

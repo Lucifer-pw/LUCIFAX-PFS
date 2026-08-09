@@ -173,7 +173,10 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
 
     return Dialog(
       backgroundColor: const Color(0xFF0F172A),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 10 : 24,
+        vertical: isSmallScreen ? 14 : 24,
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: Color(0xFF334155), width: 1.2),
@@ -181,7 +184,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
       child: Container(
         width: 1050,
         constraints: BoxConstraints(
-          maxHeight: screenSize.height * 0.92,
+          maxHeight: screenSize.height * 0.94,
         ),
         child: Column(
           children: [
@@ -189,7 +192,10 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
             // 1. DIALOG HEADER
             // ========================================================
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 14 : 20,
+                vertical: isSmallScreen ? 12 : 16,
+              ),
               decoration: const BoxDecoration(
                 color: Color(0xFF1E293B),
                 borderRadius: BorderRadius.only(
@@ -198,119 +204,215 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                 ),
                 border: Border(bottom: BorderSide(color: Color(0xFF334155))),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
+              child: isSmallScreen
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF6366F1), Color(0xFF0284C7)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF6366F1).withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.insights_rounded, color: Colors.white, size: 22),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Grafik & Analisis Pengiriman Tahunan',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.bold,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(7),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF6366F1), Color(0xFF0284C7)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
+                                    borderRadius: BorderRadius.circular(9),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
-                                    ),
-                                    child: const Text(
-                                      'STATUS: DIKIRIM',
-                                      style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
+                                  child: const Icon(Icons.insights_rounded, color: Colors.white, size: 18),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(
+                                  'Grafik Pengiriman Tahunan',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                              tooltip: 'Tutup',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                              ),
+                              child: const Text(
+                                'STATUS: DIKIRIM',
+                                style: TextStyle(color: Colors.greenAccent, fontSize: 9.5, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 13),
+                                  const SizedBox(width: 6),
+                                  DropdownButton<int>(
+                                    value: _selectedYear,
+                                    dropdownColor: const Color(0xFF1E293B),
+                                    underline: const SizedBox(),
+                                    isDense: true,
+                                    icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF38BDF8)),
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                    items: availableYears.map((yr) {
+                                      return DropdownMenuItem<int>(
+                                        value: yr,
+                                        child: Text('Tahun $yr'),
+                                      );
+                                    }).toList(),
+                                    onChanged: (newYr) {
+                                      if (newYr != null && newYr != _selectedYear) {
+                                        setState(() => _selectedYear = newYr);
+                                        _loadTargetsForYear();
+                                      }
+                                    },
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Data Distribusi Barang Terkirim Cabang Jawa Tengah - Tahun $_selectedYear',
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF6366F1), Color(0xFF0284C7)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF6366F1).withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.insights_rounded, color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          'Grafik & Analisis Pengiriman Tahunan',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                                          ),
+                                          child: const Text(
+                                            'STATUS: DIKIRIM',
+                                            style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Data Distribusi Barang Terkirim Cabang Jawa Tengah - Tahun $_selectedYear',
+                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
 
-                  // Year Selector Dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 16),
+                        // Year Selector Dropdown
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 16),
+                              const SizedBox(width: 8),
+                              DropdownButton<int>(
+                                value: _selectedYear,
+                                dropdownColor: const Color(0xFF1E293B),
+                                underline: const SizedBox(),
+                                icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF38BDF8)),
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                items: availableYears.map((yr) {
+                                  return DropdownMenuItem<int>(
+                                    value: yr,
+                                    child: Text('Tahun $yr'),
+                                  );
+                                }).toList(),
+                                onChanged: (newYr) {
+                                  if (newYr != null && newYr != _selectedYear) {
+                                    setState(() => _selectedYear = newYr);
+                                    _loadTargetsForYear();
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        DropdownButton<int>(
-                          value: _selectedYear,
-                          dropdownColor: const Color(0xFF1E293B),
-                          underline: const SizedBox(),
-                          icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF38BDF8)),
-                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                          items: availableYears.map((yr) {
-                            return DropdownMenuItem<int>(
-                              value: yr,
-                              child: Text('Tahun $yr'),
-                            );
-                          }).toList(),
-                          onChanged: (newYr) {
-                            if (newYr != null && newYr != _selectedYear) {
-                              setState(() => _selectedYear = newYr);
-                              _loadTargetsForYear();
-                            }
-                          },
+
+                        // Close Button
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                          tooltip: 'Tutup',
+                          onPressed: () => Navigator.pop(context),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Close Button
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
-                    tooltip: 'Tutup',
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
             ),
 
             // ========================================================
@@ -318,7 +420,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
             // ========================================================
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(isSmallScreen ? 12 : 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -333,11 +435,11 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                       isSmall: isSmallScreen,
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     // --- 2B. CHART SECTION WITH METRIC TOGGLE ---
                     Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: EdgeInsets.all(isSmallScreen ? 12 : 18),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(14),
@@ -346,32 +448,21 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.bar_chart_rounded, color: Color(0xFF38BDF8), size: 20),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Grafik Tren Penjualan & Pengiriman ($_selectedYear)',
-                                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  const Text(
-                                    'Pencapaian barang berstatus DIKIRIM setiap bulan',
-                                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
-                                  ),
-                                ],
-                              ),
-
-                              // Metric Segment Buttons
-                              Container(
+                          if (isSmallScreen) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.bar_chart_rounded, color: Color(0xFF38BDF8), size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Grafik Tren Penjualan & Pengiriman ($_selectedYear)',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Container(
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF0F172A),
                                   borderRadius: BorderRadius.circular(8),
@@ -386,27 +477,81 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
+                            ),
+                          ] else ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.bar_chart_rounded, color: Color(0xFF38BDF8), size: 20),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Grafik Tren Penjualan & Pengiriman ($_selectedYear)',
+                                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    const Text(
+                                      'Pencapaian barang berstatus DIKIRIM setiap bulan',
+                                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                                    ),
+                                  ],
+                                ),
+
+                                // Metric Segment Buttons
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F172A),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                                  ),
+                                  padding: const EdgeInsets.all(2),
+                                  child: Row(
+                                    children: [
+                                      _buildMetricButton('NOMINAL', 'Nominal (Rp)', Icons.attach_money_rounded),
+                                      _buildMetricButton('BERAT', 'Berat (Kg)', Icons.scale_rounded),
+                                      _buildMetricButton('INVOICE', 'Jml Invoice', Icons.receipt_long_rounded),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 20),
 
                           // FL_CHART BAR CHART
                           SizedBox(
                             height: 260,
-                            child: _buildBarChart(monthlyData),
+                            child: isSmallScreen
+                                ? SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: 580,
+                                      child: _buildBarChart(monthlyData),
+                                    ),
+                                  )
+                                : _buildBarChart(monthlyData),
                           ),
 
                           const SizedBox(height: 12),
                           // Legend Bar Chart
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildLegendItem(const Color(0xFF38BDF8), 'Realisasi Pengiriman ($_selectedMetric)'),
-                              const SizedBox(width: 20),
-                              if (_selectedMetric == 'NOMINAL') ...[
-                                _buildLegendItem(const Color(0xFFF59E0B), 'Target Bulanan (Rp)'),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildLegendItem(const Color(0xFF38BDF8), 'Realisasi Pengiriman ($_selectedMetric)'),
+                                const SizedBox(width: 16),
+                                if (_selectedMetric == 'NOMINAL') ...[
+                                  _buildLegendItem(const Color(0xFFF59E0B), 'Target Bulanan (Rp)'),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -616,7 +761,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
             // 3. DIALOG FOOTER
             // ========================================================
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 20, vertical: isSmallScreen ? 10 : 12),
               decoration: const BoxDecoration(
                 color: Color(0xFF1E293B),
                 borderRadius: BorderRadius.only(
@@ -625,44 +770,87 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                 ),
                 border: Border(top: BorderSide(color: Color(0xFF334155))),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Total $activeMonthsCount bulan aktif transaksi di tahun $_selectedYear',
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                  ),
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.edit_calendar_rounded, size: 16, color: Color(0xFFF59E0B)),
-                        label: const Text('Atur Target Bulanan', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFF59E0B)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: isSmallScreen
+                  ? Column(
+                      children: [
+                        Text(
+                          'Total $activeMonthsCount bulan aktif transaksi di tahun $_selectedYear',
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                         ),
-                        onPressed: () {
-                          final currentMonthStr = DateTime.now().month.toString().padLeft(2, '0');
-                          final activeKey = '$currentMonthStr-$_selectedYear';
-                          _showEditTargetDialog(context, activeKey, _monthlyTargets[DateTime.now().month] ?? 0.0);
-                        },
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.edit_calendar_rounded, size: 14, color: Color(0xFFF59E0B)),
+                                label: const Text('Atur Target', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 11.5)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFFF59E0B)),
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () {
+                                  final currentMonthStr = DateTime.now().month.toString().padLeft(2, '0');
+                                  final activeKey = '$currentMonthStr-$_selectedYear';
+                                  _showEditTargetDialog(context, activeKey, _monthlyTargets[DateTime.now().month] ?? 0.0);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0284C7),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total $activeMonthsCount bulan aktif transaksi di tahun $_selectedYear',
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                        ),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.edit_calendar_rounded, size: 16, color: Color(0xFFF59E0B)),
+                              label: const Text('Atur Target Bulanan', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFFF59E0B)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () {
+                                final currentMonthStr = DateTime.now().month.toString().padLeft(2, '0');
+                                final activeKey = '$currentMonthStr-$_selectedYear';
+                                _showEditTargetDialog(context, activeKey, _monthlyTargets[DateTime.now().month] ?? 0.0);
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0284C7),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -681,51 +869,55 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
     required bool isSmall,
   }) {
     final card1 = _buildKpiCard(
-      title: 'TOTAL OMZET DIKIRIM ($_selectedYear)',
+      title: isSmall ? 'TOTAL OMZET ($_selectedYear)' : 'TOTAL OMZET DIKIRIM ($_selectedYear)',
       value: _rupiahFormatter.format(grandTotalNominal),
       subtitle: '$grandTotalInvoices Total Invoice Terkirim',
       icon: Icons.attach_money_rounded,
       iconColor: Colors.greenAccent,
       borderColor: Colors.greenAccent.withOpacity(0.3),
       bgColor: Colors.green.withOpacity(0.12),
+      isSmall: isSmall,
     );
 
     final card2 = _buildKpiCard(
-      title: 'TOTAL BERAT BARANG (KG)',
+      title: isSmall ? 'TOTAL BERAT (KG)' : 'TOTAL BERAT BARANG (KG)',
       value: '${grandTotalWeight.toStringAsFixed(2)} Kg',
       subtitle: 'Distribusi Fisik Tahunan',
       icon: Icons.scale_rounded,
       iconColor: const Color(0xFF38BDF8),
       borderColor: const Color(0xFF38BDF8).withOpacity(0.3),
       bgColor: const Color(0xFF0284C7).withOpacity(0.12),
+      isSmall: isSmall,
     );
 
     final card3 = _buildKpiCard(
-      title: 'RATA-RATA PENJUALAN BULANAN',
+      title: isSmall ? 'RATA-RATA / BULAN' : 'RATA-RATA PENJUALAN BULANAN',
       value: _rupiahFormatter.format(avgNominal),
       subtitle: 'Performa rata-rata / bulan aktif',
       icon: Icons.trending_up_rounded,
       iconColor: const Color(0xFFA78BFA),
       borderColor: const Color(0xFFA78BFA).withOpacity(0.3),
       bgColor: const Color(0xFF7C3AED).withOpacity(0.12),
+      isSmall: isSmall,
     );
 
     final card4 = _buildKpiCard(
-      title: 'BULAN TERTINGGI (PEAK)',
+      title: isSmall ? 'BULAN TERTINGGI' : 'BULAN TERTINGGI (PEAK)',
       value: maxNominalInMonth > 0 ? _monthNames[peakMonth - 1] : '-',
       subtitle: maxNominalInMonth > 0 ? _rupiahFormatter.format(maxNominalInMonth) : 'Belum ada data',
       icon: Icons.star_rounded,
       iconColor: const Color(0xFFF59E0B),
       borderColor: const Color(0xFFF59E0B).withOpacity(0.3),
       bgColor: const Color(0xFFF59E0B).withOpacity(0.12),
+      isSmall: isSmall,
     );
 
     if (isSmall) {
       return Column(
         children: [
-          Row(children: [Expanded(child: card1), const SizedBox(width: 10), Expanded(child: card2)]),
-          const SizedBox(height: 10),
-          Row(children: [Expanded(child: card3), const SizedBox(width: 10), Expanded(child: card4)]),
+          Row(children: [Expanded(child: card1), const SizedBox(width: 8), Expanded(child: card2)]),
+          const SizedBox(height: 8),
+          Row(children: [Expanded(child: card3), const SizedBox(width: 8), Expanded(child: card4)]),
         ],
       );
     }
@@ -751,9 +943,13 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
     required Color iconColor,
     required Color borderColor,
     required Color bgColor,
+    bool isSmall = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmall ? 10 : 14,
+        vertical: isSmall ? 10 : 12,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
@@ -762,33 +958,36 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(isSmall ? 6 : 8),
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: iconColor, size: 20),
+            child: Icon(icon, color: iconColor, size: isSmall ? 16 : 20),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: isSmall ? 8 : 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isSmall ? 8.5 : 9.5, fontWeight: FontWeight.w600),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(color: iconColor, fontSize: 14, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(color: iconColor, fontSize: isSmall ? 13 : 14, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                  style: TextStyle(color: const Color(0xFF64748B), fontSize: isSmall ? 9 : 10),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
