@@ -211,30 +211,35 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(7),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF6366F1), Color(0xFF0284C7)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF6366F1), Color(0xFF0284C7)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(9),
                                     ),
-                                    borderRadius: BorderRadius.circular(9),
+                                    child: const Icon(Icons.insights_rounded, color: Colors.white, size: 18),
                                   ),
-                                  child: const Icon(Icons.insights_rounded, color: Colors.white, size: 18),
-                                ),
-                                const SizedBox(width: 10),
-                                const Text(
-                                  'Grafik Pengiriman Tahunan',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 10),
+                                  const Expanded(
+                                    child: Text(
+                                      'Grafik Pengiriman Tahunan',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
@@ -453,9 +458,11 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                               children: [
                                 const Icon(Icons.bar_chart_rounded, color: Color(0xFF38BDF8), size: 18),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Grafik Tren Penjualan & Pengiriman ($_selectedYear)',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                Expanded(
+                                  child: Text(
+                                    'Grafik Penjualan & Pengiriman ($_selectedYear)',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               ],
                             ),
@@ -566,29 +573,49 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: const Color(0xFF334155)),
                       ),
-                      padding: const EdgeInsets.all(18),
+                      padding: EdgeInsets.all(isSmallScreen ? 12 : 18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.table_chart_rounded, color: Color(0xFF10B981), size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Tabel Rekapitulasi Pencapaian Bulanan ($_selectedYear)',
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          if (isSmallScreen) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.table_chart_rounded, color: Color(0xFF10B981), size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Rekapitulasi Pencapaian ($_selectedYear)',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
                                   ),
-                                ],
-                              ),
-                              Text(
-                                'Area: Cabang Jawa Tengah',
-                                style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Area: Cabang Jawa Tengah',
+                              style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.9), fontSize: 11.5, fontWeight: FontWeight.w500),
+                            ),
+                          ] else ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.table_chart_rounded, color: Color(0xFF10B981), size: 18),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Tabel Rekapitulasi Pencapaian Bulanan ($_selectedYear)',
+                                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  'Area: Cabang Jawa Tengah',
+                                  style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 14),
 
                           // Data Table
