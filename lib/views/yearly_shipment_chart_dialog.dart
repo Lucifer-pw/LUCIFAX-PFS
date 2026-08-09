@@ -227,7 +227,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
         side: const BorderSide(color: Color(0xFF334155), width: 1.2),
       ),
       child: Container(
-        width: isSmallScreen ? double.infinity : (screenSize.width > 1360 ? 1280 : screenSize.width * 0.96),
+        width: isSmallScreen ? double.infinity : 1060,
         constraints: BoxConstraints(
           maxHeight: screenSize.height * 0.94,
         ),
@@ -676,8 +676,8 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                 headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                 headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
                                 dataTextStyle: const TextStyle(color: Colors.white, fontSize: 12.5),
-                                horizontalMargin: 16,
-                                columnSpacing: 24,
+                                horizontalMargin: 12,
+                                columnSpacing: isSmallScreen ? 12 : 16,
                                 columns: const [
                                   DataColumn(label: Text('No', textAlign: TextAlign.center)),
                                   DataColumn(label: Text('Bulan')),
