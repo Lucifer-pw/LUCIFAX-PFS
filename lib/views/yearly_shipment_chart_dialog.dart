@@ -227,7 +227,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
         side: const BorderSide(color: Color(0xFF334155), width: 1.2),
       ),
       child: Container(
-        width: 1050,
+        width: isSmallScreen ? double.infinity : (screenSize.width > 1360 ? 1280 : screenSize.width * 0.96),
         constraints: BoxConstraints(
           maxHeight: screenSize.height * 0.94,
         ),
