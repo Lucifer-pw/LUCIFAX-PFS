@@ -1545,6 +1545,35 @@ class FirebaseService {
     return defaultTarget;
   }
 
+  Stream<Map<String, double>> streamAllMonthlyTargets({double defaultTarget = 310947810.0}) {
+    return _db.collection('monthly_targets').snapshots().map((snapshot) {
+      final Map<String, double> result = {};
+      for (var doc in snapshot.docs) {
+        final val = doc.data()['targetAmount'];
+        if (val is num) {
+          result[doc.id] = val.toDouble();
+        }
+      }
+      return result;
+    });
+  }
+
+  Future<Map<String, double>> getAllMonthlyTargets() async {
+    try {
+      final snapshot = await _db.collection('monthly_targets').get();
+      final Map<String, double> result = {};
+      for (var doc in snapshot.docs) {
+        final val = doc.data()['targetAmount'];
+        if (val is num) {
+          result[doc.id] = val.toDouble();
+        }
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
   Future<void> setMonthlyTarget(String monthYear, double targetAmount, {String updatedBy = 'LUCIFAX (DEV)'}) async {
     final cleanMonth = monthYear.trim();
     if (cleanMonth.isEmpty || cleanMonth == 'SEMUA') return;

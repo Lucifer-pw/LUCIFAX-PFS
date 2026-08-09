@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -32,6 +33,9 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
   final FirebaseService _firebaseService = FirebaseService();
   final Map<int, double> _monthlyTargets = {};
 
+  StreamSubscription? _targetSubscription;
+  Map<String, double> _cachedTargetsMap = {};
+
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -52,28 +56,39 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
   void initState() {
     super.initState();
     _selectedYear = widget.initialYear;
-    _loadTargetsForYear();
+    _initMonthlyTargets();
   }
 
-  Future<void> _loadTargetsForYear() async {
-    try {
-      final Map<int, double> targets = {};
-      for (int m = 1; m <= 12; m++) {
-        final mStr = m.toString().padLeft(2, '0');
-        final monthKey = '$mStr-$_selectedYear';
-        final target = await _firebaseService.getMonthlyTarget(
-          monthKey,
-          defaultTarget: (m == 8 && _selectedYear == 2026 ? 310947810.0 : 0.0),
-        );
-        targets[m] = target;
+  @override
+  void dispose() {
+    _targetSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _initMonthlyTargets() {
+    // 1. Instant fallback targets (0ms latency, eliminates loading delay)
+    _applyTargetsForYear();
+
+    // 2. Real-time stream from Firestore for instant reactive updates
+    _targetSubscription = _firebaseService.streamAllMonthlyTargets().listen((targetsMap) {
+      if (!mounted) return;
+      setState(() {
+        _cachedTargetsMap = targetsMap;
+        _applyTargetsForYear();
+      });
+    });
+  }
+
+  void _applyTargetsForYear() {
+    for (int m = 1; m <= 12; m++) {
+      final mStr = m.toString().padLeft(2, '0');
+      final key = '$mStr-$_selectedYear';
+      if (_cachedTargetsMap.containsKey(key)) {
+        _monthlyTargets[m] = _cachedTargetsMap[key]!;
+      } else {
+        _monthlyTargets[m] = 310947810.0;
       }
-      if (mounted) {
-        setState(() {
-          _monthlyTargets.clear();
-          _monthlyTargets.addAll(targets);
-        });
-      }
-    } catch (_) {}
+    }
   }
 
   List<int> _getAvailableYears(List<model_tr.Transaction> transactions) {
@@ -323,8 +338,10 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                     }).toList(),
                                     onChanged: (newYr) {
                                       if (newYr != null && newYr != _selectedYear) {
-                                        setState(() => _selectedYear = newYr);
-                                        _loadTargetsForYear();
+                                        setState(() {
+                                          _selectedYear = newYr;
+                                          _applyTargetsForYear();
+                                        });
                                       }
                                     },
                                   ),
@@ -430,8 +447,10 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                 }).toList(),
                                 onChanged: (newYr) {
                                   if (newYr != null && newYr != _selectedYear) {
-                                    setState(() => _selectedYear = newYr);
-                                    _loadTargetsForYear();
+                                    setState(() {
+                                      _selectedYear = newYr;
+                                      _applyTargetsForYear();
+                                    });
                                   }
                                 },
                               ),
@@ -679,7 +698,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                     final wt = data['weightKg'] as double;
                                     final inv = data['invoiceCount'] as int;
                                     final erpNom = data['erpNominal'] as double;
-                                    final target = _monthlyTargets[m] ?? (m == 8 && _selectedYear == 2026 ? 310947810.0 : 0.0);
+                                    final target = _monthlyTargets[m] ?? 310947810.0;
                                     final pct = target > 0 ? (nom / target) * 100 : (nom > 0 ? 100.0 : 0.0);
                                     final isReached = target > 0 ? nom >= target : nom > 0;
 
@@ -1421,7 +1440,8 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                             backgroundColor: Colors.green,
                           ),
                         );
-                        _loadTargetsForYear();
+                        _cachedTargetsMap[targetMonth] = val;
+                        _applyTargetsForYear();
                       }
                     } catch (e) {
                       setInnerState(() => isSaving = false);
