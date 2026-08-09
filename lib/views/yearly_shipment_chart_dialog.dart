@@ -227,7 +227,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
         side: const BorderSide(color: Color(0xFF334155), width: 1.2),
       ),
       child: Container(
-        width: isSmallScreen ? double.infinity : 1060,
+        width: isSmallScreen ? double.infinity : (screenSize.width > 1200 ? 1120 : screenSize.width * 0.95),
         constraints: BoxConstraints(
           maxHeight: screenSize.height * 0.94,
         ),
@@ -676,18 +676,18 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                 headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                 headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
                                 dataTextStyle: const TextStyle(color: Colors.white, fontSize: 12.5),
-                                horizontalMargin: 12,
-                                columnSpacing: isSmallScreen ? 12 : 16,
+                                horizontalMargin: 16,
+                                columnSpacing: isSmallScreen ? 14 : 20,
                                 columns: const [
-                                  DataColumn(label: Text('No', textAlign: TextAlign.center)),
+                                  DataColumn(label: Center(child: Text('No', textAlign: TextAlign.center))),
                                   DataColumn(label: Text('Bulan')),
-                                  DataColumn(label: Text('Jml Invoice', textAlign: TextAlign.right)),
-                                  DataColumn(label: Text('Total Berat (Kg)', textAlign: TextAlign.right)),
-                                  DataColumn(label: Text('Pencapaian Value (Rp)', textAlign: TextAlign.right)),
-                                  DataColumn(label: Text('Target Bulan (Rp)', textAlign: TextAlign.right)),
-                                  DataColumn(label: Text('ERP (Rp)', textAlign: TextAlign.right)),
-                                  DataColumn(label: Text('Pencapaian (%)', textAlign: TextAlign.center)),
-                                  DataColumn(label: Text('Status', textAlign: TextAlign.center)),
+                                  DataColumn(numeric: true, label: Text('Jml Invoice')),
+                                  DataColumn(numeric: true, label: Text('Total Berat (Kg)')),
+                                  DataColumn(numeric: true, label: Text('Pencapaian Value (Rp)')),
+                                  DataColumn(numeric: true, label: Text('Target Bulan (Rp)')),
+                                  DataColumn(numeric: true, label: Text('ERP (Rp)')),
+                                  DataColumn(label: Center(child: Text('Pencapaian (%)', textAlign: TextAlign.center))),
+                                  DataColumn(label: Center(child: Text('Status', textAlign: TextAlign.center))),
                                 ],
                                 rows: [
                                   // 12 Months Rows
@@ -713,22 +713,13 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                           '${data['name']} $_selectedYear',
                                           style: const TextStyle(fontWeight: FontWeight.w600),
                                         )),
-                                        DataCell(Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Text(inv > 0 ? '$inv inv' : '-'),
-                                        )),
-                                        DataCell(Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Text(wt > 0 ? '${wt.toStringAsFixed(2)} Kg' : '-'),
-                                        )),
-                                        DataCell(Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Text(
-                                            nom > 0 ? _rupiahFormatter.format(nom) : '-',
-                                            style: TextStyle(
-                                              color: nom > 0 ? Colors.greenAccent : const Color(0xFF64748B),
-                                              fontWeight: nom > 0 ? FontWeight.bold : FontWeight.normal,
-                                            ),
+                                        DataCell(Text(inv > 0 ? '$inv inv' : '-')),
+                                        DataCell(Text(wt > 0 ? '${wt.toStringAsFixed(2)} Kg' : '-')),
+                                        DataCell(Text(
+                                          nom > 0 ? _rupiahFormatter.format(nom) : '-',
+                                          style: TextStyle(
+                                            color: nom > 0 ? Colors.greenAccent : const Color(0xFF64748B),
+                                            fontWeight: nom > 0 ? FontWeight.bold : FontWeight.normal,
                                           ),
                                         )),
                                         DataCell(
@@ -756,14 +747,11 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                           ),
                                         ),
                                         // Kolom ERP (Rp)
-                                        DataCell(Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Text(
-                                            erpNom > 0 ? _rupiahFormatter.format(erpNom) : '-',
-                                            style: TextStyle(
-                                              color: erpNom > 0 ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                                              fontWeight: erpNom > 0 ? FontWeight.w600 : FontWeight.normal,
-                                            ),
+                                        DataCell(Text(
+                                          erpNom > 0 ? _rupiahFormatter.format(erpNom) : '-',
+                                          style: TextStyle(
+                                            color: erpNom > 0 ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                            fontWeight: erpNom > 0 ? FontWeight.w600 : FontWeight.normal,
                                           ),
                                         )),
                                         DataCell(Center(
@@ -811,11 +799,11 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                     cells: [
                                       const DataCell(SizedBox()),
                                       const DataCell(Text('TOTAL TAHUNAN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text('$grandTotalInvoices inv', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text('${grandTotalWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)))),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(_rupiahFormatter.format(grandTotalNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)))),
+                                      DataCell(Text('$grandTotalInvoices inv', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                      DataCell(Text('${grandTotalWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                      DataCell(Text(_rupiahFormatter.format(grandTotalNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
                                       const DataCell(SizedBox()),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(grandTotalErpNominal > 0 ? _rupiahFormatter.format(grandTotalErpNominal) : '-', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)))),
+                                      DataCell(Text(grandTotalErpNominal > 0 ? _rupiahFormatter.format(grandTotalErpNominal) : '-', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
                                       const DataCell(SizedBox()),
                                       const DataCell(SizedBox()),
                                     ],
@@ -827,11 +815,11 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                     cells: [
                                       const DataCell(SizedBox()),
                                       const DataCell(Text('RATA-RATA BULANAN', style: TextStyle(color: Color(0xFFA78BFA), fontWeight: FontWeight.bold, fontSize: 13))),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(activeMonthsCount > 0 ? '${(grandTotalInvoices / activeMonthsCount).toStringAsFixed(1)} inv' : '-', style: const TextStyle(color: Colors.white70)))),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text('${avgWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8))))),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(_rupiahFormatter.format(avgNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)))),
+                                      DataCell(Text(activeMonthsCount > 0 ? '${(grandTotalInvoices / activeMonthsCount).toStringAsFixed(1)} inv' : '-', style: const TextStyle(color: Colors.white70))),
+                                      DataCell(Text('${avgWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8)))),
+                                      DataCell(Text(_rupiahFormatter.format(avgNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
                                       const DataCell(SizedBox()),
-                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(activeMonthsCount > 0 && grandTotalErpNominal > 0 ? _rupiahFormatter.format(grandTotalErpNominal / activeMonthsCount) : '-', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)))),
+                                      DataCell(Text(activeMonthsCount > 0 && grandTotalErpNominal > 0 ? _rupiahFormatter.format(grandTotalErpNominal / activeMonthsCount) : '-', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                                       const DataCell(SizedBox()),
                                       const DataCell(SizedBox()),
                                     ],
