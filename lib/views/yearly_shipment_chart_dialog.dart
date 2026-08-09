@@ -1,0 +1,965 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
+import '../models/transaction.dart' as model_tr;
+import '../providers/transaction_provider.dart';
+import '../services/firebase_service.dart';
+
+class YearlyShipmentChartDialog extends StatefulWidget {
+  final int initialYear;
+
+  const YearlyShipmentChartDialog({
+    super.key,
+    this.initialYear = 2026,
+  });
+
+  static void show(BuildContext context, {int initialYear = 2026}) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => YearlyShipmentChartDialog(initialYear: initialYear),
+    );
+  }
+
+  @override
+  State<YearlyShipmentChartDialog> createState() => _YearlyShipmentChartDialogState();
+}
+
+class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
+  late int _selectedYear;
+  String _selectedMetric = 'NOMINAL'; // 'NOMINAL', 'BERAT', 'INVOICE'
+  final FirebaseService _firebaseService = FirebaseService();
+  final Map<int, double> _monthlyTargets = {};
+
+  final _rupiahFormatter = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  );
+
+  final List<String> _monthNames = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+
+  final List<String> _monthShortNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.initialYear;
+    _loadTargetsForYear();
+  }
+
+  Future<void> _loadTargetsForYear() async {
+    try {
+      final Map<int, double> targets = {};
+      for (int m = 1; m <= 12; m++) {
+        final mStr = m.toString().padLeft(2, '0');
+        final monthKey = '$mStr-$_selectedYear';
+        final target = await _firebaseService.getMonthlyTarget(monthKey);
+        targets[m] = target;
+      }
+      if (mounted) {
+        setState(() {
+          _monthlyTargets.clear();
+          _monthlyTargets.addAll(targets);
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<int> _getAvailableYears(List<model_tr.Transaction> transactions) {
+    final Set<int> years = {2025, 2026, 2027, DateTime.now().year};
+    for (var tr in transactions) {
+      final effectiveDate = tr.deliveryDate ?? tr.date;
+      years.add(effectiveDate.year);
+    }
+    final list = years.toList();
+    list.sort((a, b) => b.compareTo(a));
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trProvider = Provider.of<TransactionProvider>(context);
+    final allTransactions = trProvider.transactions;
+    final availableYears = _getAvailableYears(allTransactions);
+
+    // Filter only DIKIRIM transactions in the selected year
+    final shippedInYear = allTransactions.where((tr) {
+      // Must be status DIKIRIM (status barang = DIKIRIM)
+      final isDikirim = tr.status.toUpperCase() == 'DIKIRIM';
+      if (!isDikirim) return false;
+
+      final effectiveDate = tr.deliveryDate ?? tr.date;
+      return effectiveDate.year == _selectedYear;
+    }).toList();
+
+    // Aggregate data for 12 months (1 to 12)
+    final Map<int, Map<String, dynamic>> monthlyData = {};
+    for (int m = 1; m <= 12; m++) {
+      monthlyData[m] = {
+        'month': m,
+        'name': _monthNames[m - 1],
+        'short': _monthShortNames[m - 1],
+        'nominal': 0.0,
+        'weightKg': 0.0,
+        'invoiceCount': 0,
+        'itemsCount': 0,
+      };
+    }
+
+    for (var tr in shippedInYear) {
+      final effectiveDate = tr.deliveryDate ?? tr.date;
+      final m = effectiveDate.month;
+      if (monthlyData.containsKey(m)) {
+        double trNominal = tr.grandTotal;
+        double trWeight = tr.items.fold(0.0, (sum, it) => sum + it.weightKg);
+
+        if (tr.items.isNotEmpty) {
+          double itemsNominal = 0;
+          for (var item in tr.items) {
+            itemsNominal += (item.isBonus ? 0.0 : item.subtotal);
+          }
+          if (itemsNominal > 0) trNominal = itemsNominal;
+        }
+
+        monthlyData[m]!['nominal'] = (monthlyData[m]!['nominal'] as double) + trNominal;
+        monthlyData[m]!['weightKg'] = (monthlyData[m]!['weightKg'] as double) + trWeight;
+        monthlyData[m]!['invoiceCount'] = (monthlyData[m]!['invoiceCount'] as int) + 1;
+        monthlyData[m]!['itemsCount'] = (monthlyData[m]!['itemsCount'] as int) + tr.items.length;
+      }
+    }
+
+    // Calculate Summary Stats
+    double grandTotalNominal = 0.0;
+    double grandTotalWeight = 0.0;
+    int grandTotalInvoices = 0;
+    int activeMonthsCount = 0;
+    int peakMonth = 1;
+    double maxNominalInMonth = 0.0;
+
+    for (int m = 1; m <= 12; m++) {
+      final nom = monthlyData[m]!['nominal'] as double;
+      final wt = monthlyData[m]!['weightKg'] as double;
+      final inv = monthlyData[m]!['invoiceCount'] as int;
+
+      grandTotalNominal += nom;
+      grandTotalWeight += wt;
+      grandTotalInvoices += inv;
+
+      if (nom > 0 || inv > 0) {
+        activeMonthsCount++;
+      }
+      if (nom > maxNominalInMonth) {
+        maxNominalInMonth = nom;
+        peakMonth = m;
+      }
+    }
+
+    final double avgNominal = activeMonthsCount > 0 ? (grandTotalNominal / activeMonthsCount) : 0.0;
+    final double avgWeight = activeMonthsCount > 0 ? (grandTotalWeight / activeMonthsCount) : 0.0;
+
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 768;
+
+    return Dialog(
+      backgroundColor: const Color(0xFF0F172A),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFF334155), width: 1.2),
+      ),
+      child: Container(
+        width: 1050,
+        constraints: BoxConstraints(
+          maxHeight: screenSize.height * 0.92,
+        ),
+        child: Column(
+          children: [
+            // ========================================================
+            // 1. DIALOG HEADER
+            // ========================================================
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E293B),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+                border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF6366F1), Color(0xFF0284C7)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF6366F1).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.insights_rounded, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Grafik & Analisis Pengiriman Tahunan',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                                    ),
+                                    child: const Text(
+                                      'STATUS: DIKIRIM',
+                                      style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Data Distribusi Barang Terkirim Cabang Jawa Tengah - Tahun $_selectedYear',
+                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Year Selector Dropdown
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 16),
+                        const SizedBox(width: 8),
+                        DropdownButton<int>(
+                          value: _selectedYear,
+                          dropdownColor: const Color(0xFF1E293B),
+                          underline: const SizedBox(),
+                          icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF38BDF8)),
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          items: availableYears.map((yr) {
+                            return DropdownMenuItem<int>(
+                              value: yr,
+                              child: Text('Tahun $yr'),
+                            );
+                          }).toList(),
+                          onChanged: (newYr) {
+                            if (newYr != null && newYr != _selectedYear) {
+                              setState(() => _selectedYear = newYr);
+                              _loadTargetsForYear();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Close Button
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                    tooltip: 'Tutup',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+
+            // ========================================================
+            // 2. DIALOG BODY (SCROLLABLE)
+            // ========================================================
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- 2A. KPI SUMMARY CARDS ---
+                    _buildKpiCards(
+                      grandTotalNominal: grandTotalNominal,
+                      grandTotalWeight: grandTotalWeight,
+                      grandTotalInvoices: grandTotalInvoices,
+                      avgNominal: avgNominal,
+                      peakMonth: peakMonth,
+                      maxNominalInMonth: maxNominalInMonth,
+                      isSmall: isSmallScreen,
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // --- 2B. CHART SECTION WITH METRIC TOGGLE ---
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.bar_chart_rounded, color: Color(0xFF38BDF8), size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Grafik Tren Penjualan & Pengiriman ($_selectedYear)',
+                                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Pencapaian barang berstatus DIKIRIM setiap bulan',
+                                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                                  ),
+                                ],
+                              ),
+
+                              // Metric Segment Buttons
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                                ),
+                                padding: const EdgeInsets.all(2),
+                                child: Row(
+                                  children: [
+                                    _buildMetricButton('NOMINAL', 'Nominal (Rp)', Icons.attach_money_rounded),
+                                    _buildMetricButton('BERAT', 'Berat (Kg)', Icons.scale_rounded),
+                                    _buildMetricButton('INVOICE', 'Jml Invoice', Icons.receipt_long_rounded),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+
+                          // FL_CHART BAR CHART
+                          SizedBox(
+                            height: 260,
+                            child: _buildBarChart(monthlyData),
+                          ),
+
+                          const SizedBox(height: 12),
+                          // Legend Bar Chart
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildLegendItem(const Color(0xFF38BDF8), 'Realisasi Pengiriman ($_selectedMetric)'),
+                              const SizedBox(width: 20),
+                              if (_selectedMetric == 'NOMINAL') ...[
+                                _buildLegendItem(const Color(0xFFF59E0B), 'Target Bulanan (Rp)'),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // --- 2C. MONTHLY BREAKDOWN TABLE ---
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.table_chart_rounded, color: Color(0xFF10B981), size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Tabel Rekapitulasi Pencapaian Bulanan ($_selectedYear)',
+                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                'Area: Cabang Jawa Tengah',
+                                style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Data Table
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                                dataTextStyle: const TextStyle(color: Colors.white, fontSize: 12.5),
+                                horizontalMargin: 16,
+                                columnSpacing: 24,
+                                columns: const [
+                                  DataColumn(label: Text('No', textAlign: TextAlign.center)),
+                                  DataColumn(label: Text('Bulan')),
+                                  DataColumn(label: Text('Jml Invoice', textAlign: TextAlign.right)),
+                                  DataColumn(label: Text('Total Berat (Kg)', textAlign: TextAlign.right)),
+                                  DataColumn(label: Text('Pencapaian Value (Rp)', textAlign: TextAlign.right)),
+                                  DataColumn(label: Text('Target Bulan (Rp)', textAlign: TextAlign.right)),
+                                  DataColumn(label: Text('Pencapaian (%)', textAlign: TextAlign.center)),
+                                  DataColumn(label: Text('Status', textAlign: TextAlign.center)),
+                                ],
+                                rows: [
+                                  // 12 Months Rows
+                                  ...List.generate(12, (index) {
+                                    final m = index + 1;
+                                    final data = monthlyData[m]!;
+                                    final nom = data['nominal'] as double;
+                                    final wt = data['weightKg'] as double;
+                                    final inv = data['invoiceCount'] as int;
+                                    final target = _monthlyTargets[m] ?? (m == 8 && _selectedYear == 2026 ? 310947810.0 : 0.0);
+                                    final pct = target > 0 ? (nom / target) * 100 : (nom > 0 ? 100.0 : 0.0);
+                                    final isReached = target > 0 ? nom >= target : nom > 0;
+
+                                    return DataRow(
+                                      color: MaterialStateProperty.resolveWith((states) {
+                                        if (index % 2 == 0) return Colors.white.withOpacity(0.02);
+                                        return Colors.transparent;
+                                      }),
+                                      cells: [
+                                        DataCell(Center(child: Text('${index + 1}'))),
+                                        DataCell(Text(
+                                          '${data['name']} $_selectedYear',
+                                          style: const TextStyle(fontWeight: FontWeight.w600),
+                                        )),
+                                        DataCell(Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(inv > 0 ? '$inv inv' : '-'),
+                                        )),
+                                        DataCell(Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(wt > 0 ? '${wt.toStringAsFixed(2)} Kg' : '-'),
+                                        )),
+                                        DataCell(Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            nom > 0 ? _rupiahFormatter.format(nom) : '-',
+                                            style: TextStyle(
+                                              color: nom > 0 ? Colors.greenAccent : const Color(0xFF64748B),
+                                              fontWeight: nom > 0 ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
+                                        )),
+                                        DataCell(Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            target > 0 ? _rupiahFormatter.format(target) : '-',
+                                            style: const TextStyle(color: Color(0xFFF59E0B)),
+                                          ),
+                                        )),
+                                        DataCell(Center(
+                                          child: Text(
+                                            nom > 0 && target > 0 ? '${pct.toStringAsFixed(1)}%' : (nom > 0 ? '-' : '0%'),
+                                            style: TextStyle(
+                                              color: pct >= 100 ? Colors.greenAccent : (pct >= 50 ? const Color(0xFF38BDF8) : const Color(0xFFA78BFA)),
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        )),
+                                        DataCell(Center(
+                                          child: nom == 0
+                                              ? const Text('-', style: TextStyle(color: Color(0xFF64748B)))
+                                              : Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: isReached
+                                                        ? Colors.green.withOpacity(0.2)
+                                                        : Colors.amber.withOpacity(0.2),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(
+                                                      color: isReached
+                                                          ? Colors.greenAccent.withOpacity(0.4)
+                                                          : Colors.amberAccent.withOpacity(0.4),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    isReached ? 'TERCAPAI' : 'BERJALAN',
+                                                    style: TextStyle(
+                                                      color: isReached ? Colors.greenAccent : Colors.amberAccent,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                        )),
+                                      ],
+                                    );
+                                  }),
+
+                                  // TOTAL TAHUNAN ROW
+                                  DataRow(
+                                    color: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                                    cells: [
+                                      const DataCell(SizedBox()),
+                                      const DataCell(Text('TOTAL TAHUNAN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text('$grandTotalInvoices inv', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text('${grandTotalWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)))),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(_rupiahFormatter.format(grandTotalNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)))),
+                                      const DataCell(SizedBox()),
+                                      const DataCell(SizedBox()),
+                                      const DataCell(SizedBox()),
+                                    ],
+                                  ),
+
+                                  // RATA-RATA BULANAN ROW
+                                  DataRow(
+                                    color: MaterialStateProperty.all(const Color(0xFF1E293B)),
+                                    cells: [
+                                      const DataCell(SizedBox()),
+                                      const DataCell(Text('RATA-RATA BULANAN', style: TextStyle(color: Color(0xFFA78BFA), fontWeight: FontWeight.bold, fontSize: 13))),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(activeMonthsCount > 0 ? '${(grandTotalInvoices / activeMonthsCount).toStringAsFixed(1)} inv' : '-', style: const TextStyle(color: Colors.white70)))),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text('${avgWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8))))),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(_rupiahFormatter.format(avgNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)))),
+                                      const DataCell(SizedBox()),
+                                      const DataCell(SizedBox()),
+                                      const DataCell(SizedBox()),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ========================================================
+            // 3. DIALOG FOOTER
+            // ========================================================
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E293B),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border(top: BorderSide(color: Color(0xFF334155))),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total $activeMonthsCount bulan aktif transaksi di tahun $_selectedYear',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0284C7),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER: KPI CARDS ---
+  Widget _buildKpiCards({
+    required double grandTotalNominal,
+    required double grandTotalWeight,
+    required int grandTotalInvoices,
+    required double avgNominal,
+    required int peakMonth,
+    required double maxNominalInMonth,
+    required bool isSmall,
+  }) {
+    final card1 = _buildKpiCard(
+      title: 'TOTAL OMZET DIKIRIM ($_selectedYear)',
+      value: _rupiahFormatter.format(grandTotalNominal),
+      subtitle: '$grandTotalInvoices Total Invoice Terkirim',
+      icon: Icons.attach_money_rounded,
+      iconColor: Colors.greenAccent,
+      borderColor: Colors.greenAccent.withOpacity(0.3),
+      bgColor: Colors.green.withOpacity(0.12),
+    );
+
+    final card2 = _buildKpiCard(
+      title: 'TOTAL BERAT BARANG (KG)',
+      value: '${grandTotalWeight.toStringAsFixed(2)} Kg',
+      subtitle: 'Distribusi Fisik Tahunan',
+      icon: Icons.scale_rounded,
+      iconColor: const Color(0xFF38BDF8),
+      borderColor: const Color(0xFF38BDF8).withOpacity(0.3),
+      bgColor: const Color(0xFF0284C7).withOpacity(0.12),
+    );
+
+    final card3 = _buildKpiCard(
+      title: 'RATA-RATA PENJUALAN BULANAN',
+      value: _rupiahFormatter.format(avgNominal),
+      subtitle: 'Performa rata-rata / bulan aktif',
+      icon: Icons.trending_up_rounded,
+      iconColor: const Color(0xFFA78BFA),
+      borderColor: const Color(0xFFA78BFA).withOpacity(0.3),
+      bgColor: const Color(0xFF7C3AED).withOpacity(0.12),
+    );
+
+    final card4 = _buildKpiCard(
+      title: 'BULAN TERTINGGI (PEAK)',
+      value: maxNominalInMonth > 0 ? _monthNames[peakMonth - 1] : '-',
+      subtitle: maxNominalInMonth > 0 ? _rupiahFormatter.format(maxNominalInMonth) : 'Belum ada data',
+      icon: Icons.star_rounded,
+      iconColor: const Color(0xFFF59E0B),
+      borderColor: const Color(0xFFF59E0B).withOpacity(0.3),
+      bgColor: const Color(0xFFF59E0B).withOpacity(0.12),
+    );
+
+    if (isSmall) {
+      return Column(
+        children: [
+          Row(children: [Expanded(child: card1), const SizedBox(width: 10), Expanded(child: card2)]),
+          const SizedBox(height: 10),
+          Row(children: [Expanded(child: card3), const SizedBox(width: 10), Expanded(child: card4)]),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: card1),
+        const SizedBox(width: 12),
+        Expanded(child: card2),
+        const SizedBox(width: 12),
+        Expanded(child: card3),
+        const SizedBox(width: 12),
+        Expanded(child: card4),
+      ],
+    );
+  }
+
+  Widget _buildKpiCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Color borderColor,
+    required Color bgColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(color: iconColor, fontSize: 14, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER: METRIC SELECTOR BUTTON ---
+  Widget _buildMetricButton(String metricKey, String label, IconData icon) {
+    final isSelected = _selectedMetric == metricKey;
+    return InkWell(
+      onTap: () => setState(() => _selectedMetric = metricKey),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0284C7) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER: BAR CHART BUILDER ---
+  Widget _buildBarChart(Map<int, Map<String, dynamic>> monthlyData) {
+    double maxY = 0;
+    for (int m = 1; m <= 12; m++) {
+      double val = 0;
+      if (_selectedMetric == 'NOMINAL') {
+        val = monthlyData[m]!['nominal'] as double;
+        final target = _monthlyTargets[m] ?? 0.0;
+        if (target > val) val = target;
+      } else if (_selectedMetric == 'BERAT') {
+        val = monthlyData[m]!['weightKg'] as double;
+      } else {
+        val = (monthlyData[m]!['invoiceCount'] as int).toDouble();
+      }
+      if (val > maxY) maxY = val;
+    }
+
+    if (maxY == 0) maxY = 100;
+    maxY = maxY * 1.2; // Add top padding
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: maxY,
+        minY: 0,
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (group) => const Color(0xFF0F172A),
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              final m = group.x.toInt() + 1;
+              final data = monthlyData[m]!;
+              final nom = data['nominal'] as double;
+              final wt = data['weightKg'] as double;
+              final inv = data['invoiceCount'] as int;
+              final target = _monthlyTargets[m] ?? 0.0;
+              final pct = target > 0 ? (nom / target) * 100 : 0.0;
+
+              String text = '${data['name']} $_selectedYear\n';
+              text += '• Nominal: ${_rupiahFormatter.format(nom)}\n';
+              text += '• Berat: ${wt.toStringAsFixed(1)} Kg\n';
+              text += '• Invoice: $inv Inv\n';
+              if (target > 0) {
+                text += '• Target: ${_rupiahFormatter.format(target)} (${pct.toStringAsFixed(1)}%)';
+              }
+
+              return BarTooltipItem(
+                text,
+                const TextStyle(color: Colors.white, fontSize: 11, height: 1.3),
+              );
+            },
+          ),
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (val, meta) {
+                final idx = val.toInt();
+                if (idx >= 0 && idx < 12) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _monthShortNames[idx],
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 65,
+              getTitlesWidget: (val, meta) {
+                if (val == 0) return const SizedBox();
+                String label = '';
+                if (_selectedMetric == 'NOMINAL') {
+                  if (val >= 1000000000) {
+                    label = '${(val / 1000000000).toStringAsFixed(1)}M';
+                  } else if (val >= 1000000) {
+                    label = '${(val / 1000000).toStringAsFixed(0)}Jt';
+                  } else {
+                    label = '${(val / 1000).toStringAsFixed(0)}rb';
+                  }
+                } else if (_selectedMetric == 'BERAT') {
+                  label = '${val.toStringAsFixed(0)} kg';
+                } else {
+                  label = '${val.toInt()} inv';
+                }
+                return Text(
+                  label,
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                );
+              },
+            ),
+          ),
+        ),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (value) => FlLine(
+            color: Colors.white.withOpacity(0.06),
+            strokeWidth: 1,
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: List.generate(12, (index) {
+          final m = index + 1;
+          final data = monthlyData[m]!;
+          double val = 0;
+          if (_selectedMetric == 'NOMINAL') {
+            val = data['nominal'] as double;
+          } else if (_selectedMetric == 'BERAT') {
+            val = data['weightKg'] as double;
+          } else {
+            val = (data['invoiceCount'] as int).toDouble();
+          }
+
+          final hasData = val > 0;
+
+          return BarChartGroupData(
+            x: index,
+            barRods: [
+              BarChartRodData(
+                toY: val,
+                width: 18,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+                gradient: hasData
+                    ? const LinearGradient(
+                        colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                      )
+                    : LinearGradient(
+                        colors: [Colors.white.withOpacity(0.05), Colors.white.withOpacity(0.08)],
+                      ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+        ),
+      ],
+    );
+  }
+}

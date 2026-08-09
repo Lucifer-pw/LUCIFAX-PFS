@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/wa_contact.dart';
 import 'transaction_entry_view.dart';
 import 'return_transaction_dialog.dart';
+import 'yearly_shipment_chart_dialog.dart';
 
 class TransactionHistoryView extends StatefulWidget {
   const TransactionHistoryView({super.key});
@@ -3834,6 +3835,30 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             },
           ),
         ),
+        const SizedBox(width: 12),
+        // Grafik Pengiriman Tahunan (Status DIKIRIM) Button
+        SizedBox(
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              int yr = 2026;
+              if (_monthFilter != "SEMUA") {
+                final parts = _monthFilter.split('-');
+                if (parts.length == 2) {
+                  yr = int.tryParse(parts[1]) ?? yr;
+                }
+              }
+              YearlyShipmentChartDialog.show(context, initialYear: yr);
+            },
+            icon: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 16),
+            label: const Text('Grafik Tahunan', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
         if (isDeveloper) ...[
           const SizedBox(width: 12),
           // Kirim WA List ERP Button (Developer Only)
@@ -4669,6 +4694,49 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 },
               );
             },
+          ),
+          const SizedBox(height: 8),
+
+          // Shortcut Lihat Grafik Pengiriman Tahunan
+          InkWell(
+            onTap: () {
+              int yr = 2026;
+              if (_monthFilter != "SEMUA") {
+                final parts = _monthFilter.split('-');
+                if (parts.length == 2) yr = int.tryParse(parts[1]) ?? yr;
+              }
+              YearlyShipmentChartDialog.show(context, initialYear: yr);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4F46E5), Color(0xFF0284C7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF4F46E5).withOpacity(0.25),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.insights_rounded, color: Colors.white, size: 14),
+                  SizedBox(width: 6),
+                  Text(
+                    'Lihat Grafik Pengiriman Tahunan',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
 
