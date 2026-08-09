@@ -61,7 +61,10 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
       for (int m = 1; m <= 12; m++) {
         final mStr = m.toString().padLeft(2, '0');
         final monthKey = '$mStr-$_selectedYear';
-        final target = await _firebaseService.getMonthlyTarget(monthKey);
+        final target = await _firebaseService.getMonthlyTarget(
+          monthKey,
+          defaultTarget: (m == 8 && _selectedYear == 2026 ? 310947810.0 : 0.0),
+        );
         targets[m] = target;
       }
       if (mounted) {
@@ -505,13 +508,30 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                             ),
                                           ),
                                         )),
-                                        DataCell(Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Text(
-                                            target > 0 ? _rupiahFormatter.format(target) : '-',
-                                            style: const TextStyle(color: Color(0xFFF59E0B)),
+                                        DataCell(
+                                          InkWell(
+                                            onTap: () {
+                                              final mStr = m.toString().padLeft(2, '0');
+                                              _showEditTargetDialog(context, '$mStr-$_selectedYear', target);
+                                            },
+                                            borderRadius: BorderRadius.circular(4),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment: MainAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    target > 0 ? _rupiahFormatter.format(target) : '-',
+                                                    style: const TextStyle(color: Color(0xFFF59E0B)),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Icon(Icons.edit_rounded, color: Color(0xFFF59E0B), size: 11),
+                                                ],
+                                              ),
+                                            ),
                                           ),
-                                        )),
+                                        ),
                                         DataCell(Center(
                                           child: Text(
                                             nom > 0 && target > 0 ? '${pct.toStringAsFixed(1)}%' : (nom > 0 ? '-' : '0%'),
@@ -612,15 +632,34 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                     'Total $activeMonthsCount bulan aktif transaksi di tahun $_selectedYear',
                     style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.edit_calendar_rounded, size: 16, color: Color(0xFFF59E0B)),
+                        label: const Text('Atur Target Bulanan', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFF59E0B)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          final currentMonthStr = DateTime.now().month.toString().padLeft(2, '0');
+                          final activeKey = '$currentMonthStr-$_selectedYear';
+                          _showEditTargetDialog(context, activeKey, _monthlyTargets[DateTime.now().month] ?? 0.0);
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -960,6 +999,152 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
           style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
         ),
       ],
+    );
+  }
+
+  void _showEditTargetDialog(BuildContext context, String initialMonth, double currentTarget) {
+    String targetMonth = initialMonth;
+    final targetController = TextEditingController(
+      text: currentTarget > 0 ? currentTarget.toInt().toString() : '310947810',
+    );
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Color(0xFF334155)),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.track_changes_rounded, color: Color(0xFF38BDF8), size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Text('Atur Target Bulanan', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Target Penjualan Cabang Jawa Tengah',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF334155)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Periode Target:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                      DropdownButton<String>(
+                        value: targetMonth,
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                        underline: const SizedBox(),
+                        items: List.generate(12, (idx) {
+                          final mStr = (idx + 1).toString().padLeft(2, '0');
+                          return '$mStr-$_selectedYear';
+                        }).map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                        onChanged: (val) async {
+                          if (val != null) {
+                            setDialogState(() => targetMonth = val);
+                            final parts = val.split('-');
+                            final mIdx = int.tryParse(parts[0]) ?? 1;
+                            final t = await _firebaseService.getMonthlyTarget(
+                              val,
+                              defaultTarget: (mIdx == 8 && _selectedYear == 2026 ? 310947810.0 : 0.0),
+                            );
+                            targetController.text = t > 0 ? t.toInt().toString() : '310947810';
+                            setDialogState(() {});
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Nominal Target (Rp):', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: targetController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    prefixText: 'Rp ',
+                    prefixStyle: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                    filled: true,
+                    fillColor: const Color(0xFF0F172A),
+                    hintText: '310947810',
+                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '* Target tersimpan di database dan berlaku untuk seluruh laporan cabang.',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.save_rounded, size: 18),
+              label: const Text('Simpan Target'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              onPressed: () async {
+                final cleanStr = targetController.text.replaceAll(RegExp(r'[^0-9]'), '');
+                final val = double.tryParse(cleanStr) ?? 0.0;
+                if (val <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Nominal target harus lebih dari 0!'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+                await _firebaseService.setMonthlyTarget(targetMonth, val);
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Target periode $targetMonth berhasil disimpan: ${_rupiahFormatter.format(val)}'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  _loadTargetsForYear();
+                }
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
