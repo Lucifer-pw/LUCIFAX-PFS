@@ -258,6 +258,25 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final isDesktop = MediaQuery.of(context).size.width > 1000;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
+    final prodMap = {for (var p in productProvider.products) p.name.toLowerCase().trim(): p};
+    final prodCodeMap = {for (var p in productProvider.products) p.kodeInduk.toLowerCase().trim(): p};
+    final prodIdMap = {for (var p in productProvider.products) p.id: p};
+
+    double grandTotalKarton = 0.0;
+    for (var item in trProvider.cartItems) {
+      Product? product = prodMap[item.productName.toLowerCase().trim()] ??
+          prodCodeMap[item.productId.toLowerCase().trim()] ??
+          prodIdMap[item.productId];
+      final isiKarton = product?.isiKarton ?? 0;
+      if (isiKarton > 0 && item.qty > 0) {
+        grandTotalKarton += (item.qty / isiKarton);
+      }
+    }
+    final grandTotalKartonStr = (grandTotalKarton % 1 == 0
+            ? grandTotalKarton.toInt().toString()
+            : grandTotalKarton.toStringAsFixed(1)) +
+        ' Ktn';
+
     final leftPanel = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -676,6 +695,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                           columns: const [
                             DataColumn(label: Text('Produk')),
                             DataColumn(label: Text('Qty'), numeric: true),
+                            DataColumn(label: Text('Total Karton'), numeric: true),
                             DataColumn(label: Text('Harga'), numeric: true),
                             DataColumn(label: Text('Disc'), numeric: true),
                             DataColumn(label: Text('Subtotal'), numeric: true),
@@ -684,6 +704,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                           rows: trProvider.cartItems.asMap().entries.map((entry) {
                             final idx = entry.key;
                             final item = entry.value;
+
+                            Product? product = prodMap[item.productName.toLowerCase().trim()] ??
+                                prodCodeMap[item.productId.toLowerCase().trim()] ??
+                                prodIdMap[item.productId];
+                            final isiKarton = product?.isiKarton ?? 0;
+                            final totalKarton = (isiKarton > 0 && item.qty > 0) ? (item.qty / isiKarton) : 0.0;
+                            final totalKartonStr = (isiKarton > 0 && item.qty > 0)
+                                ? ((totalKarton % 1 == 0 ? totalKarton.toInt().toString() : totalKarton.toStringAsFixed(1)) + ' Ktn')
+                                : '-';
+
                             return DataRow(
                               cells: [
                                 DataCell(
@@ -720,6 +750,14 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                                   ),
                                 ),
                                 DataCell(Text(item.qty.toStringAsFixed(0), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                DataCell(Text(
+                                  totalKartonStr,
+                                  style: TextStyle(
+                                    color: totalKarton > 0 ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                    fontSize: 12,
+                                    fontWeight: totalKarton > 0 ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                )),
                                 DataCell(Text(
                                   item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price),
                                   style: TextStyle(color: item.isBonus ? Colors.greenAccent : Colors.white, fontSize: 12),
@@ -778,16 +816,45 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFF334155)),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'GRAND TOTAL:',
-                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'GrandTotal Karton:',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600, fontSize: 12),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                          ),
+                          child: Text(
+                            grandTotalKartonStr,
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      _rupiahFormatter.format(trProvider.grandTotal),
-                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 0.5),
+                    const SizedBox(height: 8),
+                    const Divider(color: Color(0xFF1E293B), height: 1),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'GRAND TOTAL:',
+                          style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        Text(
+                          _rupiahFormatter.format(trProvider.grandTotal),
+                          style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 0.5),
+                        ),
+                      ],
                     ),
                   ],
                 ),
