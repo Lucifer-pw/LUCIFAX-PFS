@@ -211,6 +211,15 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 21. MONTHLY_TARGETS — Target Bulanan Cabang
+    // ═══════════════════════════════════════════════════
+    match /monthly_targets/{targetId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {

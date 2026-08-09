@@ -60,136 +60,157 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFF1E293B),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0xFF38BDF8), width: 1.2),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF38BDF8).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.track_changes_rounded, color: Color(0xFF38BDF8), size: 22),
+          bool isSaving = false;
+          return StatefulBuilder(
+            builder: (context, setInnerState) {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF1E293B),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Color(0xFF38BDF8), width: 1.2),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Atur Target Bulanan',
-                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            content: SizedBox(
-              width: 380,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Target Penjualan Cabang Jawa Tengah',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                title: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF38BDF8).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.track_changes_rounded, color: Color(0xFF38BDF8), size: 22),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Periode Target:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                        DropdownButton<String>(
-                          value: targetMonth,
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
-                          underline: const SizedBox(),
-                          items: _getMonthFilterOptions(
-                            Provider.of<TransactionProvider>(context, listen: false).transactions,
-                          ).where((m) => m != "SEMUA").map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setDialogState(() => targetMonth = val);
-                              final t = await _firebaseService.getMonthlyTarget(val);
-                              targetController.text = t.toInt().toString();
-                              setDialogState(() {});
-                            }
-                          },
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Atur Target Bulanan',
+                        style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: 380,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Target Penjualan Cabang Jawa Tengah',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
                         ),
-                      ],
-                    ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Periode Target:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                            DropdownButton<String>(
+                              value: targetMonth,
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                              underline: const SizedBox(),
+                              items: _getMonthFilterOptions(
+                                Provider.of<TransactionProvider>(context, listen: false).transactions,
+                              ).where((m) => m != "SEMUA").map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                              onChanged: isSaving ? null : (val) async {
+                                if (val != null) {
+                                  setInnerState(() => targetMonth = val);
+                                  final t = await _firebaseService.getMonthlyTarget(val);
+                                  targetController.text = t.toInt().toString();
+                                  setInnerState(() {});
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Nominal Target (Rp):', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: targetController,
+                        enabled: !isSaving,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          prefixText: 'Rp ',
+                          prefixStyle: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          hintText: '310947810',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '* Target tersimpan di database dan berlaku untuk seluruh laporan cabang.',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Nominal Target (Rp):', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: targetController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      prefixText: 'Rp ',
-                      prefixStyle: const TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold),
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      hintText: '310947810',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                    child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '* Target tersimpan di database dan berlaku untuk seluruh laporan cabang.',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+                  ElevatedButton.icon(
+                    icon: isSaving
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.save_rounded, size: 18),
+                    label: Text(isSaving ? 'Menyimpan...' : 'Simpan Target'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0284C7),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    onPressed: isSaving ? null : () async {
+                      final cleanStr = targetController.text.replaceAll(RegExp(r'[^0-9]'), '');
+                      final val = double.tryParse(cleanStr) ?? 0.0;
+                      if (val <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Nominal target harus lebih dari 0!'), backgroundColor: Colors.orange),
+                        );
+                        return;
+                      }
+                      setInnerState(() => isSaving = true);
+                      try {
+                        await _firebaseService.setMonthlyTarget(targetMonth, val);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          setState(() {});
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Target $targetMonth berhasil disimpan: ${_rupiahFormatter.format(val)}'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setInnerState(() => isSaving = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Gagal menyimpan target: $e'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save_rounded, size: 18),
-                label: const Text('Simpan Target'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0284C7),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
-                onPressed: () async {
-                  final cleanStr = targetController.text.replaceAll(RegExp(r'[^0-9]'), '');
-                  final val = double.tryParse(cleanStr) ?? 0.0;
-                  if (val <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Nominal target harus lebih dari 0!'), backgroundColor: Colors.orange),
-                    );
-                    return;
-                  }
-                  await _firebaseService.setMonthlyTarget(targetMonth, val);
-                  if (mounted) {
-                    Navigator.pop(ctx);
-                    setState(() {});
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Target $targetMonth berhasil disimpan: ${_rupiahFormatter.format(val)}'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
+              );
+            },
           );
         },
       ),
