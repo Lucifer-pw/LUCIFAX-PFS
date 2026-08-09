@@ -114,6 +114,9 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
         'weightKg': 0.0,
         'invoiceCount': 0,
         'itemsCount': 0,
+        'erpNominal': 0.0,
+        'erpWeightKg': 0.0,
+        'erpInvoiceCount': 0,
       };
     }
 
@@ -139,9 +142,34 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
       }
     }
 
+    // Aggregate ERP data reported in Menu ERP (transactions with erpSyncDate in selected year)
+    for (var tr in allTransactions) {
+      if (tr.erpSyncDate == null) continue;
+      final erpDate = tr.erpSyncDate!;
+      if (erpDate.year != _selectedYear) continue;
+      final m = erpDate.month;
+      if (monthlyData.containsKey(m)) {
+        double trNominal = tr.grandTotal;
+        double trWeight = tr.items.fold(0.0, (sum, it) => sum + it.weightKg);
+
+        if (tr.items.isNotEmpty) {
+          double itemsNominal = 0;
+          for (var item in tr.items) {
+            itemsNominal += (item.isBonus ? 0.0 : item.subtotal);
+          }
+          if (itemsNominal > 0) trNominal = itemsNominal;
+        }
+
+        monthlyData[m]!['erpNominal'] = (monthlyData[m]!['erpNominal'] as double) + trNominal;
+        monthlyData[m]!['erpWeightKg'] = (monthlyData[m]!['erpWeightKg'] as double) + trWeight;
+        monthlyData[m]!['erpInvoiceCount'] = (monthlyData[m]!['erpInvoiceCount'] as int) + 1;
+      }
+    }
+
     // Calculate Summary Stats
     double grandTotalNominal = 0.0;
     double grandTotalWeight = 0.0;
+    double grandTotalErpNominal = 0.0;
     int grandTotalInvoices = 0;
     int activeMonthsCount = 0;
     int peakMonth = 1;
@@ -151,12 +179,14 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
       final nom = monthlyData[m]!['nominal'] as double;
       final wt = monthlyData[m]!['weightKg'] as double;
       final inv = monthlyData[m]!['invoiceCount'] as int;
+      final erpNom = monthlyData[m]!['erpNominal'] as double;
 
       grandTotalNominal += nom;
       grandTotalWeight += wt;
+      grandTotalErpNominal += erpNom;
       grandTotalInvoices += inv;
 
-      if (nom > 0 || inv > 0) {
+      if (nom > 0 || inv > 0 || erpNom > 0) {
         activeMonthsCount++;
       }
       if (nom > maxNominalInMonth) {
@@ -636,6 +666,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                   DataColumn(label: Text('Total Berat (Kg)', textAlign: TextAlign.right)),
                                   DataColumn(label: Text('Pencapaian Value (Rp)', textAlign: TextAlign.right)),
                                   DataColumn(label: Text('Target Bulan (Rp)', textAlign: TextAlign.right)),
+                                  DataColumn(label: Text('ERP (Rp)', textAlign: TextAlign.right)),
                                   DataColumn(label: Text('Pencapaian (%)', textAlign: TextAlign.center)),
                                   DataColumn(label: Text('Status', textAlign: TextAlign.center)),
                                 ],
@@ -647,6 +678,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                     final nom = data['nominal'] as double;
                                     final wt = data['weightKg'] as double;
                                     final inv = data['invoiceCount'] as int;
+                                    final erpNom = data['erpNominal'] as double;
                                     final target = _monthlyTargets[m] ?? (m == 8 && _selectedYear == 2026 ? 310947810.0 : 0.0);
                                     final pct = target > 0 ? (nom / target) * 100 : (nom > 0 ? 100.0 : 0.0);
                                     final isReached = target > 0 ? nom >= target : nom > 0;
@@ -704,6 +736,17 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                             ),
                                           ),
                                         ),
+                                        // Kolom ERP (Rp)
+                                        DataCell(Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            erpNom > 0 ? _rupiahFormatter.format(erpNom) : '-',
+                                            style: TextStyle(
+                                              color: erpNom > 0 ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                              fontWeight: erpNom > 0 ? FontWeight.w600 : FontWeight.normal,
+                                            ),
+                                          ),
+                                        )),
                                         DataCell(Center(
                                           child: Text(
                                             nom > 0 && target > 0 ? '${pct.toStringAsFixed(1)}%' : (nom > 0 ? '-' : '0%'),
@@ -753,6 +796,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                       DataCell(Align(alignment: Alignment.centerRight, child: Text('${grandTotalWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)))),
                                       DataCell(Align(alignment: Alignment.centerRight, child: Text(_rupiahFormatter.format(grandTotalNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)))),
                                       const DataCell(SizedBox()),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(grandTotalErpNominal > 0 ? _rupiahFormatter.format(grandTotalErpNominal) : '-', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)))),
                                       const DataCell(SizedBox()),
                                       const DataCell(SizedBox()),
                                     ],
@@ -768,6 +812,7 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                       DataCell(Align(alignment: Alignment.centerRight, child: Text('${avgWeight.toStringAsFixed(2)} Kg', style: const TextStyle(color: Color(0xFF38BDF8))))),
                                       DataCell(Align(alignment: Alignment.centerRight, child: Text(_rupiahFormatter.format(avgNominal), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)))),
                                       const DataCell(SizedBox()),
+                                      DataCell(Align(alignment: Alignment.centerRight, child: Text(activeMonthsCount > 0 && grandTotalErpNominal > 0 ? _rupiahFormatter.format(grandTotalErpNominal / activeMonthsCount) : '-', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)))),
                                       const DataCell(SizedBox()),
                                       const DataCell(SizedBox()),
                                     ],
@@ -1089,11 +1134,15 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
               final nom = data['nominal'] as double;
               final wt = data['weightKg'] as double;
               final inv = data['invoiceCount'] as int;
+              final erpNom = data['erpNominal'] as double;
               final target = _monthlyTargets[m] ?? 0.0;
               final pct = target > 0 ? (nom / target) * 100 : 0.0;
 
               String text = '${data['name']} $_selectedYear\n';
               text += '• Nominal: ${_rupiahFormatter.format(nom)}\n';
+              if (erpNom > 0) {
+                text += '• ERP: ${_rupiahFormatter.format(erpNom)}\n';
+              }
               text += '• Berat: ${wt.toStringAsFixed(1)} Kg\n';
               text += '• Invoice: $inv Inv\n';
               if (target > 0) {
