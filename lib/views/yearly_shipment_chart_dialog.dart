@@ -529,18 +529,18 @@ class _YearlyShipmentChartDialogState extends State<YearlyShipmentChartDialog> {
                                                   decoration: BoxDecoration(
                                                     color: isReached
                                                         ? Colors.green.withOpacity(0.2)
-                                                        : Colors.amber.withOpacity(0.2),
+                                                        : Colors.red.withOpacity(0.2),
                                                     borderRadius: BorderRadius.circular(6),
                                                     border: Border.all(
                                                       color: isReached
                                                           ? Colors.greenAccent.withOpacity(0.4)
-                                                          : Colors.amberAccent.withOpacity(0.4),
+                                                          : Colors.redAccent.withOpacity(0.4),
                                                     ),
                                                   ),
                                                   child: Text(
-                                                    isReached ? 'TERCAPAI' : 'BERJALAN',
+                                                    isReached ? 'On-Target' : 'Un-Target',
                                                     style: TextStyle(
-                                                      color: isReached ? Colors.greenAccent : Colors.amberAccent,
+                                                      color: isReached ? Colors.greenAccent : Colors.redAccent,
                                                       fontSize: 10,
                                                       fontWeight: FontWeight.bold,
                                                     ),
