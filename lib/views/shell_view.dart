@@ -140,7 +140,7 @@ class _ShellViewState extends State<ShellView> {
 
       if (kacabPerms['erp_matrix'] == true) {
         items.add({
-          'title': 'Stok ERP & Opname',
+          'title': 'Stok Opname & ERP',
           'icon': Icons.table_chart_outlined,
           'widget': const ErpMatrixView(),
         });
@@ -243,7 +243,7 @@ class _ShellViewState extends State<ShellView> {
         'widget': const StockInputView(),
       },
       {
-        'title': 'Stok ERP & Opname',
+        'title': 'Stok Opname & ERP',
         'icon': Icons.table_chart_outlined,
         'widget': const ErpMatrixView(),
       },

@@ -49,7 +49,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     },
     {
       'key': 'erp_matrix',
-      'title': 'Stok ERP & Opname',
+      'title': 'Stok Opname & ERP',
       'icon': Icons.table_chart_outlined,
       'desc': 'Tabel matriks monitoring pergerakan stok awal, total keluar, dan stok akhir.',
     },

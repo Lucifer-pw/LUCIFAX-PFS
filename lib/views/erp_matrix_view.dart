@@ -1255,7 +1255,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   Text(
-                    'Stok ERP & Opname Cabang',
+                    'Stok Opname & ERP Cabang',
                     style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 2),
