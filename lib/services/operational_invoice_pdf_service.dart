@@ -307,13 +307,13 @@ class OperationalInvoicePdfService {
                   pw.SizedBox(height: 32),
 
                   // ==========================================
-                  // 5. TANDA TANGAN 2 PIHAK (DEVELOPER & KACAB JATENG)
+                  // 5. TANDA TANGAN 2 PIHAK (KACAB JATENG & DEVELOPER)
                   // ==========================================
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildSignatureBox('Penagih,', '( Developer )', 'LUCIFAX (DEV)', fontBold, fontRegular, textDark, textGray),
                       _buildSignatureBox('Mengetahui / Menyetujui,', '( Kepala Cabang Jawa Tengah )', 'Joko Setiawan', fontBold, fontRegular, textDark, textGray),
+                      _buildSignatureBox('Penagih,', '( Developer )', 'LUCIFAX (DEV)', fontBold, fontRegular, textDark, textGray),
                     ],
                   ),
 
