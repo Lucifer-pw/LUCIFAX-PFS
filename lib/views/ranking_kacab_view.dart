@@ -1170,13 +1170,13 @@ final selectedKey = '${_startMonth}_$_startYear';
                                       ),
                                       child: Row(
                                         children: [
-                                          const SizedBox(width: 70, child: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                          const SizedBox(width: 250, child: Text('OUTLET', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                          SizedBox(width: 140, child: Text(_month1Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                          SizedBox(width: 140, child: Text(_month2Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                          SizedBox(width: 140, child: Text(_month3Name.toUpperCase(), style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                          const SizedBox(width: 150, child: Text('TOTAL', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                          const SizedBox(width: 190, child: Text('Rata rata Penjualan 3 Bulan', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                                          const SizedBox(width: 70, child: Center(child: Text('NO', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          const SizedBox(width: 250, child: Center(child: Text('OUTLET', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          SizedBox(width: 140, child: Center(child: Text(_month1Name.toUpperCase(), textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          SizedBox(width: 140, child: Center(child: Text(_month2Name.toUpperCase(), textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          SizedBox(width: 140, child: Center(child: Text(_month3Name.toUpperCase(), textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          const SizedBox(width: 150, child: Center(child: Text('TOTAL', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          const SizedBox(width: 190, child: Center(child: Text('Rata rata Penjualan 3 Bulan', textAlign: TextAlign.center, style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)))),
                                         ],
                                       ),
                                     ),
@@ -1223,25 +1223,27 @@ final selectedKey = '${_startMonth}_$_startYear';
                                             color: rank == 1 ? Colors.amber.withOpacity(0.05) : (idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02)),
                                             child: Row(
                                               children: [
-                                                SizedBox(width: 70, child: Align(alignment: Alignment.centerLeft, child: rankWidget)),
+                                                SizedBox(width: 70, child: Center(child: rankWidget)),
                                                 SizedBox(
                                                   width: 250,
-                                                  child: Text(
-                                                    item['alias'].toString(),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 13,
+                                                  child: Center(
+                                                    child: Text(
+                                                      item['alias'].toString(),
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
-                                                SizedBox(width: 140, child: Text(_currency.format(_parseNum(item['month1'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                                SizedBox(width: 140, child: Text(_currency.format(_parseNum(item['month2'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                                SizedBox(width: 140, child: Text(_currency.format(_parseNum(item['month3'])), style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                                SizedBox(width: 150, child: Text(_currency.format(_parseNum(item['total'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                                SizedBox(width: 190, child: Text(_currency.format(_parseNum(item['average'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                                SizedBox(width: 140, child: Center(child: Text(_currency.format(_parseNum(item['month1'])), style: const TextStyle(color: Colors.white70, fontSize: 12)))),
+                                                SizedBox(width: 140, child: Center(child: Text(_currency.format(_parseNum(item['month2'])), style: const TextStyle(color: Colors.white70, fontSize: 12)))),
+                                                SizedBox(width: 140, child: Center(child: Text(_currency.format(_parseNum(item['month3'])), style: const TextStyle(color: Colors.white70, fontSize: 12)))),
+                                                SizedBox(width: 150, child: Center(child: Text(_currency.format(_parseNum(item['total'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)))),
+                                                SizedBox(width: 190, child: Center(child: Text(_currency.format(_parseNum(item['average'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)))),
                                               ],
                                             ),
                                           );
@@ -1261,13 +1263,13 @@ final selectedKey = '${_startMonth}_$_startYear';
                                       ),
                                       child: Row(
                                         children: [
-                                          const SizedBox(width: 70, child: Text('TOTAL', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                          const SizedBox(width: 250, child: Text('TOTAL GRANDTOTAL (SEMUA)', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13))),
-                                          SizedBox(width: 140, child: Text(_currency.format(_parseNum(computed['gM1'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                          SizedBox(width: 140, child: Text(_currency.format(_parseNum(computed['gM2'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                          SizedBox(width: 140, child: Text(_currency.format(_parseNum(computed['gM3'])), style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12))),
-                                          SizedBox(width: 150, child: Text(_currency.format(_parseNum(computed['gTotal'])), style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
-                                          SizedBox(width: 190, child: Text(_currency.format(_parseNum(computed['gAverage'])), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13))),
+                                          const SizedBox(width: 70, child: Center(child: Text('TOTAL', textAlign: TextAlign.center, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          const SizedBox(width: 250, child: Center(child: Text('TOTAL GRANDTOTAL (SEMUA)', textAlign: TextAlign.center, style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13)))),
+                                          SizedBox(width: 140, child: Center(child: Text(_currency.format(_parseNum(computed['gM1'])), textAlign: TextAlign.center, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          SizedBox(width: 140, child: Center(child: Text(_currency.format(_parseNum(computed['gM2'])), textAlign: TextAlign.center, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          SizedBox(width: 140, child: Center(child: Text(_currency.format(_parseNum(computed['gM3'])), textAlign: TextAlign.center, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12)))),
+                                          SizedBox(width: 150, child: Center(child: Text(_currency.format(_parseNum(computed['gTotal'])), textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)))),
+                                          SizedBox(width: 190, child: Center(child: Text(_currency.format(_parseNum(computed['gAverage'])), textAlign: TextAlign.center, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)))),
                                         ],
                                       ),
                                     ),

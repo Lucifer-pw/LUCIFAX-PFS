@@ -3962,16 +3962,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                             headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                             headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
                                             columns: const [
-                                              DataColumn(label: Text('INVOICE')),
-                                              DataColumn(label: Text('TANGGAL')),
-                                              DataColumn(label: Text('PELANGGAN')),
-                                              DataColumn(label: Text('KOTA')),
-                                              DataColumn(label: Text('TOTAL BERAT'), numeric: true),
-                                              DataColumn(label: Text('GRAND TOTAL'), numeric: true),
-                                              DataColumn(label: Center(child: Text('STATUS BARANG'))),
-                                              DataColumn(label: Center(child: Text('STATUS BAYAR'))),
-                                              DataColumn(label: Center(child: Text('STATUS ERP'))),
-                                              DataColumn(label: Center(child: Text('AKSI'))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('INVOICE', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('TANGGAL', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('PELANGGAN', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('KOTA', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('TOTAL BERAT', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('GRAND TOTAL', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('STATUS BARANG', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('STATUS BAYAR', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('STATUS ERP', textAlign: TextAlign.center)))),
+                                              DataColumn(label: Expanded(child: Center(child: Text('AKSI', textAlign: TextAlign.center)))),
                                             ],
                                             rows: paginatedTransactions.map((tr) {
                                               // Calculate total weight in kg across items
@@ -3980,125 +3980,137 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                               return DataRow(
                                                 cells: [
                                                   DataCell(
-                                                    Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Text(
-                                                          '#${tr.invoiceNo}',
-                                                          style: const TextStyle(
-                                                            color: Color(0xFF38BDF8),
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 13,
-                                                            decoration: TextDecoration.underline,
-                                                          ),
-                                                        ),
-                                                        if (tr.hasReturn || tr.returnAmount > 0) ...[
-                                                          const SizedBox(width: 4),
-                                                          Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.amber.withOpacity(0.2),
-                                                              borderRadius: BorderRadius.circular(4),
-                                                              border: Border.all(color: Colors.amberAccent, width: 0.6),
+                                                    Center(
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            '#${tr.invoiceNo}',
+                                                            style: const TextStyle(
+                                                              color: Color(0xFF38BDF8),
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 13,
+                                                              decoration: TextDecoration.underline,
                                                             ),
-                                                            child: const Text('RETUR', style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.bold)),
                                                           ),
+                                                          if (tr.hasReturn || tr.returnAmount > 0) ...[
+                                                            const SizedBox(width: 4),
+                                                            Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.amber.withOpacity(0.2),
+                                                                borderRadius: BorderRadius.circular(4),
+                                                                border: Border.all(color: Colors.amberAccent, width: 0.6),
+                                                              ),
+                                                              child: const Text('RETUR', style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                                            ),
+                                                          ],
+                                                          const SizedBox(width: 4),
+                                                          const Icon(Icons.open_in_new_rounded, size: 12, color: Color(0xFF38BDF8)),
                                                         ],
-                                                        const SizedBox(width: 4),
-                                                        const Icon(Icons.open_in_new_rounded, size: 12, color: Color(0xFF38BDF8)),
-                                                      ],
+                                                      ),
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
-                                                    Column(
-                                                      mainAxisAlignment: MainAxisAlignment.center,
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Row(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          children: [
-                                                            const Icon(Icons.calendar_today_rounded, size: 11, color: Color(0xFF94A3B8)),
-                                                            const SizedBox(width: 4),
-                                                            Text(
-                                                              DateFormat('dd-MM-yyyy').format(tr.date),
-                                                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        if (tr.deliveryDate != null)
+                                                    Center(
+                                                      child: Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                                        children: [
                                                           Row(
                                                             mainAxisSize: MainAxisSize.min,
                                                             children: [
-                                                              const Icon(Icons.local_shipping_rounded, size: 10, color: Color(0xFF38BDF8)),
+                                                              const Icon(Icons.calendar_today_rounded, size: 11, color: Color(0xFF94A3B8)),
                                                               const SizedBox(width: 4),
                                                               Text(
-                                                                'Kirim: ${DateFormat('dd-MM-yyyy').format(tr.deliveryDate!)}',
-                                                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                                                                DateFormat('dd-MM-yyyy').format(tr.date),
+                                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                                               ),
                                                             ],
                                                           ),
-                                                      ],
+                                                          if (tr.deliveryDate != null)
+                                                            Row(
+                                                              mainAxisSize: MainAxisSize.min,
+                                                              children: [
+                                                                const Icon(Icons.local_shipping_rounded, size: 10, color: Color(0xFF38BDF8)),
+                                                                const SizedBox(width: 4),
+                                                                Text(
+                                                                  'Kirim: ${DateFormat('dd-MM-yyyy').format(tr.deliveryDate!)}',
+                                                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                        ],
+                                                      ),
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
-                                                    Builder(
-                                                      builder: (context) {
-                                                        final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
-                                                        final firstLine = customerInfo['firstLine']!;
-                                                        final secondLine = customerInfo['secondLine']!;
+                                                    Center(
+                                                      child: Builder(
+                                                        builder: (context) {
+                                                          final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
+                                                          final firstLine = customerInfo['firstLine']!;
+                                                          final secondLine = customerInfo['secondLine']!;
 
-                                                        return Column(
-                                                          mainAxisAlignment: MainAxisAlignment.center,
-                                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                                          children: [
-                                                            Text(
-                                                              firstLine,
-                                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                                              overflow: TextOverflow.ellipsis,
-                                                            ),
-                                                            if (secondLine.isNotEmpty)
+                                                          return Column(
+                                                            mainAxisAlignment: MainAxisAlignment.center,
+                                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                                            children: [
                                                               Text(
-                                                                secondLine,
-                                                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                                                firstLine,
+                                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                                                 overflow: TextOverflow.ellipsis,
                                                               ),
-                                                          ],
-                                                        );
-                                                      },
+                                                              if (secondLine.isNotEmpty)
+                                                                Text(
+                                                                  secondLine,
+                                                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                                                  overflow: TextOverflow.ellipsis,
+                                                                ),
+                                                            ],
+                                                          );
+                                                        },
+                                                      ),
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
-                                                    Text(
-                                                      tr.city.isNotEmpty ? tr.city.toUpperCase() : '-',
-                                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                    Center(
+                                                      child: Text(
+                                                        tr.city.isNotEmpty ? tr.city.toUpperCase() : '-',
+                                                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                      ),
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
-                                                    Text(
-                                                      '${totalKg.toStringAsFixed(2)} Kg',
-                                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                    Center(
+                                                      child: Text(
+                                                        '${totalKg.toStringAsFixed(2)} Kg',
+                                                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                      ),
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),
                                                   DataCell(
-                                                    Column(
-                                                      mainAxisAlignment: MainAxisAlignment.center,
-                                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                                      children: [
-                                                        Text(
-                                                          _rupiahFormatter.format(tr.netGrandTotal),
-                                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                                        ),
-                                                        if (tr.returnAmount > 0)
+                                                    Center(
+                                                      child: Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                                        children: [
                                                           Text(
-                                                            'Retur: -${_rupiahFormatter.format(tr.returnAmount)}',
-                                                            style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                                            _rupiahFormatter.format(tr.netGrandTotal),
+                                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                                           ),
-                                                      ],
+                                                          if (tr.returnAmount > 0)
+                                                            Text(
+                                                              'Retur: -${_rupiahFormatter.format(tr.returnAmount)}',
+                                                              style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                                            ),
+                                                        ],
+                                                      ),
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
                                                   ),

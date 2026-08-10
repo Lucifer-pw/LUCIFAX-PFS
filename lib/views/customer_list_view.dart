@@ -468,86 +468,88 @@ class _CustomerListViewState extends State<CustomerListView> {
                                   headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
                                   headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11),
                                   columns: const [
-                                    DataColumn(label: Text('ID CUST')),
-                                    DataColumn(label: Text('NAMA TOKO (ALIAS)')),
-                                    DataColumn(label: Text('PEMILIK')),
-                                    DataColumn(label: Text('ALAMAT')),
-                                    DataColumn(label: Text('KOTA')),
-                                    DataColumn(label: Text('PROVINSI')),
-                                    DataColumn(label: Text('NEGARA')),
-                                    DataColumn(label: Text('TELEPON')),
-                                    DataColumn(label: Text('AKSI')),
+                                    DataColumn(label: Expanded(child: Center(child: Text('ID CUST', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('NAMA TOKO (ALIAS)', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('PEMILIK', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('ALAMAT', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('KOTA', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('PROVINSI', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('NEGARA', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('TELEPON', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Expanded(child: Center(child: Text('AKSI', textAlign: TextAlign.center)))),
                                   ],
                                   rows: filteredCustomers.map((c) {
                                     return DataRow(
                                       cells: [
-                                        DataCell(Text(c.id, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                        DataCell(Text(c.aliasName, style: const TextStyle(color: Colors.white, fontSize: 11))),
-                                        DataCell(Text(c.customerName, style: const TextStyle(color: Colors.white, fontSize: 11))),
-                                        DataCell(Text(c.address, style: const TextStyle(color: Colors.white, fontSize: 11))),
-                                        DataCell(Text(c.city, style: const TextStyle(color: Colors.white, fontSize: 11))),
-                                        DataCell(Text(c.province.isNotEmpty ? c.province : 'JAWA TENGAH', style: const TextStyle(color: Colors.white, fontSize: 11))),
-                                        DataCell(Text(c.country.isNotEmpty ? c.country : 'INDONESIA', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
-                                        DataCell(Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(Center(child: Text(c.id, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.aliasName, style: const TextStyle(color: Colors.white, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.customerName, style: const TextStyle(color: Colors.white, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.address, style: const TextStyle(color: Colors.white, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.city, style: const TextStyle(color: Colors.white, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.province.isNotEmpty ? c.province : 'JAWA TENGAH', style: const TextStyle(color: Colors.white, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.country.isNotEmpty ? c.country : 'INDONESIA', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
+                                        DataCell(Center(child: Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white, fontSize: 11)))),
                                         DataCell(
-                                          PopupMenuButton<String>(
-                                            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
-                                            color: const Color(0xFF1E293B),
-                                            tooltip: 'Menu Aksi',
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(10),
-                                              side: const BorderSide(color: Color(0xFF334155)),
-                                            ),
-                                            onSelected: (value) {
-                                              if (value == 'edit') {
-                                                _showCustomerDialog(c);
-                                              } else if (value == 'delete') {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    backgroundColor: const Color(0xFF1E293B),
-                                                    title: const Text('Hapus Pelanggan', style: TextStyle(color: Colors.white)),
-                                                    content: Text('Apakah Anda yakin ingin menghapus "${c.aliasName}"?', style: const TextStyle(color: Color(0xFF94A3B8))),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () => Navigator.pop(context),
-                                                        child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-                                                      ),
-                                                      ElevatedButton(
-                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                                        onPressed: () async {
-                                                          await customerProvider.deleteCustomer(c.id);
-                                                          if (context.mounted) Navigator.pop(context);
-                                                        },
-                                                        child: const Text('Hapus', style: TextStyle(color: Colors.white)),
-                                                      ),
+                                          Center(
+                                            child: PopupMenuButton<String>(
+                                              icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
+                                              color: const Color(0xFF1E293B),
+                                              tooltip: 'Menu Aksi',
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                                side: const BorderSide(color: Color(0xFF334155)),
+                                              ),
+                                              onSelected: (value) {
+                                                if (value == 'edit') {
+                                                  _showCustomerDialog(c);
+                                                } else if (value == 'delete') {
+                                                  showDialog(
+                                                    context: context,
+                                                    builder: (context) => AlertDialog(
+                                                      backgroundColor: const Color(0xFF1E293B),
+                                                      title: const Text('Hapus Pelanggan', style: TextStyle(color: Colors.white)),
+                                                      content: Text('Apakah Anda yakin ingin menghapus "${c.aliasName}"?', style: const TextStyle(color: Color(0xFF94A3B8))),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context),
+                                                          child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                                                        ),
+                                                        ElevatedButton(
+                                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                          onPressed: () async {
+                                                            await customerProvider.deleteCustomer(c.id);
+                                                            if (context.mounted) Navigator.pop(context);
+                                                          },
+                                                          child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              itemBuilder: (context) => [
+                                                const PopupMenuItem(
+                                                  value: 'edit',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 18),
+                                                      SizedBox(width: 10),
+                                                      Text('Edit Pelanggan', style: TextStyle(color: Colors.white, fontSize: 13)),
                                                     ],
                                                   ),
-                                                );
-                                              }
-                                            },
-                                            itemBuilder: (context) => [
-                                              const PopupMenuItem(
-                                                value: 'edit',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(Icons.edit_outlined, color: Colors.amberAccent, size: 18),
-                                                    SizedBox(width: 10),
-                                                    Text('Edit Pelanggan', style: TextStyle(color: Colors.white, fontSize: 13)),
-                                                  ],
                                                 ),
-                                              ),
-                                              const PopupMenuItem(
-                                                value: 'delete',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                                    SizedBox(width: 10),
-                                                    Text('Hapus Pelanggan', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
-                                                  ],
+                                                const PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                                      SizedBox(width: 10),
+                                                      Text('Hapus Pelanggan', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ],
