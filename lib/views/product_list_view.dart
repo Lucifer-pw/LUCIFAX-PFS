@@ -1115,55 +1115,50 @@ class _ProductListViewState extends State<ProductListView> {
                                   dataRowMaxHeight: 52,
                                   headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 13),
                                   columns: const [
-                                    DataColumn(label: Expanded(child: Center(child: Text('KODE INDUK', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('NAMA BARANG', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('HARGA UNIT', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('STOK', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('ISI KARTON', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('TOTAL KARTON', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('BERAT', textAlign: TextAlign.center)))),
-                                    DataColumn(label: Expanded(child: Center(child: Text('AKSI', textAlign: TextAlign.center)))),
+                                    DataColumn(label: Text('KODE INDUK')),
+                                    DataColumn(label: Text('NAMA BARANG')),
+                                    DataColumn(label: Text('HARGA UNIT'), numeric: true),
+                                    DataColumn(label: Text('STOK'), numeric: true),
+                                    DataColumn(label: Text('ISI KARTON'), numeric: true),
+                                    DataColumn(label: Text('TOTAL KARTON'), numeric: true),
+                                    DataColumn(label: Text('BERAT'), numeric: true),
+                                    DataColumn(label: Text('AKSI')),
                                   ],
                                   rows: filteredProducts.map((p) {
                                     return DataRow(
                                       cells: [
-                                        DataCell(Center(child: Text(p.kodeInduk, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)))),
-                                        DataCell(Center(child: Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)))),
-                                        DataCell(Center(child: Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white)))),
+                                        DataCell(Text(p.kodeInduk, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
+                                        DataCell(Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
+                                        DataCell(Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white))),
                                         DataCell(
-                                          Center(
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: (p.stock <= 0 ? Colors.redAccent : Colors.greenAccent).withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                p.stock.toStringAsFixed(0),
-                                                style: TextStyle(
-                                                  color: p.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: (p.stock <= 0 ? Colors.redAccent : Colors.greenAccent).withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(6),
                                             ),
-                                          ),
-                                        ),
-                                        DataCell(Center(child: Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white)))),
-                                        DataCell(
-                                          Center(
                                             child: Text(
-                                              p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '-',
+                                              p.stock.toStringAsFixed(0),
                                               style: TextStyle(
-                                                color: p.isiKarton > 0 && p.stock > 0 ? const Color(0xFF38BDF8) : Colors.white70,
+                                                color: p.stock <= 0 ? Colors.redAccent : Colors.greenAccent,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                           ),
                                         ),
-                                        DataCell(Center(child: Text('${p.sizeGrams.toStringAsFixed(0)} G', style: const TextStyle(color: Colors.white)))),
+                                        DataCell(Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white))),
                                         DataCell(
-                                           Center(
-                                             child: PopupMenuButton<String>(
+                                          Text(
+                                            p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '-',
+                                            style: TextStyle(
+                                              color: p.isiKarton > 0 && p.stock > 0 ? const Color(0xFF38BDF8) : Colors.white70,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(Text('${p.sizeGrams.toStringAsFixed(0)} G', style: const TextStyle(color: Colors.white))),
+                                        DataCell(
+                                           PopupMenuButton<String>(
                                              icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
                                              color: const Color(0xFF1E293B),
                                              tooltip: 'Menu Aksi',
@@ -1242,7 +1237,6 @@ class _ProductListViewState extends State<ProductListView> {
                                              ],
                                            ),
                                          ),
-                                        ),
                                       ],
                                     );
                                   }).toList(),
