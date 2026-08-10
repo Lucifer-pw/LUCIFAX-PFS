@@ -22,6 +22,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   Customer? _selectedCustomer;
   Product? _selectedProduct;
   final _qtyController = TextEditingController(text: '1');
+  final _kartonController = TextEditingController();
   final _discountController = TextEditingController(text: '0');
   final _priceController = TextEditingController();
   final _noteController = TextEditingController();
@@ -29,6 +30,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   final _productTextController = TextEditingController();
   bool _isBonus = false;
   bool _isSaving = false;
+  bool _isUpdatingFromKarton = false;
+  bool _isUpdatingFromQty = false;
   String _idempotencyKey = const Uuid().v4();
 
   final _rupiahFormatter = NumberFormat.currency(
@@ -40,12 +43,35 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   @override
   void dispose() {
     _qtyController.dispose();
+    _kartonController.dispose();
     _discountController.dispose();
     _priceController.dispose();
     _noteController.dispose();
     _customerTextController.dispose();
     _productTextController.dispose();
     super.dispose();
+  }
+
+  void _onKartonChanged(String value) {
+    if (_isUpdatingFromQty) return;
+    final isiKarton = _selectedProduct?.isiKarton ?? 0;
+    if (isiKarton <= 0) return;
+    _isUpdatingFromKarton = true;
+    final karton = double.tryParse(value) ?? 0;
+    final qty = (karton * isiKarton).round();
+    _qtyController.text = qty > 0 ? qty.toString() : '';
+    _isUpdatingFromKarton = false;
+  }
+
+  void _onQtyChanged(String value) {
+    if (_isUpdatingFromKarton) return;
+    final isiKarton = _selectedProduct?.isiKarton ?? 0;
+    if (isiKarton <= 0) return;
+    _isUpdatingFromQty = true;
+    final qty = double.tryParse(value) ?? 0;
+    final karton = qty / isiKarton;
+    _kartonController.text = karton > 0 ? karton.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') : '';
+    _isUpdatingFromQty = false;
   }
 
   void _addItemToCart(TransactionProvider trProvider) {
@@ -85,6 +111,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
         _selectedProduct = null;
         _productTextController.clear();
         _qtyController.text = '1';
+        _kartonController.clear();
         _discountController.text = '0';
         _priceController.clear();
         _isBonus = false;
@@ -520,18 +547,35 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 const SizedBox(height: 16),
               ],
 
-              // Qty and Discount Inputs
+              // Karton, Qty and Discount Inputs
               Row(
                 children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _kartonController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(color: Colors.white),
+                      enabled: _selectedProduct != null && (_selectedProduct!.isiKarton) > 0,
+                      onChanged: _onKartonChanged,
+                      decoration: _buildInputDecoration(
+                        hint: _selectedProduct != null && _selectedProduct!.isiKarton > 0
+                            ? 'Karton (1 = ${_selectedProduct!.isiKarton} Pcs)'
+                            : 'Karton',
+                        icon: Icons.inventory_2_outlined,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: TextFormField(
                       controller: _qtyController,
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: Colors.white),
+                      onChanged: _onQtyChanged,
                       decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: TextFormField(
                       controller: _discountController,

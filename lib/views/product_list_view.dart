@@ -125,6 +125,7 @@ class _ProductListViewState extends State<ProductListView> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            bool isSavingProduct = false;
             final targetStock = _parseCleanDouble(stockController.text);
             final entryDiff = isEdit ? (targetStock - initialStock) : targetStock;
 
@@ -313,11 +314,11 @@ class _ProductListViewState extends State<ProductListView> {
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
+                    backgroundColor: isSavingProduct ? Colors.teal[800] : const Color(0xFF0284C7),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
-                  onPressed: () async {
+                  onPressed: isSavingProduct ? null : () async {
                     final id = idController.text.trim().toUpperCase();
                     final kodeIndukRaw = kodeIndukController.text.trim().toUpperCase();
                     final kodeInduk = kodeIndukRaw.isNotEmpty ? kodeIndukRaw : id;
@@ -340,6 +341,8 @@ class _ProductListViewState extends State<ProductListView> {
                       );
                       return;
                     }
+
+                    setDialogState(() => isSavingProduct = true);
 
                     try {
                       final localProduct = product;
@@ -386,6 +389,7 @@ class _ProductListViewState extends State<ProductListView> {
                         );
                       }
                     } catch (e) {
+                      setDialogState(() => isSavingProduct = false);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Gagal menyimpan barang: $e'), backgroundColor: Colors.redAccent),
@@ -393,7 +397,16 @@ class _ProductListViewState extends State<ProductListView> {
                       }
                     }
                   },
-                  child: Text(isEdit ? 'Simpan Data' : 'Tambah Barang', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: isSavingProduct
+                      ? const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                            SizedBox(width: 8),
+                            Text('Menyimpan...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ],
+                        )
+                      : Text(isEdit ? 'Simpan Data' : 'Tambah Barang', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ],
             );
