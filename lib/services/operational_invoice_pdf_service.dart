@@ -198,7 +198,7 @@ class OperationalInvoicePdfService {
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
                               _buildGridRow('Tanggal Tagihan', DateFormat('dd MMMM yyyy, HH:mm').format(invoice.date), fontBold, fontRegular),
-                              _buildGridRow('Penagih / Developer', 'LUCIFAX (DEV)', fontBold, fontRegular),
+                              _buildGridRow('Penyedia Layanan', 'LUCIFAX (DEV)', fontBold, fontRegular),
                               _buildGridRow('Kategori Operasional', invoice.category, fontBold, fontRegular),
                             ],
                           ),
