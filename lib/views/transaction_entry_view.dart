@@ -572,7 +572,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: Colors.white),
                       onChanged: _onQtyChanged,
-                      decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
+                      decoration: _buildInputDecoration(hint: 'Qty (Pack)', icon: Icons.numbers),
                     ),
                   ),
                   const SizedBox(width: 10),
