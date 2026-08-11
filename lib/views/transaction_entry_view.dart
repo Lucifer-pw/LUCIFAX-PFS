@@ -559,7 +559,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       onChanged: _onKartonChanged,
                       decoration: _buildInputDecoration(
                         hint: _selectedProduct != null && _selectedProduct!.isiKarton > 0
-                            ? 'Karton (1 = ${_selectedProduct!.isiKarton} Pcs)'
+                            ? 'Karton (1 = ${_selectedProduct!.isiKarton} Pack)'
                             : 'Karton',
                         icon: Icons.inventory_2_outlined,
                       ),
