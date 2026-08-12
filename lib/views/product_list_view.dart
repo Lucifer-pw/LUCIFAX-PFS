@@ -1269,10 +1269,124 @@ class _ProductListViewState extends State<ProductListView> {
   // STOCK MUTATION DATE RANGE HELPERS
   // ==========================================
 
-  Map<String, dynamic> _getMutationDateRange(String mode, {DateTime? customDate}) {
+  Future<DateTime?> _showMonthYearPicker(BuildContext context, DateTime initialDate) async {
+    int tempYear = initialDate.year;
+    int tempMonth = initialDate.month;
+    final months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+
+    return showDialog<DateTime>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setPickerState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear--;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$tempYear',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear++;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 320,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: 12,
+                  itemBuilder: (context, idx) {
+                    final mIndex = idx + 1;
+                    final isSelected = tempMonth == mIndex && tempYear == initialDate.year;
+                    final isCurrent = mIndex == DateTime.now().month && tempYear == DateTime.now().year;
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx, DateTime(tempYear, mIndex, 1));
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF0284C7)
+                              : (isCurrent ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : (isCurrent ? const Color(0xFF38BDF8).withOpacity(0.6) : const Color(0xFF334155)),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          months[idx],
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : (isCurrent ? const Color(0xFF38BDF8) : Colors.white70),
+                            fontWeight: isSelected || isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Map<String, dynamic> _getMutationDateRange(
+    String mode, {
+    required DateTime selectedPeriodMonth,
+    DateTime? customDate,
+  }) {
     final now = DateTime.now();
-    final y = now.year;
-    final m = now.month;
+    final y = selectedPeriodMonth.year;
+    final m = selectedPeriodMonth.month;
     final lastDay = DateTime(y, m + 1, 0).day;
 
     DateTime start;
@@ -1308,7 +1422,10 @@ class _ProductListViewState extends State<ProductListView> {
       case 'MONTH':
         start = DateTime(y, m, 1, 0, 0, 0);
         end = DateTime(y, m, lastDay, 23, 59, 59, 999);
-        label = 'Bulan Ini (${DateFormat('MMMM yyyy').format(start)})';
+        final isCurrent = y == now.year && m == now.month;
+        label = isCurrent
+            ? 'Bulan Ini (${DateFormat('MMMM yyyy').format(start)})'
+            : 'Bulan ${DateFormat('MMMM yyyy').format(start)}';
         break;
       case 'CUSTOM':
         final target = customDate ?? now;
@@ -1329,9 +1446,16 @@ class _ProductListViewState extends State<ProductListView> {
   Widget _buildMutationFilterChips({
     required BuildContext context,
     required String currentMode,
+    required DateTime selectedPeriodMonth,
     required DateTime? customDate,
-    required Function(String mode, DateTime? custom) onModeChanged,
+    required Function(String mode, DateTime selectedMonth, DateTime? custom) onFilterChanged,
   }) {
+    final now = DateTime.now();
+    final isCurrentMonth = selectedPeriodMonth.year == now.year && selectedPeriodMonth.month == now.month;
+    final monthChipLabel = isCurrentMonth
+        ? 'Bulan Ini'
+        : DateFormat('MMM yyyy').format(selectedPeriodMonth);
+
     final chips = [
       {'label': 'Hari Ini', 'mode': 'TODAY', 'icon': Icons.bolt_rounded},
       {'label': 'M1 (1-7)', 'mode': 'W1', 'icon': null},
@@ -1339,7 +1463,6 @@ class _ProductListViewState extends State<ProductListView> {
       {'label': 'M3 (15-21)', 'mode': 'W3', 'icon': null},
       {'label': 'M4 (22-28)', 'mode': 'W4', 'icon': null},
       {'label': 'M5 (29+)', 'mode': 'W5', 'icon': null},
-      {'label': 'Bulan Ini', 'mode': 'MONTH', 'icon': Icons.calendar_view_month_rounded},
     ];
 
     return SingleChildScrollView(
@@ -1353,7 +1476,7 @@ class _ProductListViewState extends State<ProductListView> {
               return Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: InkWell(
-                  onTap: () => onModeChanged(mode, null),
+                  onTap: () => onFilterChanged(mode, selectedPeriodMonth, null),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1387,6 +1510,59 @@ class _ProductListViewState extends State<ProductListView> {
               );
             }),
           ],
+
+          // Dynamic Month Selector Chip
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: InkWell(
+              onTap: () async {
+                final picked = await _showMonthYearPicker(context, selectedPeriodMonth);
+                if (picked != null) {
+                  onFilterChanged('MONTH', picked, null);
+                } else if (currentMode != 'MONTH') {
+                  onFilterChanged('MONTH', selectedPeriodMonth, null);
+                }
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: currentMode == 'MONTH' ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: currentMode == 'MONTH' ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                    width: currentMode == 'MONTH' ? 1.4 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.calendar_view_month_rounded,
+                      color: currentMode == 'MONTH' ? Colors.white : const Color(0xFF38BDF8),
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      monthChipLabel,
+                      style: TextStyle(
+                        color: currentMode == 'MONTH' ? Colors.white : const Color(0xFF94A3B8),
+                        fontSize: 11,
+                        fontWeight: currentMode == 'MONTH' ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.arrow_drop_down_rounded,
+                      color: currentMode == 'MONTH' ? Colors.white70 : const Color(0xFF64748B),
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           // Custom Calendar Date Picker Button
           InkWell(
             onTap: () async {
@@ -1410,7 +1586,7 @@ class _ProductListViewState extends State<ProductListView> {
                 },
               );
               if (picked != null) {
-                onModeChanged('CUSTOM', picked);
+                onFilterChanged('CUSTOM', selectedPeriodMonth, picked);
               }
             },
             borderRadius: BorderRadius.circular(8),
@@ -1456,6 +1632,7 @@ class _ProductListViewState extends State<ProductListView> {
     final firebaseService = FirebaseService();
     String dialogSearchQuery = '';
     String filterMode = 'TODAY'; // Default: TODAY
+    DateTime selectedPeriodMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
     DateTime? customDate;
 
     showDialog(
@@ -1463,7 +1640,11 @@ class _ProductListViewState extends State<ProductListView> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final range = _getMutationDateRange(filterMode, customDate: customDate);
+            final range = _getMutationDateRange(
+              filterMode,
+              selectedPeriodMonth: selectedPeriodMonth,
+              customDate: customDate,
+            );
 
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
@@ -1498,10 +1679,12 @@ class _ProductListViewState extends State<ProductListView> {
                   _buildMutationFilterChips(
                     context: context,
                     currentMode: filterMode,
+                    selectedPeriodMonth: selectedPeriodMonth,
                     customDate: customDate,
-                    onModeChanged: (newMode, newCustom) {
+                    onFilterChanged: (newMode, newMonth, newCustom) {
                       setDialogState(() {
                         filterMode = newMode;
+                        selectedPeriodMonth = newMonth;
                         if (newCustom != null) customDate = newCustom;
                       });
                     },
@@ -1772,6 +1955,7 @@ class _ProductListViewState extends State<ProductListView> {
     String dialogSearchQuery = '';
     String selectedType = 'SEMUA';
     String filterMode = 'TODAY'; // Default: TODAY
+    DateTime selectedPeriodMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
     DateTime? customDate;
 
     showDialog(
@@ -1779,7 +1963,11 @@ class _ProductListViewState extends State<ProductListView> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final range = _getMutationDateRange(filterMode, customDate: customDate);
+            final range = _getMutationDateRange(
+              filterMode,
+              selectedPeriodMonth: selectedPeriodMonth,
+              customDate: customDate,
+            );
             final isMobile = MediaQuery.of(context).size.width < 768;
 
             return AlertDialog(
@@ -1834,10 +2022,12 @@ class _ProductListViewState extends State<ProductListView> {
                   _buildMutationFilterChips(
                     context: context,
                     currentMode: filterMode,
+                    selectedPeriodMonth: selectedPeriodMonth,
                     customDate: customDate,
-                    onModeChanged: (newMode, newCustom) {
+                    onFilterChanged: (newMode, newMonth, newCustom) {
                       setDialogState(() {
                         filterMode = newMode;
+                        selectedPeriodMonth = newMonth;
                         if (newCustom != null) customDate = newCustom;
                       });
                     },
