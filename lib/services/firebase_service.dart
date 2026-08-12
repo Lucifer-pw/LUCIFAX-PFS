@@ -96,16 +96,23 @@ class FirebaseService {
       end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
     }
 
-    Query query = _db.collection('stock_mutations').where('kodeInduk', isEqualTo: kodeInduk);
-    if (start != null) {
-      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start));
-    }
-    if (end != null) {
-      query = query.where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end));
-    }
-
-    return query.snapshots().map((snapshot) {
+    // Query by kodeInduk only (no composite index required in Firestore)
+    return _db
+        .collection('stock_mutations')
+        .where('kodeInduk', isEqualTo: kodeInduk)
+        .snapshots()
+        .map((snapshot) {
       var list = snapshot.docs.map((doc) => StockMutation.fromFirestore(doc)).toList();
+
+      if (start != null) {
+        final s = start;
+        list = list.where((m) => m.timestamp.isAfter(s.subtract(const Duration(seconds: 1)))).toList();
+      }
+      if (end != null) {
+        final e = end;
+        list = list.where((m) => m.timestamp.isBefore(e.add(const Duration(seconds: 1)))).toList();
+      }
+
       list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       if (list.length > limit) {
         list = list.sublist(0, limit);
