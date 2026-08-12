@@ -3565,7 +3565,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         final authProvider = Provider.of<AuthProvider>(context, listen: false);
                         final currentUser = authProvider.currentUser;
 
-                        _firebaseService.logInvoicePrint(
+                        await _firebaseService.logInvoicePrint(
                           invoiceNo: tr.invoiceNo,
                           customerName: tr.customerName,
                           originalDate: tr.date,

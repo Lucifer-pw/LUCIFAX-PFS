@@ -50,7 +50,7 @@ class FirebaseService {
         'userUsername': userUsername,
         'userRole': userRole,
         'isDeveloper': isDeveloper,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': Timestamp.now(),
         'grandTotal': grandTotal,
       });
     } catch (e) {

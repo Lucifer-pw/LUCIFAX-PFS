@@ -220,6 +220,16 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 22. INVOICE_PRINT_LOGS — Log Cetak Invoice Real-Time
+    // ═══════════════════════════════════════════════════
+    match /invoice_print_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {
