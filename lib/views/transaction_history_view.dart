@@ -251,6 +251,130 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     return ["SEMUA", ...list];
   }
 
+  Future<String?> _showMonthYearPicker(BuildContext context, String currentMonthFilter) async {
+    final now = DateTime.now();
+    int tempYear = now.year;
+    int tempMonth = now.month;
+
+    if (currentMonthFilter != "SEMUA" && currentMonthFilter.contains("-")) {
+      final parts = currentMonthFilter.split("-");
+      tempMonth = int.tryParse(parts[0]) ?? now.month;
+      tempYear = int.tryParse(parts[1]) ?? now.year;
+    }
+
+    final months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setPickerState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear--;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$tempYear',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear++;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 320,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: 12,
+                  itemBuilder: (context, idx) {
+                    final mIndex = idx + 1;
+                    final mString = mIndex.toString().padLeft(2, '0');
+                    final filterValue = '$mString-$tempYear';
+                    final isSelected = currentMonthFilter == filterValue;
+                    final isCurrent = mIndex == now.month && tempYear == now.year;
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx, filterValue);
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF0284C7)
+                              : (isCurrent ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : (isCurrent ? const Color(0xFF38BDF8).withOpacity(0.6) : const Color(0xFF334155)),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          months[idx],
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : (isCurrent ? const Color(0xFF38BDF8) : Colors.white70),
+                            fontWeight: isSelected || isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, "SEMUA"),
+                  child: const Text('Semua Bulan', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showSearchableProductFilterDialog(List<String> productNames) {
     showDialog(
       context: context,
@@ -3706,42 +3830,54 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final filterRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Month / Periode Dropdown Filter
-        Container(
-          width: 175,
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _monthFilter,
-              dropdownColor: const Color(0xFF1E293B),
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              items: _getMonthFilterOptions(trProvider.transactions).map((m) {
-                return DropdownMenuItem(
-                  value: m,
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_month_rounded, color: m != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: 14),
-                      const SizedBox(width: 6),
-                      Text(m == "SEMUA" ? "SEMUA BULAN" : m),
-                    ],
+        // Month / Periode Picker Filter Button
+        InkWell(
+          onTap: () async {
+            final picked = await _showMonthYearPicker(context, _monthFilter);
+            if (picked != null) {
+              setState(() {
+                _monthFilter = picked;
+                _currentPage = 1;
+              });
+            }
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.transparent,
+                width: _monthFilter != "SEMUA" ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.calendar_month_rounded,
+                  color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _monthFilter == "SEMUA" ? "SEMUA BULAN" : _monthFilter,
+                  style: TextStyle(
+                    color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() {
-                    _monthFilter = val;
-                    _currentPage = 1;
-                  });
-                }
-              },
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.arrow_drop_down_rounded,
+                  color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                  size: 18,
+                ),
+              ],
             ),
           ),
         ),
