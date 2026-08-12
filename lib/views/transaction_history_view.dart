@@ -3560,6 +3560,30 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         );
                       }
 
+                      // Log invoice print action to Firestore for Developer Monitoring
+                      try {
+                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                        final currentUser = authProvider.currentUser;
+
+                        _firebaseService.logInvoicePrint(
+                          invoiceNo: tr.invoiceNo,
+                          customerName: tr.customerName,
+                          originalDate: tr.date,
+                          originalDeliveryDate: tr.deliveryDate,
+                          printedDeliveryDate: chosenDate,
+                          optionType: selectedOption == 2 ? 'TANGGAL_BARU' : 'TANGGAL_AWAL',
+                          actionType: isDownload ? 'DOWNLOAD' : 'PRINT',
+                          userId: currentUser?.uid ?? 'unknown',
+                          userName: currentUser?.name ?? (currentUser?.username ?? 'User'),
+                          userUsername: currentUser?.username ?? '',
+                          userRole: currentUser?.role ?? 'kacab',
+                          isDeveloper: currentUser?.isDeveloper == true,
+                          grandTotal: tr.grandTotal,
+                        );
+                      } catch (logErr) {
+                        debugPrint('Error logging invoice print: $logErr');
+                      }
+
                       await _handlePrintOrDownloadPdf(toPrint, isDownload: isDownload);
                     } catch (e) {
                       if (context.mounted) {

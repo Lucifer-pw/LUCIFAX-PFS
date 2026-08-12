@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/role_permissions_provider.dart';
 import '../models/user_profile.dart';
+import '../models/invoice_print_log.dart';
+import '../services/firebase_service.dart';
 
 class UserPresenceView extends StatefulWidget {
   const UserPresenceView({super.key});
@@ -13,8 +15,12 @@ class UserPresenceView extends StatefulWidget {
 }
 
 class _UserPresenceViewState extends State<UserPresenceView> {
-  int _selectedTab = 0; // 0: User Online Monitor, 1: Role KACAB Permissions
+  final FirebaseService _firebaseService = FirebaseService();
+  int _selectedTab = 0; // 0: User Online Monitor, 1: Role KACAB Permissions, 2: Log Cetak Invoice
   String _searchQuery = '';
+  String _logSearchQuery = '';
+  String _logRoleFilter = 'ALL'; // 'ALL', 'NON_DEV', 'KACAB', 'CASHIER', 'DEV'
+  String _logOptionFilter = 'ALL'; // 'ALL', 'TANGGAL_BARU', 'TANGGAL_AWAL'
 
   final List<Map<String, dynamic>> _kacabFeatures = [
     {
@@ -263,6 +269,13 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   label: 'Hak Akses Role KACAB',
                   isMobile: isMobile,
                 ),
+                const SizedBox(width: 8),
+                _buildTabButton(
+                  index: 2,
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Log Cetak Invoice',
+                  isMobile: isMobile,
+                ),
               ],
             ),
           ),
@@ -272,7 +285,9 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           Expanded(
             child: _selectedTab == 0
                 ? _buildUserPresenceTab(authProvider, currentUser, isMobile)
-                : _buildKacabPermissionsTab(rolePermissionsProvider, isMobile),
+                : _selectedTab == 1
+                    ? _buildKacabPermissionsTab(rolePermissionsProvider, isMobile)
+                    : _buildInvoicePrintLogsTab(isMobile),
           ),
         ],
       ),
@@ -984,6 +999,433 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           ),
         ],
       ),
+    );
+  }
+
+  // TAB 3: Real-Time Invoice Print & Date Selection Audit Logs
+  Widget _buildInvoicePrintLogsTab(bool isMobile) {
+    return StreamBuilder<List<InvoicePrintLog>>(
+      stream: _firebaseService.streamInvoicePrintLogs(limit: 200),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+        }
+
+        final allLogs = snapshot.data ?? [];
+        final dateModifiedLogs = allLogs.where((l) => l.isDateModified).toList();
+        final nonDevLogs = allLogs.where((l) => !l.isDeveloper).toList();
+
+        // Apply search and filter
+        final filteredLogs = allLogs.where((l) {
+          if (_logRoleFilter == 'NON_DEV' && l.isDeveloper) return false;
+          if (_logRoleFilter == 'DEV' && !l.isDeveloper) return false;
+          if (_logRoleFilter == 'KACAB' && l.userRole.toLowerCase() != 'kacab' && l.userRole.toLowerCase() != 'manager') return false;
+          if (_logRoleFilter == 'CASHIER' && l.userRole.toLowerCase() != 'cashier' && l.userRole.toLowerCase() != 'kasir') return false;
+
+          if (_logOptionFilter == 'TANGGAL_BARU' && !l.isDateModified) return false;
+          if (_logOptionFilter == 'TANGGAL_AWAL' && l.isDateModified) return false;
+
+          if (_logSearchQuery.isNotEmpty) {
+            final q = _logSearchQuery.toLowerCase();
+            final matchInv = l.invoiceNo.toString().toLowerCase().contains(q);
+            final matchCust = l.customerName.toLowerCase().contains(q);
+            final matchUser = l.userName.toLowerCase().contains(q) || l.userUsername.toLowerCase().contains(q);
+            final matchRole = l.userRole.toLowerCase().contains(q);
+            if (!matchInv && !matchCust && !matchUser && !matchRole) return false;
+          }
+
+          return true;
+        }).toList();
+
+        return Column(
+          children: [
+            // Top Summary Cards
+            isMobile
+                ? Column(
+                    children: [
+                      _buildStatCard(
+                        title: 'Total Aktivitas Cetak',
+                        value: '${allLogs.length}',
+                        icon: Icons.print_rounded,
+                        color: const Color(0xFF38BDF8),
+                        subtext: 'Log cetak & download invoice',
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStatCard(
+                        title: 'Tanggal Kirim Baru (Diubah)',
+                        value: '${dateModifiedLogs.length}',
+                        icon: Icons.edit_calendar_rounded,
+                        color: Colors.amberAccent,
+                        subtext: 'Input tanggal kirim saat cetak',
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStatCard(
+                        title: 'Dicetak Non-Developer',
+                        value: '${nonDevLogs.length}',
+                        icon: Icons.badge_rounded,
+                        color: const Color(0xFF4ADE80),
+                        subtext: 'Aktivitas KACAB & Kasir',
+                        isMobile: isMobile,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Total Aktivitas Cetak',
+                          value: '${allLogs.length}',
+                          icon: Icons.print_rounded,
+                          color: const Color(0xFF38BDF8),
+                          subtext: 'Log cetak & download invoice',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Tanggal Kirim Baru (Diubah)',
+                          value: '${dateModifiedLogs.length}',
+                          icon: Icons.edit_calendar_rounded,
+                          color: Colors.amberAccent,
+                          subtext: 'Input tanggal kirim saat cetak',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Dicetak Non-Developer',
+                          value: '${nonDevLogs.length}',
+                          icon: Icons.badge_rounded,
+                          color: const Color(0xFF4ADE80),
+                          subtext: 'Aktivitas KACAB & Kasir',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                    ],
+                  ),
+            SizedBox(height: isMobile ? 10 : 16),
+
+            // Controls & Filter Bar
+            Container(
+              padding: EdgeInsets.all(isMobile ? 10 : 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  // Search Box
+                  SizedBox(
+                    width: isMobile ? double.infinity : 280,
+                    child: TextField(
+                      style: TextStyle(color: Colors.white, fontSize: isMobile ? 12 : 13),
+                      decoration: InputDecoration(
+                        hintText: 'Cari invoice, customer, user...',
+                        hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 12 : 13),
+                        prefixIcon: Icon(Icons.search, color: const Color(0xFF38BDF8), size: isMobile ? 16 : 20),
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: isMobile ? 6 : 10),
+                      ),
+                      onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
+                    ),
+                  ),
+
+                  // Role Filter
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _logRoleFilter,
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        items: const [
+                          DropdownMenuItem(value: 'ALL', child: Text('Semua Role User')),
+                          DropdownMenuItem(value: 'NON_DEV', child: Text('⚡ Khusus Non-Dev (Kacab / Kasir)')),
+                          DropdownMenuItem(value: 'KACAB', child: Text('👔 Khusus Kacab / Kepala Sales')),
+                          DropdownMenuItem(value: 'CASHIER', child: Text('🛒 Khusus Kasir')),
+                          DropdownMenuItem(value: 'DEV', child: Text('💻 Khusus Developer')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _logRoleFilter = val);
+                        },
+                      ),
+                    ),
+                  ),
+
+                  // Option Filter
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _logOptionFilter,
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        items: const [
+                          DropdownMenuItem(value: 'ALL', child: Text('Semua Opsi Tanggal')),
+                          DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Kirim Diubah Baru')),
+                          DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal Nota')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _logOptionFilter = val);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: isMobile ? 10 : 16),
+
+            // Log List
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: filteredLogs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.history_toggle_off_rounded, size: 48, color: Colors.white.withOpacity(0.2)),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Belum ada log cetak invoice tercatat.',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ListView.separated(
+                          itemCount: filteredLogs.length,
+                          separatorBuilder: (context, index) => const Divider(color: Color(0xFF334155), height: 1),
+                          itemBuilder: (context, index) {
+                            final log = filteredLogs[index];
+                            final roleColor = _getRoleColor(log.userRole);
+                            final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+
+                            return Container(
+                              padding: EdgeInsets.all(isMobile ? 12 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Row 1: User & Action Badges + Timestamp
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // User Avatar Icon
+                                      CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: roleColor.withOpacity(0.2),
+                                        child: Text(
+                                          log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
+                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Wrap(
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: [
+                                            Text(
+                                              log.userName,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                            if (log.userUsername.isNotEmpty)
+                                              Text(
+                                                '(@${log.userUsername})',
+                                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                              ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: roleColor.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: roleColor.withOpacity(0.4)),
+                                              ),
+                                              child: Text(
+                                                _getRoleLabel(log.userRole),
+                                                style: TextStyle(color: roleColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: log.actionType == 'PRINT'
+                                                    ? const Color(0xFF0284C7).withOpacity(0.2)
+                                                    : const Color(0xFF10B981).withOpacity(0.2),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(
+                                                  color: log.actionType == 'PRINT'
+                                                      ? const Color(0xFF38BDF8)
+                                                      : const Color(0xFF34D399),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    log.actionType == 'PRINT' ? Icons.print_rounded : Icons.download_rounded,
+                                                    size: 11,
+                                                    color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    log.actionType == 'PRINT' ? 'CETAK PDF' : 'DOWNLOAD PDF',
+                                                    style: TextStyle(
+                                                      color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatDateTime(log.timestamp),
+                                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Row 2: Invoice & Customer Info
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                        ),
+                                        child: Text(
+                                          'Invoice #${log.invoiceNo}',
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          log.customerName,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (log.grandTotal > 0)
+                                        Text(
+                                          currencyFormatter.format(log.grandTotal),
+                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+
+                                  // Row 3: DATE SELECTION AUDIT HIGHLIGHT
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: log.isDateModified
+                                          ? Colors.amber.withOpacity(0.08)
+                                          : const Color(0xFF0F172A),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: log.isDateModified
+                                            ? Colors.amber.withOpacity(0.5)
+                                            : const Color(0xFF334155),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          log.isDateModified ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
+                                          size: 18,
+                                          color: log.isDateModified ? Colors.amberAccent : const Color(0xFF38BDF8),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Wrap(
+                                                crossAxisAlignment: WrapCrossAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    'Tanggal Kirim Dipilih / Dicetak: ',
+                                                    style: TextStyle(
+                                                      color: log.isDateModified ? Colors.amberAccent : const Color(0xFF94A3B8),
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    DateFormat('dd MMMM yyyy (dd-MM-yyyy)').format(log.printedDeliveryDate),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                log.isDateModified
+                                                    ? '⚠️ Role User (${_getRoleLabel(log.userRole)}) menginput Tanggal Kirim Baru (Tanggal Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})'
+                                                    : '✓ User mencetak menggunakan Tanggal Awal Nota (${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})',
+                                                style: TextStyle(
+                                                  color: log.isDateModified ? Colors.amber.shade200 : const Color(0xFF64748B),
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -11,10 +11,71 @@ import '../models/operational_category.dart';
 import '../models/operational_payment_method.dart';
 import '../models/stock_mutation.dart';
 import '../models/wa_contact.dart';
+import '../models/invoice_print_log.dart';
 import 'package:intl/intl.dart';
 
 class FirebaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ==========================================
+  // INVOICE PRINT & DATE SELECTION AUDIT LOGS
+  // ==========================================
+
+  Future<void> logInvoicePrint({
+    required dynamic invoiceNo,
+    required String customerName,
+    required DateTime originalDate,
+    DateTime? originalDeliveryDate,
+    required DateTime printedDeliveryDate,
+    required String optionType, // 'TANGGAL_AWAL' | 'TANGGAL_BARU'
+    required String actionType, // 'PRINT' | 'DOWNLOAD'
+    required String userId,
+    required String userName,
+    required String userUsername,
+    required String userRole,
+    required bool isDeveloper,
+    required double grandTotal,
+  }) async {
+    try {
+      await _db.collection('invoice_print_logs').add({
+        'invoiceNo': invoiceNo,
+        'customerName': customerName,
+        'originalDate': Timestamp.fromDate(originalDate),
+        if (originalDeliveryDate != null) 'originalDeliveryDate': Timestamp.fromDate(originalDeliveryDate),
+        'printedDeliveryDate': Timestamp.fromDate(printedDeliveryDate),
+        'optionType': optionType,
+        'actionType': actionType,
+        'userId': userId,
+        'userName': userName,
+        'userUsername': userUsername,
+        'userRole': userRole,
+        'isDeveloper': isDeveloper,
+        'timestamp': FieldValue.serverTimestamp(),
+        'grandTotal': grandTotal,
+      });
+    } catch (e) {
+      debugPrint('Error logging invoice print: $e');
+    }
+  }
+
+  Stream<List<InvoicePrintLog>> streamInvoicePrintLogs({int limit = 150}) {
+    return _db.collection('invoice_print_logs').snapshots().map((snapshot) {
+      var list = snapshot.docs.map((doc) => InvoicePrintLog.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      if (list.length > limit) {
+        list = list.sublist(0, limit);
+      }
+      return list;
+    });
+  }
+
+  Future<void> deleteInvoicePrintLog(String logId) async {
+    try {
+      await _db.collection('invoice_print_logs').doc(logId).delete();
+    } catch (e) {
+      debugPrint('Error deleting print log: $e');
+    }
+  }
 
   // ==========================================
   // PRODUCTS CRUD
