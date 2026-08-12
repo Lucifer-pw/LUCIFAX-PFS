@@ -73,6 +73,111 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
   String get _periodDocId => '${_selectedYear}_$_selectedMonth';
   String get _monthYearTitle => '${_monthNames[_selectedMonth - 1].toUpperCase()} $_selectedYear';
 
+  Future<DateTime?> _showMonthYearPicker(BuildContext context, int currentMonth, int currentYear) async {
+    int tempYear = currentYear;
+
+    return showDialog<DateTime>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setPickerState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear--;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$tempYear',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear++;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 320,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: 12,
+                  itemBuilder: (context, idx) {
+                    final mIndex = idx + 1;
+                    final isSelected = currentMonth == mIndex && currentYear == tempYear;
+                    final isCurrent = mIndex == DateTime.now().month && tempYear == DateTime.now().year;
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx, DateTime(tempYear, mIndex, 1));
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF0284C7)
+                              : (isCurrent ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : (isCurrent ? const Color(0xFF38BDF8).withOpacity(0.6) : const Color(0xFF334155)),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          _monthNames[idx],
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : (isCurrent ? const Color(0xFF38BDF8) : Colors.white70),
+                            fontWeight: isSelected || isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   /// Initial default data matching the user's template for July 2026
   List<Map<String, dynamic>> get _defaultOperationalItems => [
     {'title': 'Biaya Listrik', 'amount': 1230881.0},
@@ -1285,64 +1390,44 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        // Month Picker
+                        // Month & Year Picker Button
                         Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF0284C7)),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: _selectedMonth,
-                                dropdownColor: const Color(0xFF1E293B),
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
-                                icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 14),
-                                isExpanded: true,
-                                items: List.generate(12, (i) {
-                                  return DropdownMenuItem(
-                                    value: i + 1,
-                                    child: Text('Bulan: ${_monthNames[i]}'),
-                                  );
-                                }),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() => _selectedMonth = val);
-                                    _loadExpenseData();
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        // Year Picker
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await _showMonthYearPicker(context, _selectedMonth, _selectedYear);
+                              if (picked != null) {
+                                setState(() {
+                                  _selectedMonth = picked.month;
+                                  _selectedYear = picked.year;
+                                });
+                                _loadExpenseData();
+                              }
+                            },
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF334155)),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _selectedYear,
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                              icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 14),
-                              items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) {
-                                return DropdownMenuItem(value: y, child: Text('$y'));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => _selectedYear = val);
-                                  _loadExpenseData();
-                                }
-                              },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF0284C7)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 14),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Bulan: ${_monthNames[_selectedMonth - 1]} $_selectedYear',
+                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF38BDF8), size: 18),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -1477,61 +1562,39 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                       runSpacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        // Month Picker
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF0284C7)),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _selectedMonth,
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
-                              icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
-                              items: List.generate(12, (i) {
-                                return DropdownMenuItem(
-                                  value: i + 1,
-                                  child: Text('Bulan: ${_monthNames[i]}'),
-                                );
-                              }),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => _selectedMonth = val);
-                                  _loadExpenseData();
-                                }
-                              },
+                        // Month & Year Picker Button
+                        InkWell(
+                          onTap: () async {
+                            final picked = await _showMonthYearPicker(context, _selectedMonth, _selectedYear);
+                            if (picked != null) {
+                              setState(() {
+                                _selectedMonth = picked.month;
+                                _selectedYear = picked.year;
+                              });
+                              _loadExpenseData();
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
                             ),
-                          ),
-                        ),
-
-                        // Year Picker
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF334155)),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _selectedYear,
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 16),
-                              items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) {
-                                return DropdownMenuItem(value: y, child: Text('$y'));
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => _selectedYear = val);
-                                  _loadExpenseData();
-                                }
-                              },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Bulan: ${_monthNames[_selectedMonth - 1]} $_selectedYear',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF38BDF8), size: 18),
+                              ],
                             ),
                           ),
                         ),
