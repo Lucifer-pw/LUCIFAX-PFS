@@ -1389,11 +1389,16 @@ class _ProductListViewState extends State<ProductListView> {
     final m = selectedPeriodMonth.month;
     final lastDay = DateTime(y, m + 1, 0).day;
 
-    DateTime start;
-    DateTime end;
+    DateTime? start;
+    DateTime? end;
     String label;
 
     switch (mode) {
+      case 'ALL':
+        start = null;
+        end = null;
+        label = 'Semua Mutasi';
+        break;
       case 'W1':
         start = DateTime(y, m, 1, 0, 0, 0);
         end = DateTime(y, m, 7, 23, 59, 59, 999);
@@ -1458,6 +1463,7 @@ class _ProductListViewState extends State<ProductListView> {
 
     final chips = [
       {'label': 'Hari Ini', 'mode': 'TODAY', 'icon': Icons.bolt_rounded},
+      {'label': 'Semua Mutasi', 'mode': 'ALL', 'icon': Icons.all_inclusive_rounded},
       {'label': 'M1 (1-7)', 'mode': 'W1', 'icon': null},
       {'label': 'M2 (8-14)', 'mode': 'W2', 'icon': null},
       {'label': 'M3 (15-21)', 'mode': 'W3', 'icon': null},

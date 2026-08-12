@@ -87,7 +87,7 @@ class FirebaseService {
     DateTime? startDate,
     DateTime? endDate,
     DateTime? date,
-    int limit = 150,
+    int limit = 500,
   }) {
     DateTime? start = startDate;
     DateTime? end = endDate;
@@ -125,7 +125,7 @@ class FirebaseService {
     DateTime? startDate,
     DateTime? endDate,
     DateTime? date,
-    int limit = 300,
+    int limit = 500,
   }) {
     DateTime? start = startDate;
     DateTime? end = endDate;
