@@ -113,7 +113,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Stok ${_selectedProduct!.name} (Minggu $_selectedWeek) +${qty.toInt()} Pcs berhasil disimpan!'),
+            content: Text('Stok ${_selectedProduct!.name} (Minggu $_selectedWeek) +${qty.toInt()} Pack berhasil disimpan!'),
             backgroundColor: Colors.teal,
             behavior: SnackBarBehavior.floating,
           ),
@@ -417,7 +417,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                               const SizedBox(height: 10),
 
                               // INPUT STOK BARANG
-                              const Text('JUMLAH STOK MASUK (PCS)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                              const Text('JUMLAH STOK MASUK (PACK)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
                               TextField(
                                 controller: _stockInputController,
@@ -590,7 +590,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                                                 borderRadius: BorderRadius.circular(6),
                                                               ),
                                                               child: Text(
-                                                                '${prod.stock.toInt()} Pcs',
+                                                                '${prod.stock.toInt()} Pack',
                                                                 style: TextStyle(
                                                                   color: isSelected ? Colors.black : const Color(0xFF38BDF8),
                                                                   fontWeight: FontWeight.bold,
@@ -796,7 +796,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                 const SizedBox(height: 16),
 
                                 // INPUT STOK BARANG
-                                const Text('JUMLAH STOK MASUK (PCS)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                const Text('JUMLAH STOK MASUK (PACK)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _stockInputController,
@@ -965,7 +965,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                                                 borderRadius: BorderRadius.circular(6),
                                                               ),
                                                               child: Text(
-                                                                '${prod.stock.toInt()} Pcs',
+                                                                '${prod.stock.toInt()} Pack',
                                                                 style: TextStyle(
                                                                   color: isSelected ? Colors.black : const Color(0xFF38BDF8),
                                                                   fontWeight: FontWeight.bold,
@@ -1196,7 +1196,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '+${NumberFormat('#,###').format(displayedQty)} Pcs',
+                          '+${NumberFormat('#,###').format(displayedQty)} Pack',
                           style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -1255,7 +1255,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                               const SizedBox(width: 4),
                             ],
                             Text(
-                              'Semua (M1-M5): +${totalMonthQty.toInt()} Pcs',
+                              'Semua (M1-M5): +${totalMonthQty.toInt()} Pack',
                               style: TextStyle(
                                 color: _historyFilterWeek == null ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
                                 fontSize: 11,
@@ -1307,7 +1307,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                 const SizedBox(width: 4),
                               ],
                               Text(
-                                'M$w: +${sumW.toInt()} Pcs',
+                                'M$w: +${sumW.toInt()} Pack',
                                 style: TextStyle(
                                   color: isSelected
                                       ? const Color(0xFF38BDF8)
@@ -1397,7 +1397,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    'Total M$w: +${sumWeek.toInt()} Pcs',
+                                    'Total M$w: +${sumWeek.toInt()} Pack',
                                     style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
                                 ),
@@ -1466,7 +1466,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                                     border: Border.all(color: const Color(0xFF334155)),
                                                   ),
                                                   child: Text(
-                                                    'Stok Sebelum: ${entry.stockBefore!.toInt()} Pcs',
+                                                    'Stok Sebelum: ${entry.stockBefore!.toInt()} Pack',
                                                     style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
                                                   ),
                                                 ),
@@ -1481,7 +1481,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                                     border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
                                                   ),
                                                   child: Text(
-                                                    'Stok Sesudah: ${(entry.stockAfter ?? (entry.stockBefore! + entry.qty)).toInt()} Pcs',
+                                                    'Stok Sesudah: ${(entry.stockAfter ?? (entry.stockBefore! + entry.qty)).toInt()} Pack',
                                                     style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
                                                   ),
                                                 ),
@@ -1492,7 +1492,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                       ),
                                     ),
                                     Text(
-                                      '+${entry.qty.toInt()} Pcs',
+                                      '+${entry.qty.toInt()} Pack',
                                       style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 14),
                                     ),
                                     const SizedBox(width: 8),
@@ -1505,7 +1505,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                             backgroundColor: const Color(0xFF1E293B),
                                             title: const Text('Hapus Entri Stok', style: TextStyle(color: Colors.white)),
                                             content: Text(
-                                              'Apakah Anda yakin ingin menghapus entri stok "${entry.productName}" (+${entry.qty.toInt()} Pcs)?',
+                                              'Apakah Anda yakin ingin menghapus entri stok "${entry.productName}" (+${entry.qty.toInt()} Pack)?',
                                               style: const TextStyle(color: Color(0xFF94A3B8)),
                                             ),
                                             actions: [

@@ -214,7 +214,7 @@ class _ProductListViewState extends State<ProductListView> {
                           children: [
                             if (isEdit) ...[
                               Text(
-                                'Stok Awal Saat Ini: ${initialStock.toStringAsFixed(0)} pcs',
+                                'Stok Awal Saat Ini: ${initialStock.toStringAsFixed(0)} Pack',
                                 style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 10),
@@ -263,8 +263,8 @@ class _ProductListViewState extends State<ProductListView> {
                                               Expanded(
                                                 child: Text(
                                                   entryDiff > 0
-                                                      ? '+${entryDiff.toStringAsFixed(0)} pcs'
-                                                      : '${entryDiff.toStringAsFixed(0)} pcs',
+                                                      ? '+${entryDiff.toStringAsFixed(0)} Pack'
+                                                      : '${entryDiff.toStringAsFixed(0)} Pack',
                                                   style: TextStyle(color: entryColor, fontSize: 15, fontWeight: FontWeight.bold),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
@@ -289,7 +289,7 @@ class _ProductListViewState extends State<ProductListView> {
                               controller: cartonController,
                               keyboardType: TextInputType.number,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _buildInputDecoration(hint: 'Isi per Karton (Pcs)'),
+                              decoration: _buildInputDecoration(hint: 'Isi per Karton (Pack)'),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -596,7 +596,7 @@ class _ProductListViewState extends State<ProductListView> {
         c3.cellStyle = centerDataStyle;
 
         var c4 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: curRow));
-        c4.value = excel_pkg.TextCellValue('${p.isiKarton} Pcs');
+        c4.value = excel_pkg.TextCellValue('${p.isiKarton} Pack');
         c4.cellStyle = centerDataStyle;
 
         var c5 = sheetObject.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: curRow));
@@ -720,7 +720,7 @@ class _ProductListViewState extends State<ProductListView> {
                     p.name,
                     _rupiahFormatter.format(p.price),
                     p.stock.toStringAsFixed(0),
-                    '${p.isiKarton} Pcs',
+                    '${p.isiKarton} Pack',
                     totalKartonStr,
                     '${p.sizeGrams.toStringAsFixed(0)} G',
                   ];
@@ -1159,7 +1159,7 @@ class _ProductListViewState extends State<ProductListView> {
                                             ),
                                           ),
                                         ),
-                                        DataCell(Text('${p.isiKarton} Pcs', style: const TextStyle(color: Colors.white))),
+                                        DataCell(Text('${p.isiKarton} Pack', style: const TextStyle(color: Colors.white))),
                                         DataCell(
                                           Text(
                                             p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '-',
@@ -1705,7 +1705,7 @@ class _ProductListViewState extends State<ProductListView> {
                                         style: const TextStyle(color: Colors.white70, fontSize: 11),
                                       )),
                                       DataCell(Text(
-                                        product.isiKarton > 0 ? '${product.isiKarton} Pcs' : '-',
+                                        product.isiKarton > 0 ? '${product.isiKarton} Pack' : '-',
                                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                       )),
                                       DataCell(Row(
@@ -2028,11 +2028,11 @@ class _ProductListViewState extends State<ProductListView> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          'Stock Out: -${totalKeluar.toStringAsFixed(0)} pcs',
+                                          'Stock Out: -${totalKeluar.toStringAsFixed(0)} Pack',
                                           style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                         Text(
-                                          'Stock In: +${totalMasuk.toStringAsFixed(0)} pcs',
+                                          'Stock In: +${totalMasuk.toStringAsFixed(0)} Pack',
                                           style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                       ],
@@ -2049,12 +2049,12 @@ class _ProductListViewState extends State<ProductListView> {
                                     Row(
                                       children: [
                                         Text(
-                                          'Total Stock Out: -${totalKeluar.toStringAsFixed(0)} pcs',
+                                          'Total Stock Out: -${totalKeluar.toStringAsFixed(0)} Pack',
                                           style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                         const SizedBox(width: 16),
                                         Text(
-                                          'Total Stock In: +${totalMasuk.toStringAsFixed(0)} pcs',
+                                          'Total Stock In: +${totalMasuk.toStringAsFixed(0)} Pack',
                                           style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                       ],
@@ -2179,7 +2179,7 @@ class _ProductListViewState extends State<ProductListView> {
                                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
                                         )),
                                         DataCell(Text(
-                                          isiKarton > 0 ? '$isiKarton Pcs' : '-',
+                                          isiKarton > 0 ? '$isiKarton Pack' : '-',
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                         )),
                                         DataCell(Row(
