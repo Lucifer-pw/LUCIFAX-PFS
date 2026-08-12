@@ -82,37 +82,61 @@ class FirebaseService {
     }
   }
 
-  Stream<List<StockMutation>> streamStockMutations(String kodeInduk, {DateTime? date}) {
-    return _db
-        .collection('stock_mutations')
-        .where('kodeInduk', isEqualTo: kodeInduk)
-        .snapshots()
-        .map((snapshot) {
+  Stream<List<StockMutation>> streamStockMutations(
+    String kodeInduk, {
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? date,
+    int limit = 150,
+  }) {
+    DateTime? start = startDate;
+    DateTime? end = endDate;
+    if (date != null && start == null && end == null) {
+      start = DateTime(date.year, date.month, date.day, 0, 0, 0);
+      end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
+    }
+
+    Query query = _db.collection('stock_mutations').where('kodeInduk', isEqualTo: kodeInduk);
+    if (start != null) {
+      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start));
+    }
+    if (end != null) {
+      query = query.where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end));
+    }
+
+    return query.snapshots().map((snapshot) {
       var list = snapshot.docs.map((doc) => StockMutation.fromFirestore(doc)).toList();
-      if (date != null) {
-        final start = DateTime(date.year, date.month, date.day, 0, 0, 0);
-        final end = DateTime(date.year, date.month, date.day, 23, 59, 59);
-        list = list.where((m) => m.timestamp.isAfter(start.subtract(const Duration(seconds: 1))) && m.timestamp.isBefore(end.add(const Duration(seconds: 1)))).toList();
-      }
       list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      if (list.length > 100) {
-        list = list.sublist(0, 100);
+      if (list.length > limit) {
+        list = list.sublist(0, limit);
       }
       return list;
     });
   }
 
-  Stream<List<StockMutation>> streamAllStockMutations({DateTime? date, int limit = 300}) {
-    return _db
-        .collection('stock_mutations')
-        .snapshots()
-        .map((snapshot) {
+  Stream<List<StockMutation>> streamAllStockMutations({
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? date,
+    int limit = 300,
+  }) {
+    DateTime? start = startDate;
+    DateTime? end = endDate;
+    if (date != null && start == null && end == null) {
+      start = DateTime(date.year, date.month, date.day, 0, 0, 0);
+      end = DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
+    }
+
+    Query query = _db.collection('stock_mutations');
+    if (start != null) {
+      query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start));
+    }
+    if (end != null) {
+      query = query.where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end));
+    }
+
+    return query.snapshots().map((snapshot) {
       var list = snapshot.docs.map((doc) => StockMutation.fromFirestore(doc)).toList();
-      if (date != null) {
-        final start = DateTime(date.year, date.month, date.day, 0, 0, 0);
-        final end = DateTime(date.year, date.month, date.day, 23, 59, 59);
-        list = list.where((m) => m.timestamp.isAfter(start.subtract(const Duration(seconds: 1))) && m.timestamp.isBefore(end.add(const Duration(seconds: 1)))).toList();
-      }
       list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       if (list.length > limit) {
         list = list.sublist(0, limit);

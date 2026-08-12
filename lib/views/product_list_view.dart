@@ -1266,23 +1266,204 @@ class _ProductListViewState extends State<ProductListView> {
   }
 
   // ==========================================
+  // STOCK MUTATION DATE RANGE HELPERS
+  // ==========================================
+
+  Map<String, dynamic> _getMutationDateRange(String mode, {DateTime? customDate}) {
+    final now = DateTime.now();
+    final y = now.year;
+    final m = now.month;
+    final lastDay = DateTime(y, m + 1, 0).day;
+
+    DateTime start;
+    DateTime end;
+    String label;
+
+    switch (mode) {
+      case 'W1':
+        start = DateTime(y, m, 1, 0, 0, 0);
+        end = DateTime(y, m, 7, 23, 59, 59, 999);
+        label = 'Minggu 1 (01 - 07 ${DateFormat('MMM yyyy').format(start)})';
+        break;
+      case 'W2':
+        start = DateTime(y, m, 8, 0, 0, 0);
+        end = DateTime(y, m, 14, 23, 59, 59, 999);
+        label = 'Minggu 2 (08 - 14 ${DateFormat('MMM yyyy').format(start)})';
+        break;
+      case 'W3':
+        start = DateTime(y, m, 15, 0, 0, 0);
+        end = DateTime(y, m, 21, 23, 59, 59, 999);
+        label = 'Minggu 3 (15 - 21 ${DateFormat('MMM yyyy').format(start)})';
+        break;
+      case 'W4':
+        start = DateTime(y, m, 22, 0, 0, 0);
+        end = DateTime(y, m, 28, 23, 59, 59, 999);
+        label = 'Minggu 4 (22 - 28 ${DateFormat('MMM yyyy').format(start)})';
+        break;
+      case 'W5':
+        start = DateTime(y, m, 29, 0, 0, 0);
+        end = DateTime(y, m, lastDay, 23, 59, 59, 999);
+        label = 'Minggu 5 (29 - $lastDay ${DateFormat('MMM yyyy').format(start)})';
+        break;
+      case 'MONTH':
+        start = DateTime(y, m, 1, 0, 0, 0);
+        end = DateTime(y, m, lastDay, 23, 59, 59, 999);
+        label = 'Bulan Ini (${DateFormat('MMMM yyyy').format(start)})';
+        break;
+      case 'CUSTOM':
+        final target = customDate ?? now;
+        start = DateTime(target.year, target.month, target.day, 0, 0, 0);
+        end = DateTime(target.year, target.month, target.day, 23, 59, 59, 999);
+        label = 'Tanggal ${DateFormat('dd/MM/yyyy').format(target)}';
+        break;
+      case 'TODAY':
+      default:
+        start = DateTime(now.year, now.month, now.day, 0, 0, 0);
+        end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+        label = 'Hari Ini (${DateFormat('dd/MM/yyyy').format(now)})';
+        break;
+    }
+    return {'start': start, 'end': end, 'label': label};
+  }
+
+  Widget _buildMutationFilterChips({
+    required BuildContext context,
+    required String currentMode,
+    required DateTime? customDate,
+    required Function(String mode, DateTime? custom) onModeChanged,
+  }) {
+    final chips = [
+      {'label': 'Hari Ini', 'mode': 'TODAY', 'icon': Icons.bolt_rounded},
+      {'label': 'M1 (1-7)', 'mode': 'W1', 'icon': null},
+      {'label': 'M2 (8-14)', 'mode': 'W2', 'icon': null},
+      {'label': 'M3 (15-21)', 'mode': 'W3', 'icon': null},
+      {'label': 'M4 (22-28)', 'mode': 'W4', 'icon': null},
+      {'label': 'M5 (29+)', 'mode': 'W5', 'icon': null},
+      {'label': 'Bulan Ini', 'mode': 'MONTH', 'icon': Icons.calendar_view_month_rounded},
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var c in chips) ...[
+            Builder(builder: (context) {
+              final mode = c['mode'] as String;
+              final isSelected = currentMode == mode;
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: InkWell(
+                  onTap: () => onModeChanged(mode, null),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                        width: isSelected ? 1.4 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (c['icon'] != null) ...[
+                          Icon(c['icon'] as IconData, color: isSelected ? Colors.white : const Color(0xFF38BDF8), size: 14),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          c['label'] as String,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                            fontSize: 11,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+          // Custom Calendar Date Picker Button
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: customDate ?? DateTime.now(),
+                firstDate: DateTime(2024),
+                lastDate: DateTime(2030),
+                builder: (context, child) {
+                  return Theme(
+                    data: ThemeData.dark().copyWith(
+                      colorScheme: const ColorScheme.dark(
+                        primary: Color(0xFF0284C7),
+                        onPrimary: Colors.white,
+                        surface: Color(0xFF1E293B),
+                        onSurface: Colors.white,
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+              if (picked != null) {
+                onModeChanged('CUSTOM', picked);
+              }
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: currentMode == 'CUSTOM' ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: currentMode == 'CUSTOM' ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                  width: currentMode == 'CUSTOM' ? 1.4 : 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.calendar_month_rounded, color: currentMode == 'CUSTOM' ? Colors.white : const Color(0xFF38BDF8), size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    currentMode == 'CUSTOM' && customDate != null
+                        ? DateFormat('dd/MM/yyyy').format(customDate)
+                        : 'Pilih Tanggal',
+                    style: TextStyle(
+                      color: currentMode == 'CUSTOM' ? Colors.white : const Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: currentMode == 'CUSTOM' ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
   // SINGLE PRODUCT STOCK MUTATION DIALOG
   // ==========================================
 
   void _showStockMutationHistory(Product product) {
     final firebaseService = FirebaseService();
     String dialogSearchQuery = '';
-    DateTime? selectedDate = DateTime.now(); // Default: TODAY
+    String filterMode = 'TODAY'; // Default: TODAY
+    DateTime? customDate;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final isToday = selectedDate != null &&
-                selectedDate!.year == DateTime.now().year &&
-                selectedDate!.month == DateTime.now().month &&
-                selectedDate!.day == DateTime.now().day;
+            final range = _getMutationDateRange(filterMode, customDate: customDate);
 
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
@@ -1313,7 +1494,21 @@ class _ProductListViewState extends State<ProductListView> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Filter Row: Search Text + Single Calendar Date Picker
+                  // Quick Filter Period Chips Row
+                  _buildMutationFilterChips(
+                    context: context,
+                    currentMode: filterMode,
+                    customDate: customDate,
+                    onModeChanged: (newMode, newCustom) {
+                      setDialogState(() {
+                        filterMode = newMode;
+                        if (newCustom != null) customDate = newCustom;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Filter Row: Search Text Input + Active Range Badge
                   Row(
                     children: [
                       // Text Search Input
@@ -1342,74 +1537,28 @@ class _ProductListViewState extends State<ProductListView> {
                       ),
                       const SizedBox(width: 8),
 
-                      // Single Date Picker Button
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDate ?? DateTime.now(),
-                            firstDate: DateTime(2024),
-                            lastDate: DateTime(2030),
-                            builder: (context, child) {
-                              return Theme(
-                                data: ThemeData.dark().copyWith(
-                                  colorScheme: const ColorScheme.dark(
-                                    primary: Color(0xFF0284C7),
-                                    onPrimary: Colors.white,
-                                    surface: Color(0xFF1E293B),
-                                    onSurface: Colors.white,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
-                          );
-                          if (picked != null) {
-                            setDialogState(() {
-                              selectedDate = picked;
-                            });
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                selectedDate == null
-                                    ? 'Semua Tanggal'
-                                    : isToday
-                                        ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
-                                        : DateFormat('dd/MM/yyyy').format(selectedDate!),
-                                style: TextStyle(
-                                  color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                      // Active Range Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.tune_rounded, color: Color(0xFF38BDF8), size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              range['label'],
+                              style: const TextStyle(
+                                color: Color(0xFF38BDF8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
-                              if (selectedDate != null) ...[
-                                const SizedBox(width: 4),
-                                GestureDetector(
-                                  onTap: () {
-                                    setDialogState(() {
-                                      selectedDate = null;
-                                    });
-                                  },
-                                  child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
-                                ),
-                              ],
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1423,7 +1572,11 @@ class _ProductListViewState extends State<ProductListView> {
                     width: isMobile ? double.maxFinite : 980,
                     height: 440,
                     child: StreamBuilder<List<StockMutation>>(
-                      stream: firebaseService.streamStockMutations(product.kodeInduk, date: selectedDate),
+                      stream: firebaseService.streamStockMutations(
+                        product.kodeInduk,
+                        startDate: range['start'],
+                        endDate: range['end'],
+                      ),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
@@ -1450,11 +1603,9 @@ class _ProductListViewState extends State<ProductListView> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.inbox_rounded, color: Colors.white.withOpacity(0.2), size: 48),
-                                SizedBox(height: 12),
+                                const SizedBox(height: 12),
                                 Text(
-                                  selectedDate != null
-                                      ? 'Belum ada mutasi stok pada ${DateFormat('dd/MM/yyyy').format(selectedDate!)}.'
-                                      : 'Belum ada riwayat mutasi stok.',
+                                  'Belum ada mutasi stok pada ${range['label']}.',
                                   style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                                 ),
                               ],
@@ -1620,18 +1771,15 @@ class _ProductListViewState extends State<ProductListView> {
     final firebaseService = FirebaseService();
     String dialogSearchQuery = '';
     String selectedType = 'SEMUA';
-    DateTime? selectedDate = DateTime.now(); // Default: TODAY to save Firestore reads!
+    String filterMode = 'TODAY'; // Default: TODAY
+    DateTime? customDate;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final isToday = selectedDate != null &&
-                selectedDate!.year == DateTime.now().year &&
-                selectedDate!.month == DateTime.now().month &&
-                selectedDate!.day == DateTime.now().day;
-
+            final range = _getMutationDateRange(filterMode, customDate: customDate);
             final isMobile = MediaQuery.of(context).size.width < 768;
 
             return AlertDialog(
@@ -1680,9 +1828,23 @@ class _ProductListViewState extends State<ProductListView> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
-                  // Filter Row: Search Input + Single Date Picker + Type Filter
+                  // Quick Filter Period Chips Row
+                  _buildMutationFilterChips(
+                    context: context,
+                    currentMode: filterMode,
+                    customDate: customDate,
+                    onModeChanged: (newMode, newCustom) {
+                      setDialogState(() {
+                        filterMode = newMode;
+                        if (newCustom != null) customDate = newCustom;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Filter Row: Search Input + Type Filter + Active Range Badge
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1711,77 +1873,6 @@ class _ProductListViewState extends State<ProductListView> {
                               dialogSearchQuery = val.trim().toLowerCase();
                             });
                           },
-                        ),
-                      ),
-
-                      // Single Date Picker Button (Defaults to TODAY)
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDate ?? DateTime.now(),
-                            firstDate: DateTime(2024),
-                            lastDate: DateTime(2030),
-                            builder: (context, child) {
-                              return Theme(
-                                data: ThemeData.dark().copyWith(
-                                  colorScheme: const ColorScheme.dark(
-                                    primary: Color(0xFF0284C7),
-                                    onPrimary: Colors.white,
-                                    surface: Color(0xFF1E293B),
-                                    onSurface: Colors.white,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
-                          );
-                          if (picked != null) {
-                            setDialogState(() {
-                              selectedDate = picked;
-                            });
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selectedDate != null ? const Color(0xFF0284C7).withOpacity(0.3) : const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selectedDate != null ? const Color(0xFF38BDF8) : const Color(0xFF334155),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                selectedDate == null
-                                    ? 'Semua Tanggal'
-                                    : isToday
-                                        ? 'Hari Ini (${DateFormat('dd/MM/yy').format(selectedDate!)})'
-                                        : DateFormat('dd/MM/yyyy').format(selectedDate!),
-                                style: TextStyle(
-                                  color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (selectedDate != null) ...[
-                                const SizedBox(width: 4),
-                                GestureDetector(
-                                  onTap: () {
-                                    setDialogState(() {
-                                      selectedDate = null;
-                                    });
-                                  },
-                                  child: const Icon(Icons.close_rounded, color: Colors.white70, size: 14),
-                                ),
-                              ],
-                            ],
-                          ),
                         ),
                       ),
 
@@ -1817,6 +1908,31 @@ class _ProductListViewState extends State<ProductListView> {
                           ),
                         ),
                       ),
+
+                      // Active Range Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.tune_rounded, color: Color(0xFF38BDF8), size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              range['label'],
+                              style: const TextStyle(
+                                color: Color(0xFF38BDF8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -1828,7 +1944,10 @@ class _ProductListViewState extends State<ProductListView> {
                     width: isMobile ? double.maxFinite : 1240,
                     height: isMobile ? MediaQuery.of(context).size.height * 0.6 : 480,
                     child: StreamBuilder<List<StockMutation>>(
-                  stream: firebaseService.streamAllStockMutations(date: selectedDate),
+                  stream: firebaseService.streamAllStockMutations(
+                    startDate: range['start'],
+                    endDate: range['end'],
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
@@ -1863,9 +1982,7 @@ class _ProductListViewState extends State<ProductListView> {
                             Icon(Icons.inbox_rounded, color: Colors.white.withOpacity(0.2), size: 48),
                             const SizedBox(height: 12),
                             Text(
-                              selectedDate != null
-                                  ? 'Belum ada riwayat mutasi stok pada ${DateFormat('dd/MM/yyyy').format(selectedDate!)}.'
-                                  : 'Tidak ada riwayat mutasi stok ditemukan.',
+                              'Belum ada riwayat mutasi stok pada ${range['label']}.',
                               style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                             ),
                           ],
@@ -1903,7 +2020,7 @@ class _ProductListViewState extends State<ProductListView> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Ditemukan: ${mutations.length} Mutasi ${selectedDate != null ? "(${DateFormat('dd/MM/yy').format(selectedDate!)})" : ""}',
+                                      'Ditemukan: ${mutations.length} Mutasi (${range['label']})',
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                     ),
                                     const SizedBox(height: 4),
@@ -1926,7 +2043,7 @@ class _ProductListViewState extends State<ProductListView> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Ditemukan: ${mutations.length} Mutasi ${selectedDate != null ? "(${DateFormat('dd/MM/yy').format(selectedDate!)})" : ""}',
+                                      'Ditemukan: ${mutations.length} Mutasi (${range['label']})',
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                     ),
                                     Row(
