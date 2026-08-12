@@ -77,6 +77,19 @@ class FirebaseService {
     }
   }
 
+  Future<void> clearAllInvoicePrintLogs() async {
+    try {
+      final snap = await _db.collection('invoice_print_logs').get();
+      final batch = _db.batch();
+      for (var doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error clearing all print logs: $e');
+    }
+  }
+
   // ==========================================
   // PRODUCTS CRUD
   // ==========================================

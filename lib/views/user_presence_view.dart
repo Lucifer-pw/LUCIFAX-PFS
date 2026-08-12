@@ -1131,180 +1131,271 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
             // Controls & Filter Bar
             Container(
-              padding: EdgeInsets.all(isMobile ? 10 : 14),
+              padding: EdgeInsets.all(isMobile ? 12 : 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFF334155)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search Box
-                  SizedBox(
-                    width: isMobile ? double.infinity : 280,
-                    child: TextField(
-                      style: TextStyle(color: Colors.white, fontSize: isMobile ? 12 : 13),
-                      decoration: InputDecoration(
-                        hintText: 'Cari invoice, customer, user...',
-                        hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 12 : 13),
-                        prefixIcon: Icon(Icons.search, color: const Color(0xFF38BDF8), size: isMobile ? 16 : 20),
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: isMobile ? 6 : 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.filter_alt_outlined, color: Color(0xFF38BDF8), size: 18),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Filter & Pencarian Log Cetak',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                      onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
-                    ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          '${filteredLogs.length} dari ${allLogs.length} Log',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
-
-                  // Role Filter
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _logRoleFilter,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        items: const [
-                          DropdownMenuItem(value: 'ALL', child: Text('Semua Role User')),
-                          DropdownMenuItem(value: 'NON_DEV', child: Text('⚡ Khusus Non-Dev (Kacab / Kasir)')),
-                          DropdownMenuItem(value: 'KACAB', child: Text('👔 Khusus Kacab / Kepala Sales')),
-                          DropdownMenuItem(value: 'CASHIER', child: Text('🛒 Khusus Kasir')),
-                          DropdownMenuItem(value: 'DEV', child: Text('💻 Khusus Developer')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _logRoleFilter = val);
-                        },
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Search Box
+                      SizedBox(
+                        width: isMobile ? double.infinity : 320,
+                        child: TextField(
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Cari No. Invoice, Customer, User...',
+                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                            suffixIcon: _logSearchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 16),
+                                    onPressed: () => setState(() => _logSearchQuery = ''),
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Color(0xFF38BDF8)),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
+                        ),
                       ),
-                    ),
-                  ),
 
-                  // Option Filter
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _logOptionFilter,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        items: const [
-                          DropdownMenuItem(value: 'ALL', child: Text('Semua Opsi Tanggal')),
-                          DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Kirim Diubah Baru')),
-                          DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal Nota')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _logOptionFilter = val);
-                        },
+                      // Role Filter Dropdown
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _logRoleFilter,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 18),
+                            dropdownColor: const Color(0xFF1E293B),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('👤 Semua Role User')),
+                              DropdownMenuItem(value: 'NON_DEV', child: Text('⚡ Khusus Non-Dev (Kacab/Kasir)')),
+                              DropdownMenuItem(value: 'KACAB', child: Text('👔 Khusus Kepala Sales / Kacab')),
+                              DropdownMenuItem(value: 'CASHIER', child: Text('🛒 Khusus Kasir')),
+                              DropdownMenuItem(value: 'DEV', child: Text('💻 Khusus Developer')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) setState(() => _logRoleFilter = val);
+                            },
+                          ),
+                        ),
                       ),
-                    ),
+
+                      // Option Filter Dropdown
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _logOptionFilter,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 18),
+                            dropdownColor: const Color(0xFF1E293B),
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('📅 Semua Opsi Tanggal')),
+                              DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Kirim Baru (Diubah)')),
+                              DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal Nota')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) setState(() => _logOptionFilter = val);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            SizedBox(height: isMobile ? 10 : 16),
+            SizedBox(height: isMobile ? 12 : 16),
 
-            // Log List
+            // Log List Container
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF334155)),
-                ),
-                child: filteredLogs.isEmpty
-                    ? Center(
+              child: filteredLogs.isEmpty
+                  ? Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.history_toggle_off_rounded, size: 48, color: Colors.white.withOpacity(0.2)),
-                            const SizedBox(height: 12),
+                            Icon(Icons.history_toggle_off_rounded, size: 56, color: Colors.white.withOpacity(0.15)),
+                            const SizedBox(height: 14),
                             const Text(
-                              'Belum ada log cetak invoice tercatat.',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                              'Tidak ada aktivitas log cetak invoice.',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Coba ubah kata kunci pencarian atau filter role.',
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                             ),
                           ],
                         ),
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: ListView.separated(
-                          itemCount: filteredLogs.length,
-                          separatorBuilder: (context, index) => const Divider(color: Color(0xFF334155), height: 1),
-                          itemBuilder: (context, index) {
-                            final log = filteredLogs[index];
-                            final roleColor = _getRoleColor(log.userRole);
-                            final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filteredLogs.length,
+                      itemBuilder: (context, index) {
+                        final log = filteredLogs[index];
+                        final roleColor = _getRoleColor(log.userRole);
+                        final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+                        final isNewDate = log.isDateModified;
 
-                            return Container(
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isNewDate ? Colors.amber.withOpacity(0.4) : const Color(0xFF334155),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
+                                    width: 4.5,
+                                  ),
+                                ),
+                              ),
                               padding: EdgeInsets.all(isMobile ? 12 : 16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Row 1: User & Action Badges + Timestamp
+                                  // Header Row: User Info, Action Pill, Timestamp & Delete Action
                                   Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      // User Avatar Icon
+                                      // User Avatar
                                       CircleAvatar(
-                                        radius: 16,
+                                        radius: 17,
                                         backgroundColor: roleColor.withOpacity(0.2),
                                         child: Text(
                                           log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
-                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 13),
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 10),
+
+                                      // User Name & Role Pill
                                       Expanded(
                                         child: Wrap(
                                           crossAxisAlignment: WrapCrossAlignment.center,
-                                          spacing: 6,
+                                          spacing: 8,
                                           runSpacing: 4,
                                           children: [
                                             Text(
                                               log.userName,
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
                                             ),
                                             if (log.userUsername.isNotEmpty)
                                               Text(
-                                                '(@${log.userUsername})',
-                                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                                '@${log.userUsername}',
+                                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                                               ),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: roleColor.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(4),
+                                                borderRadius: BorderRadius.circular(6),
                                                 border: Border.all(color: roleColor.withOpacity(0.4)),
                                               ),
                                               child: Text(
                                                 _getRoleLabel(log.userRole),
-                                                style: TextStyle(color: roleColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                                style: TextStyle(color: roleColor, fontSize: 9.5, fontWeight: FontWeight.bold),
                                               ),
                                             ),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: log.actionType == 'PRINT'
                                                     ? const Color(0xFF0284C7).withOpacity(0.2)
                                                     : const Color(0xFF10B981).withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(4),
+                                                borderRadius: BorderRadius.circular(6),
                                                 border: Border.all(
                                                   color: log.actionType == 'PRINT'
-                                                      ? const Color(0xFF38BDF8)
-                                                      : const Color(0xFF34D399),
+                                                      ? const Color(0xFF38BDF8).withOpacity(0.6)
+                                                      : const Color(0xFF34D399).withOpacity(0.6),
                                                 ),
                                               ),
                                               child: Row(
@@ -1320,7 +1411,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                                     log.actionType == 'PRINT' ? 'CETAK PDF' : 'DOWNLOAD PDF',
                                                     style: TextStyle(
                                                       color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
-                                                      fontSize: 9,
+                                                      fontSize: 9.5,
                                                       fontWeight: FontWeight.bold,
                                                     ),
                                                   ),
@@ -1330,83 +1421,122 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                           ],
                                         ),
                                       ),
-                                      Text(
-                                        _formatDateTime(log.timestamp),
-                                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+
+                                      // Timestamp Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFF334155)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF64748B)),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              _formatDateTime(log.timestamp),
+                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 6),
+                                      // Delete single log button for developer
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                                        tooltip: 'Hapus Log Ini',
+                                        splashRadius: 18,
+                                        onPressed: () {
+                                          _firebaseService.deleteInvoicePrintLog(log.id);
+                                        },
                                       ),
                                     ],
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // Middle Section: Invoice Number, Customer Name & Grand Total
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF334155).withOpacity(0.6)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0284C7).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                                          ),
+                                          child: Text(
+                                            'Invoice #${log.invoiceNo}',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            log.customerName,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (log.grandTotal > 0)
+                                          Text(
+                                            currencyFormatter.format(log.grandTotal),
+                                            style: const TextStyle(
+                                              color: Color(0xFF4ADE80),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                   const SizedBox(height: 10),
 
-                                  // Row 2: Invoice & Customer Info
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                        ),
-                                        child: Text(
-                                          'Invoice #${log.invoiceNo}',
-                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          log.customerName,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (log.grandTotal > 0)
-                                        Text(
-                                          currencyFormatter.format(log.grandTotal),
-                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Row 3: DATE SELECTION AUDIT HIGHLIGHT
+                                  // Bottom Section: DATE AUDIT PANEL
                                   Container(
                                     width: double.infinity,
-                                    padding: const EdgeInsets.all(10),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: log.isDateModified
+                                      color: isNewDate
                                           ? Colors.amber.withOpacity(0.08)
-                                          : const Color(0xFF0F172A),
-                                      borderRadius: BorderRadius.circular(8),
+                                          : const Color(0xFF0F172A).withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: log.isDateModified
-                                            ? Colors.amber.withOpacity(0.5)
+                                        color: isNewDate
+                                            ? Colors.amber.withOpacity(0.4)
                                             : const Color(0xFF334155),
                                       ),
                                     ),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
                                         Icon(
-                                          log.isDateModified ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
-                                          size: 18,
-                                          color: log.isDateModified ? Colors.amberAccent : const Color(0xFF38BDF8),
+                                          isNewDate ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
+                                          size: 20,
+                                          color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
                                         ),
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 10),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Wrap(
-                                                crossAxisAlignment: WrapCrossAlignment.center,
+                                              Row(
                                                 children: [
                                                   Text(
                                                     'Tanggal Kirim Dipilih / Dicetak: ',
                                                     style: TextStyle(
-                                                      color: log.isDateModified ? Colors.amberAccent : const Color(0xFF94A3B8),
+                                                      color: isNewDate ? Colors.amberAccent : const Color(0xFF94A3B8),
                                                       fontWeight: FontWeight.bold,
-                                                      fontSize: 12,
+                                                      fontSize: 12.5,
                                                     ),
                                                   ),
                                                   Text(
@@ -1414,19 +1544,20 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontWeight: FontWeight.bold,
-                                                      fontSize: 12,
+                                                      fontSize: 12.5,
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 3),
                                               Text(
-                                                log.isDateModified
-                                                    ? '⚠️ Role User (${_getRoleLabel(log.userRole)}) menginput Tanggal Kirim Baru (Tanggal Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})'
-                                                    : '✓ User mencetak menggunakan Tanggal Awal Nota (${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})',
+                                                isNewDate
+                                                    ? '⚠️ Role ${_getRoleLabel(log.userRole)} menginput Tanggal Kirim Baru (Tanggal Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})'
+                                                    : '✓ Menggunakan Tanggal Awal Nota (${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)}) — Tidak ada perubahan tanggal.',
                                                 style: TextStyle(
-                                                  color: log.isDateModified ? Colors.amber.shade200 : const Color(0xFF64748B),
-                                                  fontSize: 11,
+                                                  color: isNewDate ? Colors.amber.shade200 : const Color(0xFF94A3B8),
+                                                  fontSize: 11.5,
+                                                  fontWeight: isNewDate ? FontWeight.w500 : FontWeight.normal,
                                                 ),
                                               ),
                                             ],
@@ -1437,11 +1568,11 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                   ),
                                 ],
                               ),
-                            );
-                          },
-                        ),
-                      ),
-              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         );
