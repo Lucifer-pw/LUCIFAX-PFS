@@ -1011,6 +1011,26 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
         }
 
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Gagal memuat log: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         final allLogs = snapshot.data ?? [];
         final dateModifiedLogs = allLogs.where((l) => l.isDateModified).toList();
         final nonDevLogs = allLogs.where((l) => !l.isDeveloper).toList();

@@ -1366,8 +1366,37 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     };
   }
 
-  Future<void> _handlePrintOrDownloadPdf(model_tr.Transaction tr, {bool isDownload = false}) async {
+  Future<void> _handlePrintOrDownloadPdf(
+    model_tr.Transaction tr, {
+    bool isDownload = false,
+    String optionType = 'TANGGAL_AWAL',
+    DateTime? chosenDeliveryDate,
+  }) async {
     try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.currentUser;
+
+      // 1. Log print action to Firestore for Developer Monitoring
+      try {
+        await _firebaseService.logInvoicePrint(
+          invoiceNo: tr.invoiceNo,
+          customerName: tr.customerName,
+          originalDate: tr.date,
+          originalDeliveryDate: tr.deliveryDate,
+          printedDeliveryDate: chosenDeliveryDate ?? (tr.deliveryDate ?? tr.date),
+          optionType: optionType,
+          actionType: isDownload ? 'DOWNLOAD' : 'PRINT',
+          userId: currentUser?.uid ?? 'unknown',
+          userName: (currentUser?.name.isNotEmpty == true) ? currentUser!.name : (currentUser?.username ?? 'User'),
+          userUsername: currentUser?.username ?? '',
+          userRole: currentUser?.role ?? 'kacab',
+          isDeveloper: currentUser?.isDeveloper == true,
+          grandTotal: tr.grandTotal,
+        );
+      } catch (logErr) {
+        debugPrint('Error logging invoice print in _handlePrintOrDownloadPdf: $logErr');
+      }
+
       final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
       Customer? c;
       try {
@@ -3560,34 +3589,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         );
                       }
 
-                      // Log invoice print action to Firestore for Developer Monitoring
-                      try {
-                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                        final currentUser = authProvider.currentUser;
-
-                        await _firebaseService.logInvoicePrint(
-                          invoiceNo: tr.invoiceNo,
-                          customerName: tr.customerName,
-                          originalDate: tr.date,
-                          originalDeliveryDate: tr.deliveryDate,
-                          printedDeliveryDate: chosenDate,
-                          optionType: selectedOption == 2 ? 'TANGGAL_BARU' : 'TANGGAL_AWAL',
-                          actionType: isDownload ? 'DOWNLOAD' : 'PRINT',
-                          userId: currentUser?.uid ?? 'unknown',
-                          userName: currentUser?.name ?? (currentUser?.username ?? 'User'),
-                          userUsername: currentUser?.username ?? '',
-                          userRole: currentUser?.role ?? 'kacab',
-                          isDeveloper: currentUser?.isDeveloper == true,
-                          grandTotal: tr.grandTotal,
-                        );
-                      } catch (logErr) {
-                        debugPrint('Error logging invoice print: $logErr');
-                      }
-
-                      await _handlePrintOrDownloadPdf(toPrint, isDownload: isDownload);
+                      await _handlePrintOrDownloadPdf(
+                        toPrint,
+                        isDownload: isDownload,
+                        optionType: selectedOption == 2 ? 'TANGGAL_BARU' : 'TANGGAL_AWAL',
+                        chosenDeliveryDate: chosenDate,
+                      );
                     } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
                           SnackBar(content: Text('Gagal memproses PDF: $e'), backgroundColor: Colors.redAccent),
                         );
                       }
