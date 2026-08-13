@@ -46,6 +46,7 @@ class _ShellViewState extends State<ShellView> {
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
   final Set<String> _processedCommandIds = {};
   final FirebaseService _firebaseService = FirebaseService();
+  bool _hasShownSyncPrompt = false;
 
   @override
   void initState() {
@@ -53,6 +54,11 @@ class _ShellViewState extends State<ShellView> {
     _loadVersionAndCheckUpdate();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupRemotePrintListener();
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          _checkAndShowSyncPrompt();
+        }
+      });
     });
   }
 
@@ -259,6 +265,253 @@ class _ShellViewState extends State<ShellView> {
         info: updateInfo,
         currentVersion: _appVersion,
       ),
+    );
+  }
+
+  String _getTimeBasedGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Selamat Pagi';
+    } else if (hour >= 12 && hour < 15) {
+      return 'Selamat Siang';
+    } else if (hour >= 15 && hour < 18) {
+      return 'Selamat Sore';
+    } else {
+      return 'Selamat Malam';
+    }
+  }
+
+  void _checkAndShowSyncPrompt() {
+    if (!mounted) return;
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    if (user == null) return;
+    if (user.role != 'kacab' && user.role != 'staf') return;
+
+    final webrtc = WebRtcScreenService();
+    if (webrtc.isBroadcasting) return;
+
+    final greeting = _getTimeBasedGreeting();
+    final displayName = user.name.isNotEmpty ? user.name : 'Joko Setiawan';
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0284C7).withOpacity(0.25),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top Header Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1E293B),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'PT. PUTRA FIVA SEJAHTERAH — KANTOR CABANG',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Body Content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF0284C7), Color(0xFF0EA5E9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0284C7).withOpacity(0.4),
+                              blurRadius: 14,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.sync_rounded, color: Colors.white, size: 30),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '$greeting, $displayName!',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Komputer Kantor Siap Siaga.',
+                        style: TextStyle(
+                          color: Color(0xFF38BDF8),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Silakan klik tombol di bawah untuk menyinkronkan database transaksi dan mengaktifkan jalur cetak invoice otomatis kantor.',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5, height: 1.45),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 22),
+
+                      // Big Action Button: SINKRONKAN DATABASE
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            foregroundColor: Colors.white,
+                            elevation: 4,
+                            shadowColor: const Color(0xFF0284C7).withOpacity(0.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.sync_rounded, size: 20),
+                          label: const Text(
+                            '🔄  SINKRONKAN DATABASE',
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                          ),
+                          onPressed: () async {
+                            Navigator.of(ctx).pop();
+
+                            // Start broadcast
+                            final success = await webrtc.startBroadcasting(
+                              userId: user.uid,
+                              userName: user.name.isNotEmpty ? user.name : user.username,
+                              sessionId: 'kacab_live',
+                              onStoppedByUser: () {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Siaran layar kantor dihentikan dari browser.'),
+                                      backgroundColor: Color(0xFF1E293B),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              },
+                            );
+
+                            if (mounted && success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Row(
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, color: Color(0xFF4ADE80), size: 20),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          '✅ Database tersinkron & Komputer Kantor Siap Siaga!',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Color(0xFF0F172A),
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Helper Hint Note
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.lightbulb_outline_rounded, color: Color(0xFFFBBF24), size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Petunjuk: Setelah menekan tombol di atas, klik tombol [ Share / Bagikan ] pada jendela browser yang muncul.',
+                                style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, height: 1.3),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Dismiss button
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text(
+                          'Nanti Saja',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

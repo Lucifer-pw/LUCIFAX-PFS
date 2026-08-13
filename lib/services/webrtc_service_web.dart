@@ -56,6 +56,8 @@ class WebRtcScreenService {
           'frameRate': {'ideal': 30, 'max': 60},
         },
         'audio': false,
+        'preferCurrentTab': true,
+        'selfBrowserSurface': 'include',
       };
 
       final jsPromise = js_util.callMethod(
