@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Screen Monitor — Lucifax PFS</title>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #0b0f19;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+    header {
+      background-color: #1e293b;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      z-index: 10;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      background-color: #4ade80;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #4ade80;
+    }
+    .title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background-color: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    button {
+      background-color: #0284c7;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background-color: #0369a1;
+    }
+    #video-container {
+      flex: 1;
+      position: relative;
+      background-color: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background-color: #000000;
+    }
+    #overlay-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 24px 32px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      backdrop-filter: blur(8px);
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(56, 189, 248, 0.2);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <div class="dot" id="status-dot"></div>
+      <div class="title" id="station-title">📺 Live Screen: Komputer Kantor (Kacab)</div>
+      <span class="badge" id="status-badge">Menghubungkan...</span>
+    </div>
+    <div class="actions">
+      <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      <button onclick="reconnect()">🔄 Refresh</button>
+    </div>
+  </header>
+
+  <div id="video-container">
+    <video id="remote-video" autoplay playsinline muted></video>
+    <div id="overlay-message">
+      <div class="spinner" id="spinner"></div>
+      <div id="overlay-text" style="font-size: 14px; font-weight: 600;">Menghubungkan ke siaran layar Kacab...</div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDLz_JIz7I7inIziST57QSkOoBjp42Tv40",
+      projectId: "aplikasi-transaksi-fiva-frozen",
+      appId: "1:388227024926:web:d9595a3ec0882e1814860f"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
+    };
+
+    let peerConnection = null;
+    const video = document.getElementById('remote-video');
+    const statusBadge = document.getElementById('status-badge');
+    const statusDot = document.getElementById('status-dot');
+    const overlayMessage = document.getElementById('overlay-message');
+    const overlayText = document.getElementById('overlay-text');
+    const spinner = document.getElementById('spinner');
+
+    async function initViewer() {
+      try {
+        updateStatus('Mencari sesi siaran aktif...', false);
+
+        const sessionRef = db.collection('webrtc_screen_sessions').doc('kacab_live');
+        const snap = await sessionRef.get();
+
+        if (!snap.exists || snap.data().status !== 'active') {
+          updateStatus('Sesi siaran sedang tidak aktif.', false);
+          spinner.style.display = 'none';
+          overlayText.innerText = 'Kacab belum mengaktifkan fitur "Bagikan Layar".';
+          return;
+        }
+
+        const data = snap.data();
+        if (data.broadcasterName) {
+          document.getElementById('station-title').innerText = `📺 Live Screen: ${data.broadcasterName}`;
+        }
+
+        if (peerConnection) peerConnection.close();
+        peerConnection = new RTCPeerConnection(rtcConfig);
+
+        peerConnection.ontrack = (event) => {
+          if (event.streams && event.streams[0]) {
+            video.srcObject = event.streams[0];
+            video.play().catch(e => console.log('Video play error:', e));
+            overlayMessage.style.display = 'none';
+            updateStatus('Siaran Langsung Aktif (60 FPS)', true);
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          const state = peerConnection.iceConnectionState;
+          if (state === 'connected' || state === 'completed') {
+            updateStatus('Terhubung Lancar', true);
+            overlayMessage.style.display = 'none';
+          } else if (state === 'disconnected' || state === 'failed') {
+            updateStatus('Koneksi Terputus', false);
+          }
+        };
+
+        // Set remote offer
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+        // Create answer
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        // Wait for ICE gathering
+        await new Promise(resolve => {
+          if (peerConnection.iceGatheringState === 'complete') {
+            resolve();
+          } else {
+            const check = () => {
+              if (peerConnection.iceGatheringState === 'complete') {
+                peerConnection.removeEventListener('icegatheringstatechange', check);
+                resolve();
+              }
+            };
+            peerConnection.addEventListener('icegatheringstatechange', check);
+            setTimeout(resolve, 1000);
+          }
+        });
+
+        // Write answer
+        await sessionRef.update({
+          answer: {
+            sdp: peerConnection.localDescription.sdp,
+            type: peerConnection.localDescription.type
+          },
+          connectedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        updateStatus('Sinyal terhubung, memutar video...', true);
+      } catch (err) {
+        console.error('WebRTC Error:', err);
+        updateStatus('Gagal terhubung: ' + err.message, false);
+        spinner.style.display = 'none';
+        overlayText.innerText = 'Gagal terhubung ke siaran layar.';
+      }
+    }
+
+    function updateStatus(text, isGood) {
+      statusBadge.innerText = text;
+      statusDot.style.backgroundColor = isGood ? '#4ade80' : '#f59e0b';
+      statusDot.style.boxShadow = isGood ? '0 0 8px #4ade80' : '0 0 8px #f59e0b';
+    }
+
+    function toggleFullscreen() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen();
+      }
+    }
+
+    function reconnect() {
+      overlayMessage.style.display = 'block';
+      spinner.style.display = 'block';
+      overlayText.innerText = 'Menghubungkan ulang ke siaran...';
+      initViewer();
+    }
+
+    window.addEventListener('DOMContentLoaded', initViewer);
+  </script>
+</body>
+</html>

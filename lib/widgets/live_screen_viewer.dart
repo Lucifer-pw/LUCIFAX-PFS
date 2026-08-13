@@ -168,49 +168,8 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
   }
 
   void _openPopoutWindow() {
-    if (_currentStream == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sesi belum menerima stream video. Klik tombol Muat Ulang Sambungan.'),
-          backgroundColor: Color(0xFF1E293B),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
     try {
-      final newWin = html.window.open('', 'LiveScreenPopout', 'width=1280,height=720');
-      if (newWin != null) {
-        final doc = js_util.getProperty(newWin, 'document');
-        if (doc != null) {
-          js_util.setProperty(doc, 'title', 'Live Screen: ${widget.stationName}');
-          final body = js_util.getProperty(doc, 'body');
-          if (body != null) {
-            final style = js_util.getProperty(body, 'style');
-            js_util.setProperty(style, 'margin', '0');
-            js_util.setProperty(style, 'backgroundColor', '#000000');
-            js_util.setProperty(style, 'overflow', 'hidden');
-
-            final popoutVideo = html.VideoElement()
-              ..autoplay = true
-              ..controls = true
-              ..muted = true
-              ..style.width = '100vw'
-              ..style.height = '100vh'
-              ..style.objectFit = 'contain';
-
-            popoutVideo.setAttribute('playsinline', 'true');
-            popoutVideo.setAttribute('autoplay', 'true');
-            popoutVideo.setAttribute('muted', 'true');
-
-            js_util.setProperty(popoutVideo, 'srcObject', _currentStream);
-            popoutVideo.srcObject = _currentStream;
-            js_util.callMethod(body, 'append', [popoutVideo]);
-            popoutVideo.play();
-          }
-        }
-      }
+      html.window.open('live_view.html', 'LiveScreenMonitor', 'width=1280,height=720,menubar=no,toolbar=no,location=no');
     } catch (e) {
       debugPrint("Popout error: $e");
     }
