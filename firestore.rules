@@ -243,10 +243,8 @@ service cloud.firestore {
     // ═══════════════════════════════════════════════════
     // 24. WEBRTC_SCREEN_SESSIONS — Sinyal Siaran Layar WebRTC
     // ═══════════════════════════════════════════════════
-    match /webrtc_screen_sessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+    match /webrtc_screen_sessions/{document=**} {
+      allow read, write: if isAuthenticated();
     }
 
 

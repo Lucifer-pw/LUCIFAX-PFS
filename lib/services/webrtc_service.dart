@@ -15,7 +15,6 @@ class WebRtcScreenService {
   html.RtcPeerConnection? _peerConnection;
   html.MediaStream? _localStream;
   StreamSubscription? _sessionSubscription;
-  StreamSubscription? _candidateSubscription;
   bool _isBroadcasting = false;
   bool _isViewing = false;
 
@@ -87,18 +86,8 @@ class WebRtcScreenService {
         if (onStoppedByUser != null) onStoppedByUser();
       });
 
-      // 2. Clean old candidate subcollections
-      final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
-      final oldBroadcasterCands = await sessionRef.collection('broadcaster_candidates').get();
-      for (var doc in oldBroadcasterCands.docs) {
-        await doc.reference.delete();
-      }
-      final oldViewerCands = await sessionRef.collection('viewer_candidates').get();
-      for (var doc in oldViewerCands.docs) {
-        await doc.reference.delete();
-      }
-
-      // 3. Create RTC Peer Connection
+      // 2. Create RTC Peer Connection
+      _peerConnection?.close();
       _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
       // Add local stream tracks
@@ -106,15 +95,20 @@ class WebRtcScreenService {
         _peerConnection!.addTrack(track, _localStream!);
       });
 
-      // Listen for local ICE candidates and save to Firestore
+      final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
+
+      // Listen for local ICE candidates and append to document array
       _peerConnection!.onIceCandidate.listen((event) {
         if (event.candidate != null && event.candidate!.candidate != null) {
-          sessionRef.collection('broadcaster_candidates').add({
-            'candidate': event.candidate!.candidate,
-            'sdpMid': event.candidate!.sdpMid,
-            'sdpMLineIndex': event.candidate!.sdpMLineIndex,
-            'createdAt': Timestamp.now(),
-          });
+          sessionRef.update({
+            'broadcasterCandidates': FieldValue.arrayUnion([
+              {
+                'candidate': event.candidate!.candidate,
+                'sdpMid': event.candidate!.sdpMid,
+                'sdpMLineIndex': event.candidate!.sdpMLineIndex,
+              }
+            ])
+          }).catchError((_) {});
         }
       });
 
@@ -123,14 +117,14 @@ class WebRtcScreenService {
         onStatusUpdate?.call('Koneksi: ${_peerConnection?.iceConnectionState}');
       });
 
-      // 4. Create SDP Offer
+      // 3. Create SDP Offer
       final offer = await _peerConnection!.createOffer();
       await _peerConnection!.setLocalDescription({
         'sdp': offer.sdp,
         'type': offer.type,
       });
 
-      // 5. Save Session to Firestore
+      // 4. Save Initial Session Document to Firestore
       await sessionRef.set({
         'sessionId': sessionId,
         'broadcasterId': userId,
@@ -141,18 +135,25 @@ class WebRtcScreenService {
           'type': offer.type,
         },
         'answer': null,
+        'broadcasterCandidates': [],
+        'viewerCandidates': [],
         'startedAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
       });
 
       onStatusUpdate?.call('Siaran aktif, menunggu Developer...');
 
-      // 6. Listen for SDP Answer from Developer
+      // 5. Listen for SDP Answer and Viewer ICE Candidates
       bool hasSetRemote = false;
+      final processedViewerCandidates = <String>{};
+
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionRef.snapshots().listen((snapshot) async {
         final data = snapshot.data();
-        if (data != null && data['answer'] != null && _peerConnection != null && !hasSetRemote) {
+        if (data == null || _peerConnection == null) return;
+
+        // A. Set SDP Answer from Developer
+        if (data['answer'] != null && !hasSetRemote) {
           final answer = data['answer'] as Map<String, dynamic>;
           if (answer['sdp'] != null) {
             hasSetRemote = true;
@@ -163,26 +164,24 @@ class WebRtcScreenService {
             onStatusUpdate?.call('Terhubung ke Developer!');
           }
         }
-      });
 
-      // 7. Listen for Viewer ICE Candidates
-      _candidateSubscription?.cancel();
-      _candidateSubscription = sessionRef
-          .collection('viewer_candidates')
-          .snapshots()
-          .listen((snapshot) {
-        for (var change in snapshot.docChanges) {
-          if (change.type == DocumentChangeType.added) {
-            final data = change.doc.data();
-            if (data != null && data['candidate'] != null && _peerConnection != null) {
-              final candidate = html.RtcIceCandidate({
-                'candidate': data['candidate'],
-                'sdpMid': data['sdpMid'],
-                'sdpMLineIndex': data['sdpMLineIndex'],
-              });
-              _peerConnection!.addIceCandidate(candidate).catchError((e) {
-                debugPrint("Broadcaster addIceCandidate error: $e");
-              });
+        // B. Process Viewer ICE Candidates
+        if (data['viewerCandidates'] != null) {
+          final candidates = List<dynamic>.from(data['viewerCandidates']);
+          for (var cand in candidates) {
+            if (cand is Map<String, dynamic>) {
+              final candStr = cand['candidate']?.toString() ?? '';
+              if (candStr.isNotEmpty && !processedViewerCandidates.contains(candStr)) {
+                processedViewerCandidates.add(candStr);
+                final rtcCand = html.RtcIceCandidate({
+                  'candidate': cand['candidate'],
+                  'sdpMid': cand['sdpMid'],
+                  'sdpMLineIndex': cand['sdpMLineIndex'],
+                });
+                _peerConnection!.addIceCandidate(rtcCand).catchError((e) {
+                  debugPrint("Broadcaster addIceCandidate error: $e");
+                });
+              }
             }
           }
         }
@@ -199,7 +198,6 @@ class WebRtcScreenService {
   Future<void> stopBroadcasting({String sessionId = 'kacab_live'}) async {
     _isBroadcasting = false;
     _sessionSubscription?.cancel();
-    _candidateSubscription?.cancel();
 
     if (_localStream != null) {
       _localStream!.getTracks().forEach((track) => track.stop());
@@ -251,7 +249,7 @@ class WebRtcScreenService {
 
       // Listen for remote tracks
       _peerConnection!.onTrack.listen((event) {
-        debugPrint("Viewer onTrack event received with streams: ${event.streams}");
+        debugPrint("Viewer onTrack event received streams: ${event.streams}");
         if (event.streams != null && event.streams!.isNotEmpty) {
           onRemoteStreamReceived(event.streams!.first);
           onStatusUpdate?.call('Siaran Langsung Terhubung (60 FPS)');
@@ -273,12 +271,15 @@ class WebRtcScreenService {
       // Send local ICE candidates (Viewer) to Firestore
       _peerConnection!.onIceCandidate.listen((event) {
         if (event.candidate != null && event.candidate!.candidate != null) {
-          sessionRef.collection('viewer_candidates').add({
-            'candidate': event.candidate!.candidate,
-            'sdpMid': event.candidate!.sdpMid,
-            'sdpMLineIndex': event.candidate!.sdpMLineIndex,
-            'createdAt': Timestamp.now(),
-          });
+          sessionRef.update({
+            'viewerCandidates': FieldValue.arrayUnion([
+              {
+                'candidate': event.candidate!.candidate,
+                'sdpMid': event.candidate!.sdpMid,
+                'sdpMLineIndex': event.candidate!.sdpMLineIndex,
+              }
+            ])
+          }).catchError((_) {});
         }
       });
 
@@ -305,24 +306,29 @@ class WebRtcScreenService {
         'connectedAt': Timestamp.now(),
       });
 
-      // 4. Listen for Broadcaster ICE Candidates
-      _candidateSubscription?.cancel();
-      _candidateSubscription = sessionRef
-          .collection('broadcaster_candidates')
-          .snapshots()
-          .listen((snapshot) {
-        for (var change in snapshot.docChanges) {
-          if (change.type == DocumentChangeType.added) {
-            final candData = change.doc.data();
-            if (candData != null && candData['candidate'] != null && _peerConnection != null) {
-              final candidate = html.RtcIceCandidate({
-                'candidate': candData['candidate'],
-                'sdpMid': candData['sdpMid'],
-                'sdpMLineIndex': candData['sdpMLineIndex'],
-              });
-              _peerConnection!.addIceCandidate(candidate).catchError((e) {
-                debugPrint("Viewer addIceCandidate error: $e");
-              });
+      // 4. Listen for Broadcaster ICE Candidates in real-time
+      final processedBroadcasterCandidates = <String>{};
+      _sessionSubscription?.cancel();
+      _sessionSubscription = sessionRef.snapshots().listen((snapshot) {
+        final docData = snapshot.data();
+        if (docData == null || _peerConnection == null) return;
+
+        if (docData['broadcasterCandidates'] != null) {
+          final candidates = List<dynamic>.from(docData['broadcasterCandidates']);
+          for (var cand in candidates) {
+            if (cand is Map<String, dynamic>) {
+              final candStr = cand['candidate']?.toString() ?? '';
+              if (candStr.isNotEmpty && !processedBroadcasterCandidates.contains(candStr)) {
+                processedBroadcasterCandidates.add(candStr);
+                final rtcCand = html.RtcIceCandidate({
+                  'candidate': cand['candidate'],
+                  'sdpMid': cand['sdpMid'],
+                  'sdpMLineIndex': cand['sdpMLineIndex'],
+                });
+                _peerConnection!.addIceCandidate(rtcCand).catchError((e) {
+                  debugPrint("Viewer addIceCandidate error: $e");
+                });
+              }
             }
           }
         }
@@ -336,7 +342,7 @@ class WebRtcScreenService {
 
   void disconnectViewer() {
     _isViewing = false;
-    _candidateSubscription?.cancel();
+    _sessionSubscription?.cancel();
     if (_peerConnection != null) {
       _peerConnection!.close();
       _peerConnection = null;
