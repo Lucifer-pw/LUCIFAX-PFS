@@ -122,11 +122,24 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
             try {
               js_util.setProperty(_videoElement!, 'srcObject', _currentStream);
               _videoElement!.srcObject = _currentStream;
+              _videoElement!.muted = true;
               _videoElement!.play().catchError((e) {
                 debugPrint("Auto-play error: $e");
               });
             } catch (e) {
               debugPrint("Video assignment error: $e");
+            }
+
+            final tracks = _currentStream!.getVideoTracks();
+            if (tracks.isNotEmpty) {
+              tracks.first.onUnmute.listen((_) {
+                _videoElement?.play().catchError((_) {});
+                if (mounted) {
+                  setState(() {
+                    _isPlaying = true;
+                  });
+                }
+              });
             }
 
             if (mounted) {

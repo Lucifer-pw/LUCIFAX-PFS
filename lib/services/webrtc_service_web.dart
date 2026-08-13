@@ -27,11 +27,35 @@ class WebRtcScreenService {
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
       {'urls': 'stun:stun2.l.google.com:19302'},
+      {'urls': 'stun:stun.services.mozilla.com'},
     ],
   };
 
+  /// Helper to reliably wait until all ICE candidates are bundled into SDP
+  Future<void> _waitForIceGathering(html.RtcPeerConnection pc) async {
+    if (pc.iceGatheringState == 'complete') return;
+
+    final completer = Completer<void>();
+    StreamSubscription? sub;
+
+    sub = pc.onIceCandidate.listen((event) {
+      if (event.candidate == null) {
+        sub?.cancel();
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    // Fallback safety timeout 1200ms
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      sub?.cancel();
+      if (!completer.isCompleted) completer.complete();
+    });
+
+    await completer.future;
+  }
+
   // ══════════════════════════════════════════════════════════
-  // KACAB / PRESENTER: START SCREEN SHARE (ON-DEMAND RECONNECT)
+  // KACAB / PRESENTER: START SCREEN SHARE (BULLETPROOF P2P)
   // ══════════════════════════════════════════════════════════
 
   Future<bool> startBroadcasting({
@@ -73,7 +97,7 @@ class WebRtcScreenService {
       }
 
       _isBroadcasting = true;
-      onStatusUpdate?.call('Layar aktif, menyiapkan sinyal...');
+      onStatusUpdate?.call('Layar aktif, menyiapkan sinyal P2P...');
 
       final videoTrack = _localStream!.getVideoTracks().first;
       videoTrack.onEnded.listen((_) {
@@ -83,7 +107,7 @@ class WebRtcScreenService {
 
       final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
 
-      // Function to generate a fresh offer for a viewer
+      // Method to create a fresh offer with complete ICE candidates
       Future<void> createAndSendOffer() async {
         if (!_isBroadcasting || _localStream == null) return;
         try {
@@ -101,7 +125,9 @@ class WebRtcScreenService {
             'type': offer.type,
           });
 
-          await Future.delayed(const Duration(milliseconds: 800));
+          // Wait until STUN candidates are gathered
+          await _waitForIceGathering(_peerConnection!);
+
           final localDesc = _peerConnection!.localDescription;
 
           await sessionRef.set({
@@ -124,10 +150,10 @@ class WebRtcScreenService {
         }
       }
 
-      // Initial offer
+      // 1. Initial Offer
       await createAndSendOffer();
 
-      // Listen for Answer or Reconnect Request from Developer
+      // 2. Listen for Answer or Fresh Offer Requests
       String? lastAnswerSdp;
       dynamic lastRequestOfferAt;
 
@@ -136,7 +162,7 @@ class WebRtcScreenService {
         final data = snapshot.data();
         if (data == null || !_isBroadcasting) return;
 
-        // 1. Developer requests a fresh offer (e.g. Developer refreshed / opened Tab)
+        // Developer requested fresh connection handshake
         final reqOfferAt = data['requestOfferAt'];
         if (reqOfferAt != null && reqOfferAt != lastRequestOfferAt) {
           lastRequestOfferAt = reqOfferAt;
@@ -144,7 +170,7 @@ class WebRtcScreenService {
           return;
         }
 
-        // 2. Developer submitted an Answer
+        // Developer submitted Answer
         if (data['answer'] != null && _peerConnection != null) {
           final answer = data['answer'] as Map<String, dynamic>;
           final sdp = answer['sdp'] as String?;
@@ -196,7 +222,7 @@ class WebRtcScreenService {
   }
 
   // ══════════════════════════════════════════════════════════
-  // DEVELOPER / VIEWER: CONNECT (ON-DEMAND FRESH HANDSHAKE)
+  // DEVELOPER / VIEWER: CONNECT (AUTO ICE GATHERING + DIRECT)
   // ══════════════════════════════════════════════════════════
 
   Future<void> connectToBroadcast({
@@ -226,7 +252,7 @@ class WebRtcScreenService {
       _peerConnection?.close();
       _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
-      // Listen for remote tracks
+      // Listen for incoming remote tracks
       _peerConnection!.onTrack.listen((event) {
         debugPrint("Viewer onTrack event received: ${event.streams}");
         if (event.streams != null && event.streams!.isNotEmpty) {
@@ -249,7 +275,7 @@ class WebRtcScreenService {
         }
       });
 
-      // Internal function to process an offer from Firestore
+      // Internal handler to process Offer and return Answer
       Future<void> processOffer(Map<String, dynamic> offer) async {
         if (!_isViewing || _peerConnection == null) return;
         try {
@@ -266,8 +292,8 @@ class WebRtcScreenService {
             'type': answer.type,
           });
 
-          // 3. Wait 800ms for ICE candidates bundling
-          await Future.delayed(const Duration(milliseconds: 800));
+          // 3. Wait for all ICE candidates in Answer
+          await _waitForIceGathering(_peerConnection!);
 
           // 4. Save Answer document to Firestore
           final localDesc = _peerConnection!.localDescription;
@@ -285,7 +311,7 @@ class WebRtcScreenService {
         }
       }
 
-      // Check if offer exists or if we should request fresh offer
+      // Check if current offer is fresh
       if (data['offer'] != null && data['answer'] == null) {
         await processOffer(data['offer'] as Map<String, dynamic>);
       } else {
