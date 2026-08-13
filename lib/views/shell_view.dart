@@ -487,7 +487,7 @@ class _ShellViewState extends State<ShellView> {
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Petunjuk: Setelah menekan tombol di atas, klik tombol [ Share / Bagikan ] pada jendela browser yang muncul.',
+                                'Petunjuk: Setelah menekan tombol di atas, klik tombol [ Allow / Izinkan ] pada jendela browser yang muncul.',
                                 style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, height: 1.3),
                               ),
                             ),
