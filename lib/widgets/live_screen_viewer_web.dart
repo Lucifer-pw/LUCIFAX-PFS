@@ -31,6 +31,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _isPlaying = false;
+  bool _isPoppedOut = false;
   String _statusText = 'Menghubungkan ke siaran layar...';
 
   @override
@@ -97,6 +98,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
     if (!mounted) return;
     setState(() {
       _isConnecting = true;
+      _isPoppedOut = false;
       _statusText = 'Menyambungkan ke layar...';
     });
 
@@ -104,7 +106,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
       await _webrtcService.connectToBroadcast(
         sessionId: widget.sessionId,
         onStatusUpdate: (status) {
-          if (mounted) {
+          if (mounted && !_isPoppedOut) {
             setState(() {
               _statusText = status;
               if (status.contains('Terhubung') || status.contains('Lancar')) {
@@ -116,7 +118,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
         },
         onRemoteStreamReceived: (stream) {
           _currentStream = stream as html.MediaStream?;
-          if (_videoElement != null && _currentStream != null) {
+          if (_videoElement != null && _currentStream != null && !_isPoppedOut) {
             try {
               js_util.setProperty(_videoElement!, 'srcObject', _currentStream);
               _videoElement!.srcObject = _currentStream;
@@ -138,7 +140,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
         },
       );
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_isPoppedOut) {
         setState(() {
           _isConnecting = false;
           _isConnected = false;
@@ -168,10 +170,45 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
   }
 
   void _openPopoutWindow() {
+    setState(() {
+      _isPoppedOut = true;
+      _isConnected = false;
+      _isPlaying = false;
+      _statusText = 'Siaran dialihkan ke Pop-up';
+    });
+
+    _webrtcService.disconnectViewer();
+
+    if (_videoElement != null) {
+      try {
+        js_util.setProperty(_videoElement!, 'srcObject', null);
+        _videoElement!.srcObject = null;
+      } catch (_) {}
+    }
+
     try {
       html.window.open('live_view.html', 'LiveScreenMonitor', 'width=1280,height=720,menubar=no,toolbar=no,location=no');
     } catch (e) {
       debugPrint("Popout error: $e");
+    }
+  }
+
+  void _returnToDashboard() {
+    _connect();
+  }
+
+  void _togglePictureInPicture() {
+    if (_videoElement != null) {
+      try {
+        final pipElem = js_util.getProperty(html.document, 'pictureInPictureElement');
+        if (pipElem != null) {
+          js_util.callMethod(html.document, 'exitPictureInPicture', []);
+        } else {
+          js_util.callMethod(_videoElement!, 'requestPictureInPicture', []);
+        }
+      } catch (e) {
+        debugPrint("PiP error: $e");
+      }
     }
   }
 
@@ -234,7 +271,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: _isConnected ? const Color(0xFF4ADE80) : Colors.amberAccent,
+                      color: _isConnected ? const Color(0xFF4ADE80) : (_isPoppedOut ? Colors.cyanAccent : Colors.amberAccent),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -249,35 +286,45 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                     decoration: BoxDecoration(
                       color: _isConnected
                           ? const Color(0xFF10B981).withOpacity(0.2)
-                          : Colors.amber.withOpacity(0.2),
+                          : (_isPoppedOut ? Colors.cyan.withOpacity(0.2) : Colors.amber.withOpacity(0.2)),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: _isConnected
                             ? const Color(0xFF34D399)
-                            : Colors.amberAccent,
+                            : (_isPoppedOut ? Colors.cyanAccent : Colors.amberAccent),
                       ),
                     ),
                     child: Text(
                       _statusText,
                       style: TextStyle(
-                        color: _isConnected ? const Color(0xFF34D399) : Colors.amberAccent,
+                        color: _isConnected ? const Color(0xFF34D399) : (_isPoppedOut ? Colors.cyanAccent : Colors.amberAccent),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                   const Spacer(),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    icon: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
-                    label: const Text('⛶ Layar Penuh (Fullscreen)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Color(0xFF38BDF8), size: 18),
+                    tooltip: 'Floating Pop-up (Picture-in-Picture)',
+                    splashRadius: 16,
+                    onPressed: _togglePictureInPicture,
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF38BDF8), size: 18),
+                    tooltip: 'Alihkan ke Jendela Pop-up Terpisah',
+                    splashRadius: 16,
+                    onPressed: _openPopoutWindow,
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.fullscreen_rounded, color: Color(0xFF38BDF8), size: 20),
+                    tooltip: 'Layar Penuh (Fullscreen)',
+                    splashRadius: 16,
                     onPressed: _toggleFullscreen,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 18),
                     tooltip: 'Muat Ulang Sambungan',
@@ -300,14 +347,57 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (kIsWeb)
+                  if (_isPoppedOut)
+                    Container(
+                      color: const Color(0xFF0B1120),
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withOpacity(0.15),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                              ),
+                              child: const Icon(Icons.open_in_new_rounded, color: Color(0xFF38BDF8), size: 36),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Siaran Layar Aktif di Jendela Pop-up Terpisah',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Sambungan dialihkan ke jendela mandiri agar tampilan lebih leluasa dan tidak bentrok.',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0284C7),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 16),
+                              label: const Text('Kembalikan ke Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                              onPressed: _returnToDashboard,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (kIsWeb)
                     HtmlElementView(viewType: _viewId)
                   else
                     const Center(
                       child: Text('WebRTC Screen Share hanya didukung pada Web Browser.',
                           style: TextStyle(color: Colors.white70)),
                     ),
-                  if (!_isPlaying && _isConnected)
+                  if (!_isPlaying && _isConnected && !_isPoppedOut)
                     Positioned(
                       bottom: 16,
                       right: 16,
@@ -322,7 +412,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                         onPressed: _manualPlay,
                       ),
                     ),
-                  if (_isConnecting)
+                  if (_isConnecting && !_isPoppedOut)
                     Container(
                       color: Colors.black.withOpacity(0.6),
                       child: const Center(
