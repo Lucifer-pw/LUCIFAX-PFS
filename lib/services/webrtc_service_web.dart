@@ -15,6 +15,7 @@ class WebRtcScreenService {
   html.RtcPeerConnection? _peerConnection;
   html.MediaStream? _localStream;
   StreamSubscription? _sessionSubscription;
+  StreamSubscription? _viewerSubscription;
   bool _isBroadcasting = false;
   bool _isViewing = false;
 
@@ -30,7 +31,7 @@ class WebRtcScreenService {
   };
 
   // ══════════════════════════════════════════════════════════
-  // KACAB / PRESENTER: START SCREEN SHARE (VANILLA ICE - 1 WRITE ONLY)
+  // KACAB / PRESENTER: START SCREEN SHARE (ON-DEMAND RECONNECT)
   // ══════════════════════════════════════════════════════════
 
   Future<bool> startBroadcasting({
@@ -72,7 +73,7 @@ class WebRtcScreenService {
       }
 
       _isBroadcasting = true;
-      onStatusUpdate?.call('Layar aktif, menyiapkan sinyal video...');
+      onStatusUpdate?.call('Layar aktif, menyiapkan sinyal...');
 
       final videoTrack = _localStream!.getVideoTracks().first;
       videoTrack.onEnded.listen((_) {
@@ -80,50 +81,71 @@ class WebRtcScreenService {
         if (onStoppedByUser != null) onStoppedByUser();
       });
 
-      // Close previous connection if any
-      _peerConnection?.close();
-      _peerConnection = html.RtcPeerConnection(_rtcConfig);
-
-      // Add track to peer connection
-      _peerConnection!.addTrack(videoTrack, _localStream!);
-
-      // Create Offer
-      final offer = await _peerConnection!.createOffer();
-      await _peerConnection!.setLocalDescription({
-        'sdp': offer.sdp,
-        'type': offer.type,
-      });
-
-      // Wait 1s for ICE Gathering to bundle all candidates inside SDP
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      // Get localDescription with embedded ICE candidates
-      final localDesc = _peerConnection!.localDescription;
       final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
 
-      // Save SINGLE document write with full SDP offer
-      await sessionRef.set({
-        'sessionId': sessionId,
-        'broadcasterId': userId,
-        'broadcasterName': userName,
-        'status': 'active',
-        'offer': {
-          'sdp': localDesc?.sdp ?? offer.sdp,
-          'type': localDesc?.type ?? offer.type,
-        },
-        'answer': null,
-        'startedAt': Timestamp.now(),
-        'updatedAt': Timestamp.now(),
-      });
+      // Function to generate a fresh offer for a viewer
+      Future<void> createAndSendOffer() async {
+        if (!_isBroadcasting || _localStream == null) return;
+        try {
+          _peerConnection?.close();
+          _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
-      onStatusUpdate?.call('Siaran aktif, menunggu Developer...');
+          final currentTracks = _localStream!.getVideoTracks();
+          if (currentTracks.isNotEmpty) {
+            _peerConnection!.addTrack(currentTracks.first, _localStream!);
+          }
 
-      // Listen for Answer from Developer (Supports reconnection & tab switches)
+          final offer = await _peerConnection!.createOffer();
+          await _peerConnection!.setLocalDescription({
+            'sdp': offer.sdp,
+            'type': offer.type,
+          });
+
+          await Future.delayed(const Duration(milliseconds: 800));
+          final localDesc = _peerConnection!.localDescription;
+
+          await sessionRef.set({
+            'sessionId': sessionId,
+            'broadcasterId': userId,
+            'broadcasterName': userName,
+            'status': 'active',
+            'offer': {
+              'sdp': localDesc?.sdp ?? offer.sdp,
+              'type': localDesc?.type ?? offer.type,
+            },
+            'answer': null,
+            'startedAt': Timestamp.now(),
+            'updatedAt': Timestamp.now(),
+          }, SetOptions(merge: true));
+
+          onStatusUpdate?.call('Siaran aktif, menunggu Developer...');
+        } catch (e) {
+          debugPrint("Error generating offer: $e");
+        }
+      }
+
+      // Initial offer
+      await createAndSendOffer();
+
+      // Listen for Answer or Reconnect Request from Developer
       String? lastAnswerSdp;
+      dynamic lastRequestOfferAt;
+
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionRef.snapshots().listen((snapshot) async {
         final data = snapshot.data();
-        if (data != null && data['answer'] != null && _peerConnection != null) {
+        if (data == null || !_isBroadcasting) return;
+
+        // 1. Developer requests a fresh offer (e.g. Developer refreshed / opened Tab)
+        final reqOfferAt = data['requestOfferAt'];
+        if (reqOfferAt != null && reqOfferAt != lastRequestOfferAt) {
+          lastRequestOfferAt = reqOfferAt;
+          await createAndSendOffer();
+          return;
+        }
+
+        // 2. Developer submitted an Answer
+        if (data['answer'] != null && _peerConnection != null) {
           final answer = data['answer'] as Map<String, dynamic>;
           final sdp = answer['sdp'] as String?;
           if (sdp != null && sdp != lastAnswerSdp) {
@@ -137,7 +159,7 @@ class WebRtcScreenService {
                 onStatusUpdate?.call('Terhubung ke Developer!');
               }
             } catch (e) {
-              debugPrint("Error setting remote answer: $e");
+              debugPrint("Error setting remote answer on broadcaster: $e");
             }
           }
         }
@@ -174,7 +196,7 @@ class WebRtcScreenService {
   }
 
   // ══════════════════════════════════════════════════════════
-  // DEVELOPER / VIEWER: CONNECT (VANILLA ICE - 1 WRITE ONLY)
+  // DEVELOPER / VIEWER: CONNECT (ON-DEMAND FRESH HANDSHAKE)
   // ══════════════════════════════════════════════════════════
 
   Future<void> connectToBroadcast({
@@ -192,14 +214,15 @@ class WebRtcScreenService {
       final sessionSnap = await sessionRef.get();
 
       if (!sessionSnap.exists) {
-        throw Exception("Sesi siaran belum dimulai.");
+        throw Exception("Sesi siaran belum dimulai oleh Kacab.");
       }
 
       final data = sessionSnap.data()!;
-      if (data['status'] != 'active' || data['offer'] == null) {
+      if (data['status'] != 'active') {
         throw Exception("Sesi siaran sedang tidak aktif.");
       }
 
+      _viewerSubscription?.cancel();
       _peerConnection?.close();
       _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
@@ -220,40 +243,75 @@ class WebRtcScreenService {
         final state = _peerConnection?.iceConnectionState ?? '';
         debugPrint("Viewer ICE State: $state");
         if (state == 'connected' || state == 'completed') {
-          onStatusUpdate?.call('Terhubung Lancar');
+          onStatusUpdate?.call('Terhubung Lancar (60 FPS)');
         } else if (state == 'checking') {
           onStatusUpdate?.call('Menyambungkan (Checking)...');
         }
       });
 
-      // 1. Set Remote Description (Offer from Broadcaster)
-      final offer = data['offer'] as Map<String, dynamic>;
-      await _peerConnection!.setRemoteDescription({
-        'sdp': offer['sdp'],
-        'type': offer['type'],
+      // Internal function to process an offer from Firestore
+      Future<void> processOffer(Map<String, dynamic> offer) async {
+        if (!_isViewing || _peerConnection == null) return;
+        try {
+          // 1. Set Remote Offer
+          await _peerConnection!.setRemoteDescription({
+            'sdp': offer['sdp'],
+            'type': offer['type'],
+          });
+
+          // 2. Create SDP Answer
+          final answer = await _peerConnection!.createAnswer();
+          await _peerConnection!.setLocalDescription({
+            'sdp': answer.sdp,
+            'type': answer.type,
+          });
+
+          // 3. Wait 800ms for ICE candidates bundling
+          await Future.delayed(const Duration(milliseconds: 800));
+
+          // 4. Save Answer document to Firestore
+          final localDesc = _peerConnection!.localDescription;
+          await sessionRef.update({
+            'answer': {
+              'sdp': localDesc?.sdp ?? answer.sdp,
+              'type': localDesc?.type ?? answer.type,
+            },
+            'connectedAt': Timestamp.now(),
+          });
+
+          onStatusUpdate?.call('Sinyal terkirim, memutar video...');
+        } catch (e) {
+          debugPrint("Error processing offer on viewer: $e");
+        }
+      }
+
+      // Check if offer exists or if we should request fresh offer
+      if (data['offer'] != null && data['answer'] == null) {
+        await processOffer(data['offer'] as Map<String, dynamic>);
+      } else {
+        // Request fresh offer from Kacab
+        onStatusUpdate?.call('Meminta sinyal siaran baru dari Kacab...');
+        await sessionRef.update({
+          'requestOfferAt': Timestamp.now(),
+          'updatedAt': Timestamp.now(),
+        });
+      }
+
+      // Listen for fresh offer from Kacab
+      String? lastProcessedOfferSdp;
+      _viewerSubscription = sessionRef.snapshots().listen((snapshot) async {
+        final d = snapshot.data();
+        if (d == null || !_isViewing || _peerConnection == null) return;
+
+        if (d['offer'] != null) {
+          final offer = d['offer'] as Map<String, dynamic>;
+          final sdp = offer['sdp'] as String?;
+          if (sdp != null && sdp != lastProcessedOfferSdp && _peerConnection!.signalingState != 'stable') {
+            lastProcessedOfferSdp = sdp;
+            await processOffer(offer);
+          }
+        }
       });
-
-      // 2. Create SDP Answer
-      final answer = await _peerConnection!.createAnswer();
-      await _peerConnection!.setLocalDescription({
-        'sdp': answer.sdp,
-        'type': answer.type,
-      });
-
-      // 3. Wait 1s for ICE gathering to bundle all candidates inside SDP (Vanilla ICE - 1 write only!)
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      // 4. Save SINGLE Answer document to Firestore (Only 1 Write!)
-      final localDesc = _peerConnection!.localDescription;
-      await sessionRef.update({
-        'answer': {
-          'sdp': localDesc?.sdp ?? answer.sdp,
-          'type': localDesc?.type ?? answer.type,
-        },
-        'connectedAt': Timestamp.now(),
-      });
-
-      onStatusUpdate?.call('Sinyal terkirim, memutar video...');
     } catch (e) {
       debugPrint("Error connecting as viewer: $e");
       _isViewing = false;
@@ -263,7 +321,7 @@ class WebRtcScreenService {
 
   void disconnectViewer() {
     _isViewing = false;
-    _sessionSubscription?.cancel();
+    _viewerSubscription?.cancel();
     if (_peerConnection != null) {
       _peerConnection!.close();
       _peerConnection = null;
