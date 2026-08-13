@@ -13,6 +13,7 @@ import '../models/transaction.dart' as model_tr;
 import '../models/customer.dart';
 import '../services/firebase_service.dart';
 import '../services/print_service.dart';
+import '../services/webrtc_service.dart';
 import 'login_view.dart';
 import 'transaction_entry_view.dart';
 import 'product_list_view.dart';
@@ -560,6 +561,95 @@ class _ShellViewState extends State<ShellView> {
                           );
                         }
                       },
+              ),
+            ),
+
+          // WebRTC Screen Share Button (For non-developer / Kacab to share screen with Developer)
+          if (!user.isDeveloper)
+            Padding(
+              padding: const EdgeInsets.only(right: 6.0),
+              child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: WebRtcScreenService().streamSession(sessionId: 'kacab_live'),
+                builder: (context, snapshot) {
+                  final data = snapshot.data?.data();
+                  final isActive = data != null && data['status'] == 'active' && data['broadcasterId'] == user.uid;
+
+                  return ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isActive ? const Color(0xFFDC2626) : const Color(0xFF0284C7),
+                      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: isMobile ? 6 : 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    icon: Icon(
+                      isActive ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded,
+                      size: isMobile ? 14 : 16,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      isActive
+                          ? (isMobile ? 'STOP' : '🛑 Hentikan Siaran')
+                          : (isMobile ? 'LAYAR' : '📺 Bagikan Layar'),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isMobile ? 10.5 : 12,
+                      ),
+                    ),
+                    onPressed: () async {
+                      final webrtc = WebRtcScreenService();
+                      if (isActive) {
+                        await webrtc.stopBroadcasting(sessionId: 'kacab_live');
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Siaran layar dihentikan.'),
+                              backgroundColor: Color(0xFF1E293B),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } else {
+                        final success = await webrtc.startBroadcasting(
+                          userId: user.uid,
+                          userName: user.name,
+                          sessionId: 'kacab_live',
+                          onStoppedByUser: () {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Siaran layar dihentikan dari browser.'),
+                                  backgroundColor: Color(0xFF1E293B),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                        );
+
+                        if (context.mounted) {
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('📡 Siaran layar aktif! Developer sekarang dapat melihat layar Anda secara live.'),
+                                backgroundColor: Color(0xFF059669),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Gagal memulai siaran layar atau dibatalkan.'),
+                                backgroundColor: Colors.redAccent,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    },
+                  );
+                },
               ),
             ),
 

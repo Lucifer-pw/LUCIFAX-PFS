@@ -3,10 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/role_permissions_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_profile.dart';
 import '../models/invoice_print_log.dart';
 import '../models/remote_print_command.dart';
 import '../services/firebase_service.dart';
+import '../services/webrtc_service.dart';
+import '../widgets/live_screen_viewer.dart';
 
 class UserPresenceView extends StatefulWidget {
   const UserPresenceView({super.key});
@@ -1735,6 +1738,28 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                     ],
                   ),
             SizedBox(height: isMobile ? 12 : 16),
+
+            // Real-Time WebRTC Live Screen Viewer (When Kacab is sharing screen)
+            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: WebRtcScreenService().streamSession(sessionId: 'kacab_live'),
+              builder: (context, screenSnap) {
+                final screenData = screenSnap.data?.data();
+                final isScreenActive = screenData != null && screenData['status'] == 'active';
+
+                if (!isScreenActive) return const SizedBox.shrink();
+
+                final broadcasterName = screenData['broadcasterName'] ?? 'Kacab Kantor';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  height: isMobile ? 240 : 400,
+                  child: LiveScreenViewer(
+                    sessionId: 'kacab_live',
+                    stationName: broadcasterName,
+                  ),
+                );
+              },
+            ),
 
             // Header info bar
             Container(
