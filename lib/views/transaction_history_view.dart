@@ -1465,6 +1465,78 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     }
   }
 
+  Future<void> _sendRemotePrintToOffice(
+    model_tr.Transaction tr, {
+    DateTime? chosenDeliveryDate,
+    String optionType = 'TANGGAL_AWAL',
+  }) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.currentUser;
+      final deliveryDate = chosenDeliveryDate ?? (tr.deliveryDate ?? tr.date);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('📡 Mengirim perintah cetak Invoice #${tr.invoiceNo} ke komputer kantor...'),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0284C7),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      final cmdId = await _firebaseService.sendRemotePrintCommand(
+        invoiceNo: tr.invoiceNo,
+        customerName: tr.customerName,
+        deliveryDate: tr.deliveryDate,
+        printedDeliveryDate: deliveryDate,
+        optionType: optionType,
+        requestedByUserId: currentUser?.uid ?? 'developer',
+        requestedByUserName: currentUser?.name.isNotEmpty == true
+            ? currentUser!.name
+            : (currentUser?.username ?? 'Developer'),
+        targetUserRole: 'kacab',
+        grandTotal: tr.grandTotal,
+      );
+
+      if (cmdId != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('✅ Perintah cetak Invoice #${tr.invoiceNo} berhasil dikirim! Menunggu printer kantor merespons...'),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengirim perintah cetak: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   // Show detailed item list in dialog
   void _showDetailDialog(model_tr.Transaction tr) {
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
@@ -3441,6 +3513,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Print or Download invoice with date options dialog
   void _showPrintDialog(model_tr.Transaction tr, {bool isDownload = false}) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     int selectedOption = 1; // 1 = Tanggal di Awal, 2 = Input Tanggal Kirim Baru
     DateTime chosenDate = tr.deliveryDate ?? tr.date;
 
@@ -3541,6 +3614,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
+                if (authProvider.currentUser?.isDeveloper == true && !isDownload)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF059669),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.podcasts_rounded, size: 16, color: Colors.white),
+                    label: const Text(
+                      '📡 Cetak ke Kantor',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await _sendRemotePrintToOffice(
+                        tr,
+                        chosenDeliveryDate: chosenDate,
+                        optionType: selectedOption == 2 ? 'TANGGAL_BARU' : 'TANGGAL_AWAL',
+                      );
+                    },
+                  ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0284C7),

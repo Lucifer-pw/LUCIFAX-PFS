@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/role_permissions_provider.dart';
 import '../models/user_profile.dart';
 import '../models/invoice_print_log.dart';
+import '../models/remote_print_command.dart';
 import '../services/firebase_service.dart';
 
 class UserPresenceView extends StatefulWidget {
@@ -276,6 +277,13 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   label: 'Log Cetak Invoice',
                   isMobile: isMobile,
                 ),
+                const SizedBox(width: 8),
+                _buildTabButton(
+                  index: 3,
+                  icon: Icons.podcasts_rounded,
+                  label: '📡 Remote Print Console',
+                  isMobile: isMobile,
+                ),
               ],
             ),
           ),
@@ -287,7 +295,9 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                 ? _buildUserPresenceTab(authProvider, currentUser, isMobile)
                 : _selectedTab == 1
                     ? _buildKacabPermissionsTab(rolePermissionsProvider, isMobile)
-                    : _buildInvoicePrintLogsTab(isMobile),
+                    : _selectedTab == 2
+                        ? _buildInvoicePrintLogsTab(isMobile)
+                        : _buildRemotePrintConsoleTab(isMobile),
           ),
         ],
       ),
@@ -639,6 +649,32 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                           fontSize: isMobile ? 9 : 11,
                                         ),
                                       ),
+                                      if (isOnline && (u.role.toLowerCase() == 'kacab' || u.role.toLowerCase() == 'manager' || u.role.toLowerCase() == 'cashier')) ...[
+                                        const SizedBox(height: 3),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0284C7).withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 10),
+                                              SizedBox(width: 3),
+                                              Text(
+                                                'PRINT STATION SIAGA',
+                                                style: TextStyle(
+                                                  color: Color(0xFF38BDF8),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 8.5,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ],
@@ -1563,6 +1599,469 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                             ],
                                           ),
                                         ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // TAB 4: Real-Time Remote Print Console (WFH -> Office Print Station)
+  Widget _buildRemotePrintConsoleTab(bool isMobile) {
+    return StreamBuilder<List<RemotePrintCommand>>(
+      stream: _firebaseService.streamRecentPrintCommands(limit: 100),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Gagal memuat perintah remote print: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final allCommands = snapshot.data ?? [];
+        final pendingCmds = allCommands.where((c) => c.isPending).toList();
+        final processingCmds = allCommands.where((c) => c.isProcessing).toList();
+        final completedCmds = allCommands.where((c) => c.isCompleted).toList();
+        final failedCmds = allCommands.where((c) => c.isFailed).toList();
+
+        return Column(
+          children: [
+            // Top Summary Cards
+            isMobile
+                ? Column(
+                    children: [
+                      _buildStatCard(
+                        title: 'Total Perintah Remote',
+                        value: '${allCommands.length}',
+                        icon: Icons.podcasts_rounded,
+                        color: const Color(0xFF38BDF8),
+                        subtext: 'Seluruh antrean cetak dari WFH',
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStatCard(
+                        title: 'Menunggu Kantor (Pending)',
+                        value: '${pendingCmds.length + processingCmds.length}',
+                        icon: Icons.hourglass_top_rounded,
+                        color: Colors.amberAccent,
+                        subtext: 'Siaga diproses printer kantor',
+                        isMobile: isMobile,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildStatCard(
+                        title: 'Berhasil Tercetak',
+                        value: '${completedCmds.length}',
+                        icon: Icons.check_circle_rounded,
+                        color: const Color(0xFF4ADE80),
+                        subtext: 'Keluar di printer fisik kantor',
+                        isMobile: isMobile,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Total Perintah Remote',
+                          value: '${allCommands.length}',
+                          icon: Icons.podcasts_rounded,
+                          color: const Color(0xFF38BDF8),
+                          subtext: 'Seluruh antrean cetak dari WFH',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Menunggu Kantor (Pending)',
+                          value: '${pendingCmds.length + processingCmds.length}',
+                          icon: Icons.hourglass_top_rounded,
+                          color: Colors.amberAccent,
+                          subtext: 'Siaga diproses printer kantor',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Berhasil Tercetak',
+                          value: '${completedCmds.length}',
+                          icon: Icons.check_circle_rounded,
+                          color: const Color(0xFF4ADE80),
+                          subtext: 'Keluar di printer fisik kantor',
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      if (failedCmds.isNotEmpty) ...[
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildStatCard(
+                            title: 'Gagal / Error',
+                            value: '${failedCmds.length}',
+                            icon: Icons.cancel_rounded,
+                            color: Colors.redAccent,
+                            subtext: 'Perlu dicek ulang',
+                            isMobile: isMobile,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+            SizedBox(height: isMobile ? 12 : 16),
+
+            // Header info bar
+            Container(
+              padding: EdgeInsets.all(isMobile ? 12 : 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF334155)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.podcasts_rounded, color: Color(0xFF38BDF8), size: 20),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Antrean Cetak Jarak Jauh (Remote Print Queue)',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Perintah cetak yang dikirim Developer dari WFH ke komputer kantor secara real-time.',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      '${allCommands.length} Perintah',
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: isMobile ? 12 : 16),
+
+            // Commands List
+            Expanded(
+              child: allCommands.isEmpty
+                  ? Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.print_disabled_rounded, size: 56, color: Colors.white.withOpacity(0.15)),
+                            const SizedBox(height: 14),
+                            const Text(
+                              'Belum ada perintah cetak remote.',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Gunakan tombol "📡 Cetak ke Kantor" di menu Histori Transaksi untuk mengirim cetakan.',
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: allCommands.length,
+                      itemBuilder: (context, index) {
+                        final cmd = allCommands[index];
+                        final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+
+                        Color statusColor;
+                        String statusLabel;
+                        IconData statusIcon;
+
+                        if (cmd.isPending) {
+                          statusColor = Colors.amberAccent;
+                          statusLabel = 'MENUNGGU RESPONS KANTOR';
+                          statusIcon = Icons.hourglass_top_rounded;
+                        } else if (cmd.isProcessing) {
+                          statusColor = const Color(0xFF38BDF8);
+                          statusLabel = 'SEDANG DIPROSES KANTOR';
+                          statusIcon = Icons.sync_rounded;
+                        } else if (cmd.isCompleted) {
+                          statusColor = const Color(0xFF4ADE80);
+                          statusLabel = 'SUKSES TERCETAK DI KANTOR';
+                          statusIcon = Icons.check_circle_rounded;
+                        } else {
+                          statusColor = Colors.redAccent;
+                          statusLabel = 'GAGAL / ERROR';
+                          statusIcon = Icons.error_outline_rounded;
+                        }
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: statusColor.withOpacity(0.4),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: statusColor,
+                                    width: 4.5,
+                                  ),
+                                ),
+                              ),
+                              padding: EdgeInsets.all(isMobile ? 12 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Header: Status Badge, Time, and Actions
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // Status Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: statusColor.withOpacity(0.5)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(statusIcon, size: 12, color: statusColor),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              statusLabel,
+                                              style: TextStyle(
+                                                color: statusColor,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+
+                                      // Requested by pill
+                                      Text(
+                                        'Oleh ${cmd.requestedByUserName}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                      ),
+
+                                      const Spacer(),
+
+                                      // Time badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFF334155)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF64748B)),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              _formatDateTime(cmd.createdAt),
+                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 6),
+                                      // Re-send / Retry button
+                                      IconButton(
+                                        icon: const Icon(Icons.replay_rounded, color: Color(0xFF38BDF8), size: 18),
+                                        tooltip: 'Kirim Ulang ke Komputer Kantor',
+                                        splashRadius: 18,
+                                        onPressed: () async {
+                                          await _firebaseService.updatePrintCommandStatus(cmd.id, 'PENDING');
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Perintah cetak #${cmd.invoiceNo} dikirim ulang ke kantor!'),
+                                                backgroundColor: const Color(0xFF0284C7),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      ),
+
+                                      // Delete button
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                                        tooltip: 'Hapus Antrean Ini',
+                                        splashRadius: 18,
+                                        onPressed: () {
+                                          _firebaseService.deletePrintCommand(cmd.id);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // Middle Row: Invoice info & total
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF334155).withOpacity(0.6)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0284C7).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                                          ),
+                                          child: Text(
+                                            'Invoice #${cmd.invoiceNo}',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            cmd.customerName,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (cmd.grandTotal > 0)
+                                          Text(
+                                            currencyFormatter.format(cmd.grandTotal),
+                                            style: const TextStyle(
+                                              color: Color(0xFF4ADE80),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Bottom Row: Target delivery date & station confirmation
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A).withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF334155)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFF38BDF8)),
+                                            const SizedBox(width: 8),
+                                            const Text(
+                                              'Tanggal Kirim Dicetak: ',
+                                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
+                                            ),
+                                            Text(
+                                              DateFormat('dd MMMM yyyy (dd-MM-yyyy)').format(cmd.printedDeliveryDate),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                        if (cmd.printerStationName != null) ...[
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.print_rounded, size: 14, color: Color(0xFF4ADE80)),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Print Station Penerima: ${cmd.printerStationName}',
+                                                style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 11.5, fontWeight: FontWeight.w500),
+                                              ),
+                                              if (cmd.processedAt != null)
+                                                Text(
+                                                  ' (${_formatDateTime(cmd.processedAt)})',
+                                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                        if (cmd.errorMessage != null && cmd.errorMessage!.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '⚠️ Error: ${cmd.errorMessage}',
+                                            style: const TextStyle(color: Colors.redAccent, fontSize: 11.5),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),

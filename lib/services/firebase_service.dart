@@ -12,6 +12,7 @@ import '../models/operational_payment_method.dart';
 import '../models/stock_mutation.dart';
 import '../models/wa_contact.dart';
 import '../models/invoice_print_log.dart';
+import '../models/remote_print_command.dart';
 import 'package:intl/intl.dart';
 
 class FirebaseService {
@@ -87,6 +88,126 @@ class FirebaseService {
       await batch.commit();
     } catch (e) {
       debugPrint('Error clearing all print logs: $e');
+    }
+  }
+
+  // ==========================================
+  // REMOTE PRINT COMMANDS (WFH -> OFFICE PRINTER)
+  // ==========================================
+
+  Future<String?> sendRemotePrintCommand({
+    required dynamic invoiceNo,
+    required String customerName,
+    DateTime? deliveryDate,
+    required DateTime printedDeliveryDate,
+    required String optionType, // 'TANGGAL_AWAL' | 'TANGGAL_BARU'
+    required String requestedByUserId,
+    required String requestedByUserName,
+    String? targetUserId,
+    String targetUserRole = 'kacab',
+    double grandTotal = 0.0,
+  }) async {
+    try {
+      final docRef = _db.collection('remote_print_commands').doc();
+      final cmd = RemotePrintCommand(
+        id: docRef.id,
+        invoiceNo: invoiceNo is int ? invoiceNo : int.tryParse(invoiceNo.toString()) ?? 0,
+        customerName: customerName,
+        deliveryDate: deliveryDate,
+        printedDeliveryDate: printedDeliveryDate,
+        optionType: optionType,
+        status: 'PENDING',
+        requestedByUserId: requestedByUserId,
+        requestedByUserName: requestedByUserName,
+        targetUserId: targetUserId,
+        targetUserRole: targetUserRole,
+        createdAt: DateTime.now(),
+        grandTotal: grandTotal,
+      );
+
+      await docRef.set(cmd.toMap());
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error sending remote print command: $e');
+      return null;
+    }
+  }
+
+  Stream<List<RemotePrintCommand>> streamPendingPrintCommands({String? targetUserId, String role = 'kacab'}) {
+    return _db
+        .collection('remote_print_commands')
+        .where('status', isEqualTo: 'PENDING')
+        .snapshots()
+        .map((snapshot) {
+      final all = snapshot.docs.map((doc) => RemotePrintCommand.fromFirestore(doc)).toList();
+      // Filter in memory for role or specific target user
+      return all.where((cmd) {
+        if (targetUserId != null && cmd.targetUserId != null && cmd.targetUserId != targetUserId) {
+          return false;
+        }
+        if (cmd.targetUserRole != 'all' && cmd.targetUserRole.toLowerCase() != role.toLowerCase() && role.toLowerCase() != 'developer') {
+          return false;
+        }
+        return true;
+      }).toList();
+    });
+  }
+
+  Future<void> updatePrintCommandStatus(
+    String commandId,
+    String status, {
+    String? errorMessage,
+    String? printerStationName,
+  }) async {
+    try {
+      final Map<String, dynamic> updateData = {
+        'status': status,
+      };
+      if (status == 'PROCESSING' || status == 'COMPLETED' || status == 'FAILED') {
+        updateData['processedAt'] = Timestamp.now();
+      }
+      if (errorMessage != null) {
+        updateData['errorMessage'] = errorMessage;
+      }
+      if (printerStationName != null) {
+        updateData['printerStationName'] = printerStationName;
+      }
+
+      await _db.collection('remote_print_commands').doc(commandId).update(updateData);
+    } catch (e) {
+      debugPrint('Error updating print command status: $e');
+    }
+  }
+
+  Stream<List<RemotePrintCommand>> streamRecentPrintCommands({int limit = 50}) {
+    return _db.collection('remote_print_commands').snapshots().map((snapshot) {
+      final list = snapshot.docs.map((doc) => RemotePrintCommand.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (list.length > limit) {
+        return list.sublist(0, limit);
+      }
+      return list;
+    });
+  }
+
+  Future<void> deletePrintCommand(String commandId) async {
+    try {
+      await _db.collection('remote_print_commands').doc(commandId).delete();
+    } catch (e) {
+      debugPrint('Error deleting print command: $e');
+    }
+  }
+
+  Future<void> clearAllPrintCommands() async {
+    try {
+      final snap = await _db.collection('remote_print_commands').get();
+      final batch = _db.batch();
+      for (var doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error clearing all print commands: $e');
     }
   }
 

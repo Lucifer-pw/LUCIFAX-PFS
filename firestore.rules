@@ -230,6 +230,17 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 23. REMOTE_PRINT_COMMANDS — Perintah Cetak Jarak Jauh (WFH -> Kantor)
+    // ═══════════════════════════════════════════════════
+    match /remote_print_commands/{cmdId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isDeveloper();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {

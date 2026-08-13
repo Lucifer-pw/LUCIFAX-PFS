@@ -1,9 +1,18 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/auth_provider.dart';
 import '../providers/update_provider.dart';
 import '../providers/role_permissions_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/customer_provider.dart';
+import '../models/remote_print_command.dart';
+import '../models/transaction.dart' as model_tr;
+import '../models/customer.dart';
+import '../services/firebase_service.dart';
+import '../services/print_service.dart';
 import 'login_view.dart';
 import 'transaction_entry_view.dart';
 import 'product_list_view.dart';
@@ -33,17 +42,179 @@ class _ShellViewState extends State<ShellView> {
   String _appVersion = '3.3.13';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
+  StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
+  final Set<String> _processedCommandIds = {};
+  final FirebaseService _firebaseService = FirebaseService();
 
   @override
   void initState() {
     super.initState();
     _loadVersionAndCheckUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupRemotePrintListener();
+    });
   }
 
   @override
   void dispose() {
+    _printCommandSubscription?.cancel();
     _menuSearchController.dispose();
     super.dispose();
+  }
+
+  void _setupRemotePrintListener() {
+    _printCommandSubscription?.cancel();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    if (user == null) return;
+
+    // Listen for remote print commands targeted for this user or their role
+    _printCommandSubscription = _firebaseService
+        .streamPendingPrintCommands(targetUserId: user.uid, role: user.role)
+        .listen((commands) async {
+      for (final cmd in commands) {
+        if (_processedCommandIds.contains(cmd.id)) continue;
+        _processedCommandIds.add(cmd.id);
+
+        await _processIncomingRemotePrint(cmd, user.name.isNotEmpty ? user.name : user.username);
+      }
+    }, onError: (err) {
+      debugPrint("Error in remote print command listener: $err");
+    });
+  }
+
+  Future<void> _processIncomingRemotePrint(RemotePrintCommand cmd, String stationName) async {
+    try {
+      // 1. Mark command as processing
+      await _firebaseService.updatePrintCommandStatus(
+        cmd.id,
+        'PROCESSING',
+        printerStationName: stationName,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.print_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '🖨️ Perintah Cetak dari ${cmd.requestedByUserName}: Invoice #${cmd.invoiceNo} (${cmd.customerName})',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF0284C7),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+
+      // 2. Find transaction model
+      final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+      model_tr.Transaction? tr;
+      try {
+        tr = trProvider.transactions.firstWhere((t) => t.invoiceNo.toString() == cmd.invoiceNo.toString());
+      } catch (_) {}
+
+      if (tr == null) {
+        // Fallback: query from Firestore directly if not found in memory
+        final snap = await FirebaseFirestore.instance
+            .collection('transactions')
+            .where('invoiceNo', isEqualTo: cmd.invoiceNo)
+            .limit(1)
+            .get();
+        if (snap.docs.isNotEmpty) {
+          tr = model_tr.Transaction.fromMap(snap.docs.first.data(), snap.docs.first.id);
+        }
+      }
+
+      if (tr == null) {
+        await _firebaseService.updatePrintCommandStatus(
+          cmd.id,
+          'FAILED',
+          errorMessage: 'Data transaksi Invoice #${cmd.invoiceNo} tidak ditemukan di database.',
+        );
+        return;
+      }
+
+      // Build model to print with the specified delivery date
+      final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
+      Customer? c;
+      try {
+        c = masterCustomers.firstWhere((cust) => cust.id == tr!.customerId);
+      } catch (_) {}
+
+      final toPrint = model_tr.Transaction(
+        invoiceNo: tr.invoiceNo,
+        customerId: tr.customerId,
+        customerName: tr.customerName,
+        aliasName: (c != null && c.aliasName.isNotEmpty) ? c.aliasName : tr.customerName,
+        date: tr.date,
+        deliveryDate: cmd.printedDeliveryDate,
+        city: (c != null && c.city.isNotEmpty) ? c.city : tr.city,
+        province: (c != null && c.province.isNotEmpty) ? c.province : tr.province,
+        country: (c != null && c.country.isNotEmpty) ? c.country : tr.country,
+        items: tr.items,
+        grandTotal: tr.grandTotal,
+        note: tr.note,
+        status: tr.status,
+        statusTransfer: tr.statusTransfer,
+        transferDate: tr.transferDate,
+        erpSyncDate: tr.erpSyncDate,
+        createdBy: tr.createdBy,
+        createdAt: tr.createdAt,
+      );
+
+      // 3. Trigger printing to physical printer via PrintService
+      await PrintService.printInvoice(toPrint);
+
+      // 4. Mark command as completed
+      await _firebaseService.updatePrintCommandStatus(
+        cmd.id,
+        'COMPLETED',
+        printerStationName: stationName,
+      );
+
+      // 5. Log print action to Firestore audit log
+      await _firebaseService.logInvoicePrint(
+        invoiceNo: tr.invoiceNo,
+        customerName: tr.customerName,
+        originalDate: tr.date,
+        originalDeliveryDate: tr.deliveryDate,
+        printedDeliveryDate: cmd.printedDeliveryDate,
+        optionType: cmd.optionType,
+        actionType: 'REMOTE_PRINT',
+        userId: cmd.requestedByUserId,
+        userName: '${cmd.requestedByUserName} (via $stationName)',
+        userUsername: 'remote_station',
+        userRole: 'developer',
+        isDeveloper: true,
+        grandTotal: tr.grandTotal,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Invoice #${tr.invoiceNo} berhasil diproses ke printer kantor!'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error executing remote print on station: $e');
+      await _firebaseService.updatePrintCommandStatus(
+        cmd.id,
+        'FAILED',
+        errorMessage: e.toString(),
+      );
+    }
   }
 
   Future<void> _loadVersionAndCheckUpdate() async {
