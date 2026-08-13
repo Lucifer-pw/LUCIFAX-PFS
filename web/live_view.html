@@ -129,13 +129,13 @@
     </div>
     <div class="actions">
       <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
-      <button onclick="manualPlay()" style="background-color: #10b981;">▶️ Play Stream</button>
+      <button onclick="manualPlay()" style="background-color: #10b981;">▶️ Play Video</button>
       <button onclick="reconnect()">🔄 Refresh</button>
     </div>
   </header>
 
   <div id="video-container">
-    <video id="remote-video" autoplay playsinline muted controls></video>
+    <video id="remote-video" autoplay playsinline muted></video>
     <div id="overlay-message">
       <div class="spinner" id="spinner"></div>
       <div id="overlay-text" style="font-size: 14px; font-weight: 600;">Menghubungkan ke siaran layar Kacab...</div>
@@ -162,13 +162,15 @@
 
     let peerConnection = null;
     let currentStream = null;
-    let bCandidatesUnsub = null;
     const video = document.getElementById('remote-video');
     const statusBadge = document.getElementById('status-badge');
     const statusDot = document.getElementById('status-dot');
     const overlayMessage = document.getElementById('overlay-message');
     const overlayText = document.getElementById('overlay-text');
     const spinner = document.getElementById('spinner');
+
+    video.muted = true;
+    video.defaultMuted = true;
 
     async function initViewer() {
       try {
@@ -193,42 +195,27 @@
           peerConnection.close();
           peerConnection = null;
         }
-        if (bCandidatesUnsub) {
-          bCandidatesUnsub();
-          bCandidatesUnsub = null;
-        }
 
         peerConnection = new RTCPeerConnection(rtcConfig);
 
         peerConnection.ontrack = (event) => {
-          console.log('ontrack event fired:', event);
+          console.log('ontrack event fired:', event.streams);
           if (event.streams && event.streams[0]) {
             currentStream = event.streams[0];
             video.srcObject = currentStream;
-          } else if (event.track) {
-            currentStream = new MediaStream([event.track]);
-            video.srcObject = currentStream;
+            video.play().then(() => {
+              overlayMessage.style.display = 'none';
+              updateStatus('Siaran Langsung Aktif (60 FPS)', true);
+            }).catch(e => console.log('Video play error:', e));
           }
-          video.play().catch(e => console.log('Video play error:', e));
-          overlayMessage.style.display = 'none';
-          updateStatus('Siaran Langsung Aktif (60 FPS)', true);
         };
 
         peerConnection.oniceconnectionstatechange = () => {
           const state = peerConnection ? peerConnection.iceConnectionState : '';
-          console.log('ICE Connection State:', state);
+          console.log('ICE State:', state);
           if (state === 'connected' || state === 'completed') {
             updateStatus('Terhubung Lancar (60 FPS)', true);
             overlayMessage.style.display = 'none';
-          } else if (state === 'disconnected' || state === 'failed') {
-            updateStatus('Koneksi Terputus / Perlu Muat Ulang', false);
-          }
-        };
-
-        // Send viewer candidates
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            sessionRef.collection('viewerCandidates').add(event.candidate.toJSON());
           }
         };
 
@@ -239,47 +226,37 @@
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
-        // 3. Update Answer to Firestore
+        // 3. Wait 1s for ICE candidates to gather into localDescription
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 4. Save Answer
         await sessionRef.update({
           answer: {
-            sdp: answer.sdp,
-            type: answer.type
+            sdp: peerConnection.localDescription.sdp,
+            type: peerConnection.localDescription.type
           },
           connectedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // 4. Listen for Broadcaster candidates
-        bCandidatesUnsub = sessionRef.collection('broadcasterCandidates').onSnapshot(snap => {
-          snap.docChanges().forEach(change => {
-            if (change.type === 'added' && peerConnection) {
-              try {
-                peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
-              } catch (e) {
-                console.log('Error adding broadcaster candidate:', e);
-              }
-            }
-          });
-        });
-
-        updateStatus('Sinyal terhubung, menyambungkan video...', true);
+        updateStatus('Sinyal terhubung, memutar video...', true);
       } catch (err) {
         console.error('WebRTC Error:', err);
         updateStatus('Gagal: ' + err.message, false);
         spinner.style.display = 'none';
-        overlayText.innerText = 'Gagal terhubung ke siaran layar: ' + err.message;
+        overlayText.innerText = 'Gagal terhubung ke siaran: ' + err.message;
       }
     }
 
     function manualPlay() {
       if (video) {
-        if (currentStream && video.srcObject !== currentStream) {
+        if (currentStream) {
           video.srcObject = currentStream;
         }
         video.play().then(() => {
           overlayMessage.style.display = 'none';
           updateStatus('Siaran Langsung Aktif (60 FPS)', true);
         }).catch(e => {
-          alert('Stream belum masuk, silakan klik Refresh.');
+          alert('Klik Refresh untuk memuat ulang koneksi.');
         });
       }
     }
