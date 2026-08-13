@@ -162,6 +162,7 @@
 
     let peerConnection = null;
     let currentStream = null;
+    let bCandidatesUnsub = null;
     const video = document.getElementById('remote-video');
     const statusBadge = document.getElementById('status-badge');
     const statusDot = document.getElementById('status-dot');
@@ -192,20 +193,12 @@
           peerConnection.close();
           peerConnection = null;
         }
+        if (bCandidatesUnsub) {
+          bCandidatesUnsub();
+          bCandidatesUnsub = null;
+        }
 
         peerConnection = new RTCPeerConnection(rtcConfig);
-
-        // Collect viewer candidates
-        const viewerCandidates = [];
-        peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            viewerCandidates.push({
-              candidate: event.candidate.candidate,
-              sdpMid: event.candidate.sdpMid,
-              sdpMLineIndex: event.candidate.sdpMLineIndex
-            });
-          }
-        };
 
         peerConnection.ontrack = (event) => {
           console.log('ontrack event fired:', event);
@@ -232,38 +225,43 @@
           }
         };
 
-        // 1. Set Remote Description (Offer from Broadcaster)
+        // Send viewer candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            sessionRef.collection('viewerCandidates').add(event.candidate.toJSON());
+          }
+        };
+
+        // 1. Set Remote Offer
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
 
-        // 2. Add Broadcaster Candidates
-        if (data.broadcasterCandidates && Array.isArray(data.broadcasterCandidates)) {
-          for (const c of data.broadcasterCandidates) {
-            try {
-              await peerConnection.addIceCandidate(new RTCIceCandidate(c));
-            } catch (e) {
-              console.log('Broadcaster candidate error:', e);
-            }
-          }
-        }
-
-        // 3. Create Answer
+        // 2. Create Answer
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
-        // 4. Wait 1.5s for ICE Candidates Gathering
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // 5. Update SINGLE Answer & Candidates write to Firestore
+        // 3. Update Answer to Firestore
         await sessionRef.update({
           answer: {
             sdp: answer.sdp,
             type: answer.type
           },
-          viewerCandidates: viewerCandidates,
           connectedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        updateStatus('Sinyal terhubung, menunggu video...', true);
+        // 4. Listen for Broadcaster candidates
+        bCandidatesUnsub = sessionRef.collection('broadcasterCandidates').onSnapshot(snap => {
+          snap.docChanges().forEach(change => {
+            if (change.type === 'added' && peerConnection) {
+              try {
+                peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+              } catch (e) {
+                console.log('Error adding broadcaster candidate:', e);
+              }
+            }
+          });
+        });
+
+        updateStatus('Sinyal terhubung, menyambungkan video...', true);
       } catch (err) {
         console.error('WebRTC Error:', err);
         updateStatus('Gagal: ' + err.message, false);
