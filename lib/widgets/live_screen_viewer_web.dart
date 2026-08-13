@@ -152,7 +152,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
 
   void _manualPlay() {
     if (_videoElement != null) {
-      if (_currentStream != null && _videoElement!.srcObject == null) {
+      if (_currentStream != null) {
         js_util.setProperty(_videoElement!, 'srcObject', _currentStream);
         _videoElement!.srcObject = _currentStream;
       }

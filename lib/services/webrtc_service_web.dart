@@ -118,20 +118,27 @@ class WebRtcScreenService {
 
       onStatusUpdate?.call('Siaran aktif, menunggu Developer...');
 
-      // Listen for Answer from Developer
-      bool hasSetRemote = false;
+      // Listen for Answer from Developer (Supports reconnection & tab switches)
+      String? lastAnswerSdp;
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionRef.snapshots().listen((snapshot) async {
         final data = snapshot.data();
-        if (data != null && data['answer'] != null && _peerConnection != null && !hasSetRemote) {
+        if (data != null && data['answer'] != null && _peerConnection != null) {
           final answer = data['answer'] as Map<String, dynamic>;
-          if (answer['sdp'] != null) {
-            hasSetRemote = true;
-            await _peerConnection!.setRemoteDescription({
-              'sdp': answer['sdp'],
-              'type': answer['type'],
-            });
-            onStatusUpdate?.call('Terhubung ke Developer!');
+          final sdp = answer['sdp'] as String?;
+          if (sdp != null && sdp != lastAnswerSdp) {
+            lastAnswerSdp = sdp;
+            try {
+              if (_peerConnection!.signalingState == 'have-local-offer') {
+                await _peerConnection!.setRemoteDescription({
+                  'sdp': sdp,
+                  'type': answer['type'] ?? 'answer',
+                });
+                onStatusUpdate?.call('Terhubung ke Developer!');
+              }
+            } catch (e) {
+              debugPrint("Error setting remote answer: $e");
+            }
           }
         }
       });
@@ -201,6 +208,10 @@ class WebRtcScreenService {
         debugPrint("Viewer onTrack event received: ${event.streams}");
         if (event.streams != null && event.streams!.isNotEmpty) {
           onRemoteStreamReceived(event.streams!.first);
+          onStatusUpdate?.call('Siaran Langsung Terhubung (60 FPS)');
+        } else if (event.track != null) {
+          final stream = html.MediaStream([event.track!]);
+          onRemoteStreamReceived(stream);
           onStatusUpdate?.call('Siaran Langsung Terhubung (60 FPS)');
         }
       });
