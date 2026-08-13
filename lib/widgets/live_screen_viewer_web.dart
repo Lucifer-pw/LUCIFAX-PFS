@@ -267,18 +267,17 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF38BDF8), size: 18),
-                    tooltip: 'Buka di Jendela Pop-up Terpisah',
-                    splashRadius: 16,
-                    onPressed: _openPopoutWindow,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.fullscreen_rounded, color: Color(0xFF38BDF8), size: 20),
-                    tooltip: 'Layar Penuh (Fullscreen)',
-                    splashRadius: 16,
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0284C7),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    icon: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                    label: const Text('⛶ Layar Penuh (Fullscreen)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                     onPressed: _toggleFullscreen,
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 18),
                     tooltip: 'Muat Ulang Sambungan',
@@ -312,31 +311,15 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                     Positioned(
                       bottom: 16,
                       right: 16,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF059669),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 18),
-                            label: const Text('Pop-out Jendela', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                            onPressed: _openPopoutWindow,
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0284C7),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
-                            label: const Text('▶️ Putar Video', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                            onPressed: _manualPlay,
-                          ),
-                        ],
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                        label: const Text('▶️ Putar Video', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: _manualPlay,
                       ),
                     ),
                   if (_isConnecting)
