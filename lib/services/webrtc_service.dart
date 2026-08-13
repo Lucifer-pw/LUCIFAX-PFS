@@ -27,7 +27,10 @@ class WebRtcScreenService {
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
       {'urls': 'stun:stun2.l.google.com:19302'},
-    ]
+      {'urls': 'stun:stun3.l.google.com:19302'},
+      {'urls': 'stun:stun4.l.google.com:19302'},
+    ],
+    'iceCandidatePoolSize': 10,
   };
 
   // ══════════════════════════════════════════════════════════
@@ -39,6 +42,7 @@ class WebRtcScreenService {
     required String userName,
     String sessionId = 'kacab_live',
     VoidCallback? onStoppedByUser,
+    Function(String)? onStatusUpdate,
   }) async {
     if (!kIsWeb) {
       debugPrint("WebRTC screen share only supported on Web.");
@@ -46,6 +50,8 @@ class WebRtcScreenService {
     }
 
     try {
+      onStatusUpdate?.call('Meminta izin layar...');
+
       // 1. Get Screen Media Stream from browser via JS Interop
       final mediaDevices = html.window.navigator.mediaDevices;
       if (mediaDevices == null) {
@@ -72,15 +78,27 @@ class WebRtcScreenService {
       }
 
       _isBroadcasting = true;
+      onStatusUpdate?.call('Layar aktif, menyiapkan koneksi...');
 
-      // Handle when user stops sharing via browser bar
+      // Handle when user stops sharing via browser floating stop bar
       final videoTrack = _localStream!.getVideoTracks().first;
       videoTrack.onEnded.listen((_) {
         stopBroadcasting(sessionId: sessionId);
         if (onStoppedByUser != null) onStoppedByUser();
       });
 
-      // 2. Create RTC Peer Connection
+      // 2. Clean old candidate subcollections
+      final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
+      final oldBroadcasterCands = await sessionRef.collection('broadcaster_candidates').get();
+      for (var doc in oldBroadcasterCands.docs) {
+        await doc.reference.delete();
+      }
+      final oldViewerCands = await sessionRef.collection('viewer_candidates').get();
+      for (var doc in oldViewerCands.docs) {
+        await doc.reference.delete();
+      }
+
+      // 3. Create RTC Peer Connection
       _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
       // Add local stream tracks
@@ -90,8 +108,8 @@ class WebRtcScreenService {
 
       // Listen for local ICE candidates and save to Firestore
       _peerConnection!.onIceCandidate.listen((event) {
-        if (event.candidate != null) {
-          _db.collection('webrtc_screen_sessions').doc(sessionId).collection('broadcaster_candidates').add({
+        if (event.candidate != null && event.candidate!.candidate != null) {
+          sessionRef.collection('broadcaster_candidates').add({
             'candidate': event.candidate!.candidate,
             'sdpMid': event.candidate!.sdpMid,
             'sdpMLineIndex': event.candidate!.sdpMLineIndex,
@@ -100,15 +118,19 @@ class WebRtcScreenService {
         }
       });
 
-      // 3. Create SDP Offer
+      _peerConnection!.onIceConnectionStateChange.listen((_) {
+        debugPrint("Broadcaster ICE State: ${_peerConnection?.iceConnectionState}");
+        onStatusUpdate?.call('Koneksi: ${_peerConnection?.iceConnectionState}');
+      });
+
+      // 4. Create SDP Offer
       final offer = await _peerConnection!.createOffer();
       await _peerConnection!.setLocalDescription({
         'sdp': offer.sdp,
         'type': offer.type,
       });
 
-      // 4. Save Session to Firestore
-      final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
+      // 5. Save Session to Firestore
       await sessionRef.set({
         'sessionId': sessionId,
         'broadcasterId': userId,
@@ -118,27 +140,32 @@ class WebRtcScreenService {
           'sdp': offer.sdp,
           'type': offer.type,
         },
+        'answer': null,
         'startedAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
       });
 
-      // 5. Listen for SDP Answer from Developer
+      onStatusUpdate?.call('Siaran aktif, menunggu Developer...');
+
+      // 6. Listen for SDP Answer from Developer
+      bool hasSetRemote = false;
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionRef.snapshots().listen((snapshot) async {
         final data = snapshot.data();
-        if (data != null && data['answer'] != null && _peerConnection != null) {
+        if (data != null && data['answer'] != null && _peerConnection != null && !hasSetRemote) {
           final answer = data['answer'] as Map<String, dynamic>;
-          final currentRemoteDesc = _peerConnection!.remoteDescription;
-          if (currentRemoteDesc == null) {
+          if (answer['sdp'] != null) {
+            hasSetRemote = true;
             await _peerConnection!.setRemoteDescription({
               'sdp': answer['sdp'],
               'type': answer['type'],
             });
+            onStatusUpdate?.call('Terhubung ke Developer!');
           }
         }
       });
 
-      // 6. Listen for Viewer ICE Candidates
+      // 7. Listen for Viewer ICE Candidates
       _candidateSubscription?.cancel();
       _candidateSubscription = sessionRef
           .collection('viewer_candidates')
@@ -147,13 +174,15 @@ class WebRtcScreenService {
         for (var change in snapshot.docChanges) {
           if (change.type == DocumentChangeType.added) {
             final data = change.doc.data();
-            if (data != null && _peerConnection != null) {
+            if (data != null && data['candidate'] != null && _peerConnection != null) {
               final candidate = html.RtcIceCandidate({
                 'candidate': data['candidate'],
                 'sdpMid': data['sdpMid'],
                 'sdpMLineIndex': data['sdpMLineIndex'],
               });
-              _peerConnection!.addIceCandidate(candidate);
+              _peerConnection!.addIceCandidate(candidate).catchError((e) {
+                debugPrint("Broadcaster addIceCandidate error: $e");
+              });
             }
           }
         }
@@ -194,14 +223,17 @@ class WebRtcScreenService {
   // DEVELOPER / VIEWER: CONNECT & RECEIVE LIVE STREAM
   // ══════════════════════════════════════════════════════════
 
-  Future<html.MediaStream?> connectToBroadcast({
+  Future<void> connectToBroadcast({
     String sessionId = 'kacab_live',
     required Function(html.MediaStream) onRemoteStreamReceived,
+    Function(String)? onStatusUpdate,
   }) async {
-    if (!kIsWeb) return null;
+    if (!kIsWeb) return;
 
     try {
       _isViewing = true;
+      onStatusUpdate?.call('Mengambil data siaran...');
+
       final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
       final sessionSnap = await sessionRef.get();
 
@@ -219,14 +251,28 @@ class WebRtcScreenService {
 
       // Listen for remote tracks
       _peerConnection!.onTrack.listen((event) {
+        debugPrint("Viewer onTrack event received with streams: ${event.streams}");
         if (event.streams != null && event.streams!.isNotEmpty) {
           onRemoteStreamReceived(event.streams!.first);
+          onStatusUpdate?.call('Siaran Langsung Terhubung (60 FPS)');
+        }
+      });
+
+      _peerConnection!.onIceConnectionStateChange.listen((_) {
+        final state = _peerConnection?.iceConnectionState ?? '';
+        debugPrint("Viewer ICE State: $state");
+        if (state == 'connected' || state == 'completed') {
+          onStatusUpdate?.call('Terhubung Lancar');
+        } else if (state == 'checking') {
+          onStatusUpdate?.call('Menyambungkan (Checking)...');
+        } else if (state == 'failed' || state == 'disconnected') {
+          onStatusUpdate?.call('Koneksi Terputus ($state)');
         }
       });
 
       // Send local ICE candidates (Viewer) to Firestore
       _peerConnection!.onIceCandidate.listen((event) {
-        if (event.candidate != null) {
+        if (event.candidate != null && event.candidate!.candidate != null) {
           sessionRef.collection('viewer_candidates').add({
             'candidate': event.candidate!.candidate,
             'sdpMid': event.candidate!.sdpMid,
@@ -268,23 +314,23 @@ class WebRtcScreenService {
         for (var change in snapshot.docChanges) {
           if (change.type == DocumentChangeType.added) {
             final candData = change.doc.data();
-            if (candData != null && _peerConnection != null) {
+            if (candData != null && candData['candidate'] != null && _peerConnection != null) {
               final candidate = html.RtcIceCandidate({
                 'candidate': candData['candidate'],
                 'sdpMid': candData['sdpMid'],
                 'sdpMLineIndex': candData['sdpMLineIndex'],
               });
-              _peerConnection!.addIceCandidate(candidate);
+              _peerConnection!.addIceCandidate(candidate).catchError((e) {
+                debugPrint("Viewer addIceCandidate error: $e");
+              });
             }
           }
         }
       });
-
-      return null;
     } catch (e) {
       debugPrint("Error connecting as viewer: $e");
       _isViewing = false;
-      return null;
+      onStatusUpdate?.call('Gagal: $e');
     }
   }
 

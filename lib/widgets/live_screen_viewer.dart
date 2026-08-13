@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'dart:ui_web' as ui_web;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js_util' as js_util;
 import '../services/webrtc_service.dart';
 
 class LiveScreenViewer extends StatefulWidget {
@@ -42,7 +44,12 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'contain'
-        ..style.backgroundColor = '#0F172A';
+        ..style.backgroundColor = '#000000';
+
+      _videoElement!.setAttribute('playsinline', 'true');
+      _videoElement!.setAttribute('webkit-playsinline', 'true');
+      _videoElement!.setAttribute('autoplay', 'true');
+      _videoElement!.setAttribute('muted', 'true');
 
       ui_web.platformViewRegistry.registerViewFactory(
         _viewId,
@@ -54,18 +61,36 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
   }
 
   Future<void> _connect() async {
+    if (!mounted) return;
     setState(() {
       _isConnecting = true;
-      _statusText = 'Menghubungkan ke siaran...';
+      _statusText = 'Menyambungkan ke layar...';
     });
 
     try {
       await _webrtcService.connectToBroadcast(
         sessionId: widget.sessionId,
+        onStatusUpdate: (status) {
+          if (mounted) {
+            setState(() {
+              _statusText = status;
+              if (status.contains('Terhubung') || status.contains('Lancar')) {
+                _isConnected = true;
+                _isConnecting = false;
+              }
+            });
+          }
+        },
         onRemoteStreamReceived: (stream) {
           if (_videoElement != null) {
-            _videoElement!.srcObject = stream;
-            _videoElement!.play();
+            try {
+              js_util.setProperty(_videoElement!, 'srcObject', stream);
+              _videoElement!.srcObject = stream;
+              _videoElement!.play();
+            } catch (e) {
+              debugPrint("Video play error: $e");
+            }
+
             if (mounted) {
               setState(() {
                 _isConnected = true;
@@ -87,11 +112,28 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
     }
   }
 
+  void _toggleFullscreen() {
+    if (_videoElement != null) {
+      try {
+        if (html.document.fullscreenElement != null) {
+          html.document.exitFullscreen();
+        } else {
+          _videoElement!.requestFullscreen();
+        }
+      } catch (e) {
+        debugPrint("Fullscreen error: $e");
+      }
+    }
+  }
+
   @override
   void dispose() {
     _webrtcService.disconnectViewer();
     if (_videoElement != null) {
-      _videoElement!.srcObject = null;
+      try {
+        js_util.setProperty(_videoElement!, 'srcObject', null);
+        _videoElement!.srcObject = null;
+      } catch (_) {}
     }
     super.dispose();
   }
@@ -163,6 +205,12 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                   ),
                   const Spacer(),
                   IconButton(
+                    icon: const Icon(Icons.fullscreen_rounded, color: Color(0xFF38BDF8), size: 20),
+                    tooltip: 'Layar Penuh (Fullscreen)',
+                    splashRadius: 16,
+                    onPressed: _toggleFullscreen,
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8), size: 18),
                     tooltip: 'Muat Ulang Sambungan',
                     splashRadius: 16,
@@ -200,7 +248,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                           children: [
                             CircularProgressIndicator(color: Color(0xFF38BDF8)),
                             SizedBox(height: 12),
-                            Text('Menghubungkan ke siaran layar Kacab...',
+                            Text('Menghubungkan ke siaran layar...',
                                 style: TextStyle(color: Colors.white70, fontSize: 13)),
                           ],
                         ),
