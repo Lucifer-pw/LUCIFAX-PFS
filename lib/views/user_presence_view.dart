@@ -1654,44 +1654,17 @@ class _UserPresenceViewState extends State<UserPresenceView> {
         final completedCmds = allCommands.where((c) => c.isCompleted).toList();
         final failedCmds = allCommands.where((c) => c.isFailed).toList();
 
-        return Column(
-          children: [
-            // Top Summary Cards
-            isMobile
-                ? Column(
-                    children: [
-                      _buildStatCard(
-                        title: 'Total Perintah Remote',
-                        value: '${allCommands.length}',
-                        icon: Icons.podcasts_rounded,
-                        color: const Color(0xFF38BDF8),
-                        subtext: 'Seluruh antrean cetak dari WFH',
-                        isMobile: isMobile,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildStatCard(
-                        title: 'Menunggu Kantor (Pending)',
-                        value: '${pendingCmds.length + processingCmds.length}',
-                        icon: Icons.hourglass_top_rounded,
-                        color: Colors.amberAccent,
-                        subtext: 'Siaga diproses printer kantor',
-                        isMobile: isMobile,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildStatCard(
-                        title: 'Berhasil Tercetak',
-                        value: '${completedCmds.length}',
-                        icon: Icons.check_circle_rounded,
-                        color: const Color(0xFF4ADE80),
-                        subtext: 'Keluar di printer fisik kantor',
-                        isMobile: isMobile,
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(bottom: isMobile ? 32 : 48),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Top Summary Cards
+              isMobile
+                  ? Column(
+                      children: [
+                        _buildStatCard(
                           title: 'Total Perintah Remote',
                           value: '${allCommands.length}',
                           icon: Icons.podcasts_rounded,
@@ -1699,10 +1672,8 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           subtext: 'Seluruh antrean cetak dari WFH',
                           isMobile: isMobile,
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildStatCard(
+                        const SizedBox(height: 8),
+                        _buildStatCard(
                           title: 'Menunggu Kantor (Pending)',
                           value: '${pendingCmds.length + processingCmds.length}',
                           icon: Icons.hourglass_top_rounded,
@@ -1710,10 +1681,8 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           subtext: 'Siaga diproses printer kantor',
                           isMobile: isMobile,
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildStatCard(
+                        const SizedBox(height: 8),
+                        _buildStatCard(
                           title: 'Berhasil Tercetak',
                           value: '${completedCmds.length}',
                           icon: Icons.check_circle_rounded,
@@ -1721,102 +1690,137 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           subtext: 'Keluar di printer fisik kantor',
                           isMobile: isMobile,
                         ),
-                      ),
-                      if (failedCmds.isNotEmpty) ...[
-                        const SizedBox(width: 16),
+                      ],
+                    )
+                  : Row(
+                      children: [
                         Expanded(
                           child: _buildStatCard(
-                            title: 'Gagal / Error',
-                            value: '${failedCmds.length}',
-                            icon: Icons.cancel_rounded,
-                            color: Colors.redAccent,
-                            subtext: 'Perlu dicek ulang',
+                            title: 'Total Perintah Remote',
+                            value: '${allCommands.length}',
+                            icon: Icons.podcasts_rounded,
+                            color: const Color(0xFF38BDF8),
+                            subtext: 'Seluruh antrean cetak dari WFH',
                             isMobile: isMobile,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-            SizedBox(height: isMobile ? 12 : 16),
-
-            // Real-Time WebRTC Live Screen Viewer (When Kacab is sharing screen)
-            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: WebRtcScreenService().streamSession(sessionId: 'kacab_live'),
-              builder: (context, screenSnap) {
-                final screenData = screenSnap.data?.data();
-                final isScreenActive = screenData != null && screenData['status'] == 'active';
-
-                if (!isScreenActive) return const SizedBox.shrink();
-
-                final broadcasterName = screenData['broadcasterName'] ?? 'Kacab Kantor';
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  height: isMobile ? 240 : 400,
-                  child: LiveScreenViewer(
-                    sessionId: 'kacab_live',
-                    stationName: broadcasterName,
-                  ),
-                );
-              },
-            ),
-
-            // Header info bar
-            Container(
-              padding: EdgeInsets.all(isMobile ? 12 : 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.podcasts_rounded, color: Color(0xFF38BDF8), size: 20),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Antrean Cetak Jarak Jauh (Remote Print Queue)',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildStatCard(
+                            title: 'Menunggu Kantor (Pending)',
+                            value: '${pendingCmds.length + processingCmds.length}',
+                            icon: Icons.hourglass_top_rounded,
+                            color: Colors.amberAccent,
+                            subtext: 'Siaga diproses printer kantor',
+                            isMobile: isMobile,
+                          ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Perintah cetak yang dikirim Developer dari WFH ke komputer kantor secara real-time.',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildStatCard(
+                            title: 'Berhasil Tercetak',
+                            value: '${completedCmds.length}',
+                            icon: Icons.check_circle_rounded,
+                            color: const Color(0xFF4ADE80),
+                            subtext: 'Keluar di printer fisik kantor',
+                            isMobile: isMobile,
+                          ),
                         ),
+                        if (failedCmds.isNotEmpty) ...[
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Gagal / Error',
+                              value: '${failedCmds.length}',
+                              icon: Icons.cancel_rounded,
+                              color: Colors.redAccent,
+                              subtext: 'Perlu dicek ulang',
+                              isMobile: isMobile,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                    ),
-                    child: Text(
-                      '${allCommands.length} Perintah',
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: isMobile ? 12 : 16),
+              SizedBox(height: isMobile ? 12 : 16),
 
-            // Commands List
-            Expanded(
-              child: allCommands.isEmpty
+              // Real-Time WebRTC Live Screen Viewer (When Kacab is sharing screen)
+              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: WebRtcScreenService().streamSession(sessionId: 'kacab_live'),
+                builder: (context, screenSnap) {
+                  final screenData = screenSnap.data?.data();
+                  final isScreenActive = screenData != null && screenData['status'] == 'active';
+
+                  if (!isScreenActive) return const SizedBox.shrink();
+
+                  final broadcasterName = screenData['broadcasterName'] ?? 'Kacab Kantor';
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    height: isMobile ? 240 : 400,
+                    child: LiveScreenViewer(
+                      sessionId: 'kacab_live',
+                      stationName: broadcasterName,
+                    ),
+                  );
+                },
+              ),
+
+              // Header info bar
+              Container(
+                padding: EdgeInsets.all(isMobile ? 12 : 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF334155)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.podcasts_rounded, color: Color(0xFF38BDF8), size: 20),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Antrean Cetak Jarak Jauh (Remote Print Queue)',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Perintah cetak yang dikirim Developer dari WFH ke komputer kantor secara real-time.',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                      ),
+                      child: Text(
+                        '${allCommands.length} Perintah',
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: isMobile ? 12 : 16),
+
+              // Commands List
+              allCommands.isEmpty
                   ? Container(
+                      padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(14),
@@ -1842,6 +1846,8 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                       ),
                     )
                   : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
                       itemCount: allCommands.length,
                       itemBuilder: (context, index) {
                         final cmd = allCommands[index];
@@ -2097,8 +2103,8 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         );
                       },
                     ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
