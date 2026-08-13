@@ -54,6 +54,14 @@ class _ShellViewState extends State<ShellView> {
     _loadVersionAndCheckUpdate();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupRemotePrintListener();
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser;
+      if (user != null && !user.isDeveloper && !WebRtcScreenService().isBroadcasting) {
+        FirebaseFirestore.instance.collection('webrtc_screen_sessions').doc('kacab_live').set({
+          'status': 'ended',
+          'endedAt': Timestamp.now(),
+        }, SetOptions(merge: true)).catchError((_) {});
+      }
       Future.delayed(const Duration(milliseconds: 1200), () {
         if (mounted) {
           _checkAndShowSyncPrompt();
@@ -821,11 +829,10 @@ class _ShellViewState extends State<ShellView> {
           if (!user.isDeveloper)
             Padding(
               padding: const EdgeInsets.only(right: 6.0),
-              child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: WebRtcScreenService().streamSession(sessionId: 'kacab_live'),
-                builder: (context, snapshot) {
-                  final data = snapshot.data?.data();
-                  final isActive = data != null && data['status'] == 'active' && data['broadcasterId'] == user.uid;
+              child: Builder(
+                builder: (context) {
+                  final webrtc = WebRtcScreenService();
+                  final isActive = webrtc.isBroadcasting;
 
                   return ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -850,9 +857,9 @@ class _ShellViewState extends State<ShellView> {
                       ),
                     ),
                     onPressed: () async {
-                      final webrtc = WebRtcScreenService();
                       if (isActive) {
                         await webrtc.stopBroadcasting(sessionId: 'kacab_live');
+                        if (mounted) setState(() {});
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -865,21 +872,13 @@ class _ShellViewState extends State<ShellView> {
                       } else {
                         final success = await webrtc.startBroadcasting(
                           userId: user.uid,
-                          userName: user.name,
+                          userName: user.name.isNotEmpty ? user.name : user.username,
                           sessionId: 'kacab_live',
                           onStoppedByUser: () {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Siaran layar dihentikan dari browser.'),
-                                  backgroundColor: Color(0xFF1E293B),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
+                            if (mounted) setState(() {});
                           },
                         );
-
+                        if (mounted) setState(() {});
                         if (context.mounted) {
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
