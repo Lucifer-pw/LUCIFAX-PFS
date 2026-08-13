@@ -39,17 +39,24 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
     _viewId = 'webrtc-video-${DateTime.now().millisecondsSinceEpoch}';
 
     if (kIsWeb) {
+      final container = html.DivElement()
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.position = 'relative'
+        ..style.backgroundColor = '#000000'
+        ..style.overflow = 'hidden';
+
       _videoElement = html.VideoElement()
         ..autoplay = true
         ..controls = false
         ..muted = true
         ..defaultMuted = true
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
         ..style.width = '100%'
         ..style.height = '100%'
-        ..style.objectFit = 'contain'
-        ..style.backgroundColor = '#000000'
-        ..style.border = 'none'
-        ..style.display = 'block';
+        ..style.objectFit = 'contain';
 
       _videoElement!.setAttribute('playsinline', 'true');
       _videoElement!.setAttribute('webkit-playsinline', 'true');
@@ -75,9 +82,11 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
         }
       });
 
+      container.append(_videoElement!);
+
       ui_web.platformViewRegistry.registerViewFactory(
         _viewId,
-        (int viewId) => _videoElement!,
+        (int viewId) => container,
       );
 
       _connect();
@@ -162,7 +171,7 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
     if (_currentStream == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Sesi belum terhubung. Tunggu hingga status aktif.'),
+          content: Text('Sesi belum menerima stream video. Klik tombol Muat Ulang Sambungan.'),
           backgroundColor: Color(0xFF1E293B),
           behavior: SnackBarBehavior.floating,
         ),
@@ -344,15 +353,31 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                     Positioned(
                       bottom: 16,
                       right: 16,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
-                        label: const Text('▶️ Putar Video Layar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                        onPressed: _manualPlay,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF059669),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 18),
+                            label: const Text('Pop-out Jendela', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: _openPopoutWindow,
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                            label: const Text('▶️ Putar Video', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: _manualPlay,
+                          ),
+                        ],
                       ),
                     ),
                   if (_isConnecting)
