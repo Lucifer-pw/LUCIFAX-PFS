@@ -104,6 +104,7 @@
       border-radius: 12px;
       border: 1px solid #334155;
       backdrop-filter: blur(8px);
+      z-index: 5;
     }
     .spinner {
       width: 36px;
@@ -128,12 +129,13 @@
     </div>
     <div class="actions">
       <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      <button onclick="manualPlay()" style="background-color: #10b981;">▶️ Play Stream</button>
       <button onclick="reconnect()">🔄 Refresh</button>
     </div>
   </header>
 
   <div id="video-container">
-    <video id="remote-video" autoplay playsinline muted></video>
+    <video id="remote-video" autoplay playsinline muted controls></video>
     <div id="overlay-message">
       <div class="spinner" id="spinner"></div>
       <div id="overlay-text" style="font-size: 14px; font-weight: 600;">Menghubungkan ke siaran layar Kacab...</div>
@@ -159,6 +161,7 @@
     };
 
     let peerConnection = null;
+    let currentStream = null;
     const video = document.getElementById('remote-video');
     const statusBadge = document.getElementById('status-badge');
     const statusDot = document.getElementById('status-dot');
@@ -185,66 +188,101 @@
           document.getElementById('station-title').innerText = `📺 Live Screen: ${data.broadcasterName}`;
         }
 
-        if (peerConnection) peerConnection.close();
+        if (peerConnection) {
+          peerConnection.close();
+          peerConnection = null;
+        }
+
         peerConnection = new RTCPeerConnection(rtcConfig);
 
-        peerConnection.ontrack = (event) => {
-          if (event.streams && event.streams[0]) {
-            video.srcObject = event.streams[0];
-            video.play().catch(e => console.log('Video play error:', e));
-            overlayMessage.style.display = 'none';
-            updateStatus('Siaran Langsung Aktif (60 FPS)', true);
+        // Collect viewer candidates
+        const viewerCandidates = [];
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            viewerCandidates.push({
+              candidate: event.candidate.candidate,
+              sdpMid: event.candidate.sdpMid,
+              sdpMLineIndex: event.candidate.sdpMLineIndex
+            });
           }
+        };
+
+        peerConnection.ontrack = (event) => {
+          console.log('ontrack event fired:', event);
+          if (event.streams && event.streams[0]) {
+            currentStream = event.streams[0];
+            video.srcObject = currentStream;
+          } else if (event.track) {
+            currentStream = new MediaStream([event.track]);
+            video.srcObject = currentStream;
+          }
+          video.play().catch(e => console.log('Video play error:', e));
+          overlayMessage.style.display = 'none';
+          updateStatus('Siaran Langsung Aktif (60 FPS)', true);
         };
 
         peerConnection.oniceconnectionstatechange = () => {
-          const state = peerConnection.iceConnectionState;
+          const state = peerConnection ? peerConnection.iceConnectionState : '';
+          console.log('ICE Connection State:', state);
           if (state === 'connected' || state === 'completed') {
-            updateStatus('Terhubung Lancar', true);
+            updateStatus('Terhubung Lancar (60 FPS)', true);
             overlayMessage.style.display = 'none';
           } else if (state === 'disconnected' || state === 'failed') {
-            updateStatus('Koneksi Terputus', false);
+            updateStatus('Koneksi Terputus / Perlu Muat Ulang', false);
           }
         };
 
-        // Set remote offer
+        // 1. Set Remote Description (Offer from Broadcaster)
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
 
-        // Create answer
+        // 2. Add Broadcaster Candidates
+        if (data.broadcasterCandidates && Array.isArray(data.broadcasterCandidates)) {
+          for (const c of data.broadcasterCandidates) {
+            try {
+              await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+            } catch (e) {
+              console.log('Broadcaster candidate error:', e);
+            }
+          }
+        }
+
+        // 3. Create Answer
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
-        // Wait for ICE gathering
-        await new Promise(resolve => {
-          if (peerConnection.iceGatheringState === 'complete') {
-            resolve();
-          } else {
-            const check = () => {
-              if (peerConnection.iceGatheringState === 'complete') {
-                peerConnection.removeEventListener('icegatheringstatechange', check);
-                resolve();
-              }
-            };
-            peerConnection.addEventListener('icegatheringstatechange', check);
-            setTimeout(resolve, 1000);
-          }
-        });
+        // 4. Wait 1.5s for ICE Candidates Gathering
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
-        // Write answer
+        // 5. Update SINGLE Answer & Candidates write to Firestore
         await sessionRef.update({
           answer: {
-            sdp: peerConnection.localDescription.sdp,
-            type: peerConnection.localDescription.type
+            sdp: answer.sdp,
+            type: answer.type
           },
+          viewerCandidates: viewerCandidates,
           connectedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        updateStatus('Sinyal terhubung, memutar video...', true);
+        updateStatus('Sinyal terhubung, menunggu video...', true);
       } catch (err) {
         console.error('WebRTC Error:', err);
-        updateStatus('Gagal terhubung: ' + err.message, false);
+        updateStatus('Gagal: ' + err.message, false);
         spinner.style.display = 'none';
-        overlayText.innerText = 'Gagal terhubung ke siaran layar.';
+        overlayText.innerText = 'Gagal terhubung ke siaran layar: ' + err.message;
+      }
+    }
+
+    function manualPlay() {
+      if (video) {
+        if (currentStream && video.srcObject !== currentStream) {
+          video.srcObject = currentStream;
+        }
+        video.play().then(() => {
+          overlayMessage.style.display = 'none';
+          updateStatus('Siaran Langsung Aktif (60 FPS)', true);
+        }).catch(e => {
+          alert('Stream belum masuk, silakan klik Refresh.');
+        });
       }
     }
 

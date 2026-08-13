@@ -30,7 +30,7 @@ class WebRtcScreenService {
   };
 
   // ══════════════════════════════════════════════════════════
-  // KACAB / PRESENTER: START SCREEN SHARE (VANILLA ICE - 1 WRITE ONLY)
+  // KACAB: START SCREEN BROADCAST (SINGLE-BATCH ICE EXCHANGE)
   // ══════════════════════════════════════════════════════════
 
   Future<bool> startBroadcasting({
@@ -82,6 +82,18 @@ class WebRtcScreenService {
       _peerConnection?.close();
       _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
+      // Collect ICE candidates in local memory
+      final List<Map<String, dynamic>> broadcasterCandidates = [];
+      _peerConnection!.onIceCandidate.listen((event) {
+        if (event.candidate != null && event.candidate!.candidate != null) {
+          broadcasterCandidates.add({
+            'candidate': event.candidate!.candidate,
+            'sdpMid': event.candidate!.sdpMid,
+            'sdpMLineIndex': event.candidate!.sdpMLineIndex,
+          });
+        }
+      });
+
       // Add track to peer connection
       _peerConnection!.addTrack(videoTrack, _localStream!);
 
@@ -92,31 +104,31 @@ class WebRtcScreenService {
         'type': offer.type,
       });
 
-      // Wait 1s for ICE Gathering to bundle all candidates inside SDP (Vanilla ICE - Saves 1000s of writes!)
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // Wait 1.5s for ICE candidates gathering
+      await Future.delayed(const Duration(milliseconds: 1500));
 
-      // Get localDescription with embedded ICE candidates
-      final localDesc = _peerConnection!.localDescription;
       final sessionRef = _db.collection('webrtc_screen_sessions').doc(sessionId);
 
-      // Save SINGLE document write with full SDP offer
+      // Save SINGLE document write with full SDP offer AND gathered candidates
       await sessionRef.set({
         'sessionId': sessionId,
         'broadcasterId': userId,
         'broadcasterName': userName,
         'status': 'active',
         'offer': {
-          'sdp': localDesc?.sdp ?? offer.sdp,
-          'type': localDesc?.type ?? offer.type,
+          'sdp': offer.sdp,
+          'type': offer.type,
         },
+        'broadcasterCandidates': broadcasterCandidates,
         'answer': null,
+        'viewerCandidates': [],
         'startedAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
       });
 
       onStatusUpdate?.call('Siaran aktif, menunggu Developer...');
 
-      // Listen for Answer from Developer (Only triggers when Developer writes 1 answer)
+      // Listen for Answer from Developer
       bool hasSetRemote = false;
       _sessionSubscription?.cancel();
       _sessionSubscription = sessionRef.snapshots().listen((snapshot) async {
@@ -129,6 +141,17 @@ class WebRtcScreenService {
               'sdp': answer['sdp'],
               'type': answer['type'],
             });
+
+            // Add viewer candidates
+            if (data['viewerCandidates'] != null) {
+              final viewerCandidates = List<dynamic>.from(data['viewerCandidates']);
+              for (var c in viewerCandidates) {
+                try {
+                  _peerConnection!.addIceCandidate(html.RtcIceCandidate(Map<String, dynamic>.from(c)));
+                } catch (_) {}
+              }
+            }
+
             onStatusUpdate?.call('Terhubung ke Developer!');
           }
         }
@@ -165,7 +188,7 @@ class WebRtcScreenService {
   }
 
   // ══════════════════════════════════════════════════════════
-  // DEVELOPER / VIEWER: CONNECT (VANILLA ICE - 1 WRITE ONLY)
+  // DEVELOPER: CONNECT (SINGLE-BATCH ICE EXCHANGE)
   // ══════════════════════════════════════════════════════════
 
   Future<void> connectToBroadcast({
@@ -194,6 +217,18 @@ class WebRtcScreenService {
       _peerConnection?.close();
       _peerConnection = html.RtcPeerConnection(_rtcConfig);
 
+      // Collect viewer candidates in local memory
+      final List<Map<String, dynamic>> viewerCandidates = [];
+      _peerConnection!.onIceCandidate.listen((event) {
+        if (event.candidate != null && event.candidate!.candidate != null) {
+          viewerCandidates.add({
+            'candidate': event.candidate!.candidate,
+            'sdpMid': event.candidate!.sdpMid,
+            'sdpMLineIndex': event.candidate!.sdpMLineIndex,
+          });
+        }
+      });
+
       // Listen for remote tracks
       _peerConnection!.onTrack.listen((event) {
         debugPrint("Viewer onTrack event received: ${event.streams}");
@@ -203,40 +238,40 @@ class WebRtcScreenService {
         }
       });
 
-      _peerConnection!.onIceConnectionStateChange.listen((_) {
-        final state = _peerConnection?.iceConnectionState ?? '';
-        debugPrint("Viewer ICE State: $state");
-        if (state == 'connected' || state == 'completed') {
-          onStatusUpdate?.call('Terhubung Lancar');
-        } else if (state == 'checking') {
-          onStatusUpdate?.call('Menyambungkan (Checking)...');
-        }
-      });
-
-      // 1. Set Remote Description (Offer from Broadcaster)
+      // 1. Set Remote Description (Offer)
       final offer = data['offer'] as Map<String, dynamic>;
       await _peerConnection!.setRemoteDescription({
         'sdp': offer['sdp'],
         'type': offer['type'],
       });
 
-      // 2. Create SDP Answer
+      // 2. Add Broadcaster Candidates
+      if (data['broadcasterCandidates'] != null) {
+        final broadcasterCandidates = List<dynamic>.from(data['broadcasterCandidates']);
+        for (var c in broadcasterCandidates) {
+          try {
+            _peerConnection!.addIceCandidate(html.RtcIceCandidate(Map<String, dynamic>.from(c)));
+          } catch (_) {}
+        }
+      }
+
+      // 3. Create Answer
       final answer = await _peerConnection!.createAnswer();
       await _peerConnection!.setLocalDescription({
         'sdp': answer.sdp,
         'type': answer.type,
       });
 
-      // 3. Wait 1s for ICE gathering to bundle all candidates inside SDP (Vanilla ICE - 1 write only!)
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // 4. Wait 1.5s for ICE gathering
+      await Future.delayed(const Duration(milliseconds: 1500));
 
-      // 4. Save SINGLE Answer document to Firestore (Only 1 Write!)
-      final localDesc = _peerConnection!.localDescription;
+      // 5. Update SINGLE Answer & Candidates write to Firestore
       await sessionRef.update({
         'answer': {
-          'sdp': localDesc?.sdp ?? answer.sdp,
-          'type': localDesc?.type ?? answer.type,
+          'sdp': answer.sdp,
+          'type': answer.type,
         },
+        'viewerCandidates': viewerCandidates,
         'connectedAt': Timestamp.now(),
       });
 
