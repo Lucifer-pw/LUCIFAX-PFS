@@ -26,9 +26,11 @@ class LiveScreenViewer extends StatefulWidget {
 class _LiveScreenViewerState extends State<LiveScreenViewer> {
   final WebRtcScreenService _webrtcService = WebRtcScreenService();
   html.VideoElement? _videoElement;
+  html.MediaStream? _currentStream;
   late final String _viewId;
   bool _isConnected = false;
   bool _isConnecting = false;
+  bool _isPlaying = false;
   String _statusText = 'Menghubungkan ke siaran layar...';
 
   @override
@@ -41,15 +43,37 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
         ..autoplay = true
         ..controls = false
         ..muted = true
+        ..defaultMuted = true
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'contain'
-        ..style.backgroundColor = '#000000';
+        ..style.backgroundColor = '#000000'
+        ..style.border = 'none'
+        ..style.display = 'block';
 
       _videoElement!.setAttribute('playsinline', 'true');
       _videoElement!.setAttribute('webkit-playsinline', 'true');
       _videoElement!.setAttribute('autoplay', 'true');
       _videoElement!.setAttribute('muted', 'true');
+
+      _videoElement!.onLoadedMetadata.listen((_) {
+        _videoElement?.play();
+      });
+
+      _videoElement!.onCanPlay.listen((_) {
+        _videoElement?.play();
+      });
+
+      _videoElement!.onPlaying.listen((_) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+            _isConnected = true;
+            _isConnecting = false;
+            _statusText = 'Live Stream Aktif (60 FPS)';
+          });
+        }
+      });
 
       ui_web.platformViewRegistry.registerViewFactory(
         _viewId,
@@ -82,13 +106,16 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
           }
         },
         onRemoteStreamReceived: (stream) {
+          _currentStream = stream;
           if (_videoElement != null) {
             try {
               js_util.setProperty(_videoElement!, 'srcObject', stream);
               _videoElement!.srcObject = stream;
-              _videoElement!.play();
+              _videoElement!.play().catchError((e) {
+                debugPrint("Auto-play error: $e");
+              });
             } catch (e) {
-              debugPrint("Video play error: $e");
+              debugPrint("Video assignment error: $e");
             }
 
             if (mounted) {
@@ -109,6 +136,74 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
           _statusText = 'Gagal terhubung: $e';
         });
       }
+    }
+  }
+
+  void _manualPlay() {
+    if (_videoElement != null) {
+      if (_currentStream != null && _videoElement!.srcObject == null) {
+        js_util.setProperty(_videoElement!, 'srcObject', _currentStream);
+        _videoElement!.srcObject = _currentStream;
+      }
+      _videoElement!.play().then((_) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+            _statusText = 'Live Stream Aktif (60 FPS)';
+          });
+        }
+      }).catchError((e) {
+        debugPrint("Manual play error: $e");
+      });
+    }
+  }
+
+  void _openPopoutWindow() {
+    if (_currentStream == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sesi belum terhubung. Tunggu hingga status aktif.'),
+          backgroundColor: Color(0xFF1E293B),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final newWin = html.window.open('', 'LiveScreenPopout', 'width=1280,height=720');
+      if (newWin != null) {
+        final doc = js_util.getProperty(newWin, 'document');
+        if (doc != null) {
+          js_util.setProperty(doc, 'title', 'Live Screen: ${widget.stationName}');
+          final body = js_util.getProperty(doc, 'body');
+          if (body != null) {
+            final style = js_util.getProperty(body, 'style');
+            js_util.setProperty(style, 'margin', '0');
+            js_util.setProperty(style, 'backgroundColor', '#000000');
+            js_util.setProperty(style, 'overflow', 'hidden');
+
+            final popoutVideo = html.VideoElement()
+              ..autoplay = true
+              ..controls = true
+              ..muted = true
+              ..style.width = '100vw'
+              ..style.height = '100vh'
+              ..style.objectFit = 'contain';
+
+            popoutVideo.setAttribute('playsinline', 'true');
+            popoutVideo.setAttribute('autoplay', 'true');
+            popoutVideo.setAttribute('muted', 'true');
+
+            js_util.setProperty(popoutVideo, 'srcObject', _currentStream);
+            popoutVideo.srcObject = _currentStream;
+            js_util.callMethod(body, 'append', [popoutVideo]);
+            popoutVideo.play();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Popout error: $e");
     }
   }
 
@@ -205,6 +300,12 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                   ),
                   const Spacer(),
                   IconButton(
+                    icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF38BDF8), size: 18),
+                    tooltip: 'Buka di Jendela Pop-up Terpisah',
+                    splashRadius: 16,
+                    onPressed: _openPopoutWindow,
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.fullscreen_rounded, color: Color(0xFF38BDF8), size: 20),
                     tooltip: 'Layar Penuh (Fullscreen)',
                     splashRadius: 16,
@@ -238,6 +339,21 @@ class _LiveScreenViewerState extends State<LiveScreenViewer> {
                     const Center(
                       child: Text('WebRTC Screen Share hanya didukung pada Web Browser.',
                           style: TextStyle(color: Colors.white70)),
+                    ),
+                  if (!_isPlaying && _isConnected)
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                        label: const Text('▶️ Putar Video Layar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: _manualPlay,
+                      ),
                     ),
                   if (_isConnecting)
                     Container(
