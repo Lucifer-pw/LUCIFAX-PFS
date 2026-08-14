@@ -300,7 +300,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                     ? _buildKacabPermissionsTab(rolePermissionsProvider, isMobile)
                     : _selectedTab == 2
                         ? _buildInvoicePrintLogsTab(isMobile)
-                        : _buildRemotePrintConsoleTab(isMobile),
+                        : _buildRemotePrintConsoleTab(authProvider, isMobile),
           ),
         ],
       ),
@@ -1620,7 +1620,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
   }
 
   // TAB 4: Real-Time Remote Print Console (WFH -> Office Print Station)
-  Widget _buildRemotePrintConsoleTab(bool isMobile) {
+  Widget _buildRemotePrintConsoleTab(AuthProvider authProvider, bool isMobile) {
     return StreamBuilder<List<RemotePrintCommand>>(
       stream: _firebaseService.streamRecentPrintCommands(limit: 100),
       builder: (context, snapshot) {
@@ -1660,6 +1660,105 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 1. Office PC & Printer Live Status Banner
+              StreamBuilder<List<UserProfile>>(
+                stream: authProvider.getUsersStream(),
+                builder: (context, userSnap) {
+                  final users = userSnap.data ?? [];
+                  final kacabUser = users.firstWhere(
+                    (u) => u.role.toLowerCase() == 'kacab' || u.isKacab,
+                    orElse: () => UserProfile(uid: '', name: 'Joko Setiawan', username: 'kacabjateng', role: 'kacab'),
+                  );
+
+                  final isKacabOnline = kacabUser.isActuallyOnline;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: EdgeInsets.all(isMobile ? 12 : 16),
+                    decoration: BoxDecoration(
+                      color: isKacabOnline ? const Color(0xFF064E3B).withOpacity(0.35) : const Color(0xFF7F1D1D).withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isKacabOnline ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isKacabOnline ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.12),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: (isKacabOnline ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isKacabOnline ? Icons.print_rounded : Icons.print_disabled_rounded,
+                            color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                            size: isMobile ? 20 : 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                                          blurRadius: 6,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      isKacabOnline
+                                          ? 'KOMPUTER & PRINTER KANTOR ONLINE (SIAP CETAK INSTAN)'
+                                          : 'KOMPUTER KANTOR OFFLINE (PC BELUM DINYALAKAN)',
+                                      style: TextStyle(
+                                        color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: isMobile ? 11.5 : 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                isKacabOnline
+                                    ? 'Aplikasi kantor aktif (${kacabUser.name}). Perintah cetak dari WFH langsung keluar di printer EPSON.'
+                                    : 'Aplikasi kasir sedang tutup / PC belum hidup. Perintah baru akan disimpan di antrean PENDING dan otomatis tercetak saat PC dinyalakan.',
+                                style: TextStyle(
+                                  color: isKacabOnline ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                                  fontSize: isMobile ? 11 : 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
               // Top Summary Cards
               isMobile
                   ? Column(
@@ -1859,7 +1958,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                         if (cmd.isPending) {
                           statusColor = Colors.amberAccent;
-                          statusLabel = 'MENUNGGU RESPONS KANTOR';
+                          statusLabel = 'MENUNGGU KANTOR (PENDING)';
                           statusIcon = Icons.hourglass_top_rounded;
                         } else if (cmd.isProcessing) {
                           statusColor = const Color(0xFF38BDF8);
@@ -1894,49 +1993,34 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(14),
                             child: Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  left: BorderSide(
-                                    color: statusColor,
-                                    width: 4.5,
-                                  ),
-                                ),
-                              ),
                               padding: EdgeInsets.all(isMobile ? 12 : 16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Header: Status Badge, Time, and Actions
+                                  // Top Row: Status badge & timestamp
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      // Status Badge
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: statusColor.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: statusColor.withOpacity(0.5)),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: statusColor.withOpacity(0.4)),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(statusIcon, size: 12, color: statusColor),
+                                            Icon(statusIcon, size: 13, color: statusColor),
                                             const SizedBox(width: 5),
                                             Text(
                                               statusLabel,
-                                              style: TextStyle(
-                                                color: statusColor,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 10,
-                                              ),
+                                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
                                             ),
                                           ],
                                         ),
                                       ),
                                       const SizedBox(width: 8),
 
-                                      // Requested by pill
                                       Text(
                                         'Oleh ${cmd.requestedByUserName}',
                                         style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
@@ -1944,7 +2028,6 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                                       const Spacer(),
 
-                                      // Time badge
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
@@ -1985,15 +2068,25 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                         },
                                       ),
 
-                                      // Delete button
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
-                                        tooltip: 'Hapus Antrean Ini',
-                                        splashRadius: 18,
-                                        onPressed: () {
-                                          _firebaseService.deletePrintCommand(cmd.id);
-                                        },
-                                      ),
+                                      // Delete / Cancel Button (Safe Confirmation)
+                                      if (cmd.isPending)
+                                        IconButton(
+                                          icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 19),
+                                          tooltip: 'Batalkan Cetakan Kantor',
+                                          splashRadius: 18,
+                                          onPressed: () {
+                                            _showCancelPrintDialog(context, cmd);
+                                          },
+                                        )
+                                      else
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                                          tooltip: 'Hapus dari Riwayat',
+                                          splashRadius: 18,
+                                          onPressed: () {
+                                            _showDeletePrintLogDialog(context, cmd);
+                                          },
+                                        ),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
@@ -2013,11 +2106,10 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                           decoration: BoxDecoration(
                                             color: const Color(0xFF0284C7).withOpacity(0.2),
                                             borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
                                           ),
                                           child: Text(
-                                            'Invoice #${cmd.invoiceNo}',
-                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                            '#${cmd.invoiceNo}',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
                                           ),
                                         ),
                                         const SizedBox(width: 10),
@@ -2108,5 +2200,281 @@ class _UserPresenceViewState extends State<UserPresenceView> {
         );
       },
     );
+  }
+
+  Future<void> _showCancelPrintDialog(BuildContext context, RemotePrintCommand cmd) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 440),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.redAccent.withOpacity(0.2),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1E293B),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(18),
+                      topRight: Radius.circular(18),
+                    ),
+                    border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Batalkan Cetak #${cmd.invoiceNo}?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Konfirmasi pembatalan antrean cetak kantor',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Body Info
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Pelanggan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5)),
+                                Flexible(
+                                  child: Text(
+                                    cmd.customerName,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (cmd.grandTotal > 0) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Total Tagihan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5)),
+                                  Text(
+                                    currencyFormatter.format(cmd.grandTotal),
+                                    style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Status Antrean:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amberAccent.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    'MENUNGGU KANTOR (PENDING)',
+                                    style: TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Warning Box
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.shield_outlined, color: Colors.redAccent, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Printer fisik di kantor TIDAK AKAN mencetak nota ini jika dibatalkan sekarang. Dokumen akan langsung dihapus dari antrean.',
+                                style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12, height: 1.3),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Footer Actions
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF475569)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Jangan Batalkan', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.cancel_rounded, size: 16, color: Colors.white),
+                          label: const Text('Ya, Batalkan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          onPressed: () => Navigator.pop(ctx, true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _firebaseService.deletePrintCommand(cmd.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('✅ Perintah cetak #${cmd.invoiceNo} berhasil dibatalkan. Printer kantor aman!'),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeletePrintLogDialog(BuildContext context, RemotePrintCommand cmd) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Row(
+            children: [
+              const Icon(Icons.delete_outline_rounded, color: Color(0xFF94A3B8), size: 20),
+              const SizedBox(width: 8),
+              Text('Hapus Riwayat #${cmd.invoiceNo}?', style: const TextStyle(color: Colors.white, fontSize: 16)),
+            ],
+          ),
+          content: Text(
+            'Hapus catatan riwayat cetak invoice #${cmd.invoiceNo} (${cmd.customerName}) dari daftar ini?',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF334155),
+                elevation: 0,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _firebaseService.deletePrintCommand(cmd.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Riwayat #${cmd.invoiceNo} dihapus dari daftar.'),
+            backgroundColor: const Color(0xFF334155),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }

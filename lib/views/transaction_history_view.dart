@@ -1518,7 +1518,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('✅ Perintah cetak Invoice #${tr.invoiceNo} berhasil dikirim! Menunggu printer kantor merespons...'),
+                  child: Text('✅ Perintah cetak #${tr.invoiceNo} dikirim! Masuk antrean & otomatis tercetak saat PC kantor online.'),
                 ),
               ],
             ),
