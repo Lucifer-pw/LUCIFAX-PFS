@@ -64,9 +64,9 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
   @override
   void initState() {
     super.initState();
-    if (_selectedYear == 2026) {
-      _selectedMonth = 7;
-    }
+    final now = DateTime.now();
+    _selectedMonth = now.month;
+    _selectedYear = now.year;
     _loadExpenseData();
   }
 
