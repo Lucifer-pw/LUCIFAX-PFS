@@ -160,6 +160,22 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     }
   }
 
+  Widget _buildTableHeader(String label, {required int flex, TextAlign align = TextAlign.left}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF64748B),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+        textAlign: align,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -1236,213 +1252,295 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: filteredLogs.length,
-                      itemBuilder: (context, index) {
-                        final log = filteredLogs[index];
-                        final roleColor = _getRoleColor(log.userRole);
-                        final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
-                        final isNewDate = log.isDateModified;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 5),
+                  : Column(
+                      children: [
+                        // Table Header Row (Sticky)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isNewDate ? Colors.amber.withOpacity(0.35) : const Color(0xFF334155),
+                            color: const Color(0xFF0F172A),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(8),
+                              topRight: Radius.circular(8),
                             ),
+                            border: Border.all(color: const Color(0xFF334155)),
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  left: BorderSide(
-                                    color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
-                                    width: 3.5,
-                                  ),
-                                ),
+                          child: Row(
+                            children: [
+                              _buildTableHeader('Waktu', flex: 2),
+                              _buildTableHeader('Operator', flex: 3),
+                              _buildTableHeader('Aksi', flex: 2),
+                              _buildTableHeader('Invoice', flex: 2),
+                              _buildTableHeader('Customer', flex: 3),
+                              _buildTableHeader('Status Tanggal', flex: 3),
+                              _buildTableHeader('Total', flex: 2, align: TextAlign.right),
+                              const SizedBox(width: 28), // space for delete button
+                            ],
+                          ),
+                        ),
+                        // Table Data Rows (Scrollable)
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: const BorderRadius.only(
+                                bottomLeft: Radius.circular(8),
+                                bottomRight: Radius.circular(8),
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Row 1: User, Action, Invoice, Customer, Total, Timestamp, Delete
-                                  Row(
-                                    children: [
-                                      // User Avatar
-                                      CircleAvatar(
-                                        radius: 11,
-                                        backgroundColor: roleColor.withOpacity(0.2),
-                                        child: Text(
-                                          log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
-                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 10),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.only(
+                                bottomLeft: Radius.circular(8),
+                                bottomRight: Radius.circular(8),
+                              ),
+                              child: ListView.builder(
+                                itemCount: filteredLogs.length,
+                                itemBuilder: (context, index) {
+                                  final log = filteredLogs[index];
+                                  final roleColor = _getRoleColor(log.userRole);
+                                  final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+                                  final isNewDate = log.isDateModified;
+                                  final isEven = index % 2 == 0;
 
-                                      // User Name
-                                      Text(
-                                        log.userName,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: roleColor.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: roleColor.withOpacity(0.3)),
-                                        ),
-                                        child: Text(
-                                          _getRoleLabel(log.userRole),
-                                          style: TextStyle(color: roleColor, fontSize: 8.5, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
+                                  // Determine action type properties (PRINT / DOWNLOAD / REMOTE_PRINT)
+                                  String actionLabel;
+                                  IconData actionIcon;
+                                  Color actionColor;
+                                  if (log.actionType == 'PRINT') {
+                                    actionLabel = 'CETAK';
+                                    actionIcon = Icons.print_rounded;
+                                    actionColor = const Color(0xFF38BDF8);
+                                  } else if (log.actionType == 'REMOTE_PRINT') {
+                                    actionLabel = 'REMOTE';
+                                    actionIcon = Icons.cell_tower_rounded;
+                                    actionColor = const Color(0xFFA78BFA); // violet
+                                  } else {
+                                    actionLabel = 'DOWNLOAD';
+                                    actionIcon = Icons.download_rounded;
+                                    actionColor = const Color(0xFF34D399);
+                                  }
 
-                                      // Action Badge
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: log.actionType == 'PRINT'
-                                              ? const Color(0xFF0284C7).withOpacity(0.2)
-                                              : const Color(0xFF10B981).withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(
-                                            color: log.actionType == 'PRINT'
-                                                ? const Color(0xFF38BDF8).withOpacity(0.5)
-                                                : const Color(0xFF34D399).withOpacity(0.5),
+                                  // Date status
+                                  final String dateStatusText = isNewDate
+                                      ? 'Diubah → ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}'
+                                      : 'Sesuai Nota';
+                                  final String dateTooltip = isNewDate
+                                      ? 'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}\nTgl Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)}'
+                                      : 'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)} (Sesuai tanggal awal nota)';
+
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: isNewDate
+                                          ? Colors.amber.withOpacity(0.04)
+                                          : isEven
+                                              ? const Color(0xFF1E293B)
+                                              : const Color(0xFF172033),
+                                      border: Border(
+                                        left: BorderSide(
+                                          color: isNewDate ? Colors.amberAccent : Colors.transparent,
+                                          width: 3,
+                                        ),
+                                        bottom: BorderSide(
+                                          color: const Color(0xFF334155).withOpacity(0.5),
+                                          width: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                    child: Row(
+                                      children: [
+                                        // Column: Waktu
+                                        Expanded(
+                                          flex: 2,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+                                              const SizedBox(width: 3),
+                                              Flexible(
+                                                child: Text(
+                                                  _formatDateTime(log.timestamp),
+                                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              log.actionType == 'PRINT' ? Icons.print_rounded : Icons.download_rounded,
-                                              size: 10,
-                                              color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
-                                            ),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              log.actionType == 'PRINT' ? 'CETAK' : 'DOWNLOAD',
-                                              style: TextStyle(
-                                                color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
-                                                fontSize: 8.5,
-                                                fontWeight: FontWeight.bold,
+
+                                        // Column: Operator (Avatar + Name + Role Badge)
+                                        Expanded(
+                                          flex: 3,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 10,
+                                                backgroundColor: roleColor.withOpacity(0.2),
+                                                child: Text(
+                                                  log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
+                                                  style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 9),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Flexible(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      log.userName,
+                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                    Container(
+                                                      margin: const EdgeInsets.only(top: 1),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                                                      decoration: BoxDecoration(
+                                                        color: roleColor.withOpacity(0.12),
+                                                        borderRadius: BorderRadius.circular(3),
+                                                      ),
+                                                      child: Text(
+                                                        _getRoleLabel(log.userRole),
+                                                        style: TextStyle(color: roleColor, fontSize: 7.5, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        // Column: Aksi (Action Badge)
+                                        Expanded(
+                                          flex: 2,
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: actionColor.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: actionColor.withOpacity(0.4)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(actionIcon, size: 11, color: actionColor),
+                                                  const SizedBox(width: 3),
+                                                  Text(
+                                                    actionLabel,
+                                                    style: TextStyle(color: actionColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 6),
 
-                                      // Invoice Number
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0284C7).withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                        // Column: Invoice
+                                        Expanded(
+                                          flex: 2,
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              '#${log.invoiceNo}',
+                                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                            ),
+                                          ),
                                         ),
-                                        child: Text(
-                                          '#${log.invoiceNo}',
-                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
 
-                                      // Customer Name
-                                      Expanded(
-                                        child: Text(
-                                          log.customerName,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                                          overflow: TextOverflow.ellipsis,
+                                        // Column: Customer
+                                        Expanded(
+                                          flex: 3,
+                                          child: Text(
+                                            log.customerName,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 6),
 
-                                      // Grand Total
-                                      if (log.grandTotal > 0) ...[
-                                        Text(
-                                          currencyFormatter.format(log.grandTotal),
-                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                                        // Column: Status Tanggal (simplified + tooltip)
+                                        Expanded(
+                                          flex: 3,
+                                          child: Tooltip(
+                                            message: dateTooltip,
+                                            textStyle: const TextStyle(color: Colors.white, fontSize: 11),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF1E293B),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: const Color(0xFF475569)),
+                                            ),
+                                            preferBelow: true,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isNewDate ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
+                                                  size: 13,
+                                                  color: isNewDate ? Colors.amberAccent : const Color(0xFF4ADE80),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    dateStatusText,
+                                                    style: TextStyle(
+                                                      color: isNewDate ? Colors.amberAccent : const Color(0xFF4ADE80),
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 10.5,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
-                                        const SizedBox(width: 8),
+
+                                        // Column: Total (right-aligned)
+                                        Expanded(
+                                          flex: 2,
+                                          child: Text(
+                                            log.grandTotal > 0 ? currencyFormatter.format(log.grandTotal) : '-',
+                                            style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11),
+                                            textAlign: TextAlign.right,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+
+                                        // Column: Delete Button
+                                        SizedBox(
+                                          width: 28,
+                                          child: Center(
+                                            child: SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: IconButton(
+                                                padding: EdgeInsets.zero,
+                                                icon: Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  color: const Color(0xFF64748B).withOpacity(0.6),
+                                                  size: 14,
+                                                ),
+                                                tooltip: 'Hapus Log Ini',
+                                                splashRadius: 12,
+                                                onPressed: () {
+                                                  _firebaseService.deleteInvoicePrintLog(log.id);
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ],
-
-                                      // Timestamp
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            _formatDateTime(log.timestamp),
-                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(width: 4),
-
-                                      // Delete Button
-                                      SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: IconButton(
-                                          padding: EdgeInsets.zero,
-                                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 15),
-                                          tooltip: 'Hapus Log Ini',
-                                          splashRadius: 12,
-                                          onPressed: () {
-                                            _firebaseService.deleteInvoicePrintLog(log.id);
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-
-                                  // Row 2: Date Audit Line (Compact)
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isNewDate ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
-                                        size: 12,
-                                        color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Tgl Kirim Cetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}',
-                                        style: TextStyle(
-                                          color: isNewDate ? Colors.amberAccent : const Color(0xFF94A3B8),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10.5,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          isNewDate
-                                              ? '(⚠️ Tgl Diubah | Tgl Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})'
-                                              : '(✓ Tanggal Awal Nota)',
-                                          style: TextStyle(
-                                            color: isNewDate ? Colors.amber.shade200 : const Color(0xFF64748B),
-                                            fontSize: 10,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ],
                     ),
             ),
           ],
