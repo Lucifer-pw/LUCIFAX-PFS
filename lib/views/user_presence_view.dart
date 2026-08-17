@@ -194,66 +194,66 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Padding(
-      padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 10.0 : 16.0, vertical: 10.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header Section
+          // Header Section (Compact)
           Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
+            spacing: 10,
+            runSpacing: 6,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.developer_board_rounded, color: const Color(0xFF38BDF8), size: isMobile ? 22 : 28),
-                      const SizedBox(width: 8),
+                      Icon(Icons.developer_board_rounded, color: const Color(0xFF38BDF8), size: isMobile ? 18 : 22),
+                      const SizedBox(width: 6),
                       Text(
                         'Developer Control & Monitor',
-                        style: TextStyle(color: Colors.white, fontSize: isMobile ? 18 : 24, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: isMobile ? 16 : 20, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
                     'Monitoring Aktivitas User Real-Time & Pengaturan Akses Menu Role KACAB',
-                    style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 11 : 14),
+                    style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 10.5 : 12),
                   ),
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF38BDF8).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
+                      width: 6,
+                      height: 6,
                       decoration: const BoxDecoration(
                         color: Color(0xFF4ADE80),
                         shape: BoxShape.circle,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 5),
                     const Text(
                       'DEVELOPER MODE ACTIVE',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 10),
+                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 9.5),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          SizedBox(height: isMobile ? 12 : 20),
+          const SizedBox(height: 8),
 
           // Horizontal Scrollable Tab Bar Selector for Mobile & Desktop
           SingleChildScrollView(
@@ -266,21 +266,21 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   label: 'User Online Monitor',
                   isMobile: isMobile,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 _buildTabButton(
                   index: 1,
                   icon: Icons.admin_panel_settings_rounded,
                   label: 'Hak Akses Role KACAB',
                   isMobile: isMobile,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 _buildTabButton(
                   index: 2,
                   icon: Icons.receipt_long_rounded,
                   label: 'Log Cetak Invoice',
                   isMobile: isMobile,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 _buildTabButton(
                   index: 3,
                   icon: Icons.podcasts_rounded,
@@ -290,7 +290,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
               ],
             ),
           ),
-          SizedBox(height: isMobile ? 12 : 20),
+          const SizedBox(height: 8),
 
           // Tab Contents
           Expanded(
@@ -311,22 +311,22 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     final isSelected = _selectedTab == index;
     return InkWell(
       onTap: () => setState(() => _selectedTab = index),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18, vertical: isMobile ? 8 : 12),
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 6 : 8),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155),
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF0284C7).withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: const Color(0xFF0284C7).withOpacity(0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ]
               : [],
@@ -336,7 +336,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           children: [
             Icon(
               icon,
-              size: isMobile ? 15 : 18,
+              size: isMobile ? 14 : 16,
               color: isSelected ? Colors.white : const Color(0xFF94A3B8),
             ),
             const SizedBox(width: 6),
@@ -345,7 +345,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
               style: TextStyle(
                 color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: isMobile ? 12 : 14,
+                fontSize: isMobile ? 11 : 12.5,
               ),
             ),
           ],
@@ -399,7 +399,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         subtext: 'Sedang membuka aplikasi',
                         isMobile: isMobile,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _buildStatCard(
                         title: 'User Offline',
                         value: '${offlineUsers.length}',
@@ -408,7 +408,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         subtext: 'Tutup app / tidak aktif',
                         isMobile: isMobile,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _buildStatCard(
                         title: 'Total Akun Terdaftar',
                         value: '${users.length}',
@@ -431,7 +431,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           isMobile: isMobile,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _buildStatCard(
                           title: 'User Offline',
@@ -442,7 +442,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           isMobile: isMobile,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _buildStatCard(
                           title: 'Total Akun Terdaftar',
@@ -455,44 +455,41 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                       ),
                     ],
                   ),
-            SizedBox(height: isMobile ? 10 : 20),
+            const SizedBox(height: 6),
 
             // Controls & Filter Bar
             Container(
-              padding: EdgeInsets.all(isMobile ? 10 : 16),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0xFF334155)),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      style: TextStyle(color: Colors.white, fontSize: isMobile ? 12 : 14),
-                      decoration: InputDecoration(
-                        hintText: 'Cari berdasarkan nama, username, atau role...',
-                        hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 12 : 14),
-                        prefixIcon: Icon(Icons.search, color: const Color(0xFF38BDF8), size: isMobile ? 18 : 22),
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: isMobile ? 8 : 12),
-                      ),
-                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                    ),
+              child: SizedBox(
+                height: 32,
+                child: TextField(
+                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 11.5 : 12.5),
+                  decoration: InputDecoration(
+                    hintText: 'Cari berdasarkan nama, username, atau role...',
+                    hintStyle: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 11 : 12),
+                    prefixIcon: Icon(Icons.search, color: const Color(0xFF38BDF8), size: isMobile ? 16 : 18),
+                    filled: true,
+                    fillColor: const Color(0xFF0F172A),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
-                ],
+                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                ),
               ),
             ),
-            SizedBox(height: isMobile ? 10 : 16),
+            const SizedBox(height: 6),
 
             // User List Table
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFF334155)),
                 ),
                 child: filteredUsers.isEmpty
@@ -503,7 +500,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         ),
                       )
                     : ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         child: ListView.separated(
                           itemCount: filteredUsers.length,
                           separatorBuilder: (context, index) => const Divider(color: Color(0xFF334155), height: 1),
@@ -514,7 +511,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                             final isSelf = currentUser != null && u.uid == currentUser.uid;
 
                             return Container(
-                              padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: isMobile ? 10 : 12),
+                              padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 6 : 8),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
@@ -701,188 +698,102 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
     return Column(
       children: [
-        // Top Banner Card
+        // Top Banner Card (Compact)
         Container(
-          padding: EdgeInsets.all(isMobile ? 12 : 20),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF334155)),
           ),
-          child: isMobile
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.amberAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                ),
+                child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.amberAccent.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
-                          ),
-                          child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 22),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Hak Akses Role KACAB',
-                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.amberAccent.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  '$activeCount / ${_kacabFeatures.length} Menu Aktif',
-                                  style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
                     const Text(
-                      'Aktifkan (ON) atau matikan (OFF) fitur yang akan ditampilkan di sidebar navigasi akun KACAB / Manager secara real-time.',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                      'Hak Akses Menu Role KACAB',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 10),
-                    // Quick Bulk Toggle Buttons
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => permissionsProvider.setAllKacabPermissions(true),
-                          icon: const Icon(Icons.select_all_rounded, size: 14),
-                          label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF4ADE80),
-                            side: const BorderSide(color: Color(0xFF4ADE80)),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => permissionsProvider.resetKacabToDefault(),
-                          icon: const Icon(Icons.restart_alt_rounded, size: 14),
-                          label: const Text('Reset Default', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.orangeAccent,
-                            side: const BorderSide(color: Colors.orangeAccent),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
+                    const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.amberAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
                       ),
-                      child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 32),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'Pengaturan Menu Sidebar untuk Role KACAB',
-                                style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(width: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.amberAccent.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '$activeCount / ${_kacabFeatures.length} Menu Aktif',
-                                  style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Aktifkan (ON) atau matikan (OFF) fitur yang akan ditampilkan di sidebar navigasi akun KACAB / Manager secara real-time.',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                          ),
-                        ],
+                      child: Text(
+                        '$activeCount / ${_kacabFeatures.length} Menu Aktif',
+                        style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Quick Bulk Toggle Buttons
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => permissionsProvider.setAllKacabPermissions(true),
-                          icon: const Icon(Icons.select_all_rounded, size: 16),
-                          label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF4ADE80),
-                            side: const BorderSide(color: Color(0xFF4ADE80)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => permissionsProvider.resetKacabToDefault(),
-                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                          label: const Text('Reset Default (Histori Saja)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.orangeAccent,
-                            side: const BorderSide(color: Colors.orangeAccent),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
+              ),
+              // Quick Bulk Toggle Buttons
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => permissionsProvider.setAllKacabPermissions(true),
+                    icon: const Icon(Icons.select_all_rounded, size: 13),
+                    label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF4ADE80),
+                      side: const BorderSide(color: Color(0xFF4ADE80)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    onPressed: () => permissionsProvider.resetKacabToDefault(),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 13),
+                    label: const Text('Reset Default', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orangeAccent,
+                      side: const BorderSide(color: Colors.orangeAccent),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        SizedBox(height: isMobile ? 10 : 16),
+        const SizedBox(height: 6),
 
-        // Grid List of Features
+        // Grid List of Features (Compact Height)
         Expanded(
           child: Container(
-            padding: EdgeInsets.all(isMobile ? 8 : 12),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFF334155)),
             ),
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: isMobile ? 600 : 500,
-                mainAxisExtent: isMobile ? 100 : 110,
-                crossAxisSpacing: isMobile ? 8 : 12,
-                mainAxisSpacing: isMobile ? 8 : 12,
+                maxCrossAxisExtent: isMobile ? 600 : 450,
+                mainAxisExtent: isMobile ? 56 : 60,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
               ),
               itemCount: _kacabFeatures.length,
               itemBuilder: (context, index) {
@@ -894,11 +805,11 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                 final bool isEnabled = perms[key] ?? false;
 
                 return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: isMobile ? 8 : 12),
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: isEnabled ? const Color(0xFF0F172A) : const Color(0xFF1E293B).withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isEnabled ? const Color(0xFF38BDF8).withOpacity(0.5) : const Color(0xFF334155),
                       width: isEnabled ? 1.5 : 1,
@@ -907,18 +818,18 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   child: Row(
                     children: [
                       Container(
-                        padding: EdgeInsets.all(isMobile ? 8 : 10),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: isEnabled ? const Color(0xFF38BDF8).withOpacity(0.15) : const Color(0xFF334155).withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Icon(
                           icon,
                           color: isEnabled ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                          size: isMobile ? 20 : 24,
+                          size: 16,
                         ),
                       ),
-                      SizedBox(width: isMobile ? 10 : 14),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -932,51 +843,53 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                     style: TextStyle(
                                       color: isEnabled ? Colors.white : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: isMobile ? 13 : 15,
+                                      fontSize: 12,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 5),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
                                   decoration: BoxDecoration(
                                     color: isEnabled ? const Color(0xFF4ADE80).withOpacity(0.2) : const Color(0xFF334155),
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(3),
                                   ),
                                   child: Text(
                                     isEnabled ? 'ON' : 'OFF',
                                     style: TextStyle(
                                       color: isEnabled ? const Color(0xFF4ADE80) : const Color(0xFF64748B),
-                                      fontSize: 9,
+                                      fontSize: 8.5,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 2),
                             Text(
                               desc,
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: isEnabled ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                fontSize: isMobile ? 10 : 11,
+                                fontSize: 10,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Switch(
-                        value: isEnabled,
-                        activeColor: const Color(0xFF38BDF8),
-                        activeTrackColor: const Color(0xFF0284C7).withOpacity(0.4),
-                        inactiveThumbColor: const Color(0xFF64748B),
-                        inactiveTrackColor: const Color(0xFF0F172A),
-                        onChanged: (val) {
-                          permissionsProvider.updateKacabPermission(key, val);
-                        },
+                      Transform.scale(
+                        scale: 0.75,
+                        child: Switch(
+                          value: isEnabled,
+                          activeColor: const Color(0xFF38BDF8),
+                          activeTrackColor: const Color(0xFF0284C7).withOpacity(0.4),
+                          inactiveThumbColor: const Color(0xFF64748B),
+                          inactiveTrackColor: const Color(0xFF0F172A),
+                          onChanged: (val) {
+                            permissionsProvider.updateKacabPermission(key, val);
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -998,38 +911,45 @@ class _UserPresenceViewState extends State<UserPresenceView> {
     bool isMobile = false,
   }) {
     return Container(
-      padding: EdgeInsets.all(isMobile ? 10 : 16),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: isMobile ? 6 : 8),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(isMobile ? 8 : 12),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(icon, color: color, size: isMobile ? 18 : 24),
+            child: Icon(icon, color: color, size: isMobile ? 15 : 17),
           ),
-          SizedBox(width: isMobile ? 10 : 14),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 11 : 12, fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 10 : 11, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(value, style: TextStyle(color: color, fontSize: isMobile ? 14 : 16, fontWeight: FontWeight.bold)),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(value, style: TextStyle(color: color, fontSize: isMobile ? 18 : 22, fontWeight: FontWeight.bold)),
                 Text(
                   subtext,
-                  style: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 9 : 10),
+                  style: TextStyle(color: const Color(0xFF64748B), fontSize: isMobile ? 8.5 : 9.5),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1098,178 +1018,154 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
         return Column(
           children: [
-            // Top Summary Cards
-            isMobile
-                ? Column(
-                    children: [
-                      _buildStatCard(
-                        title: 'Total Aktivitas Cetak',
-                        value: '${allLogs.length}',
-                        icon: Icons.print_rounded,
-                        color: const Color(0xFF38BDF8),
-                        subtext: 'Log cetak & download invoice',
-                        isMobile: isMobile,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildStatCard(
-                        title: 'Tanggal Kirim Baru (Diubah)',
-                        value: '${dateModifiedLogs.length}',
-                        icon: Icons.edit_calendar_rounded,
-                        color: Colors.amberAccent,
-                        subtext: 'Input tanggal kirim saat cetak',
-                        isMobile: isMobile,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildStatCard(
-                        title: 'Dicetak Non-Developer',
-                        value: '${nonDevLogs.length}',
-                        icon: Icons.badge_rounded,
-                        color: const Color(0xFF4ADE80),
-                        subtext: 'Aktivitas KACAB & Kasir',
-                        isMobile: isMobile,
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total Aktivitas Cetak',
-                          value: '${allLogs.length}',
-                          icon: Icons.print_rounded,
-                          color: const Color(0xFF38BDF8),
-                          subtext: 'Log cetak & download invoice',
-                          isMobile: isMobile,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Tanggal Kirim Baru (Diubah)',
-                          value: '${dateModifiedLogs.length}',
-                          icon: Icons.edit_calendar_rounded,
-                          color: Colors.amberAccent,
-                          subtext: 'Input tanggal kirim saat cetak',
-                          isMobile: isMobile,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Dicetak Non-Developer',
-                          value: '${nonDevLogs.length}',
-                          icon: Icons.badge_rounded,
-                          color: const Color(0xFF4ADE80),
-                          subtext: 'Aktivitas KACAB & Kasir',
-                          isMobile: isMobile,
-                        ),
-                      ),
-                    ],
-                  ),
-            SizedBox(height: isMobile ? 10 : 16),
-
-            // Controls & Filter Bar
+            // Compact Header: Stats Badges & Search/Filter Controls
             Container(
-              padding: EdgeInsets.all(isMobile ? 12 : 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFF334155)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Row 1: Stat Pills + Total Log Count
                   Row(
                     children: [
-                      const Icon(Icons.filter_alt_outlined, color: Color(0xFF38BDF8), size: 18),
+                      // Stat 1: Total
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.print_rounded, size: 12, color: Color(0xFF38BDF8)),
+                            const SizedBox(width: 4),
+                            Text('Total: ${allLogs.length}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
+                          ],
+                        ),
+                      ),
                       const SizedBox(width: 6),
-                      const Text(
-                        'Filter & Pencarian Log Cetak',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      // Stat 2: Tanggal Baru
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: Colors.amberAccent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.edit_calendar_rounded, size: 12, color: Colors.amberAccent),
+                            const SizedBox(width: 4),
+                            Text('Tanggal Diubah: ${dateModifiedLogs.length}', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Stat 3: Non-Dev
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4ADE80).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF4ADE80).withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.badge_rounded, size: 12, color: Color(0xFF4ADE80)),
+                            const SizedBox(width: 4),
+                            Text('Non-Dev: ${nonDevLogs.length}', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11)),
+                          ],
+                        ),
                       ),
                       const Spacer(),
+                      // Log Count
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF334155)),
                         ),
                         child: Text(
                           '${filteredLogs.length} dari ${allLogs.length} Log',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  const SizedBox(height: 6),
+
+                  // Row 2: Search Box & Dropdown Filters
+                  Row(
                     children: [
                       // Search Box
-                      SizedBox(
-                        width: isMobile ? double.infinity : 320,
-                        child: TextField(
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'Cari No. Invoice, Customer, User...',
-                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
-                            suffixIcon: _logSearchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 16),
-                                    onPressed: () => setState(() => _logSearchQuery = ''),
-                                  )
-                                : null,
-                            filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                      Expanded(
+                        flex: 3,
+                        child: SizedBox(
+                          height: 30,
+                          child: TextField(
+                            style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                            decoration: InputDecoration(
+                              hintText: 'Cari No. Invoice, Customer, User...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 15),
+                              suffixIcon: _logSearchQuery.isNotEmpty
+                                  ? IconButton(
+                                      padding: EdgeInsets.zero,
+                                      icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 13),
+                                      onPressed: () => setState(() => _logSearchQuery = ''),
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(color: Color(0xFF38BDF8)),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF334155)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Color(0xFF38BDF8)),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
                           ),
-                          onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
                         ),
                       ),
+                      const SizedBox(width: 6),
 
                       // Role Filter Dropdown
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        height: 30,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: const Color(0xFF334155)),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: _logRoleFilter,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 18),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
                             dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                             items: const [
-                              DropdownMenuItem(value: 'ALL', child: Text('👤 Semua Role User')),
-                              DropdownMenuItem(value: 'NON_DEV', child: Text('⚡ Khusus Non-Dev (Kacab/Kasir)')),
-                              DropdownMenuItem(value: 'KACAB', child: Text('👔 Khusus Kepala Sales / Kacab')),
-                              DropdownMenuItem(value: 'CASHIER', child: Text('🛒 Khusus Kasir')),
-                              DropdownMenuItem(value: 'DEV', child: Text('💻 Khusus Developer')),
+                              DropdownMenuItem(value: 'ALL', child: Text('Semua Role')),
+                              DropdownMenuItem(value: 'NON_DEV', child: Text('Non-Dev (Kacab/Kasir)')),
+                              DropdownMenuItem(value: 'KACAB', child: Text('Kacab / Manager')),
+                              DropdownMenuItem(value: 'CASHIER', child: Text('Kasir')),
+                              DropdownMenuItem(value: 'DEV', child: Text('Developer')),
                             ],
                             onChanged: (val) {
                               if (val != null) setState(() => _logRoleFilter = val);
@@ -1277,25 +1173,27 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           ),
                         ),
                       ),
+                      const SizedBox(width: 6),
 
                       // Option Filter Dropdown
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        height: 30,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: const Color(0xFF334155)),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: _logOptionFilter,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 18),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
                             dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                             items: const [
-                              DropdownMenuItem(value: 'ALL', child: Text('📅 Semua Opsi Tanggal')),
-                              DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Kirim Baru (Diubah)')),
-                              DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal Nota')),
+                              DropdownMenuItem(value: 'ALL', child: Text('📅 Semua Tanggal')),
+                              DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Baru')),
+                              DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal')),
                             ],
                             onChanged: (val) {
                               if (val != null) setState(() => _logOptionFilter = val);
@@ -1308,7 +1206,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                 ],
               ),
             ),
-            SizedBox(height: isMobile ? 12 : 16),
+            const SizedBox(height: 6),
 
             // Log List Container
             Expanded(
@@ -1316,23 +1214,23 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   ? Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFF334155)),
                       ),
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.history_toggle_off_rounded, size: 56, color: Colors.white.withOpacity(0.15)),
-                            const SizedBox(height: 14),
+                            Icon(Icons.history_toggle_off_rounded, size: 42, color: Colors.white.withOpacity(0.15)),
+                            const SizedBox(height: 10),
                             const Text(
                               'Tidak ada aktivitas log cetak invoice.',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15, fontWeight: FontWeight.w600),
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             const Text(
                               'Coba ubah kata kunci pencarian atau filter role.',
-                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
                             ),
                           ],
                         ),
@@ -1347,263 +1245,197 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         final isNewDate = log.isDateModified;
 
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
+                          margin: const EdgeInsets.only(bottom: 5),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isNewDate ? Colors.amber.withOpacity(0.4) : const Color(0xFF334155),
+                              color: isNewDate ? Colors.amber.withOpacity(0.35) : const Color(0xFF334155),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(8),
                             child: Container(
                               decoration: BoxDecoration(
                                 border: Border(
                                   left: BorderSide(
                                     color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
-                                    width: 4.5,
+                                    width: 3.5,
                                   ),
                                 ),
                               ),
-                              padding: EdgeInsets.all(isMobile ? 12 : 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Header Row: User Info, Action Pill, Timestamp & Delete Action
+                                  // Row 1: User, Action, Invoice, Customer, Total, Timestamp, Delete
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       // User Avatar
                                       CircleAvatar(
-                                        radius: 17,
+                                        radius: 11,
                                         backgroundColor: roleColor.withOpacity(0.2),
                                         child: Text(
                                           log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
-                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 13),
+                                          style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 10),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
+                                      const SizedBox(width: 6),
 
-                                      // User Name & Role Pill
-                                      Expanded(
-                                        child: Wrap(
-                                          crossAxisAlignment: WrapCrossAlignment.center,
-                                          spacing: 8,
-                                          runSpacing: 4,
-                                          children: [
-                                            Text(
-                                              log.userName,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                            if (log.userUsername.isNotEmpty)
-                                              Text(
-                                                '@${log.userUsername}',
-                                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                                              ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: roleColor.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(color: roleColor.withOpacity(0.4)),
-                                              ),
-                                              child: Text(
-                                                _getRoleLabel(log.userRole),
-                                                style: TextStyle(color: roleColor, fontSize: 9.5, fontWeight: FontWeight.bold),
-                                              ),
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: log.actionType == 'PRINT'
-                                                    ? const Color(0xFF0284C7).withOpacity(0.2)
-                                                    : const Color(0xFF10B981).withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color: log.actionType == 'PRINT'
-                                                      ? const Color(0xFF38BDF8).withOpacity(0.6)
-                                                      : const Color(0xFF34D399).withOpacity(0.6),
-                                                ),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    log.actionType == 'PRINT' ? Icons.print_rounded : Icons.download_rounded,
-                                                    size: 11,
-                                                    color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    log.actionType == 'PRINT' ? 'CETAK PDF' : 'DOWNLOAD PDF',
-                                                    style: TextStyle(
-                                                      color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
-                                                      fontSize: 9.5,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                      // User Name
+                                      Text(
+                                        log.userName,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                                       ),
-
-                                      // Timestamp Badge
+                                      const SizedBox(width: 5),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFF334155)),
+                                          color: roleColor.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: roleColor.withOpacity(0.3)),
+                                        ),
+                                        child: Text(
+                                          _getRoleLabel(log.userRole),
+                                          style: TextStyle(color: roleColor, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+
+                                      // Action Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: log.actionType == 'PRINT'
+                                              ? const Color(0xFF0284C7).withOpacity(0.2)
+                                              : const Color(0xFF10B981).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: log.actionType == 'PRINT'
+                                                ? const Color(0xFF38BDF8).withOpacity(0.5)
+                                                : const Color(0xFF34D399).withOpacity(0.5),
+                                          ),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF64748B)),
-                                            const SizedBox(width: 5),
+                                            Icon(
+                                              log.actionType == 'PRINT' ? Icons.print_rounded : Icons.download_rounded,
+                                              size: 10,
+                                              color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
+                                            ),
+                                            const SizedBox(width: 3),
                                             Text(
-                                              _formatDateTime(log.timestamp),
-                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
+                                              log.actionType == 'PRINT' ? 'CETAK' : 'DOWNLOAD',
+                                              style: TextStyle(
+                                                color: log.actionType == 'PRINT' ? const Color(0xFF38BDF8) : const Color(0xFF34D399),
+                                                fontSize: 8.5,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ],
                                         ),
                                       ),
-
                                       const SizedBox(width: 6),
-                                      // Delete single log button for developer
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
-                                        tooltip: 'Hapus Log Ini',
-                                        splashRadius: 18,
-                                        onPressed: () {
-                                          _firebaseService.deleteInvoicePrintLog(log.id);
-                                        },
+
+                                      // Invoice Number
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0284C7).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                        ),
+                                        child: Text(
+                                          '#${log.invoiceNo}',
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+
+                                      // Customer Name
+                                      Expanded(
+                                        child: Text(
+                                          log.customerName,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+
+                                      // Grand Total
+                                      if (log.grandTotal > 0) ...[
+                                        Text(
+                                          currencyFormatter.format(log.grandTotal),
+                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+
+                                      // Timestamp
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _formatDateTime(log.timestamp),
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 4),
+
+                                      // Delete Button
+                                      SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: IconButton(
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 15),
+                                          tooltip: 'Hapus Log Ini',
+                                          splashRadius: 12,
+                                          onPressed: () {
+                                            _firebaseService.deleteInvoicePrintLog(log.id);
+                                          },
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 2),
 
-                                  // Middle Section: Invoice Number, Customer Name & Grand Total
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0F172A),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFF334155).withOpacity(0.6)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0284C7).withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
-                                          ),
-                                          child: Text(
-                                            'Invoice #${log.invoiceNo}',
-                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            log.customerName,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        if (log.grandTotal > 0)
-                                          Text(
-                                            currencyFormatter.format(log.grandTotal),
-                                            style: const TextStyle(
-                                              color: Color(0xFF4ADE80),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Bottom Section: DATE AUDIT PANEL
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: isNewDate
-                                          ? Colors.amber.withOpacity(0.08)
-                                          : const Color(0xFF0F172A).withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isNewDate
-                                            ? Colors.amber.withOpacity(0.4)
-                                            : const Color(0xFF334155),
+                                  // Row 2: Date Audit Line (Compact)
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        isNewDate ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
+                                        size: 12,
+                                        color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
                                       ),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          isNewDate ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
-                                          size: 20,
-                                          color: isNewDate ? Colors.amberAccent : const Color(0xFF38BDF8),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Tgl Kirim Cetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}',
+                                        style: TextStyle(
+                                          color: isNewDate ? Colors.amberAccent : const Color(0xFF94A3B8),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10.5,
                                         ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Text(
-                                                    'Tanggal Kirim Dipilih / Dicetak: ',
-                                                    style: TextStyle(
-                                                      color: isNewDate ? Colors.amberAccent : const Color(0xFF94A3B8),
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 12.5,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    DateFormat('dd MMMM yyyy (dd-MM-yyyy)').format(log.printedDeliveryDate),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 12.5,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 3),
-                                              Text(
-                                                isNewDate
-                                                    ? '⚠️ Role ${_getRoleLabel(log.userRole)} menginput Tanggal Kirim Baru (Tanggal Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})'
-                                                    : '✓ Menggunakan Tanggal Awal Nota (${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)}) — Tidak ada perubahan tanggal.',
-                                                style: TextStyle(
-                                                  color: isNewDate ? Colors.amber.shade200 : const Color(0xFF94A3B8),
-                                                  fontSize: 11.5,
-                                                  fontWeight: isNewDate ? FontWeight.w500 : FontWeight.normal,
-                                                ),
-                                              ),
-                                            ],
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          isNewDate
+                                              ? '(⚠️ Tgl Diubah | Tgl Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)})'
+                                              : '(✓ Tanggal Awal Nota)',
+                                          style: TextStyle(
+                                            color: isNewDate ? Colors.amber.shade200 : const Color(0xFF64748B),
+                                            fontSize: 10,
                                           ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -1673,27 +1505,20 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   final isKacabOnline = kacabUser.isActuallyOnline;
 
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: EdgeInsets.all(isMobile ? 12 : 16),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: isKacabOnline ? const Color(0xFF064E3B).withOpacity(0.35) : const Color(0xFF7F1D1D).withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: isKacabOnline ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                        width: 1.5,
+                        width: 1,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isKacabOnline ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.12),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
                             color: (isKacabOnline ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.2),
                             shape: BoxShape.circle,
@@ -1701,10 +1526,10 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           child: Icon(
                             isKacabOnline ? Icons.print_rounded : Icons.print_disabled_rounded,
                             color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
-                            size: isMobile ? 20 : 24,
+                            size: isMobile ? 15 : 17,
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1712,20 +1537,14 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                               Row(
                                 children: [
                                   Container(
-                                    width: 8,
-                                    height: 8,
+                                    width: 6,
+                                    height: 6,
                                     decoration: BoxDecoration(
                                       color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
                                       shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
-                                          blurRadius: 6,
-                                        ),
-                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 5),
                                   Expanded(
                                     child: Text(
                                       isKacabOnline
@@ -1734,20 +1553,19 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                       style: TextStyle(
                                         color: isKacabOnline ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
                                         fontWeight: FontWeight.bold,
-                                        fontSize: isMobile ? 11.5 : 13,
+                                        fontSize: isMobile ? 11 : 12,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
                               Text(
                                 isKacabOnline
                                     ? 'Aplikasi kantor aktif (${kacabUser.name}). Perintah cetak dari WFH langsung keluar di printer EPSON.'
-                                    : 'Aplikasi kasir sedang tutup / PC belum hidup. Perintah baru akan disimpan di antrean PENDING dan otomatis tercetak saat PC dinyalakan.',
+                                    : 'Aplikasi kasir sedang tutup / PC belum hidup. Perintah baru disimpan di antrean PENDING.',
                                 style: TextStyle(
                                   color: isKacabOnline ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
-                                  fontSize: isMobile ? 11 : 11.5,
+                                  fontSize: isMobile ? 10 : 10.5,
                                 ),
                               ),
                             ],
@@ -1771,7 +1589,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           subtext: 'Seluruh antrean cetak dari WFH',
                           isMobile: isMobile,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         _buildStatCard(
                           title: 'Menunggu Kantor (Pending)',
                           value: '${pendingCmds.length + processingCmds.length}',
@@ -1780,7 +1598,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           subtext: 'Siaga diproses printer kantor',
                           isMobile: isMobile,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         _buildStatCard(
                           title: 'Berhasil Tercetak',
                           value: '${completedCmds.length}',
@@ -1803,7 +1621,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                             isMobile: isMobile,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: _buildStatCard(
                             title: 'Menunggu Kantor (Pending)',
@@ -1814,7 +1632,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                             isMobile: isMobile,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: _buildStatCard(
                             title: 'Berhasil Tercetak',
@@ -1826,7 +1644,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                           ),
                         ),
                         if (failedCmds.isNotEmpty) ...[
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: _buildStatCard(
                               title: 'Gagal / Error',
@@ -1840,7 +1658,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         ],
                       ],
                     ),
-              SizedBox(height: isMobile ? 12 : 16),
+              const SizedBox(height: 6),
 
               // Real-Time WebRTC Live Screen Viewer (When Kacab is sharing screen)
               StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -1854,8 +1672,8 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                   final broadcasterName = screenData['broadcasterName'] ?? 'Kacab Kantor';
 
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    height: isMobile ? 240 : 400,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    height: isMobile ? 220 : 360,
                     child: LiveScreenViewer(
                       sessionId: 'kacab_live',
                       stationName: broadcasterName,
@@ -1866,79 +1684,62 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
               // Header info bar
               Container(
-                padding: EdgeInsets.all(isMobile ? 12 : 16),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFF334155)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.podcasts_rounded, color: Color(0xFF38BDF8), size: 20),
-                    const SizedBox(width: 10),
+                    const Icon(Icons.podcasts_rounded, color: Color(0xFF38BDF8), size: 16),
+                    const SizedBox(width: 8),
                     const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Antrean Cetak Jarak Jauh (Remote Print Queue)',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Perintah cetak yang dikirim Developer dari WFH ke komputer kantor secara real-time.',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
-                          ),
-                        ],
+                      child: Text(
+                        'Antrean Cetak Jarak Jauh (Remote Print Queue)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0F172A),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
                       ),
                       child: Text(
                         '${allCommands.length} Perintah',
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
                 ),
               ),
-              SizedBox(height: isMobile ? 12 : 16),
+              const SizedBox(height: 6),
 
               // Commands List
               allCommands.isEmpty
                   ? Container(
-                      padding: const EdgeInsets.all(32),
+                      padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFF334155)),
                       ),
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.print_disabled_rounded, size: 56, color: Colors.white.withOpacity(0.15)),
-                            const SizedBox(height: 14),
+                            Icon(Icons.print_disabled_rounded, size: 42, color: Colors.white.withOpacity(0.15)),
+                            const SizedBox(height: 10),
                             const Text(
                               'Belum ada perintah cetak remote.',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15, fontWeight: FontWeight.w600),
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 2),
                             const Text(
                               'Gunakan tombol "📡 Cetak ke Kantor" di menu Histori Transaksi untuk mengirim cetakan.',
-                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
                             ),
                           ],
                         ),
@@ -1958,235 +1759,195 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                         if (cmd.isPending) {
                           statusColor = Colors.amberAccent;
-                          statusLabel = 'MENUNGGU KANTOR (PENDING)';
+                          statusLabel = 'PENDING';
                           statusIcon = Icons.hourglass_top_rounded;
                         } else if (cmd.isProcessing) {
                           statusColor = const Color(0xFF38BDF8);
-                          statusLabel = 'SEDANG DIPROSES KANTOR';
+                          statusLabel = 'DIPROSES';
                           statusIcon = Icons.sync_rounded;
                         } else if (cmd.isCompleted) {
                           statusColor = const Color(0xFF4ADE80);
-                          statusLabel = 'SUKSES TERCETAK DI KANTOR';
+                          statusLabel = 'TERCETAK';
                           statusIcon = Icons.check_circle_rounded;
                         } else {
                           statusColor = Colors.redAccent;
-                          statusLabel = 'GAGAL / ERROR';
+                          statusLabel = 'GAGAL';
                           statusIcon = Icons.error_outline_rounded;
                         }
 
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
+                          margin: const EdgeInsets.only(bottom: 5),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: statusColor.withOpacity(0.4),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: EdgeInsets.all(isMobile ? 12 : 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Top Row: Status badge & timestamp
+                                  // Row 1: Status badge, invoice, customer, total, time, actions
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: statusColor.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(4),
                                           border: Border.all(color: statusColor.withOpacity(0.4)),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(statusIcon, size: 13, color: statusColor),
-                                            const SizedBox(width: 5),
+                                            Icon(statusIcon, size: 10, color: statusColor),
+                                            const SizedBox(width: 3),
                                             Text(
                                               statusLabel,
-                                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                                              style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold),
                                             ),
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-
-                                      Text(
-                                        'Oleh ${cmd.requestedByUserName}',
-                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                                      ),
-
-                                      const Spacer(),
-
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFF334155)),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF64748B)),
-                                            const SizedBox(width: 5),
-                                            Text(
-                                              _formatDateTime(cmd.createdAt),
-                                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
                                       const SizedBox(width: 6),
-                                      // Re-send / Retry button
-                                      IconButton(
-                                        icon: const Icon(Icons.replay_rounded, color: Color(0xFF38BDF8), size: 18),
-                                        tooltip: 'Kirim Ulang ke Komputer Kantor',
-                                        splashRadius: 18,
-                                        onPressed: () async {
-                                          await _firebaseService.updatePrintCommandStatus(cmd.id, 'PENDING');
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('Perintah cetak #${cmd.invoiceNo} dikirim ulang ke kantor!'),
-                                                backgroundColor: const Color(0xFF0284C7),
-                                                behavior: SnackBarBehavior.floating,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                      ),
 
-                                      // Delete / Cancel Button (Safe Confirmation)
-                                      if (cmd.isPending)
-                                        IconButton(
-                                          icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 19),
-                                          tooltip: 'Batalkan Cetakan Kantor',
-                                          splashRadius: 18,
-                                          onPressed: () {
-                                            _showCancelPrintDialog(context, cmd);
-                                          },
-                                        )
-                                      else
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
-                                          tooltip: 'Hapus dari Riwayat',
-                                          splashRadius: 18,
-                                          onPressed: () {
-                                            _showDeletePrintLogDialog(context, cmd);
+                                      // Invoice Number
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0284C7).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                        ),
+                                        child: Text(
+                                          '#${cmd.invoiceNo}',
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+
+                                      // Customer Name
+                                      Expanded(
+                                        child: Text(
+                                          cmd.customerName,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+
+                                      // Grand Total
+                                      if (cmd.grandTotal > 0) ...[
+                                        Text(
+                                          currencyFormatter.format(cmd.grandTotal),
+                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+
+                                      // Timestamp
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _formatDateTime(cmd.createdAt),
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 4),
+
+                                      // Re-send / Retry button
+                                      SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: IconButton(
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.replay_rounded, color: Color(0xFF38BDF8), size: 15),
+                                          tooltip: 'Kirim Ulang ke Komputer Kantor',
+                                          splashRadius: 12,
+                                          onPressed: () async {
+                                            await _firebaseService.updatePrintCommandStatus(cmd.id, 'PENDING');
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Perintah cetak #${cmd.invoiceNo} dikirim ulang ke kantor!'),
+                                                  backgroundColor: const Color(0xFF0284C7),
+                                                  behavior: SnackBarBehavior.floating,
+                                                ),
+                                              );
+                                            }
                                           },
                                         ),
+                                      ),
+
+                                      // Delete / Cancel Button
+                                      SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: cmd.isPending
+                                            ? IconButton(
+                                                padding: EdgeInsets.zero,
+                                                icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 15),
+                                                tooltip: 'Batalkan Cetakan Kantor',
+                                                splashRadius: 12,
+                                                onPressed: () {
+                                                  _showCancelPrintDialog(context, cmd);
+                                                },
+                                              )
+                                            : IconButton(
+                                                padding: EdgeInsets.zero,
+                                                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 15),
+                                                tooltip: 'Hapus dari Riwayat',
+                                                splashRadius: 12,
+                                                onPressed: () {
+                                                  _showDeletePrintLogDialog(context, cmd);
+                                                },
+                                              ),
+                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 2),
 
-                                  // Middle Row: Invoice info & total
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0F172A),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFF334155).withOpacity(0.6)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0284C7).withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            '#${cmd.invoiceNo}',
-                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
+                                  // Row 2: Delivery Date & Station confirmation
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF38BDF8)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(cmd.printedDeliveryDate)}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                      ),
+                                      if (cmd.printerStationName != null) ...[
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.print_rounded, size: 12, color: Color(0xFF4ADE80)),
+                                        const SizedBox(width: 3),
                                         Expanded(
                                           child: Text(
-                                            cmd.customerName,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                            'Station: ${cmd.printerStationName}${cmd.processedAt != null ? ' (${_formatDateTime(cmd.processedAt)})' : ''}',
+                                            style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 10.5),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        if (cmd.grandTotal > 0)
-                                          Text(
-                                            currencyFormatter.format(cmd.grandTotal),
-                                            style: const TextStyle(
-                                              color: Color(0xFF4ADE80),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                            ),
-                                          ),
                                       ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Bottom Row: Target delivery date & station confirmation
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0F172A).withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFF334155)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFF38BDF8)),
-                                            const SizedBox(width: 8),
-                                            const Text(
-                                              'Tanggal Kirim Dicetak: ',
-                                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
-                                            ),
-                                            Text(
-                                              DateFormat('dd MMMM yyyy (dd-MM-yyyy)').format(cmd.printedDeliveryDate),
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                            ),
-                                          ],
-                                        ),
-                                        if (cmd.printerStationName != null) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.print_rounded, size: 14, color: Color(0xFF4ADE80)),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                'Print Station Penerima: ${cmd.printerStationName}',
-                                                style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 11.5, fontWeight: FontWeight.w500),
-                                              ),
-                                              if (cmd.processedAt != null)
-                                                Text(
-                                                  ' (${_formatDateTime(cmd.processedAt)})',
-                                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                                ),
-                                            ],
-                                          ),
-                                        ],
-                                        if (cmd.errorMessage != null && cmd.errorMessage!.isNotEmpty) ...[
-                                          const SizedBox(height: 4),
-                                          Text(
+                                      if (cmd.errorMessage != null && cmd.errorMessage!.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
                                             '⚠️ Error: ${cmd.errorMessage}',
-                                            style: const TextStyle(color: Colors.redAccent, fontSize: 11.5),
+                                            style: const TextStyle(color: Colors.redAccent, fontSize: 10.5),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                        ],
+                                        ),
                                       ],
-                                    ),
+                                    ],
                                   ),
                                 ],
                               ),
