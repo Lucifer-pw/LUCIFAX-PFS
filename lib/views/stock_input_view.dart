@@ -1113,51 +1113,69 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
         ? (groupedByWeek[_historyFilterWeek!]?.length ?? 0)
         : filteredEntries.length;
 
-    final displayedPeriodText = _historyFilterWeek != null
-        ? 'Total Input Stok (Minggu $_historyFilterWeek • ${_formatMonthName(_historyFilterMonthYear)})'
-        : 'Total Input Stok (${_formatMonthName(_historyFilterMonthYear)})';
-
     return Column(
       children: [
-        // Top Filter & Summary Card
+        // Top Filter & Summary Card (Compact 2-Row Design)
         Container(
-          margin: const EdgeInsets.all(12),
-          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.35)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Filter Month Row
+              // Row 1: Total Input Summary (Left) & Compact Month Dropdown (Right)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.filter_alt_outlined, color: Color(0xFF38BDF8), size: 18),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'Filter Periode Bulan:',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 16),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: RichText(
+                            overflow: TextOverflow.ellipsis,
+                            text: TextSpan(
+                              style: const TextStyle(fontSize: 12.5, fontFamily: 'Roboto'),
+                              children: [
+                                const TextSpan(
+                                  text: 'Total Input: ',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                                ),
+                                TextSpan(
+                                  text: '+${NumberFormat('#,###').format(displayedQty)} Pack',
+                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
+                                ),
+                                TextSpan(
+                                  text: ' ($displayedEntriesCount Entri)',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    height: 30,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _historyFilterMonthYear,
                         dropdownColor: const Color(0xFF1E293B),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF38BDF8)),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF38BDF8), size: 16),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
                         onChanged: (val) {
                           if (val != null) {
                             setState(() {
@@ -1177,49 +1195,9 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              const Divider(color: Color(0xFF334155), height: 1),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
 
-              // Total Summary Banner
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          displayedPeriodText,
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '+${NumberFormat('#,###').format(displayedQty)} Pack',
-                          style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0284C7).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      '$displayedEntriesCount Entri',
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // Weekly Breakdown Interactive Filter Pills (Semua & M1 .. M5)
+              // Row 2: Weekly Breakdown Interactive Filter Pills (Semua & M1 .. M5)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -1234,7 +1212,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                       borderRadius: BorderRadius.circular(6),
                       child: Container(
                         margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: _historyFilterWeek == null
                               ? const Color(0xFF0284C7).withOpacity(0.35)
@@ -1251,13 +1229,13 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (_historyFilterWeek == null) ...[
-                              const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 13),
+                              const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 12),
                               const SizedBox(width: 4),
                             ],
                             Text(
                               'Semua (M1-M5): +${totalMonthQty.toInt()} Pack',
                               style: TextStyle(
-                                color: _historyFilterWeek == null ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                color: _historyFilterWeek == null ? const Color(0xFF38BDF8) : Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1269,9 +1247,9 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
 
                     // Pills: M1 .. M5
                     ...[1, 2, 3, 4, 5].map((w) {
-                      final sumW = weekTotals[w] ?? 0.0;
                       final isSelected = _historyFilterWeek == w;
-                      final hasData = sumW > 0;
+                      final sumW = weekTotals[w] ?? 0.0;
+                      final hasData = (groupedByWeek[w] ?? []).isNotEmpty;
 
                       return InkWell(
                         onTap: () {
@@ -1286,7 +1264,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                         borderRadius: BorderRadius.circular(6),
                         child: Container(
                           margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? const Color(0xFF0284C7).withOpacity(0.35)
@@ -1303,7 +1281,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (isSelected) ...[
-                                const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 13),
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 12),
                                 const SizedBox(width: 4),
                               ],
                               Text(
@@ -1343,7 +1321,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                     final sumWeek = weekTotals[w] ?? 0.0;
 
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
+                      margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0F172A),
                         borderRadius: BorderRadius.circular(10),
@@ -1352,9 +1330,9 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Weekly Header Bar
+                          // Weekly Header Bar (Sleek 30px bar)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: const BoxDecoration(
                               color: Color(0xFF1E293B),
                               borderRadius: BorderRadius.only(
@@ -1368,67 +1346,69 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF0284C7),
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         'M$w',
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                       ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      'MINGGU $w',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
+                                      'MINGGU $w',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
                                       '(${entriesInWeek.length} Entri)',
-                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
                                     ),
                                   ],
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.greenAccent.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     'Total M$w: +${sumWeek.toInt()} Pack',
-                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                   ),
                                 ),
                               ],
                             ),
                           ),
 
-                          // Cards in Week w
+                          // Compact Rows in Week w (Table-Style Single Row ~40px)
                           ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(6),
                             itemCount: entriesInWeek.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 6),
+                            separatorBuilder: (_, __) => const SizedBox(height: 4),
                             itemBuilder: (context, idx) {
                               final entry = entriesInWeek[idx];
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: const Color(0xFF1E293B)),
                                 ),
                                 child: Row(
                                   children: [
-                                    // Number Badge (1, 2, 3 ...)
+                                    // Number Badge
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                      width: 22,
+                                      height: 22,
+                                      alignment: Alignment.center,
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF1E293B),
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(4),
                                         border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
                                       ),
                                       child: Text(
@@ -1436,98 +1416,100 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                         style: const TextStyle(
                                           color: Color(0xFF38BDF8),
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 12,
+                                          fontSize: 10.5,
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 8),
+
+                                    // Product Name & Date / Stock Pill
                                     Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                      child: Row(
                                         children: [
-                                          Text(
-                                            entry.productName,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${dateFormatter.format(entry.date)} • Periode: ${entry.monthYear}',
-                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                          ),
-                                          if (entry.stockBefore != null) ...[
-                                            const SizedBox(height: 4),
-                                            Row(
+                                          Expanded(
+                                            flex: 4,
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF1E293B),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                    border: Border.all(color: const Color(0xFF334155)),
-                                                  ),
-                                                  child: Text(
-                                                    'Stok Sebelum: ${entry.stockBefore!.toInt()} Pack',
-                                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
-                                                  ),
+                                                Text(
+                                                  entry.productName,
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                                const SizedBox(width: 4),
-                                                const Icon(Icons.arrow_forward_rounded, color: Color(0xFF64748B), size: 12),
-                                                const SizedBox(width: 4),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.greenAccent.withOpacity(0.12),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                    border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
-                                                  ),
-                                                  child: Text(
-                                                    'Stok Sesudah: ${(entry.stockAfter ?? (entry.stockBefore! + entry.qty)).toInt()} Pack',
-                                                    style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
-                                                  ),
+                                                Text(
+                                                  dateFormatter.format(entry.date),
+                                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
                                                 ),
                                               ],
+                                            ),
+                                          ),
+                                          if (entry.stockBefore != null) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF1E293B),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: const Color(0xFF334155)),
+                                              ),
+                                              child: Text(
+                                                '${entry.stockBefore!.toInt()} ➔ ${(entry.stockAfter ?? (entry.stockBefore! + entry.qty)).toInt()}',
+                                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
+                                              ),
                                             ),
                                           ],
                                         ],
                                       ),
                                     ),
+                                    const SizedBox(width: 10),
+
+                                    // Added Qty (Green Bold)
                                     Text(
                                       '+${entry.qty.toInt()} Pack',
-                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                     ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                      onPressed: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            backgroundColor: const Color(0xFF1E293B),
-                                            title: const Text('Hapus Entri Stok', style: TextStyle(color: Colors.white)),
-                                            content: Text(
-                                              'Apakah Anda yakin ingin menghapus entri stok "${entry.productName}" (+${entry.qty.toInt()} Pack)?',
-                                              style: const TextStyle(color: Color(0xFF94A3B8)),
+                                    const SizedBox(width: 4),
+
+                                    // Delete Action Button
+                                    SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: IconButton(
+                                        padding: EdgeInsets.zero,
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                        splashRadius: 14,
+                                        onPressed: () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              backgroundColor: const Color(0xFF1E293B),
+                                              title: const Text('Hapus Entri Stok', style: TextStyle(color: Colors.white)),
+                                              content: Text(
+                                                'Apakah Anda yakin ingin menghapus entri stok "${entry.productName}" (+${entry.qty.toInt()} Pack)?',
+                                                style: const TextStyle(color: Color(0xFF94A3B8)),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx, false),
+                                                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                  onPressed: () => Navigator.pop(ctx, true),
+                                                  child: const Text('Hapus'),
+                                                ),
+                                              ],
                                             ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(ctx, false),
-                                                child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
-                                              ),
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                                onPressed: () => Navigator.pop(ctx, true),
-                                                child: const Text('Hapus'),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                        if (confirm == true) {
-                                          await stockProvider.deleteStockEntry(entry.id);
-                                          if (mounted) {
-                                            Provider.of<ProductProvider>(context, listen: false).fetchProducts();
+                                          );
+                                          if (confirm == true) {
+                                            await stockProvider.deleteStockEntry(entry.id);
+                                            if (mounted) {
+                                              Provider.of<ProductProvider>(context, listen: false).fetchProducts();
+                                            }
                                           }
-                                        }
-                                      },
+                                        },
+                                      ),
                                     ),
                                   ],
                                 ),
