@@ -5375,7 +5375,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     }
 
     // Format Kacab (Pak Joko) — format baru dengan nominal
-    String generateKacabText(String greeting, WaContact contact, DateTime dt, List<model_tr.Transaction> items, List<model_tr.Transaction> allMonthErpTrs) {
+    String generateKacabText(String greeting, WaContact contact, DateTime dt, List<model_tr.Transaction> items, double previouslySyncedErp) {
       final weekNum = getWeekOfMonth(dt);
       final monthName = getMonthName(dt.month);
       final dateStr = formatIndoDate(dt);
@@ -5408,17 +5408,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       // 6. Total ERP (NOW)
       buffer.writeln('Total ERP (NOW) : ${formatNominal(totalNow)}');
 
-      // 7. GRANDTOTAL ERP (seluruh bulan berjalan)
-      final grandTotalErp = allMonthErpTrs.fold(0.0, (sum, t) => sum + t.grandTotal);
+      // 7. GRANDTOTAL ERP = Total ERP Sebelumnya + Total ERP (NOW)
+      final grandTotalErp = previouslySyncedErp + totalNow;
       buffer.write('GRANDTOTAL ERP : ${formatNominal(grandTotalErp)}');
 
       return buffer.toString();
     }
 
-    String generateText(String greeting, WaContact? contact, DateTime dt, List<model_tr.Transaction> items, List<model_tr.Transaction> allMonthErpTrs) {
+    String generateText(String greeting, WaContact? contact, DateTime dt, List<model_tr.Transaction> items, double previouslySyncedErp) {
       // Route to Kacab format if contact has templateFormat == 'kacab'
       if (contact != null && contact.templateFormat == 'kacab') {
-        return generateKacabText(greeting, contact, dt, items, allMonthErpTrs);
+        return generateKacabText(greeting, contact, dt, items, previouslySyncedErp);
       }
       return generateAdminErpText(greeting, contact, dt, items);
     }
@@ -5452,16 +5452,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 // Filter selected transactions
                 final activeTrs = initialTrs.where((t) => selectedInvoiceNos.contains(t.invoiceNo.toString())).toList();
 
-                // Calculate all ERP-synced transactions for the selected month (for GRANDTOTAL ERP)
-                final allMonthErpTrs = initialTrs.where((t) =>
-                  t.erpSyncDate != null &&
-                  t.date.month == selectedDate.month &&
-                  t.date.year == selectedDate.year
-                ).toList();
+                // Calculate all previously ERP-synced transactions for the selected month (excluding currently selected invoices)
+                final previouslySyncedErp = initialTrs.where((t) {
+                  if (selectedInvoiceNos.contains(t.invoiceNo.toString())) return false;
+                  if (t.erpSyncDate == null) return false;
+                  final syncDate = t.erpSyncDate!;
+                  return (syncDate.month == selectedDate.month && syncDate.year == selectedDate.year) ||
+                         (t.date.month == selectedDate.month && t.date.year == selectedDate.year);
+                }).fold(0.0, (sum, t) => sum + t.grandTotal);
 
                 // Re-generate text preview unless user edited manually
                 if (!userEditedMessage) {
-                  final generatedMsg = generateText(selectedGreeting, selectedContact, selectedDate, activeTrs, allMonthErpTrs);
+                  final generatedMsg = generateText(selectedGreeting, selectedContact, selectedDate, activeTrs, previouslySyncedErp);
                   customMessageCtrl.text = generatedMsg;
                 }
 
