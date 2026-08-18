@@ -980,7 +980,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
   // TAB 3: Real-Time Invoice Print & Date Selection Audit Logs
   Widget _buildInvoicePrintLogsTab(bool isMobile) {
     return StreamBuilder<List<InvoicePrintLog>>(
-      stream: _firebaseService.streamInvoicePrintLogs(limit: 200),
+      stream: _firebaseService.streamInvoicePrintLogs(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
@@ -1552,7 +1552,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
   // TAB 4: Real-Time Remote Print Console (WFH -> Office Print Station)
   Widget _buildRemotePrintConsoleTab(AuthProvider authProvider, bool isMobile) {
     return StreamBuilder<List<RemotePrintCommand>>(
-      stream: _firebaseService.streamRecentPrintCommands(limit: 100),
+      stream: _firebaseService.streamRecentPrintCommands(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));

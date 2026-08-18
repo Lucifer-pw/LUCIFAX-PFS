@@ -59,14 +59,13 @@ class FirebaseService {
     }
   }
 
-  Stream<List<InvoicePrintLog>> streamInvoicePrintLogs({int limit = 150}) {
-    return _db.collection('invoice_print_logs').snapshots().map((snapshot) {
-      var list = snapshot.docs.map((doc) => InvoicePrintLog.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      if (list.length > limit) {
-        list = list.sublist(0, limit);
-      }
-      return list;
+  Stream<List<InvoicePrintLog>> streamInvoicePrintLogs({int limit = 50}) {
+    return _db.collection('invoice_print_logs')
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => InvoicePrintLog.fromFirestore(doc)).toList();
     });
   }
 
@@ -179,14 +178,13 @@ class FirebaseService {
     }
   }
 
-  Stream<List<RemotePrintCommand>> streamRecentPrintCommands({int limit = 50}) {
-    return _db.collection('remote_print_commands').snapshots().map((snapshot) {
-      final list = snapshot.docs.map((doc) => RemotePrintCommand.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      if (list.length > limit) {
-        return list.sublist(0, limit);
-      }
-      return list;
+  Stream<List<RemotePrintCommand>> streamRecentPrintCommands({int limit = 30}) {
+    return _db.collection('remote_print_commands')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => RemotePrintCommand.fromFirestore(doc)).toList();
     });
   }
 
