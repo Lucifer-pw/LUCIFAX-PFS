@@ -621,7 +621,7 @@ class _ProductListViewState extends State<ProductListView> {
       List<int>? fileBytes = excel.encode();
       if (fileBytes != null) {
         final bytes = Uint8List.fromList(fileBytes);
-        final fileName = 'Master_Barang_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+        final fileName = 'Master_Barang_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx';
         await Printing.sharePdf(bytes: bytes, filename: fileName);
       }
     } catch (e) {
@@ -634,104 +634,124 @@ class _ProductListViewState extends State<ProductListView> {
   }
 
   // -------------------------------------------------------------------
-  // CETAK PDF
+  // CETAK & DOWNLOAD PDF
   // -------------------------------------------------------------------
+  pw.Document _buildProductsPdfDoc(List<Product> products) {
+    final doc = pw.Document();
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+
+    // Deduplicate products by Kode Induk (ambil salah satu saja jika ada Kode Induk yang sama)
+    final Set<String> seenKodeInduk = {};
+    final List<Product> pdfProducts = [];
+
+    for (var p in products) {
+      final key = p.kodeInduk.trim().isNotEmpty ? p.kodeInduk.trim().toUpperCase() : p.id.trim().toUpperCase();
+      if (!seenKodeInduk.contains(key)) {
+        seenKodeInduk.add(key);
+        pdfProducts.add(p);
+      }
+    }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        build: (pw.Context context) {
+          return [
+            // Header Document
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'DATA MASTER BARANG CABANG JAWA TENGAH',
+                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'PT PUTRA FIVA SEJAHTERA',
+                      style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Tanggal Cetak: $dateStr',
+                      style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('LUCIFAX PFS', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                    pw.Text('Total Items: ${pdfProducts.length}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+            pw.Divider(thickness: 1, color: PdfColors.grey400),
+            pw.SizedBox(height: 10),
+
+            // Table
+            pw.TableHelper.fromTextArray(
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+              headerHeight: 24,
+              cellHeight: 20,
+              headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
+              cellStyle: const pw.TextStyle(fontSize: 8.5),
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                0: pw.Alignment.center,
+                1: pw.Alignment.centerLeft,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.center,
+                4: pw.Alignment.center,
+                5: pw.Alignment.center,
+                6: pw.Alignment.center,
+              },
+              headers: ['Kode Induk', 'Nama Barang', 'Harga Unit', 'Stok', 'Isi Karton', 'Total Karton', 'Berat'],
+              data: pdfProducts.map((p) {
+                final totalKartonStr = p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '0';
+                return [
+                  p.kodeInduk,
+                  p.name,
+                  _rupiahFormatter.format(p.price),
+                  p.stock.toStringAsFixed(0),
+                  '${p.isiKarton} Pack',
+                  totalKartonStr,
+                  '${p.sizeGrams.toStringAsFixed(0)} G',
+                ];
+              }).toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc;
+  }
+
+  Future<void> _downloadProductsPdf(List<Product> products) async {
+    try {
+      final doc = _buildProductsPdfDoc(products);
+      final bytes = await doc.save();
+      final fileName = 'Master_Barang_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal download PDF: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   Future<void> _printProductsPdf(List<Product> products) async {
     try {
-      final doc = pw.Document();
-      final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
-
-      // Deduplicate products by Kode Induk (ambil salah satu saja jika ada Kode Induk yang sama)
-      final Set<String> seenKodeInduk = {};
-      final List<Product> pdfProducts = [];
-
-      for (var p in products) {
-        final key = p.kodeInduk.trim().isNotEmpty ? p.kodeInduk.trim().toUpperCase() : p.id.trim().toUpperCase();
-        if (!seenKodeInduk.contains(key)) {
-          seenKodeInduk.add(key);
-          pdfProducts.add(p);
-        }
-      }
-
-      doc.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(24),
-          build: (pw.Context context) {
-            return [
-              // Header Document
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'DATA MASTER BARANG CABANG JAWA TENGAH',
-                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
-                      ),
-                      pw.SizedBox(height: 2),
-                      pw.Text(
-                        'PT PUTRA FIVA SEJAHTERA',
-                        style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Tanggal Cetak: $dateStr',
-                        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('LUCIFAX PFS', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                      pw.Text('Total Items: ${pdfProducts.length}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-              pw.Divider(thickness: 1, color: PdfColors.grey400),
-              pw.SizedBox(height: 10),
-
-              // Table
-              pw.TableHelper.fromTextArray(
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
-                headerHeight: 24,
-                cellHeight: 20,
-                headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
-                cellStyle: const pw.TextStyle(fontSize: 8.5),
-                cellAlignment: pw.Alignment.centerLeft,
-                cellAlignments: {
-                  0: pw.Alignment.center,
-                  1: pw.Alignment.centerLeft,
-                  2: pw.Alignment.centerRight,
-                  3: pw.Alignment.center,
-                  4: pw.Alignment.center,
-                  5: pw.Alignment.center,
-                  6: pw.Alignment.center,
-                },
-                headers: ['Kode Induk', 'Nama Barang', 'Harga Unit', 'Stok', 'Isi Karton', 'Total Karton', 'Berat'],
-                data: pdfProducts.map((p) {
-                  final totalKartonStr = p.isiKarton > 0 ? (p.stock / p.isiKarton).toStringAsFixed(1) : '0';
-                  return [
-                    p.kodeInduk,
-                    p.name,
-                    _rupiahFormatter.format(p.price),
-                    p.stock.toStringAsFixed(0),
-                    '${p.isiKarton} Pack',
-                    totalKartonStr,
-                    '${p.sizeGrams.toStringAsFixed(0)} G',
-                  ];
-                }).toList(),
-              ),
-            ];
-          },
-        ),
-      );
-
-      final fileName = 'Master_Barang_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      final doc = _buildProductsPdfDoc(products);
+      final fileName = 'Master_Barang_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => doc.save(),
         name: fileName,
@@ -838,6 +858,8 @@ class _ProductListViewState extends State<ProductListView> {
                           _importProductsFromExcel();
                         } else if (val == 'export') {
                           _exportProductsToExcel(filteredProducts);
+                        } else if (val == 'download_pdf') {
+                          _downloadProductsPdf(filteredProducts);
                         } else if (val == 'pdf') {
                           _printProductsPdf(filteredProducts);
                         }
@@ -885,6 +907,16 @@ class _ProductListViewState extends State<ProductListView> {
                           ),
                         ),
                         const PopupMenuDivider(height: 1),
+                        const PopupMenuItem(
+                          value: 'download_pdf',
+                          child: Row(
+                            children: [
+                              Icon(Icons.file_download_outlined, color: Color(0xFF38BDF8), size: 20),
+                              SizedBox(width: 12),
+                              Text('Download PDF (.pdf)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem(
                           value: 'pdf',
                           child: Row(
@@ -1019,6 +1051,8 @@ class _ProductListViewState extends State<ProductListView> {
                           _importProductsFromExcel();
                         } else if (val == 'export') {
                           _exportProductsToExcel(filteredProducts);
+                        } else if (val == 'download_pdf') {
+                          _downloadProductsPdf(filteredProducts);
                         } else if (val == 'pdf') {
                           _printProductsPdf(filteredProducts);
                         }
@@ -1066,6 +1100,16 @@ class _ProductListViewState extends State<ProductListView> {
                           ),
                         ),
                         const PopupMenuDivider(height: 1),
+                        const PopupMenuItem(
+                          value: 'download_pdf',
+                          child: Row(
+                            children: [
+                              Icon(Icons.file_download_outlined, color: Color(0xFF38BDF8), size: 20),
+                              SizedBox(width: 12),
+                              Text('Download PDF (.pdf)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem(
                           value: 'pdf',
                           child: Row(
