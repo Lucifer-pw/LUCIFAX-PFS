@@ -5347,7 +5347,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         }
         return rawTemplate.isEmpty ? '${greeting.trim()} ${contact.name.trim()}' : rawTemplate;
       } else if (contact != null && contact.name.trim().isNotEmpty) {
-        final greet = greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
+        final greet = (contact.templateFormat == 'kacab' && (greeting.trim().isEmpty || greeting.trim() == 'siang'))
+            ? 'Assalammualaikum'
+            : (greeting.trim().isNotEmpty ? greeting.trim() : 'siang');
         return '$greet ${contact.name.trim()}';
       } else {
         return greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
@@ -5436,6 +5438,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 if (selectedContact == null && contacts.isNotEmpty) {
                   selectedContact = contacts.first;
                   phoneCtrl.text = selectedContact!.phone;
+                  if (selectedContact!.templateFormat == 'kacab') {
+                    selectedGreeting = 'Assalammualaikum';
+                  }
                 }
 
                 // Filtered list based strictly on search bar (No Invoice / Nama Customer)
@@ -5546,6 +5551,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     setDialogState(() {
                                       selectedContact = val;
                                       phoneCtrl.text = val.phone;
+                                      if (val.templateFormat == 'kacab') {
+                                        selectedGreeting = 'Assalammualaikum';
+                                      } else if (selectedGreeting == 'Assalammualaikum' || selectedGreeting == 'assalammualaikum') {
+                                        selectedGreeting = 'siang';
+                                      }
                                       userEditedMessage = false; // Reset to auto populate template
                                     });
                                   }
@@ -5602,6 +5612,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           dropdownColor: const Color(0xFF0F172A),
                                           style: const TextStyle(color: Colors.white, fontSize: 13),
                                           items: const [
+                                            DropdownMenuItem(value: 'Assalammualaikum', child: Text('Assalammualaikum')),
+                                            DropdownMenuItem(value: 'assalammualaikum', child: Text('assalammualaikum')),
                                             DropdownMenuItem(value: 'siang', child: Text('siang')),
                                             DropdownMenuItem(value: 'pagi', child: Text('pagi')),
                                             DropdownMenuItem(value: 'sore', child: Text('sore')),
