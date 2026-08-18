@@ -6,6 +6,7 @@ class WaContact {
   final String phone;
   final String role;
   final String template;
+  final String templateFormat; // 'admin_erp' (default) or 'kacab'
 
   WaContact({
     required this.id,
@@ -13,6 +14,7 @@ class WaContact {
     required this.phone,
     this.role = '',
     this.template = '',
+    this.templateFormat = 'admin_erp',
   });
 
   factory WaContact.fromFirestore(DocumentSnapshot doc) {
@@ -23,6 +25,7 @@ class WaContact {
       phone: data['phone'] ?? '',
       role: data['role'] ?? '',
       template: data['template'] ?? '',
+      templateFormat: data['templateFormat'] ?? 'admin_erp',
     );
   }
 
@@ -32,6 +35,7 @@ class WaContact {
       'phone': phone,
       'role': role,
       'template': template,
+      'templateFormat': templateFormat,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

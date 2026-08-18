@@ -1721,7 +1721,20 @@ class FirebaseService {
     final snap = await _db.collection('wa_contacts').get();
     if (snap.docs.isEmpty) {
       final defaults = [
-        {'name': 'Bu Silvi', 'phone': '08123456789', 'role': 'Admin ERP', 'template': 'siang Bu Silvi'},
+        {
+          'name': 'Bu Silvi',
+          'phone': '082114513410',
+          'role': 'Admin ERP',
+          'template': 'siang Bu Silvi',
+          'templateFormat': 'admin_erp',
+        },
+        {
+          'name': 'Joko Setiawan',
+          'phone': '',
+          'role': 'Kacab Jateng',
+          'template': 'assalammualaikum Pak Joko,',
+          'templateFormat': 'kacab',
+        },
       ];
       final batch = _db.batch();
       for (var c in defaults) {
@@ -1731,6 +1744,7 @@ class FirebaseService {
           'phone': c['phone'],
           'role': c['role'],
           'template': c['template'],
+          'templateFormat': c['templateFormat'] ?? 'admin_erp',
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }

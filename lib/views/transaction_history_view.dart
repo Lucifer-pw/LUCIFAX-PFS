@@ -5322,34 +5322,47 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return 'TOKO';
     }
 
-    String generateText(String greeting, WaContact? contact, DateTime dt, List<model_tr.Transaction> items) {
-      final dateStr = formatIndoDate(dt);
-      final countStr = '${items.length} invoice';
+    int getWeekOfMonth(DateTime dt) {
+      return ((dt.day - 1) ~/ 7) + 1;
+    }
 
-      final buffer = StringBuffer();
-      
-      // 1. Header Sapaan Line (from Kelola Daftar Kontak Template or construct from greeting + name)
-      String headerLine = '';
+    String getMonthName(int month) {
+      final months = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei',
+        'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      return months[month - 1];
+    }
+
+    String formatNominal(double amount) {
+      return NumberFormat('#,###', 'id').format(amount.round()).replaceAll(',', '.');
+    }
+
+    // Build sapaan header line from contact template or greeting
+    String buildSapaanHeader(String greeting, WaContact? contact) {
       if (contact != null && contact.template.trim().isNotEmpty) {
         String rawTemplate = contact.template.trim();
         if (rawTemplate.toLowerCase().contains('untuk list erp')) {
           rawTemplate = rawTemplate.split(RegExp(r'untuk list erp', caseSensitive: false))[0].trim();
         }
-        headerLine = rawTemplate.isEmpty ? '${greeting.trim()} ${contact.name.trim()}' : rawTemplate;
+        return rawTemplate.isEmpty ? '${greeting.trim()} ${contact.name.trim()}' : rawTemplate;
       } else if (contact != null && contact.name.trim().isNotEmpty) {
         final greet = greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
-        headerLine = '$greet ${contact.name.trim()}';
+        return '$greet ${contact.name.trim()}';
       } else {
-        final greet = greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
-        headerLine = greet;
+        return greeting.trim().isNotEmpty ? greeting.trim() : 'siang';
       }
+    }
 
-      buffer.writeln(headerLine);
+    // Format Admin ERP (Bu Silvi) — format lama
+    String generateAdminErpText(String greeting, WaContact? contact, DateTime dt, List<model_tr.Transaction> items) {
+      final dateStr = formatIndoDate(dt);
+      final countStr = '${items.length} invoice';
+      final buffer = StringBuffer();
 
-      // 2. Summary Line
+      buffer.writeln(buildSapaanHeader(greeting, contact));
       buffer.writeln('untuk list erp hari ini $dateStr ada : $countStr');
 
-      // 3. Invoice Items List
       for (int i = 0; i < items.length; i++) {
         final tr = items[i];
         final invClean = tr.invoiceNo.toString().replaceAll('#', '');
@@ -5357,10 +5370,57 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         buffer.writeln('${i + 1}. $storeName ($invClean)');
       }
 
-      // 4. Closing
       buffer.write('Terimakasih');
+      return buffer.toString();
+    }
+
+    // Format Kacab (Pak Joko) — format baru dengan nominal
+    String generateKacabText(String greeting, WaContact contact, DateTime dt, List<model_tr.Transaction> items, List<model_tr.Transaction> allMonthErpTrs) {
+      final weekNum = getWeekOfMonth(dt);
+      final monthName = getMonthName(dt.month);
+      final dateStr = formatIndoDate(dt);
+      final buffer = StringBuffer();
+
+      // 1. Sapaan
+      buffer.writeln(buildSapaanHeader(greeting, contact));
+
+      // 2. Intro line
+      buffer.writeln('izin mengirimkan List PO ERP Kacab Minggu ke $weekNum Bulan $monthName ${dt.year}');
+      buffer.writeln();
+
+      // 3. Header tanggal
+      buffer.writeln('List masuk ERP $dateStr (minggu ke $weekNum)');
+
+      // 4. Daftar invoice dengan nominal
+      double totalNow = 0;
+      for (int i = 0; i < items.length; i++) {
+        final tr = items[i];
+        final invClean = tr.invoiceNo.toString().replaceAll('#', '');
+        final storeName = getStoreName(tr);
+        final nominal = tr.grandTotal;
+        totalNow += nominal;
+        buffer.writeln('${i + 1}. $storeName ($invClean) = ${formatNominal(nominal)}');
+      }
+
+      // 5. Separator
+      buffer.writeln('=====================');
+
+      // 6. Total ERP (NOW)
+      buffer.writeln('Total ERP (NOW) : ${formatNominal(totalNow)}');
+
+      // 7. GRANDTOTAL ERP (seluruh bulan berjalan)
+      final grandTotalErp = allMonthErpTrs.fold(0.0, (sum, t) => sum + t.grandTotal);
+      buffer.write('GRANDTOTAL ERP : ${formatNominal(grandTotalErp)}');
 
       return buffer.toString();
+    }
+
+    String generateText(String greeting, WaContact? contact, DateTime dt, List<model_tr.Transaction> items, List<model_tr.Transaction> allMonthErpTrs) {
+      // Route to Kacab format if contact has templateFormat == 'kacab'
+      if (contact != null && contact.templateFormat == 'kacab') {
+        return generateKacabText(greeting, contact, dt, items, allMonthErpTrs);
+      }
+      return generateAdminErpText(greeting, contact, dt, items);
     }
 
     showDialog(
@@ -5392,9 +5452,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 // Filter selected transactions
                 final activeTrs = initialTrs.where((t) => selectedInvoiceNos.contains(t.invoiceNo.toString())).toList();
 
+                // Calculate all ERP-synced transactions for the selected month (for GRANDTOTAL ERP)
+                final allMonthErpTrs = initialTrs.where((t) =>
+                  t.erpSyncDate != null &&
+                  t.date.month == selectedDate.month &&
+                  t.date.year == selectedDate.year
+                ).toList();
+
                 // Re-generate text preview unless user edited manually
                 if (!userEditedMessage) {
-                  final generatedMsg = generateText(selectedGreeting, selectedContact, selectedDate, activeTrs);
+                  final generatedMsg = generateText(selectedGreeting, selectedContact, selectedDate, activeTrs, allMonthErpTrs);
                   customMessageCtrl.text = generatedMsg;
                 }
 
@@ -5746,6 +5813,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final phoneCtrl = TextEditingController();
     final roleCtrl = TextEditingController();
     final templateCtrl = TextEditingController();
+    String selectedFormat = 'admin_erp';
     String? editingContactId;
     bool isSaving = false;
 
@@ -5867,6 +5935,42 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 10),
+                                // Format Template Dropdown
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1E293B),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.article_outlined, color: Color(0xFF94A3B8), size: 16),
+                                      const SizedBox(width: 8),
+                                      const Text('Format Pesan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: selectedFormat,
+                                            dropdownColor: const Color(0xFF1E293B),
+                                            isDense: true,
+                                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                                            items: const [
+                                              DropdownMenuItem(value: 'admin_erp', child: Text('📋 Admin ERP (Default)', style: TextStyle(fontSize: 12))),
+                                              DropdownMenuItem(value: 'kacab', child: Text('📊 Kacab (dengan Nominal)', style: TextStyle(fontSize: 12))),
+                                            ],
+                                            onChanged: (val) {
+                                              if (val != null) {
+                                                setDialogState(() => selectedFormat = val);
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 const SizedBox(height: 12),
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -5898,6 +6002,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                 phone: phone,
                                                 role: role,
                                                 template: tmpl,
+                                                templateFormat: selectedFormat,
                                               );
                                               await _firebaseService.saveWaContact(contact);
 
@@ -5956,9 +6061,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   itemCount: contacts.length,
                                   itemBuilder: (context, index) {
                                     final item = contacts[index];
+                                    final formatLabel = item.templateFormat == 'kacab' ? '📊 Kacab' : '📋 Admin';
                                     final subDetails = [
                                       item.phone,
                                       if (item.role.isNotEmpty) item.role,
+                                      formatLabel,
                                       if (item.template.isNotEmpty) 'Template: ${item.template}',
                                     ].join(' • ');
 
@@ -5987,6 +6094,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   phoneCtrl.text = item.phone;
                                                   roleCtrl.text = item.role;
                                                   templateCtrl.text = item.template;
+                                                  selectedFormat = item.templateFormat;
                                                 });
                                               },
                                             ),
