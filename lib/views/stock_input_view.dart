@@ -50,6 +50,31 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
     super.dispose();
   }
 
+  Product? _findProduct(List<Product> products, String productId, String productName) {
+    try {
+      return products.firstWhere(
+        (p) => p.id == productId || p.name.trim().toLowerCase() == productName.trim().toLowerCase(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatNumber(double val) {
+    if (val == val.roundToDouble()) {
+      return NumberFormat('#,###').format(val.toInt());
+    }
+    return NumberFormat('#,###.#').format(val);
+  }
+
+  double _calculateEntryCarton(StockEntry entry, List<Product> products) {
+    final prod = _findProduct(products, entry.productId, entry.productName);
+    if (prod != null && prod.isiKarton > 0) {
+      return entry.qty / prod.isiKarton;
+    }
+    return 0.0;
+  }
+
   void _selectProduct(Product prod) {
     setState(() {
       _selectedProduct = prod;
@@ -423,6 +448,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                 controller: _stockInputController,
                                 focusNode: _qtyFocusNode,
                                 keyboardType: TextInputType.number,
+                                onChanged: (_) => setState(() {}),
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                                 decoration: InputDecoration(
                                   filled: true,
@@ -434,6 +460,38 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
                                 ),
                               ),
+                              if (_selectedProduct != null) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F172A),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.35)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 14),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedProduct!.isiKarton > 0
+                                              ? () {
+                                                  final qty = double.tryParse(_stockInputController.text.trim()) ?? 0.0;
+                                                  if (qty > 0) {
+                                                    final ktn = qty / _selectedProduct!.isiKarton;
+                                                    return 'Isi: ${_selectedProduct!.isiKarton} Pack/Ktn ➔ Input: ${qty.toInt()} Pack = ${_formatNumber(ktn)} Karton';
+                                                  }
+                                                  return 'Isi per Karton: ${_selectedProduct!.isiKarton} Pack';
+                                                }()
+                                              : 'Isi per Karton belum diatur di Master Barang',
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 14),
 
                               // SIMPAN BUTTON
@@ -802,6 +860,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                   controller: _stockInputController,
                                   focusNode: _qtyFocusNode,
                                   keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                   decoration: InputDecoration(
                                     filled: true,
@@ -813,6 +872,38 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
                                   ),
                                 ),
+                                if (_selectedProduct != null) ...[
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.35)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.inventory_2_outlined, color: Color(0xFF38BDF8), size: 14),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            _selectedProduct!.isiKarton > 0
+                                                ? () {
+                                                    final qty = double.tryParse(_stockInputController.text.trim()) ?? 0.0;
+                                                    if (qty > 0) {
+                                                      final ktn = qty / _selectedProduct!.isiKarton;
+                                                      return 'Isi: ${_selectedProduct!.isiKarton} Pack/Karton ➔ Input: ${qty.toInt()} Pack = ${_formatNumber(ktn)} Karton';
+                                                    }
+                                                    return 'Isi per Karton: ${_selectedProduct!.isiKarton} Pack (Ketik jumlah pack untuk hitung karton)';
+                                                  }()
+                                                : 'Isi per Karton belum diatur di Master Barang',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 24),
 
                                 // SIMPAN BUTTON
@@ -958,20 +1049,34 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                                                 ],
                                                               ),
                                                             ),
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                              decoration: BoxDecoration(
-                                                                color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF0284C7).withOpacity(0.2),
-                                                                borderRadius: BorderRadius.circular(6),
-                                                              ),
-                                                              child: Text(
-                                                                '${prod.stock.toInt()} Pack',
-                                                                style: TextStyle(
-                                                                  color: isSelected ? Colors.black : const Color(0xFF38BDF8),
-                                                                  fontWeight: FontWeight.bold,
-                                                                  fontSize: 12,
+                                                            Column(
+                                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                                              mainAxisSize: MainAxisSize.min,
+                                                              children: [
+                                                                Container(
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                                  decoration: BoxDecoration(
+                                                                    color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF0284C7).withOpacity(0.2),
+                                                                    borderRadius: BorderRadius.circular(6),
+                                                                  ),
+                                                                  child: Text(
+                                                                    '${prod.stock.toInt()} Pack',
+                                                                    style: TextStyle(
+                                                                      color: isSelected ? Colors.black : const Color(0xFF38BDF8),
+                                                                      fontWeight: FontWeight.bold,
+                                                                      fontSize: 12,
+                                                                    ),
+                                                                  ),
                                                                 ),
-                                                              ),
+                                                                if (prod.isiKarton > 0)
+                                                                  Padding(
+                                                                    padding: const EdgeInsets.only(top: 2),
+                                                                    child: Text(
+                                                                      '${_formatNumber(prod.stock / prod.isiKarton)} Ktn (@${prod.isiKarton})',
+                                                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w500),
+                                                                    ),
+                                                                  ),
+                                                              ],
                                                             ),
                                                             const SizedBox(width: 10),
                                                             ElevatedButton(
@@ -1071,6 +1176,9 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
       );
     }
 
+    final productProvider = Provider.of<ProductProvider>(context);
+    final products = productProvider.products;
+
     final availableMonths = _getAvailableHistoryMonths(allEntries);
     if (!availableMonths.contains(_historyFilterMonthYear)) {
       final currentMonth = DateFormat('MM-yyyy').format(DateTime.now());
@@ -1085,18 +1193,24 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
     }).toList();
 
     double totalMonthQty = 0;
+    double totalMonthCartons = 0;
     final Map<int, double> weekTotals = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+    final Map<int, double> weekCartons = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
     final Map<int, List<StockEntry>> groupedByWeek = {1: [], 2: [], 3: [], 4: [], 5: []};
 
     for (var entry in filteredEntries) {
       totalMonthQty += entry.qty;
+      final c = _calculateEntryCarton(entry, products);
+      totalMonthCartons += c;
       final w = entry.weekNumber;
       if (groupedByWeek.containsKey(w)) {
         groupedByWeek[w]!.add(entry);
         weekTotals[w] = (weekTotals[w] ?? 0.0) + entry.qty;
+        weekCartons[w] = (weekCartons[w] ?? 0.0) + c;
       } else {
         groupedByWeek.putIfAbsent(w, () => []).add(entry);
         weekTotals[w] = (weekTotals[w] ?? 0.0) + entry.qty;
+        weekCartons[w] = (weekCartons[w] ?? 0.0) + c;
       }
     }
 
@@ -1108,6 +1222,10 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
     final displayedQty = _historyFilterWeek != null
         ? (weekTotals[_historyFilterWeek!] ?? 0.0)
         : totalMonthQty;
+
+    final displayedCartons = _historyFilterWeek != null
+        ? (weekCartons[_historyFilterWeek!] ?? 0.0)
+        : totalMonthCartons;
 
     final displayedEntriesCount = _historyFilterWeek != null
         ? (groupedByWeek[_historyFilterWeek!]?.length ?? 0)
@@ -1150,9 +1268,23 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                   text: '+${NumberFormat('#,###').format(displayedQty)} Pack',
                                   style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
                                 ),
+                                if (displayedCartons > 0) ...[
+                                  const TextSpan(
+                                    text: ' (',
+                                    style: TextStyle(color: Color(0xFF94A3B8)),
+                                  ),
+                                  TextSpan(
+                                    text: '${_formatNumber(displayedCartons)} Karton',
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                                  ),
+                                  const TextSpan(
+                                    text: ')',
+                                    style: TextStyle(color: Color(0xFF94A3B8)),
+                                  ),
+                                ],
                                 TextSpan(
-                                  text: ' ($displayedEntriesCount Entri)',
-                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+                                  text: ' • $displayedEntriesCount Entri',
+                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                                 ),
                               ],
                             ),
@@ -1233,7 +1365,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                               const SizedBox(width: 4),
                             ],
                             Text(
-                              'Semua (M1-M5): +${totalMonthQty.toInt()} Pack',
+                              'Semua: +${totalMonthQty.toInt()} Pack${totalMonthCartons > 0 ? ' (${_formatNumber(totalMonthCartons)} Ktn)' : ''}',
                               style: TextStyle(
                                 color: _historyFilterWeek == null ? const Color(0xFF38BDF8) : Colors.white,
                                 fontSize: 11,
@@ -1249,6 +1381,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                     ...[1, 2, 3, 4, 5].map((w) {
                       final isSelected = _historyFilterWeek == w;
                       final sumW = weekTotals[w] ?? 0.0;
+                      final sumCartonW = weekCartons[w] ?? 0.0;
                       final hasData = (groupedByWeek[w] ?? []).isNotEmpty;
 
                       return InkWell(
@@ -1285,7 +1418,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                 const SizedBox(width: 4),
                               ],
                               Text(
-                                'M$w: +${sumW.toInt()} Pack',
+                                'M$w: +${sumW.toInt()} Pack${sumCartonW > 0 ? ' (${_formatNumber(sumCartonW)} Ktn)' : ''}',
                                 style: TextStyle(
                                   color: isSelected
                                       ? const Color(0xFF38BDF8)
@@ -1319,6 +1452,7 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                     final w = activeWeeks[weekIdx];
                     final entriesInWeek = groupedByWeek[w]!;
                     final sumWeek = weekTotals[w] ?? 0.0;
+                    final sumWeekCarton = weekCartons[w] ?? 0.0;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -1369,13 +1503,13 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                   ],
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: Colors.greenAccent.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    'Total M$w: +${sumWeek.toInt()} Pack',
+                                    'Total M$w: +${sumWeek.toInt()} Pack${sumWeekCarton > 0 ? ' • ${_formatNumber(sumWeekCarton)} Karton' : ''}',
                                     style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                   ),
                                 ),
@@ -1392,6 +1526,10 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                             separatorBuilder: (_, __) => const SizedBox(height: 4),
                             itemBuilder: (context, idx) {
                               final entry = entriesInWeek[idx];
+                              final entryCarton = _calculateEntryCarton(entry, products);
+                              final prod = _findProduct(products, entry.productId, entry.productName);
+                              final isiKarton = prod?.isiKarton ?? 0;
+
                               return Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
@@ -1464,10 +1602,21 @@ class _StockInputViewState extends State<StockInputView> with SingleTickerProvid
                                     ),
                                     const SizedBox(width: 10),
 
-                                    // Added Qty (Green Bold)
-                                    Text(
-                                      '+${entry.qty.toInt()} Pack',
-                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                    // Added Qty (Green Bold) & Karton Details
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '+${entry.qty.toInt()} Pack',
+                                          style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                        ),
+                                        if (isiKarton > 0 && entryCarton > 0)
+                                          Text(
+                                            '${_formatNumber(entryCarton)} Karton (@$isiKarton)',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
+                                          ),
+                                      ],
                                     ),
                                     const SizedBox(width: 4),
 
