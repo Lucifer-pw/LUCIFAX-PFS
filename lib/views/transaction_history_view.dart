@@ -1376,11 +1376,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final currentUser = authProvider.currentUser;
 
+      final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
+      Customer? c;
+      try {
+        c = masterCustomers.firstWhere((cust) => cust.id == tr.customerId);
+      } catch (_) {}
+
+      final String alias = (c != null && c.aliasName.trim().isNotEmpty)
+          ? c.aliasName.trim()
+          : (tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : '');
+      final String formattedCustomer = alias.isNotEmpty
+          ? '$alias (${tr.customerName.trim()})'
+          : tr.customerName.trim();
+
       // 1. Log print action to Firestore for Developer Monitoring
       try {
         await _firebaseService.logInvoicePrint(
           invoiceNo: tr.invoiceNo,
-          customerName: tr.customerName,
+          customerName: formattedCustomer,
           originalDate: tr.date,
           originalDeliveryDate: tr.deliveryDate,
           printedDeliveryDate: chosenDeliveryDate ?? (tr.deliveryDate ?? tr.date),
@@ -1396,12 +1409,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       } catch (logErr) {
         debugPrint('Error logging invoice print in _handlePrintOrDownloadPdf: $logErr');
       }
-
-      final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
-      Customer? c;
-      try {
-        c = masterCustomers.firstWhere((cust) => cust.id == tr.customerId);
-      } catch (_) {}
 
       final toPrint = model_tr.Transaction(
         invoiceNo: tr.invoiceNo,
@@ -1475,6 +1482,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       final currentUser = authProvider.currentUser;
       final deliveryDate = chosenDeliveryDate ?? (tr.deliveryDate ?? tr.date);
 
+      final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
+      Customer? c;
+      try {
+        c = masterCustomers.firstWhere((cust) => cust.id == tr.customerId);
+      } catch (_) {}
+
+      final String alias = (c != null && c.aliasName.trim().isNotEmpty)
+          ? c.aliasName.trim()
+          : (tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : '');
+      final String formattedCustomer = alias.isNotEmpty
+          ? '$alias (${tr.customerName.trim()})'
+          : tr.customerName.trim();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -1498,7 +1518,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
       final cmdId = await _firebaseService.sendRemotePrintCommand(
         invoiceNo: tr.invoiceNo,
-        customerName: tr.customerName,
+        customerName: formattedCustomer,
         deliveryDate: tr.deliveryDate,
         printedDeliveryDate: deliveryDate,
         optionType: optionType,

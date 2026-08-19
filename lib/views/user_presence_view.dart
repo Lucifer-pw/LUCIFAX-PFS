@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/role_permissions_provider.dart';
+import '../providers/customer_provider.dart';
+import '../providers/transaction_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_profile.dart';
 import '../models/invoice_print_log.dart';
@@ -25,6 +27,47 @@ class _UserPresenceViewState extends State<UserPresenceView> {
   String _logSearchQuery = '';
   String _logRoleFilter = 'ALL'; // 'ALL', 'NON_DEV', 'KACAB', 'CASHIER', 'DEV'
   String _logOptionFilter = 'ALL'; // 'ALL', 'TANGGAL_BARU', 'TANGGAL_AWAL'
+
+  String _formatCustomerWithAlias(String rawCustomerName, [String? invoiceNo]) {
+    final trimmed = rawCustomerName.trim();
+    if (trimmed.isEmpty) return '-';
+    // If it already has formatted alias format like "KK FF (BAMBANG EKO RATIYATNO)", return directly
+    if (trimmed.contains('(') && trimmed.contains(')')) {
+      return trimmed;
+    }
+
+    try {
+      final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+      final custs = customerProvider.customers;
+      
+      for (final c in custs) {
+        if (c.customerName.trim().toLowerCase() == trimmed.toLowerCase() ||
+            c.aliasName.trim().toLowerCase() == trimmed.toLowerCase()) {
+          if (c.aliasName.trim().isNotEmpty && c.customerName.trim().isNotEmpty) {
+            return '${c.aliasName.trim()} (${c.customerName.trim()})';
+          }
+          return c.displayName;
+        }
+      }
+    } catch (_) {}
+
+    if (invoiceNo != null && invoiceNo.isNotEmpty) {
+      try {
+        final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+        final trs = trProvider.transactions;
+        for (final tr in trs) {
+          if (tr.invoiceNo.toString().trim() == invoiceNo.toString().trim()) {
+            if (tr.aliasName.trim().isNotEmpty && tr.customerName.trim().isNotEmpty) {
+              return '${tr.aliasName.trim()} (${tr.customerName.trim()})';
+            }
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return trimmed;
+  }
 
   final List<Map<String, dynamic>> _kacabFeatures = [
     {
@@ -1097,7 +1140,8 @@ class _UserPresenceViewState extends State<UserPresenceView> {
           if (_logSearchQuery.isNotEmpty) {
             final q = _logSearchQuery.toLowerCase();
             final matchInv = l.invoiceNo.toString().toLowerCase().contains(q);
-            final matchCust = l.customerName.toLowerCase().contains(q);
+            final formattedCust = _formatCustomerWithAlias(l.customerName, l.invoiceNo.toString()).toLowerCase();
+            final matchCust = l.customerName.toLowerCase().contains(q) || formattedCust.contains(q);
             final matchUser = l.userName.toLowerCase().contains(q) || l.userUsername.toLowerCase().contains(q);
             final matchRole = l.userRole.toLowerCase().contains(q);
             if (!matchInv && !matchCust && !matchUser && !matchRole) return false;
@@ -1578,7 +1622,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          log.customerName,
+                                          _formatCustomerWithAlias(log.customerName, log.invoiceNo.toString()),
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1847,7 +1891,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                             Expanded(
                                               flex: 3,
                                               child: Text(
-                                                log.customerName,
+                                                _formatCustomerWithAlias(log.customerName, log.invoiceNo.toString()),
                                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -2324,7 +2368,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                       // Customer Name
                                       Expanded(
                                         child: Text(
-                                          cmd.customerName,
+                                          _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -2547,7 +2591,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                 const Text('Pelanggan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5)),
                                 Flexible(
                                   child: Text(
-                                    cmd.customerName,
+                                    _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
                                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -2694,7 +2738,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
             ],
           ),
           content: Text(
-            'Hapus catatan riwayat cetak invoice #${cmd.invoiceNo} (${cmd.customerName}) dari daftar ini?',
+            'Hapus catatan riwayat cetak invoice #${cmd.invoiceNo} (${_formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString())}) dari daftar ini?',
             style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
           ),
           actions: [

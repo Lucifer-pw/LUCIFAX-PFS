@@ -205,7 +205,11 @@ class _ShellViewState extends State<ShellView> {
       // 5. Log print action to Firestore audit log
       await _firebaseService.logInvoicePrint(
         invoiceNo: tr.invoiceNo,
-        customerName: tr.customerName,
+        customerName: cmd.customerName.isNotEmpty
+            ? cmd.customerName
+            : (tr.aliasName.isNotEmpty
+                ? '${tr.aliasName} (${tr.customerName})'
+                : tr.customerName),
         originalDate: tr.date,
         originalDeliveryDate: tr.deliveryDate,
         printedDeliveryDate: cmd.printedDeliveryDate,
