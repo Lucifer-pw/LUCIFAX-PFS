@@ -716,82 +716,156 @@ class _UserPresenceViewState extends State<UserPresenceView> {
       children: [
         // Top Banner Card (Compact)
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: isMobile ? 8 : 6),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF334155)),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.amberAccent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
-                ),
-                child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Row(
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Hak Akses Menu Role KACAB',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.amberAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                          ),
+                          child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Hak Akses Menu Role KACAB',
+                            style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amberAccent.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            '$activeCount / ${_kacabFeatures.length} Aktif',
+                            style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => permissionsProvider.setAllKacabPermissions(true),
+                            icon: const Icon(Icons.select_all_rounded, size: 13),
+                            label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF4ADE80),
+                              side: const BorderSide(color: Color(0xFF4ADE80)),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => permissionsProvider.resetKacabToDefault(),
+                            icon: const Icon(Icons.restart_alt_rounded, size: 13),
+                            label: const Text('Reset Default', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.orangeAccent,
+                              side: const BorderSide(color: Colors.orangeAccent),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: Colors.amberAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
                       ),
-                      child: Text(
-                        '$activeCount / ${_kacabFeatures.length} Menu Aktif',
-                        style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                      child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Hak Akses Menu Role KACAB',
+                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amberAccent.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              '$activeCount / ${_kacabFeatures.length} Menu Aktif',
+                              style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                    // Quick Bulk Toggle Buttons
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => permissionsProvider.setAllKacabPermissions(true),
+                          icon: const Icon(Icons.select_all_rounded, size: 13),
+                          label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF4ADE80),
+                            side: const BorderSide(color: Color(0xFF4ADE80)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        OutlinedButton.icon(
+                          onPressed: () => permissionsProvider.resetKacabToDefault(),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 13),
+                          label: const Text('Reset Default', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orangeAccent,
+                            side: const BorderSide(color: Colors.orangeAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ),
-              // Quick Bulk Toggle Buttons
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => permissionsProvider.setAllKacabPermissions(true),
-                    icon: const Icon(Icons.select_all_rounded, size: 13),
-                    label: const Text('Aktifkan Semua', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4ADE80),
-                      side: const BorderSide(color: Color(0xFF4ADE80)),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  OutlinedButton.icon(
-                    onPressed: () => permissionsProvider.resetKacabToDefault(),
-                    icon: const Icon(Icons.restart_alt_rounded, size: 13),
-                    label: const Text('Reset Default', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orangeAccent,
-                      side: const BorderSide(color: Colors.orangeAccent),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
         const SizedBox(height: 6),
 
@@ -1044,181 +1118,288 @@ class _UserPresenceViewState extends State<UserPresenceView> {
               ),
               child: Column(
                 children: [
-                  // Row 1: Stat Pills + Total Log Count
-                  Row(
-                    children: [
-                      // Stat 1: Total
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF38BDF8).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                  // Row 1: Stat Pills + Total Log Count (Horizontal Scroll on Mobile)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        // Stat 1: Total
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF38BDF8).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.print_rounded, size: 12, color: Color(0xFF38BDF8)),
+                              const SizedBox(width: 4),
+                              Text('Total: ${allLogs.length}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.print_rounded, size: 12, color: Color(0xFF38BDF8)),
-                            const SizedBox(width: 4),
-                            Text('Total: ${allLogs.length}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
-                          ],
+                        const SizedBox(width: 6),
+                        // Stat 2: Tanggal Baru
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: Colors.amberAccent.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.edit_calendar_rounded, size: 12, color: Colors.amberAccent),
+                              const SizedBox(width: 4),
+                              Text('Tanggal Diubah: ${dateModifiedLogs.length}', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      // Stat 2: Tanggal Baru
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: Colors.amberAccent.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                        const SizedBox(width: 6),
+                        // Stat 3: Non-Dev
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4ADE80).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF4ADE80).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.badge_rounded, size: 12, color: Color(0xFF4ADE80)),
+                              const SizedBox(width: 4),
+                              Text('Non-Dev: ${nonDevLogs.length}', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11)),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.edit_calendar_rounded, size: 12, color: Colors.amberAccent),
-                            const SizedBox(width: 4),
-                            Text('Tanggal Diubah: ${dateModifiedLogs.length}', style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
-                          ],
+                        const SizedBox(width: 6),
+                        // Log Count
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: Text(
+                            '${filteredLogs.length} dari ${allLogs.length} Log',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      // Stat 3: Non-Dev
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4ADE80).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF4ADE80).withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.badge_rounded, size: 12, color: Color(0xFF4ADE80)),
-                            const SizedBox(width: 4),
-                            Text('Non-Dev: ${nonDevLogs.length}', style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      // Log Count
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: Text(
-                          '${filteredLogs.length} dari ${allLogs.length} Log',
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 6),
 
-                  // Row 2: Search Box & Dropdown Filters
-                  Row(
-                    children: [
-                      // Search Box
-                      Expanded(
-                        flex: 3,
-                        child: SizedBox(
-                          height: 30,
-                          child: TextField(
-                            style: const TextStyle(color: Colors.white, fontSize: 11.5),
-                            decoration: InputDecoration(
-                              hintText: 'Cari No. Invoice, Customer, User...',
-                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 15),
-                              suffixIcon: _logSearchQuery.isNotEmpty
-                                  ? IconButton(
-                                      padding: EdgeInsets.zero,
-                                      icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 13),
-                                      onPressed: () => setState(() => _logSearchQuery = ''),
-                                    )
-                                  : null,
-                              filled: true,
-                              fillColor: const Color(0xFF0F172A),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: const BorderSide(color: Color(0xFF334155)),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: const BorderSide(color: Color(0xFF334155)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: const BorderSide(color: Color(0xFF38BDF8)),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  // Row 2: Search Box & Dropdown Filters (Responsive)
+                  if (isMobile) ...[
+                    // Mobile Search Box (Full Width)
+                    SizedBox(
+                      height: 32,
+                      child: TextField(
+                        style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                        decoration: InputDecoration(
+                          hintText: 'Cari No. Invoice, Customer, User...',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 15),
+                          suffixIcon: _logSearchQuery.isNotEmpty
+                              ? IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 13),
+                                  onPressed: () => setState(() => _logSearchQuery = ''),
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: const BorderSide(color: Color(0xFF334155)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: const BorderSide(color: Color(0xFF334155)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: const BorderSide(color: Color(0xFF38BDF8)),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        ),
+                        onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Mobile Dropdowns Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 32,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF334155)),
                             ),
-                            onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _logRoleFilter,
+                                isExpanded: true,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                items: const [
+                                  DropdownMenuItem(value: 'ALL', child: Text('Semua Role')),
+                                  DropdownMenuItem(value: 'NON_DEV', child: Text('Non-Dev')),
+                                  DropdownMenuItem(value: 'KACAB', child: Text('Kacab')),
+                                  DropdownMenuItem(value: 'CASHIER', child: Text('Kasir')),
+                                  DropdownMenuItem(value: 'DEV', child: Text('Developer')),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _logRoleFilter = val);
+                                },
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Container(
+                            height: 32,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _logOptionFilter,
+                                isExpanded: true,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                items: const [
+                                  DropdownMenuItem(value: 'ALL', child: Text('📅 Semua Tgl')),
+                                  DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tgl Baru')),
+                                  DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tgl Awal')),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _logOptionFilter = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    // Desktop Search & Dropdowns Row
+                    Row(
+                      children: [
+                        // Search Box
+                        Expanded(
+                          flex: 3,
+                          child: SizedBox(
+                            height: 30,
+                            child: TextField(
+                              style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                              decoration: InputDecoration(
+                                hintText: 'Cari No. Invoice, Customer, User...',
+                                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 15),
+                                suffixIcon: _logSearchQuery.isNotEmpty
+                                    ? IconButton(
+                                        padding: EdgeInsets.zero,
+                                        icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 13),
+                                        onPressed: () => setState(() => _logSearchQuery = ''),
+                                      )
+                                    : null,
+                                filled: true,
+                                fillColor: const Color(0xFF0F172A),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: const BorderSide(color: Color(0xFF38BDF8)),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
+                              onChanged: (val) => setState(() => _logSearchQuery = val.trim()),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
 
-                      // Role Filter Dropdown
-                      Container(
-                        height: 30,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _logRoleFilter,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
-                            dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                            items: const [
-                              DropdownMenuItem(value: 'ALL', child: Text('Semua Role')),
-                              DropdownMenuItem(value: 'NON_DEV', child: Text('Non-Dev (Kacab/Kasir)')),
-                              DropdownMenuItem(value: 'KACAB', child: Text('Kacab / Manager')),
-                              DropdownMenuItem(value: 'CASHIER', child: Text('Kasir')),
-                              DropdownMenuItem(value: 'DEV', child: Text('Developer')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) setState(() => _logRoleFilter = val);
-                            },
+                        // Role Filter Dropdown
+                        Container(
+                          height: 30,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _logRoleFilter,
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                              items: const [
+                                DropdownMenuItem(value: 'ALL', child: Text('Semua Role')),
+                                DropdownMenuItem(value: 'NON_DEV', child: Text('Non-Dev (Kacab/Kasir)')),
+                                DropdownMenuItem(value: 'KACAB', child: Text('Kacab / Manager')),
+                                DropdownMenuItem(value: 'CASHIER', child: Text('Kasir')),
+                                DropdownMenuItem(value: 'DEV', child: Text('Developer')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) setState(() => _logRoleFilter = val);
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
+                        const SizedBox(width: 6),
 
-                      // Option Filter Dropdown
-                      Container(
-                        height: 30,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _logOptionFilter,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
-                            dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                            items: const [
-                              DropdownMenuItem(value: 'ALL', child: Text('📅 Semua Tanggal')),
-                              DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Baru')),
-                              DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) setState(() => _logOptionFilter = val);
-                            },
+                        // Option Filter Dropdown
+                        Container(
+                          height: 30,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _logOptionFilter,
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 15),
+                              dropdownColor: const Color(0xFF1E293B),
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                              items: const [
+                                DropdownMenuItem(value: 'ALL', child: Text('📅 Semua Tanggal')),
+                                DropdownMenuItem(value: 'TANGGAL_BARU', child: Text('⚠️ Tanggal Baru')),
+                                DropdownMenuItem(value: 'TANGGAL_AWAL', child: Text('✓ Tanggal Awal')),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) setState(() => _logOptionFilter = val);
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1252,296 +1433,507 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         ),
                       ),
                     )
-                  : Column(
-                      children: [
-                        // Table Header Row (Sticky)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(8),
-                              topRight: Radius.circular(8),
-                            ),
-                            border: Border.all(color: const Color(0xFF334155)),
-                          ),
-                          child: Row(
-                            children: [
-                              _buildTableHeader('Waktu', flex: 2),
-                              _buildTableHeader('Operator', flex: 3),
-                              _buildTableHeader('Aksi', flex: 2),
-                              _buildTableHeader('Invoice', flex: 2),
-                              _buildTableHeader('Customer', flex: 3),
-                              _buildTableHeader('Status Tanggal', flex: 3),
-                              _buildTableHeader('Total', flex: 2, align: TextAlign.right),
-                              const SizedBox(width: 28), // space for delete button
-                            ],
-                          ),
-                        ),
-                        // Table Data Rows (Scrollable)
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(8),
-                                bottomRight: Radius.circular(8),
+                  : isMobile
+                      // MOBILE VIEW: Sleek responsive cards
+                      ? ListView.builder(
+                          itemCount: filteredLogs.length,
+                          itemBuilder: (context, index) {
+                            final log = filteredLogs[index];
+                            final roleColor = _getRoleColor(log.userRole);
+                            final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+                            final isNewDate = log.isDateModified;
+
+                            String actionLabel;
+                            IconData actionIcon;
+                            Color actionColor;
+                            if (log.actionType == 'PRINT') {
+                              actionLabel = 'CETAK';
+                              actionIcon = Icons.print_rounded;
+                              actionColor = const Color(0xFF38BDF8);
+                            } else if (log.actionType == 'REMOTE_PRINT') {
+                              actionLabel = 'REMOTE';
+                              actionIcon = Icons.cell_tower_rounded;
+                              actionColor = const Color(0xFFA78BFA);
+                            } else {
+                              actionLabel = 'DOWNLOAD';
+                              actionIcon = Icons.download_rounded;
+                              actionColor = const Color(0xFF34D399);
+                            }
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isNewDate ? Colors.amberAccent.withOpacity(0.5) : const Color(0xFF334155),
+                                  width: isNewDate ? 1.2 : 1,
+                                ),
                               ),
-                              border: Border.all(color: const Color(0xFF334155)),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(8),
-                                bottomRight: Radius.circular(8),
-                              ),
-                              child: ListView.builder(
-                                itemCount: filteredLogs.length,
-                                itemBuilder: (context, index) {
-                                  final log = filteredLogs[index];
-                                  final roleColor = _getRoleColor(log.userRole);
-                                  final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
-                                  final isNewDate = log.isDateModified;
-                                  final isEven = index % 2 == 0;
-
-                                  // Determine action type properties (PRINT / DOWNLOAD / REMOTE_PRINT)
-                                  String actionLabel;
-                                  IconData actionIcon;
-                                  Color actionColor;
-                                  if (log.actionType == 'PRINT') {
-                                    actionLabel = 'CETAK';
-                                    actionIcon = Icons.print_rounded;
-                                    actionColor = const Color(0xFF38BDF8);
-                                  } else if (log.actionType == 'REMOTE_PRINT') {
-                                    actionLabel = 'REMOTE';
-                                    actionIcon = Icons.cell_tower_rounded;
-                                    actionColor = const Color(0xFFA78BFA); // violet
-                                  } else {
-                                    actionLabel = 'DOWNLOAD';
-                                    actionIcon = Icons.download_rounded;
-                                    actionColor = const Color(0xFF34D399);
-                                  }
-
-                                  // Date status
-                                  final String dateStatusText = isNewDate
-                                      ? 'Diubah → ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}'
-                                      : 'Sesuai Nota';
-                                  final String dateTooltip = isNewDate
-                                      ? 'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}\nTgl Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)}'
-                                      : 'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)} (Sesuai tanggal awal nota)';
-
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: isNewDate
-                                          ? Colors.amber.withOpacity(0.04)
-                                          : isEven
-                                              ? const Color(0xFF1E293B)
-                                              : const Color(0xFF172033),
-                                      border: Border(
-                                        left: BorderSide(
-                                          color: isNewDate ? Colors.amberAccent : Colors.transparent,
-                                          width: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Row 1: Invoice Badge + Action Badge + Status Badge + Delete Button
+                                  Row(
+                                    children: [
+                                      // Invoice
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0284C7).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
                                         ),
-                                        bottom: BorderSide(
-                                          color: const Color(0xFF334155).withOpacity(0.5),
-                                          width: 0.5,
+                                        child: Text(
+                                          '#${log.invoiceNo}',
+                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
                                         ),
                                       ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                                    child: Row(
-                                      children: [
-                                        // Column: Waktu
-                                        Expanded(
-                                          flex: 2,
+                                      const SizedBox(width: 6),
+
+                                      // Action Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: actionColor.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: actionColor.withOpacity(0.4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(actionIcon, size: 10, color: actionColor),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              actionLabel,
+                                              style: TextStyle(color: actionColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Spacer(),
+
+                                      // Date Status
+                                      if (isNewDate)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.amberAccent.withOpacity(0.4)),
+                                          ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+                                              const Icon(Icons.warning_amber_rounded, size: 10, color: Colors.amberAccent),
                                               const SizedBox(width: 3),
-                                              Flexible(
-                                                child: Text(
-                                                  _formatDateTime(log.timestamp),
-                                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
+                                              Text(
+                                                'Diubah: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}',
+                                                style: const TextStyle(color: Colors.amberAccent, fontSize: 9.5, fontWeight: FontWeight.bold),
                                               ),
                                             ],
                                           ),
+                                        )
+                                      else
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF10B981).withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                                          ),
+                                          child: const Text(
+                                            'Sesuai Nota',
+                                            style: TextStyle(color: Color(0xFF4ADE80), fontSize: 9.5, fontWeight: FontWeight.bold),
+                                          ),
                                         ),
+                                      const SizedBox(width: 4),
 
-                                        // Column: Operator (Avatar + Name + Role Badge)
-                                        Expanded(
-                                          flex: 3,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              CircleAvatar(
-                                                radius: 10,
-                                                backgroundColor: roleColor.withOpacity(0.2),
-                                                child: Text(
-                                                  log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
-                                                  style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 9),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 5),
-                                              Flexible(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      log.userName,
-                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                                      // Delete Button
+                                      SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: IconButton(
+                                          padding: EdgeInsets.zero,
+                                          icon: Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: const Color(0xFF64748B).withOpacity(0.8),
+                                            size: 14,
+                                          ),
+                                          tooltip: 'Hapus Log',
+                                          splashRadius: 12,
+                                          onPressed: () {
+                                            _firebaseService.deleteInvoicePrintLog(log.id);
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+
+                                  // Row 2: Customer Name & Grand Total
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          log.customerName,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      if (log.grandTotal > 0)
+                                        Text(
+                                          currencyFormatter.format(log.grandTotal),
+                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12.5),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+
+                                  // Row 3: Operator & Timestamp
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 8,
+                                            backgroundColor: roleColor.withOpacity(0.2),
+                                            child: Text(
+                                              log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
+                                              style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 8),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            log.userName,
+                                            style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, fontWeight: FontWeight.w500),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                                            decoration: BoxDecoration(
+                                              color: roleColor.withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(3),
+                                            ),
+                                            child: Text(
+                                              _getRoleLabel(log.userRole),
+                                              style: TextStyle(color: roleColor, fontSize: 8, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.access_time_rounded, size: 10, color: Color(0xFF64748B)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _formatDateTime(log.timestamp),
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        )
+                      // DESKTOP VIEW: Full sticky table
+                      : Column(
+                          children: [
+                            // Table Header Row (Sticky)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(8),
+                                  topRight: Radius.circular(8),
+                                ),
+                                border: Border.all(color: const Color(0xFF334155)),
+                              ),
+                              child: Row(
+                                children: [
+                                  _buildTableHeader('Waktu', flex: 2),
+                                  _buildTableHeader('Operator', flex: 3),
+                                  _buildTableHeader('Aksi', flex: 2),
+                                  _buildTableHeader('Invoice', flex: 2),
+                                  _buildTableHeader('Customer', flex: 3),
+                                  _buildTableHeader('Status Tanggal', flex: 3),
+                                  _buildTableHeader('Total', flex: 2, align: TextAlign.right),
+                                  const SizedBox(width: 28), // space for delete button
+                                ],
+                              ),
+                            ),
+                            // Table Data Rows (Scrollable)
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(8),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                  border: Border.all(color: const Color(0xFF334155)),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(8),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                  child: ListView.builder(
+                                    itemCount: filteredLogs.length,
+                                    itemBuilder: (context, index) {
+                                      final log = filteredLogs[index];
+                                      final roleColor = _getRoleColor(log.userRole);
+                                      final currencyFormatter = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+                                      final isNewDate = log.isDateModified;
+                                      final isEven = index % 2 == 0;
+
+                                      String actionLabel;
+                                      IconData actionIcon;
+                                      Color actionColor;
+                                      if (log.actionType == 'PRINT') {
+                                        actionLabel = 'CETAK';
+                                        actionIcon = Icons.print_rounded;
+                                        actionColor = const Color(0xFF38BDF8);
+                                      } else if (log.actionType == 'REMOTE_PRINT') {
+                                        actionLabel = 'REMOTE';
+                                        actionIcon = Icons.cell_tower_rounded;
+                                        actionColor = const Color(0xFFA78BFA);
+                                      } else {
+                                        actionLabel = 'DOWNLOAD';
+                                        actionIcon = Icons.download_rounded;
+                                        actionColor = const Color(0xFF34D399);
+                                      }
+
+                                      final String dateStatusText = isNewDate
+                                          ? 'Diubah → ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}'
+                                          : 'Sesuai Nota';
+                                      final String dateTooltip = isNewDate
+                                          ? 'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)}\nTgl Awal Nota: ${DateFormat('dd-MM-yyyy').format(log.originalDeliveryDate ?? log.originalDate)}'
+                                          : 'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(log.printedDeliveryDate)} (Sesuai tanggal awal nota)';
+
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          color: isNewDate
+                                              ? Colors.amber.withOpacity(0.04)
+                                              : isEven
+                                                  ? const Color(0xFF1E293B)
+                                                  : const Color(0xFF172033),
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: isNewDate ? Colors.amberAccent : Colors.transparent,
+                                              width: 3,
+                                            ),
+                                            bottom: BorderSide(
+                                              color: const Color(0xFF334155).withOpacity(0.5),
+                                              width: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                        child: Row(
+                                          children: [
+                                            // Column: Waktu
+                                            Expanded(
+                                              flex: 2,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+                                                  const SizedBox(width: 3),
+                                                  Flexible(
+                                                    child: Text(
+                                                      _formatDateTime(log.timestamp),
+                                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
                                                       overflow: TextOverflow.ellipsis,
                                                     ),
-                                                    Container(
-                                                      margin: const EdgeInsets.only(top: 1),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
-                                                      decoration: BoxDecoration(
-                                                        color: roleColor.withOpacity(0.12),
-                                                        borderRadius: BorderRadius.circular(3),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+
+                                            // Column: Operator (Avatar + Name + Role Badge)
+                                            Expanded(
+                                              flex: 3,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  CircleAvatar(
+                                                    radius: 10,
+                                                    backgroundColor: roleColor.withOpacity(0.2),
+                                                    child: Text(
+                                                      log.userName.isNotEmpty ? log.userName[0].toUpperCase() : 'U',
+                                                      style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 9),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 5),
+                                                  Flexible(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          log.userName,
+                                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        Container(
+                                                          margin: const EdgeInsets.only(top: 1),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                                                          decoration: BoxDecoration(
+                                                            color: roleColor.withOpacity(0.12),
+                                                            borderRadius: BorderRadius.circular(3),
+                                                          ),
+                                                          child: Text(
+                                                            _getRoleLabel(log.userRole),
+                                                            style: TextStyle(color: roleColor, fontSize: 7.5, fontWeight: FontWeight.bold),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+
+                                            // Column: Aksi (Action Badge)
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: actionColor.withOpacity(0.15),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: actionColor.withOpacity(0.4)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(actionIcon, size: 11, color: actionColor),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        actionLabel,
+                                                        style: TextStyle(color: actionColor, fontSize: 9, fontWeight: FontWeight.bold),
                                                       ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Column: Invoice
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  '#${log.invoiceNo}',
+                                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Column: Customer
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(
+                                                log.customerName,
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+
+                                            // Column: Status Tanggal (simplified + tooltip)
+                                            Expanded(
+                                              flex: 3,
+                                              child: Tooltip(
+                                                message: dateTooltip,
+                                                textStyle: const TextStyle(color: Colors.white, fontSize: 11),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1E293B),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: const Color(0xFF475569)),
+                                                ),
+                                                preferBelow: true,
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      isNewDate ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
+                                                      size: 13,
+                                                      color: isNewDate ? Colors.amberAccent : const Color(0xFF4ADE80),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Flexible(
                                                       child: Text(
-                                                        _getRoleLabel(log.userRole),
-                                                        style: TextStyle(color: roleColor, fontSize: 7.5, fontWeight: FontWeight.bold),
+                                                        dateStatusText,
+                                                        style: TextStyle(
+                                                          color: isNewDate ? Colors.amberAccent : const Color(0xFF4ADE80),
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 10.5,
+                                                        ),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                        ),
+                                            ),
 
-                                        // Column: Aksi (Action Badge)
-                                        Expanded(
-                                          flex: 2,
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: actionColor.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(4),
-                                                border: Border.all(color: actionColor.withOpacity(0.4)),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(actionIcon, size: 11, color: actionColor),
-                                                  const SizedBox(width: 3),
-                                                  Text(
-                                                    actionLabel,
-                                                    style: TextStyle(color: actionColor, fontSize: 9, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
+                                            // Column: Total (right-aligned)
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                log.grandTotal > 0 ? currencyFormatter.format(log.grandTotal) : '-',
+                                                style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11),
+                                                textAlign: TextAlign.right,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
-                                          ),
-                                        ),
 
-                                        // Column: Invoice
-                                        Expanded(
-                                          flex: 2,
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              '#${log.invoiceNo}',
-                                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                            ),
-                                          ),
-                                        ),
-
-                                        // Column: Customer
-                                        Expanded(
-                                          flex: 3,
-                                          child: Text(
-                                            log.customerName,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-
-                                        // Column: Status Tanggal (simplified + tooltip)
-                                        Expanded(
-                                          flex: 3,
-                                          child: Tooltip(
-                                            message: dateTooltip,
-                                            textStyle: const TextStyle(color: Colors.white, fontSize: 11),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF1E293B),
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(color: const Color(0xFF475569)),
-                                            ),
-                                            preferBelow: true,
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  isNewDate ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
-                                                  size: 13,
-                                                  color: isNewDate ? Colors.amberAccent : const Color(0xFF4ADE80),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Flexible(
-                                                  child: Text(
-                                                    dateStatusText,
-                                                    style: TextStyle(
-                                                      color: isNewDate ? Colors.amberAccent : const Color(0xFF4ADE80),
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 10.5,
+                                            // Column: Delete Button
+                                            SizedBox(
+                                              width: 28,
+                                              child: Center(
+                                                child: SizedBox(
+                                                  width: 22,
+                                                  height: 22,
+                                                  child: IconButton(
+                                                    padding: EdgeInsets.zero,
+                                                    icon: Icon(
+                                                      Icons.delete_outline_rounded,
+                                                      color: const Color(0xFF64748B).withOpacity(0.6),
+                                                      size: 14,
                                                     ),
-                                                    overflow: TextOverflow.ellipsis,
+                                                    tooltip: 'Hapus Log Ini',
+                                                    splashRadius: 12,
+                                                    onPressed: () {
+                                                      _firebaseService.deleteInvoicePrintLog(log.id);
+                                                    },
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-
-                                        // Column: Total (right-aligned)
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            log.grandTotal > 0 ? currencyFormatter.format(log.grandTotal) : '-',
-                                            style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 11),
-                                            textAlign: TextAlign.right,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-
-                                        // Column: Delete Button
-                                        SizedBox(
-                                          width: 28,
-                                          child: Center(
-                                            child: SizedBox(
-                                              width: 22,
-                                              height: 22,
-                                              child: IconButton(
-                                                padding: EdgeInsets.zero,
-                                                icon: Icon(
-                                                  Icons.delete_outline_rounded,
-                                                  color: const Color(0xFF64748B).withOpacity(0.6),
-                                                  size: 14,
-                                                ),
-                                                tooltip: 'Hapus Log Ini',
-                                                splashRadius: 12,
-                                                onPressed: () {
-                                                  _firebaseService.deleteInvoicePrintLog(log.id);
-                                                },
                                               ),
                                             ),
-                                          ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                                      );
+                                    },
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
             ),
           ],
         );
