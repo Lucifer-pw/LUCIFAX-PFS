@@ -83,6 +83,12 @@ class _ShellViewState extends State<ShellView> {
     final user = authProvider.currentUser;
     if (user == null) return;
 
+    // STRICT: Only PC Kantor with role 'kacab' (Joko Setiawan) is allowed to act as physical print station!
+    // Developers, Admins, and other remote users must NEVER listen to or execute print commands!
+    if (user.role.toLowerCase() != 'kacab' && !user.isKacab) {
+      return;
+    }
+
     _printCommandSubscription = _firebaseService
         .streamPendingPrintCommands(targetUserId: user.uid, role: user.role)
         .listen((commands) async {
