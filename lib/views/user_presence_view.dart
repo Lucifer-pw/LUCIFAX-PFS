@@ -1707,10 +1707,10 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                 children: [
                                   _buildTableHeader('Waktu', flex: 2),
                                   _buildTableHeader('Operator', flex: 3),
-                                  _buildTableHeader('Aksi', flex: 1),
+                                  _buildTableHeader('Aksi', flex: 2),
                                   _buildTableHeader('Invoice', flex: 1),
-                                  _buildTableHeader('Customer', flex: 5),
-                                  _buildTableHeader('Status Tanggal', flex: 3),
+                                  _buildTableHeader('Customer', flex: 4),
+                                  _buildTableHeader('Status Tanggal', flex: 2),
                                   _buildTableHeader('Total', flex: 2, align: TextAlign.right),
                                   const SizedBox(width: 28), // space for delete button
                                 ],
@@ -1848,13 +1848,13 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                               ),
                                             ),
 
-                                            // Column: Aksi (Action Badge)
+                                            // Column: Aksi (Action Badge - flex 2 with ample space)
                                             Expanded(
-                                              flex: 1,
+                                              flex: 2,
                                               child: Align(
                                                 alignment: Alignment.centerLeft,
                                                 child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                   decoration: BoxDecoration(
                                                     color: actionColor.withOpacity(0.15),
                                                     borderRadius: BorderRadius.circular(4),
@@ -1864,7 +1864,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                                     mainAxisSize: MainAxisSize.min,
                                                     children: [
                                                       Icon(actionIcon, size: 10, color: actionColor),
-                                                      const SizedBox(width: 2.5),
+                                                      const SizedBox(width: 3),
                                                       Text(
                                                         actionLabel,
                                                         style: TextStyle(color: actionColor, fontSize: 8.5, fontWeight: FontWeight.bold),
@@ -1887,9 +1887,9 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                               ),
                                             ),
 
-                                            // Column: Customer (Flex 5 + Tooltip + MaxLines 2)
+                                            // Column: Customer (Flex 4 + Tooltip + MaxLines 2)
                                             Expanded(
-                                              flex: 5,
+                                              flex: 4,
                                               child: Tooltip(
                                                 message: _formatCustomerWithAlias(log.customerName, log.invoiceNo.toString()),
                                                 preferBelow: true,
@@ -1904,7 +1904,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                                             // Column: Status Tanggal (simplified + tooltip)
                                             Expanded(
-                                              flex: 3,
+                                              flex: 2,
                                               child: Tooltip(
                                                 message: dateTooltip,
                                                 textStyle: const TextStyle(color: Colors.white, fontSize: 11),
