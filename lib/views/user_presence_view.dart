@@ -2315,186 +2315,210 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                         }
 
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 5),
+                          margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: statusColor.withOpacity(0.4),
+                              color: statusColor.withOpacity(0.35),
+                              width: 1,
                             ),
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Row 1: Status badge, invoice, customer, total, time, actions
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: statusColor.withOpacity(0.4)),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(statusIcon, size: 10, color: statusColor),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              statusLabel,
-                                              style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-
-                                      // Invoice Number
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0284C7).withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                        ),
-                                        child: Text(
-                                          '#${cmd.invoiceNo}',
-                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-
-                                      // Customer Name
-                                      Expanded(
-                                        child: Tooltip(
-                                          message: _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
-                                          preferBelow: true,
-                                          child: Text(
-                                            _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Row 1: Badges (Status + Invoice) & Action Buttons (Replay + Delete/Cancel)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Status Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: statusColor.withOpacity(0.4)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(statusIcon, size: 11, color: statusColor),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                statusLabel,
+                                                style: TextStyle(color: statusColor, fontSize: 9.5, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 6),
+                                        const SizedBox(width: 6),
 
-                                      // Grand Total
-                                      if (cmd.grandTotal > 0) ...[
-                                        Text(
-                                          currencyFormatter.format(cmd.grandTotal),
-                                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                                        // Invoice Badge
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0284C7).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                          ),
+                                          child: Text(
+                                            '#${cmd.invoiceNo}',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                          ),
                                         ),
-                                        const SizedBox(width: 8),
                                       ],
+                                    ),
 
-                                      // Timestamp
+                                    // Action Buttons
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Re-send / Retry button
+                                        SizedBox(
+                                          width: 28,
+                                          height: 28,
+                                          child: IconButton(
+                                            padding: EdgeInsets.zero,
+                                            icon: const Icon(Icons.replay_rounded, color: Color(0xFF38BDF8), size: 17),
+                                            tooltip: 'Kirim Ulang ke Komputer Kantor',
+                                            splashRadius: 14,
+                                            onPressed: () async {
+                                              await _firebaseService.updatePrintCommandStatus(cmd.id, 'PENDING');
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Perintah cetak #${cmd.invoiceNo} dikirim ulang ke kantor!'),
+                                                    backgroundColor: const Color(0xFF0284C7),
+                                                    behavior: SnackBarBehavior.floating,
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+
+                                        // Delete / Cancel Button
+                                        SizedBox(
+                                          width: 28,
+                                          height: 28,
+                                          child: cmd.isPending
+                                              ? IconButton(
+                                                  padding: EdgeInsets.zero,
+                                                  icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 17),
+                                                  tooltip: 'Batalkan Cetakan Kantor',
+                                                  splashRadius: 14,
+                                                  onPressed: () {
+                                                    _showCancelPrintDialog(context, cmd);
+                                                  },
+                                                )
+                                              : IconButton(
+                                                  padding: EdgeInsets.zero,
+                                                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 17),
+                                                  tooltip: 'Hapus dari Riwayat',
+                                                  splashRadius: 14,
+                                                  onPressed: () {
+                                                    _showDeletePrintLogDialog(context, cmd);
+                                                  },
+                                                ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+
+                                // Row 2: Customer Name & Grand Total (Full width, highly readable)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 2,
+                                      ),
+                                    ),
+                                    if (cmd.grandTotal > 0) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        currencyFormatter.format(cmd.grandTotal),
+                                        style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+
+                                // Row 3: Meta Info (Delivery Date, Station, Created At)
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    // Delivery Date
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF38BDF8)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Tgl Kirim: ${DateFormat('dd-MM-yyyy').format(cmd.printedDeliveryDate)}',
+                                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Station Name (if processed)
+                                    if (cmd.printerStationName != null)
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
-                                          const SizedBox(width: 3),
+                                          const Icon(Icons.print_rounded, size: 12, color: Color(0xFF4ADE80)),
+                                          const SizedBox(width: 4),
                                           Text(
-                                            _formatDateTime(cmd.createdAt),
-                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                                            'Station: ${cmd.printerStationName}${cmd.processedAt != null ? ' (${_formatDateTime(cmd.processedAt)})' : ''}',
+                                            style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 11),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(width: 4),
 
-                                      // Re-send / Retry button
-                                      SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: IconButton(
-                                          padding: EdgeInsets.zero,
-                                          icon: const Icon(Icons.replay_rounded, color: Color(0xFF38BDF8), size: 15),
-                                          tooltip: 'Kirim Ulang ke Komputer Kantor',
-                                          splashRadius: 12,
-                                          onPressed: () async {
-                                            await _firebaseService.updatePrintCommandStatus(cmd.id, 'PENDING');
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text('Perintah cetak #${cmd.invoiceNo} dikirim ulang ke kantor!'),
-                                                  backgroundColor: const Color(0xFF0284C7),
-                                                  behavior: SnackBarBehavior.floating,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      ),
-
-                                      // Delete / Cancel Button
-                                      SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: cmd.isPending
-                                            ? IconButton(
-                                                padding: EdgeInsets.zero,
-                                                icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 15),
-                                                tooltip: 'Batalkan Cetakan Kantor',
-                                                splashRadius: 12,
-                                                onPressed: () {
-                                                  _showCancelPrintDialog(context, cmd);
-                                                },
-                                              )
-                                            : IconButton(
-                                                padding: EdgeInsets.zero,
-                                                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 15),
-                                                tooltip: 'Hapus dari Riwayat',
-                                                splashRadius: 12,
-                                                onPressed: () {
-                                                  _showDeletePrintLogDialog(context, cmd);
-                                                },
-                                              ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-
-                                  // Row 2: Delivery Date & Station confirmation
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF38BDF8)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Tgl Kirim Dicetak: ${DateFormat('dd-MM-yyyy').format(cmd.printedDeliveryDate)}',
-                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, fontWeight: FontWeight.bold),
-                                      ),
-                                      if (cmd.printerStationName != null) ...[
-                                        const SizedBox(width: 8),
-                                        const Icon(Icons.print_rounded, size: 12, color: Color(0xFF4ADE80)),
+                                    // Timestamp (Created At)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
                                         const SizedBox(width: 3),
-                                        Expanded(
-                                          child: Text(
-                                            'Station: ${cmd.printerStationName}${cmd.processedAt != null ? ' (${_formatDateTime(cmd.processedAt)})' : ''}',
-                                            style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 10.5),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                        Text(
+                                          _formatDateTime(cmd.createdAt),
+                                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
                                         ),
                                       ],
-                                      if (cmd.errorMessage != null && cmd.errorMessage!.isNotEmpty) ...[
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            '⚠️ Error: ${cmd.errorMessage}',
+                                    ),
+
+                                    // Error message if failed
+                                    if (cmd.errorMessage != null && cmd.errorMessage!.isNotEmpty)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.error_outline_rounded, size: 12, color: Colors.redAccent),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            'Error: ${cmd.errorMessage}',
                                             style: const TextStyle(color: Colors.redAccent, fontSize: 10.5),
-                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                        ],
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         );
