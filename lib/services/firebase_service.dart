@@ -141,10 +141,10 @@ class FirebaseService {
       final all = snapshot.docs.map((doc) => RemotePrintCommand.fromFirestore(doc)).toList();
       // Filter in memory for role or specific target user
       return all.where((cmd) {
-        if (targetUserId != null && cmd.targetUserId != null && cmd.targetUserId != targetUserId) {
+        if (targetUserId != null && cmd.targetUserId != null && cmd.targetUserId!.isNotEmpty && cmd.targetUserId != targetUserId) {
           return false;
         }
-        if (cmd.targetUserRole != 'all' && cmd.targetUserRole.toLowerCase() != role.toLowerCase() && role.toLowerCase() != 'developer') {
+        if (cmd.targetUserRole != 'all' && cmd.targetUserRole.toLowerCase() != role.toLowerCase()) {
           return false;
         }
         return true;

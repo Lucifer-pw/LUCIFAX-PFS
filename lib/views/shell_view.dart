@@ -83,11 +83,12 @@ class _ShellViewState extends State<ShellView> {
     final user = authProvider.currentUser;
     if (user == null) return;
 
-    // Listen for remote print commands targeted for this user or their role
     _printCommandSubscription = _firebaseService
         .streamPendingPrintCommands(targetUserId: user.uid, role: user.role)
         .listen((commands) async {
       for (final cmd in commands) {
+        // Do not process commands that this user requested (prevent self-print)
+        if (cmd.requestedByUserId == user.uid) continue;
         if (_processedCommandIds.contains(cmd.id)) continue;
         _processedCommandIds.add(cmd.id);
 
