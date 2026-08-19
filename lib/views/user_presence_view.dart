@@ -1707,9 +1707,9 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                 children: [
                                   _buildTableHeader('Waktu', flex: 2),
                                   _buildTableHeader('Operator', flex: 3),
-                                  _buildTableHeader('Aksi', flex: 2),
-                                  _buildTableHeader('Invoice', flex: 2),
-                                  _buildTableHeader('Customer', flex: 3),
+                                  _buildTableHeader('Aksi', flex: 1),
+                                  _buildTableHeader('Invoice', flex: 1),
+                                  _buildTableHeader('Customer', flex: 5),
                                   _buildTableHeader('Status Tanggal', flex: 3),
                                   _buildTableHeader('Total', flex: 2, align: TextAlign.right),
                                   const SizedBox(width: 28), // space for delete button
@@ -1850,11 +1850,11 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                                             // Column: Aksi (Action Badge)
                                             Expanded(
-                                              flex: 2,
+                                              flex: 1,
                                               child: Align(
                                                 alignment: Alignment.centerLeft,
                                                 child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                                   decoration: BoxDecoration(
                                                     color: actionColor.withOpacity(0.15),
                                                     borderRadius: BorderRadius.circular(4),
@@ -1863,11 +1863,11 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                                   child: Row(
                                                     mainAxisSize: MainAxisSize.min,
                                                     children: [
-                                                      Icon(actionIcon, size: 11, color: actionColor),
-                                                      const SizedBox(width: 3),
+                                                      Icon(actionIcon, size: 10, color: actionColor),
+                                                      const SizedBox(width: 2.5),
                                                       Text(
                                                         actionLabel,
-                                                        style: TextStyle(color: actionColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                                        style: TextStyle(color: actionColor, fontSize: 8.5, fontWeight: FontWeight.bold),
                                                       ),
                                                     ],
                                                   ),
@@ -1877,7 +1877,7 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                                             // Column: Invoice
                                             Expanded(
-                                              flex: 2,
+                                              flex: 1,
                                               child: Align(
                                                 alignment: Alignment.centerLeft,
                                                 child: Text(
@@ -1887,13 +1887,18 @@ class _UserPresenceViewState extends State<UserPresenceView> {
                                               ),
                                             ),
 
-                                            // Column: Customer
+                                            // Column: Customer (Flex 5 + Tooltip + MaxLines 2)
                                             Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                _formatCustomerWithAlias(log.customerName, log.invoiceNo.toString()),
-                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
-                                                overflow: TextOverflow.ellipsis,
+                                              flex: 5,
+                                              child: Tooltip(
+                                                message: _formatCustomerWithAlias(log.customerName, log.invoiceNo.toString()),
+                                                preferBelow: true,
+                                                child: Text(
+                                                  _formatCustomerWithAlias(log.customerName, log.invoiceNo.toString()),
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                                                  overflow: TextOverflow.ellipsis,
+                                                  maxLines: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -2367,10 +2372,15 @@ class _UserPresenceViewState extends State<UserPresenceView> {
 
                                       // Customer Name
                                       Expanded(
-                                        child: Text(
-                                          _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                                          overflow: TextOverflow.ellipsis,
+                                        child: Tooltip(
+                                          message: _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
+                                          preferBelow: true,
+                                          child: Text(
+                                            _formatCustomerWithAlias(cmd.customerName, cmd.invoiceNo.toString()),
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 2,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 6),
