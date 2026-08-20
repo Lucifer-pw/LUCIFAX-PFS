@@ -1378,9 +1378,17 @@ class _AttendanceViewState extends State<AttendanceView> {
                 final message = Uri.encodeComponent(
                   "Permisi Bu Lia (HRD),\n\nBerikut Rekap Absensi Pegawai Cabang Jawa Tengah Awal Bulan sampai Tanggal $titleMonthYearName.\nFile PDF Rekap Absensi telah di-download & siap dilampirkan.\n\nTerima Kasih.\n(Lucifax PFS)",
                 );
-                final waUrl = Uri.parse("https://wa.me/$targetPhone?text=$message");
-                if (await canLaunchUrl(waUrl)) {
-                  await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+                final waAppUrl = 'whatsapp://send?phone=$targetPhone&text=$message';
+
+                try {
+                  final appUri = Uri.parse(waAppUrl);
+                  await launchUrl(appUri, webOnlyWindowName: '_self');
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Gagal membuka Aplikasi WhatsApp: $e'), backgroundColor: Colors.redAccent),
+                    );
+                  }
                 }
 
                 if (context.mounted) Navigator.pop(context);
