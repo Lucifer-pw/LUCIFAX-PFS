@@ -5478,23 +5478,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                 final selectedMonthYear = DateFormat('MM-yyyy').format(selectedDate);
 
-                // 1. Total semua invoice yang SUDAH masuk ERP pada periode bulan ini (sesuai menu Stok Opname & ERP)
-                final erpMenuTotal = initialTrs.where((t) {
+                // Total semua invoice yang SUDAH masuk ERP pada periode bulan ini (statis mengikuti laporan di menu Stok Opname & ERP)
+                final grandTotalErp = initialTrs.where((t) {
                   if (t.erpSyncDate == null) return false;
                   return DateFormat('MM-yyyy').format(t.erpSyncDate!) == selectedMonthYear;
                 }).fold(0.0, (sum, t) => sum + t.grandTotal);
-
-                // 2. Jika ada invoice yang sedang dicentang saat ini tapi BELUM di-sync ke ERP:
-                final unsyncedSelectedTotal = initialTrs.where((t) {
-                  if (!selectedInvoiceNos.contains(t.invoiceNo.toString())) return false;
-                  // Cek apakah invoice ini sudah terhitung di erpMenuTotal
-                  if (t.erpSyncDate != null && DateFormat('MM-yyyy').format(t.erpSyncDate!) == selectedMonthYear) {
-                    return false; // sudah terhitung di erpMenuTotal
-                  }
-                  return true; // belum ada di ERP, tambahkan ke grand total
-                }).fold(0.0, (sum, t) => sum + t.grandTotal);
-
-                final grandTotalErp = erpMenuTotal + unsyncedSelectedTotal;
 
                 // Re-generate text preview unless user edited manually
                 if (!userEditedMessage) {
