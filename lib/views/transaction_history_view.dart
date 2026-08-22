@@ -583,6 +583,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   }
 
   void _showEditTransactionDialog(model_tr.Transaction tr) {
+    if (tr.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invoice #${tr.invoiceNo} sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk mengedit.'),
+          backgroundColor: Colors.amber[900],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final customers = Provider.of<CustomerProvider>(context, listen: false).customers;
     final products = Provider.of<ProductProvider>(context, listen: false).products;
 
@@ -2078,6 +2088,33 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (!isKacab) ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _toggleTransactionLock(tr);
+                      },
+                      icon: Icon(
+                        tr.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                        color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                        size: 16,
+                      ),
+                      label: Text(
+                        tr.isLocked ? 'Buka Kunci (Unlock)' : 'Kunci Invoice (Lock)',
+                        style: TextStyle(
+                          color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Row(
                     children: [
                       if (!isKacab) ...[
@@ -2161,6 +2198,31 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               )
             ] else ...[
               if (!isKacab) ...[
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _toggleTransactionLock(tr);
+                  },
+                  icon: Icon(
+                    tr.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                    color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                    size: 18,
+                  ),
+                  label: Text(
+                    tr.isLocked ? 'Buka Kunci' : 'Kunci Invoice',
+                    style: TextStyle(
+                      color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent, width: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(context);
@@ -2292,6 +2354,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Update delivery status (DIKIRIM / PENDING) & delivery date dialog
   void _showUpdateDeliveryStatusDialog(model_tr.Transaction tr) {
+    if (tr.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invoice #${tr.invoiceNo} sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk mengubah status pengiriman.'),
+          backgroundColor: Colors.amber[900],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     String currentDeliveryStatus = tr.status; // 'DIKIRIM', 'PENDING'
     DateTime currentDeliveryDate = tr.deliveryDate ?? DateTime.now();
     bool isSubmitting = false;
@@ -2487,6 +2559,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Update payment transfer status dialog
   void _showUpdateStatusDialog(model_tr.Transaction tr) {
+    if (tr.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invoice #${tr.invoiceNo} sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk mengubah status pembayaran.'),
+          backgroundColor: Colors.amber[900],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     String currentStatus = tr.statusTransfer;
     DateTime? currentTransferDate = tr.transferDate ?? DateTime.now();
     bool isSubmitting = false;
@@ -2518,28 +2600,22 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           CircularProgressIndicator(color: Color(0xFF38BDF8)),
                           SizedBox(height: 16),
                           Text(
-                            'Memproses Update Status Pembayaran...',
+                            'Menyimpan status pembayaran...',
+                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Mohon tunggu sebentar, sedang menyinkronkan data dengan server',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                           ),
                         ],
                       ),
                     ),
                   ] else ...[
-                    DropdownButtonFormField<String>(
+                    DropdownButton<String>(
                       value: currentStatus,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _buildInputDecoration(hint: 'Status Transfer'),
+                      dropdownColor: const Color(0xFF0F172A),
+                      isExpanded: true,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
                       items: const [
                         DropdownMenuItem(value: 'UNPAID', child: Text('UNPAID (Belum Bayar)')),
-                        DropdownMenuItem(value: 'PAID', child: Text('PAID (Lunas)')),
+                        DropdownMenuItem(value: 'PAID', child: Text('PAID (Sudah Bayar)')),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -3726,6 +3802,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   }
 
   void _showReturnProductDialog(model_tr.Transaction tr) {
+    if (tr.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invoice #${tr.invoiceNo} sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk melakukan retur.'),
+          backgroundColor: Colors.amber[900],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
     if (user == null || !user.isDeveloper) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3758,7 +3844,98 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     });
   }
 
+  // Toggle Lock/Unlock Transaction
+  Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final willLock = !tr.isLocked;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              willLock ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
+              color: willLock ? Colors.amberAccent : Colors.greenAccent,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                willLock ? 'Kunci Invoice #${tr.invoiceNo}?' : 'Buka Kunci #${tr.invoiceNo}?',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          willLock
+              ? 'Invoice #${tr.invoiceNo} (${tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName}) akan dikunci dan disembunyikan dari daftar utama (hanya tampil pada filter "STATUS: TERKUNCI"). Status pengiriman, pembayaran, ERP, edit, dan hapus tidak dapat diubah.'
+              : 'Invoice #${tr.invoiceNo} (${tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName}) akan dibuka kuncinya dan kembali muncul di daftar transaksi aktif.',
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: willLock ? Colors.amber[800] : const Color(0xFF0284C7),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              willLock ? 'Ya, Kunci Invoice 🔒' : 'Ya, Buka Kunci 🔓',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await trProvider.toggleTransactionLock(tr.invoiceNo, willLock);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                willLock
+                    ? 'Invoice #${tr.invoiceNo} berhasil dikunci (LOCKED) 🔒'
+                    : 'Kunci Invoice #${tr.invoiceNo} berhasil dibuka (UNLOCKED) 🔓',
+              ),
+              backgroundColor: willLock ? Colors.amber[900] : Colors.teal,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal mengubah status kunci: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   void _deleteTransaction(dynamic invoiceNo) {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final tr = trProvider.transactions.where((t) => t.invoiceNo.toString() == invoiceNo.toString()).firstOrNull;
+    if (tr != null && tr.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invoice #$invoiceNo sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk menghapus.'),
+          backgroundColor: Colors.amber[900],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (context) {
@@ -3817,6 +3994,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
     // Apply local queries, month filter, and status filter
     final filteredTransactions = trProvider.transactions.where((tr) {
+      // 0. Lock Filter:
+      // If _statusFilter is "LOCKED", show ONLY locked transactions.
+      // If _statusFilter is anything else, HIDE locked transactions.
+      if (_statusFilter == "LOCKED") {
+        if (!tr.isLocked) return false;
+      } else {
+        if (tr.isLocked) return false;
+      }
+
       // 1. Month Filter
       if (_monthFilter != "SEMUA") {
         if (_statusFilter == "ERP_SYNC") {
@@ -3831,7 +4017,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       }
 
       // 2. Status Filter
-      if (_statusFilter != "SEMUA") {
+      if (_statusFilter != "SEMUA" && _statusFilter != "LOCKED") {
         if (_statusFilter == "DIKIRIM" || _statusFilter == "PENDING") {
           if (tr.status != _statusFilter) return false;
         } else if (_statusFilter == "DIPINDAH") {
@@ -4056,6 +4242,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "ERP_SYNC", child: Text("ERP: SUDAH SYNC", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "ERP_NOT_SYNC", child: Text("ERP: BELUM SYNC", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "LOCKED", child: Text("STATUS: TERKUNCI (LOCKED)", overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (val) {
                 if (val != null) {
@@ -4268,13 +4455,25 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                       children: [
                                                         Text(
                                                           '#${tr.invoiceNo}',
-                                                          style: const TextStyle(
-                                                            color: Color(0xFF38BDF8),
+                                                          style: TextStyle(
+                                                            color: tr.isLocked ? Colors.amberAccent : const Color(0xFF38BDF8),
                                                             fontWeight: FontWeight.bold,
                                                             fontSize: 13,
                                                             decoration: TextDecoration.underline,
                                                           ),
                                                         ),
+                                                        if (tr.isLocked) ...[
+                                                          const SizedBox(width: 4),
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.amber.withOpacity(0.2),
+                                                              borderRadius: BorderRadius.circular(4),
+                                                              border: Border.all(color: Colors.amberAccent, width: 0.6),
+                                                            ),
+                                                            child: const Text('LOCK 🔒', style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                                          ),
+                                                        ],
                                                         if (tr.hasReturn || tr.returnAmount > 0) ...[
                                                           const SizedBox(width: 4),
                                                           Container(
@@ -4288,7 +4487,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                           ),
                                                         ],
                                                         const SizedBox(width: 4),
-                                                        const Icon(Icons.open_in_new_rounded, size: 12, color: Color(0xFF38BDF8)),
+                                                        Icon(Icons.open_in_new_rounded, size: 12, color: tr.isLocked ? Colors.amberAccent : const Color(0xFF38BDF8)),
                                                       ],
                                                     ),
                                                     onTap: () => _showDetailDialog(tr),
@@ -4489,6 +4688,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         onSelected: (action) {
                                                           if (action == 'detail') {
                                                             _showDetailDialog(tr);
+                                                          } else if (action == 'toggle_lock') {
+                                                            _toggleTransactionLock(tr);
                                                           } else if (action == 'return_product') {
                                                             _showReturnProductDialog(tr);
                                                           } else if (action == 'move_items') {
@@ -4514,6 +4715,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                               ],
                                                             ),
                                                           ),
+                                                          if (!isKacab) ...[
+                                                            PopupMenuItem(
+                                                              value: 'toggle_lock',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    tr.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                                                                    color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                                                                    size: 18,
+                                                                  ),
+                                                                  const SizedBox(width: 10),
+                                                                  Text(
+                                                                    tr.isLocked ? 'Buka Kunci (Unlock)' : 'Kunci Invoice (Lock)',
+                                                                    style: TextStyle(
+                                                                      color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                                                                      fontSize: 13,
+                                                                      fontWeight: FontWeight.bold,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
                                                           if (tr.status == 'DIKIRIM' && isDeveloper) ...[
                                                             const PopupMenuItem(
                                                               value: 'return_product',

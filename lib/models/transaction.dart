@@ -73,6 +73,7 @@ class Transaction {
   final bool hasReturn;
   final List<TransactionItem> movedItems; // History of items moved to another invoice
   final String movedToInvoice; // Target invoice number for moved items
+  final bool isLocked;
 
   Transaction({
     required this.invoiceNo,
@@ -97,6 +98,7 @@ class Transaction {
     this.hasReturn = false,
     this.movedItems = const [],
     this.movedToInvoice = '',
+    this.isLocked = false,
   });
 
   double get netGrandTotal => (grandTotal - returnAmount).clamp(0.0, double.infinity);
@@ -149,6 +151,7 @@ class Transaction {
       hasReturn: hasRet,
       movedItems: movedItemsList,
       movedToInvoice: map['movedToInvoice'] ?? '',
+      isLocked: map['isLocked'] == true,
     );
   }
 
@@ -176,6 +179,7 @@ class Transaction {
       'hasReturn': hasReturn,
       'movedItems': movedItems.map((item) => item.toMap()).toList(),
       'movedToInvoice': movedToInvoice,
+      'isLocked': isLocked,
     };
   }
 }

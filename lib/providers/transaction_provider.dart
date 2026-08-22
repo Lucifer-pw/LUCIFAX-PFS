@@ -222,6 +222,11 @@ class TransactionProvider extends ChangeNotifier {
     await _dbService.updateTransactionTransferStatus(invoiceNo, status, transferDate);
   }
 
+  Future<void> toggleTransactionLock(dynamic invoiceNo, bool isLocked) async {
+    await _dbService.toggleTransactionLock(invoiceNo, isLocked);
+    notifyListeners();
+  }
+
   Future<void> updateDeliveryStatus(dynamic invoiceNo, String status, DateTime? deliveryDate) async {
     await _dbService.updateTransactionDeliveryStatus(invoiceNo, status, deliveryDate);
     notifyListeners();

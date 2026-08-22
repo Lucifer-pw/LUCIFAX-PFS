@@ -686,6 +686,12 @@ class FirebaseService {
     });
   }
 
+  Future<void> toggleTransactionLock(dynamic invoiceNo, bool isLocked) async {
+    await _db.collection('transactions').doc(invoiceNo.toString()).update({
+      'isLocked': isLocked,
+    });
+  }
+
   Future<void> updateTransactionDeliveryDate(dynamic invoiceNo, DateTime deliveryDate) async {
     await _db.collection('transactions').doc(invoiceNo.toString()).update({
       'deliveryDate': Timestamp.fromDate(deliveryDate),
