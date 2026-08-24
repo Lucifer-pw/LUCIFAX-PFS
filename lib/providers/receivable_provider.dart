@@ -1,12 +1,20 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/receivable.dart';
+import '../services/firebase_service.dart';
 
 class ReceivableProvider with ChangeNotifier {
+  final FirebaseService _dbService = FirebaseService();
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   List<Receivable> _receivables = [];
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _error;
+  StreamSubscription? _subscription;
+  StreamSubscription? _authSubscription;
 
   List<Receivable> get receivables => _receivables;
   bool get isLoading => _isLoading;
@@ -22,6 +30,30 @@ class ReceivableProvider with ChangeNotifier {
     return _receivables
         .where((r) => r.isLunas)
         .fold(0.0, (acc, r) => acc + r.nominal);
+  }
+
+  ReceivableProvider() {
+    _authSubscription = _auth.authStateChanges().listen((user) {
+      _subscription?.cancel();
+      if (user != null) {
+        _isLoading = true;
+        notifyListeners();
+        _subscription = _dbService.streamReceivables().listen((list) {
+          _receivables = list;
+          _isLoading = false;
+          notifyListeners();
+        }, onError: (error) {
+          debugPrint("Receivable stream error: $error");
+          _error = error.toString();
+          _isLoading = false;
+          notifyListeners();
+        });
+      } else {
+        _receivables = [];
+        _isLoading = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> fetchReceivables() async {
@@ -122,5 +154,12 @@ class ReceivableProvider with ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }

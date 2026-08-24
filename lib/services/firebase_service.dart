@@ -13,6 +13,7 @@ import '../models/stock_mutation.dart';
 import '../models/wa_contact.dart';
 import '../models/invoice_print_log.dart';
 import '../models/remote_print_command.dart';
+import '../models/receivable.dart';
 import 'package:intl/intl.dart';
 
 class FirebaseService {
@@ -855,6 +856,18 @@ class FirebaseService {
     } catch (e) {
       debugPrint("Error syncReceivableErpStatus: $e");
     }
+  }
+
+  Stream<List<Receivable>> streamReceivables() {
+    return _db
+        .collection('receivables')
+        .orderBy('tglKirim', descending: false)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Receivable.fromFirestore(doc))
+          .toList();
+    });
   }
 
   // Helper to apply items to ERP summary in a transaction
