@@ -5532,17 +5532,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
     final allTrs = trProvider.transactions.isNotEmpty ? trProvider.transactions : trList;
     
-    // Sort ascending (terlama ke terbaru: #1, #2 ... #558, #574, #640)
+    // Sort descending for checklist display (terbaru ke terlama: #645, #644 ... #1)
     final sortedTrs = List<model_tr.Transaction>.from(allTrs);
     sortedTrs.sort((a, b) {
       final aNum = int.tryParse(a.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
       final bNum = int.tryParse(b.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
       if (aNum != null && bNum != null && aNum != bNum) {
-        return aNum.compareTo(bNum); // Ascending: nomor kecil/lama ke besar/baru
+        return bNum.compareTo(aNum); // Descending: nomor besar/baru ke kecil/lama
       }
-      final invCmp = a.invoiceNo.compareTo(b.invoiceNo);
+      final invCmp = b.invoiceNo.compareTo(a.invoiceNo);
       if (invCmp != 0) return invCmp;
-      return a.createdAt.compareTo(b.createdAt);
+      return b.createdAt.compareTo(a.createdAt);
     });
     final initialTrs = sortedTrs;
 
@@ -5710,8 +5710,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   return storeName.contains(searchLower) || aliasName.contains(searchLower) || invNo.contains(searchLower);
                 }).toList();
 
-                // Filter selected transactions
+                // Filter selected transactions and sort ascending (terlama ke terbaru) for WA text
                 final activeTrs = initialTrs.where((t) => selectedInvoiceNos.contains(t.invoiceNo.toString())).toList();
+                activeTrs.sort((a, b) {
+                  final aNum = int.tryParse(a.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+                  final bNum = int.tryParse(b.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+                  if (aNum != null && bNum != null && aNum != bNum) {
+                    return aNum.compareTo(bNum); // Ascending: terlama ke terbaru (#558, #574, #640)
+                  }
+                  final invCmp = a.invoiceNo.compareTo(b.invoiceNo);
+                  if (invCmp != 0) return invCmp;
+                  return a.createdAt.compareTo(b.createdAt);
+                });
 
                 final selectedMonthYear = DateFormat('MM-yyyy').format(selectedDate);
 
