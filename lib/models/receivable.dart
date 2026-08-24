@@ -10,6 +10,9 @@ class Receivable {
   final String keterangan;
   final bool isLunas;
   final DateTime? createdAt;
+  final DateTime? erpSyncDate;
+  final bool isLocked;
+  final double returnAmount;
 
   Receivable({
     required this.id,
@@ -21,6 +24,9 @@ class Receivable {
     this.keterangan = '',
     this.isLunas = false,
     this.createdAt,
+    this.erpSyncDate,
+    this.isLocked = false,
+    this.returnAmount = 0.0,
   });
 
   factory Receivable.fromFirestore(DocumentSnapshot doc) {
@@ -40,6 +46,13 @@ class Receivable {
       parsedCreatedAt = (data['createdAt'] as Timestamp).toDate();
     }
 
+    DateTime? parsedErpSyncDate;
+    if (data['erpSyncDate'] != null && data['erpSyncDate'] is Timestamp) {
+      parsedErpSyncDate = (data['erpSyncDate'] as Timestamp).toDate();
+    } else if (data['erpSyncDate'] is String) {
+      parsedErpSyncDate = DateTime.tryParse(data['erpSyncDate']);
+    }
+
     return Receivable(
       id: doc.id,
       toko: data['toko'] ?? '',
@@ -50,6 +63,9 @@ class Receivable {
       keterangan: data['keterangan'] ?? '',
       isLunas: data['isLunas'] ?? false,
       createdAt: parsedCreatedAt,
+      erpSyncDate: parsedErpSyncDate,
+      isLocked: data['isLocked'] ?? false,
+      returnAmount: (data['returnAmount'] is num) ? (data['returnAmount'] as num).toDouble() : 0.0,
     );
   }
 
@@ -63,6 +79,9 @@ class Receivable {
       'keterangan': keterangan,
       'isLunas': isLunas,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate!) : null,
+      'isLocked': isLocked,
+      'returnAmount': returnAmount,
     };
   }
 
@@ -76,6 +95,9 @@ class Receivable {
     String? keterangan,
     bool? isLunas,
     DateTime? createdAt,
+    DateTime? erpSyncDate,
+    bool? isLocked,
+    double? returnAmount,
   }) {
     return Receivable(
       id: id ?? this.id,
@@ -87,6 +109,9 @@ class Receivable {
       keterangan: keterangan ?? this.keterangan,
       isLunas: isLunas ?? this.isLunas,
       createdAt: createdAt ?? this.createdAt,
+      erpSyncDate: erpSyncDate ?? this.erpSyncDate,
+      isLocked: isLocked ?? this.isLocked,
+      returnAmount: returnAmount ?? this.returnAmount,
     );
   }
 }

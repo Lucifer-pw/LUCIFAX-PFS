@@ -676,26 +676,185 @@ class FirebaseService {
       }
     }
 
+    // Auto-sync to receivables collection if UNPAID
+    if (trDoc.statusTransfer == 'UNPAID') {
+      try {
+        await syncReceivableFromTransaction(trDoc);
+      } catch (e) {
+        debugPrint("Auto-sync receivable on create bypass/error: $e");
+      }
+    }
+
     return trDoc;
   }
 
   Future<void> updateTransactionTransferStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {
-    await _db.collection('transactions').doc(invoiceNo.toString()).update({
+    final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+    await _db.collection('transactions').doc(invClean).update({
       'statusTransfer': status,
       'transferDate': transferDate != null ? Timestamp.fromDate(transferDate) : null,
     });
+    // Auto-sync to receivables collection
+    try {
+      final isLunas = (status == 'PAID');
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      if (snap.docs.isNotEmpty) {
+        for (var doc in snap.docs) {
+          await doc.reference.update({
+            'isLunas': isLunas,
+          });
+        }
+      } else if (!isLunas) {
+        // If not in receivables yet and changed to UNPAID, fetch transaction and sync it!
+        final trSnap = await _db.collection('transactions').doc(invClean).get();
+        if (trSnap.exists) {
+          final tr = model_tr.Transaction.fromMap(trSnap.data()!, trSnap.id);
+          await syncReceivableFromTransaction(tr);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error syncing status to receivables: $e");
+    }
   }
 
   Future<void> toggleTransactionLock(dynamic invoiceNo, bool isLocked) async {
-    await _db.collection('transactions').doc(invoiceNo.toString()).update({
+    final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+    await _db.collection('transactions').doc(invClean).update({
       'isLocked': isLocked,
     });
+    // Auto-sync isLocked to receivables collection
+    try {
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      for (var doc in snap.docs) {
+        await doc.reference.update({
+          'isLocked': isLocked,
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing isLocked to receivables: $e");
+    }
   }
 
   Future<void> updateTransactionDeliveryDate(dynamic invoiceNo, DateTime deliveryDate) async {
-    await _db.collection('transactions').doc(invoiceNo.toString()).update({
+    final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+    await _db.collection('transactions').doc(invClean).update({
       'deliveryDate': Timestamp.fromDate(deliveryDate),
     });
+    // Auto-sync tglKirim to receivables collection
+    try {
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      for (var doc in snap.docs) {
+        await doc.reference.update({
+          'tglKirim': Timestamp.fromDate(deliveryDate),
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing tglKirim to receivables: $e");
+    }
+  }
+
+  // ==========================================
+  // RECEIVABLES / KARTU PIUTANG SINKRONISASI
+  // ==========================================
+
+  Future<void> syncReceivableFromTransaction(model_tr.Transaction tr) async {
+    try {
+      final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+      final customerName = tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : tr.customerName.trim();
+      final effectiveNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
+      final isLunas = (tr.statusTransfer == 'PAID');
+
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      if (snap.docs.isNotEmpty) {
+        for (var doc in snap.docs) {
+          await doc.reference.update({
+            'toko': customerName,
+            'kota': tr.city,
+            'tglKirim': Timestamp.fromDate(tr.deliveryDate ?? tr.date),
+            'nominal': effectiveNominal,
+            'isLunas': isLunas,
+            'erpSyncDate': tr.erpSyncDate != null ? Timestamp.fromDate(tr.erpSyncDate!) : null,
+            'isLocked': tr.isLocked,
+            'returnAmount': tr.returnAmount,
+          });
+        }
+      } else {
+        await _db.collection('receivables').add({
+          'toko': customerName,
+          'kota': tr.city,
+          'noInvoice': invClean,
+          'tglKirim': Timestamp.fromDate(tr.deliveryDate ?? tr.date),
+          'nominal': effectiveNominal,
+          'keterangan': tr.note,
+          'isLunas': isLunas,
+          'createdAt': FieldValue.serverTimestamp(),
+          'erpSyncDate': tr.erpSyncDate != null ? Timestamp.fromDate(tr.erpSyncDate!) : null,
+          'isLocked': tr.isLocked,
+          'returnAmount': tr.returnAmount,
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncReceivableFromTransaction: $e");
+    }
+  }
+
+  Future<void> deleteReceivableByInvoiceNo(dynamic invoiceNo) async {
+    try {
+      final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      for (var doc in snap.docs) {
+        await doc.reference.delete();
+      }
+    } catch (e) {
+      debugPrint("Error deleteReceivableByInvoiceNo: $e");
+    }
+  }
+
+  Future<void> updateReceivablePaymentStatus(String noInvoice, bool isLunas, DateTime? transferDate) async {
+    try {
+      final invClean = noInvoice.replaceAll('#', '').trim();
+      // 1. Update receivables collection
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      for (var doc in snap.docs) {
+        await doc.reference.update({
+          'isLunas': isLunas,
+        });
+      }
+
+      // 2. Update transactions collection
+      final trStatus = isLunas ? 'PAID' : 'UNPAID';
+      final trDoc = await _db.collection('transactions').doc(invClean).get();
+      if (trDoc.exists) {
+        await trDoc.reference.update({
+          'statusTransfer': trStatus,
+          'transferDate': isLunas ? Timestamp.fromDate(transferDate ?? DateTime.now()) : null,
+        });
+      } else {
+        final trSnap = await _db.collection('transactions').where('invoiceNo', isEqualTo: invClean).limit(1).get();
+        if (trSnap.docs.isNotEmpty) {
+          await trSnap.docs.first.reference.update({
+            'statusTransfer': trStatus,
+            'transferDate': isLunas ? Timestamp.fromDate(transferDate ?? DateTime.now()) : null,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error updateReceivablePaymentStatus: $e");
+    }
+  }
+
+  Future<void> syncReceivableErpStatus(dynamic invoiceNo, DateTime? erpSyncDate) async {
+    try {
+      final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+      final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      for (var doc in snap.docs) {
+        await doc.reference.update({
+          'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate) : null,
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncReceivableErpStatus: $e");
+    }
   }
 
   // Helper to apply items to ERP summary in a transaction
@@ -840,6 +999,9 @@ class FirebaseService {
         'erpSyncDate': newErpSyncDate != null ? Timestamp.fromDate(newErpSyncDate) : null,
       });
     });
+
+    // Auto-sync ERP status to receivables collection
+    await syncReceivableErpStatus(invoiceNo, newErpSyncDate);
   }
 
   Future<List<DocumentReference<Map<String, dynamic>>>> _resolveProductRefs(
@@ -1353,15 +1515,16 @@ class FirebaseService {
 
       if (newErpRef != null && (oldErpRef == null || oldErpRef.path != newErpRef.path)) {
         _addToErpSummary(transaction, newErpRef, newErpSnap, updatedTr, newMonthYear!);
-      }
-
-      // 3) Write updated transaction doc
+      }      // 3) Write updated transaction doc
       final Map<String, dynamic> data = updatedTr.toMap();
       data['erpSyncDate'] = updatedTr.erpSyncDate != null 
           ? Timestamp.fromDate(updatedTr.erpSyncDate!) 
           : null;
       transaction.set(docRef, data);
     });
+
+    // Auto-sync updated transaction data to receivables collection
+    await syncReceivableFromTransaction(updatedTr);
   }
 
 
@@ -1408,17 +1571,17 @@ class FirebaseService {
         }
       }
 
-      // Read ERP snap if erpSyncDate was set
-      final String? monthYear = oldTr.erpSyncDate != null ? DateFormat('MM-yyyy').format(oldTr.erpSyncDate!) : null;
+      // Check ERP summary document for old transaction
       DocumentReference<Map<String, dynamic>>? erpRef;
       DocumentSnapshot<Map<String, dynamic>>? erpSnap;
-      if (oldTr.erpSyncDate != null && monthYear != null) {
+      if (oldTr.erpSyncDate != null) {
+        final monthYear = DateFormat('MM-yyyy').format(oldTr.erpSyncDate!);
         erpRef = _db.collection('erp_summary').doc("${monthYear}_${oldTr.customerId}");
         erpSnap = await transaction.get(erpRef);
       }
 
-      // 2. EXECUTE WRITES
-      // Restore stock per kodeInduk
+      // 2. WRITE ALL UPDATES
+      // Restore physical stock
       if (wasDelivered) {
         for (var entry in totalQtyPerKodeInduk.entries) {
           final kInduk = entry.key;
@@ -1428,7 +1591,7 @@ class FirebaseService {
             final pSnap = pSnapshots[ref.path];
             if (pSnap != null && pSnap.exists) {
               final data = pSnap.data() as Map<String, dynamic>?;
-            final currentStock = (data?['stock'] ?? 0.0).toDouble();
+              final currentStock = (data?['stock'] ?? 0.0).toDouble();
               transaction.update(ref, {'stock': currentStock + totalQty});
             }
           }
@@ -1458,8 +1621,8 @@ class FirebaseService {
           final pSnap = await refs.first.get();
           if (pSnap.exists) {
             final data = pSnap.data() as Map<String, dynamic>?;
-            pName = data?['name'] ?? kInduk;
             currentStockAfter = (data?['stock'] ?? 0.0).toDouble();
+            pName = data?['name'] ?? kInduk;
           }
         }
         final stockBefore = currentStockAfter - totalQty;
@@ -1480,6 +1643,9 @@ class FirebaseService {
 
       await _logStockMutations(mutations);
     }
+
+    // Auto-delete from receivables collection
+    await deleteReceivableByInvoiceNo(invoiceNo);
   }
 
   // ==========================================

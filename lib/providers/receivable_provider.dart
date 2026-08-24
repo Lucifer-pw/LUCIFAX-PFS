@@ -62,25 +62,52 @@ class ReceivableProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> toggleLunas(String id, bool currentStatus) async {
+  Future<bool> markLunasWithDate(String id, String noInvoice, bool isLunas, DateTime? transferDate) async {
     try {
-      final newStatus = !currentStatus;
+      // 1. Update receivables in Firestore
       await _db.collection('receivables').doc(id).update({
-        'isLunas': newStatus,
+        'isLunas': isLunas,
       });
 
+      // 2. Update local state
       final index = _receivables.indexWhere((r) => r.id == id);
       if (index != -1) {
-        _receivables[index] = _receivables[index].copyWith(isLunas: newStatus);
+        _receivables[index] = _receivables[index].copyWith(isLunas: isLunas);
         notifyListeners();
       }
+
+      // 3. Sync to transactions collection in Firestore
+      final invClean = noInvoice.replaceAll('#', '').trim();
+      final trStatus = isLunas ? 'PAID' : 'UNPAID';
+      final trDoc = await _db.collection('transactions').doc(invClean).get();
+      if (trDoc.exists) {
+        await trDoc.reference.update({
+          'statusTransfer': trStatus,
+          'transferDate': isLunas ? Timestamp.fromDate(transferDate ?? DateTime.now()) : null,
+        });
+      } else {
+        final trSnap = await _db.collection('transactions').where('invoiceNo', isEqualTo: invClean).limit(1).get();
+        if (trSnap.docs.isNotEmpty) {
+          await trSnap.docs.first.reference.update({
+            'statusTransfer': trStatus,
+            'transferDate': isLunas ? Timestamp.fromDate(transferDate ?? DateTime.now()) : null,
+          });
+        }
+      }
+
       return true;
     } catch (e) {
       _error = e.toString();
-      debugPrint("Error toggling receivable lunas status: $e");
+      debugPrint("Error markLunasWithDate: $e");
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> toggleLunas(String id, bool currentStatus, {DateTime? transferDate}) async {
+    final index = _receivables.indexWhere((r) => r.id == id);
+    final noInvoice = (index != -1) ? _receivables[index].noInvoice : '';
+    return await markLunasWithDate(id, noInvoice, !currentStatus, transferDate);
   }
 
   Future<bool> deleteReceivable(String id) async {

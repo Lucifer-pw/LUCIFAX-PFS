@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/receivable_provider.dart';
 import '../providers/customer_provider.dart';
+import '../providers/transaction_provider.dart';
 import '../models/receivable.dart';
 import '../models/customer.dart';
 import '../services/print_service.dart';
@@ -435,7 +436,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     );
   }
 
-  // Helper search invoice in Firestore
+  // Helper search invoice in Firestore & in-memory transactions (Smart Case-Insensitive)
   Future<void> _searchInvoice(
     String invoiceNoRaw,
     StateSetter setDialogState,
@@ -446,25 +447,58 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     Function(String, bool) onResult,
     Function(bool) onLoading,
   ) async {
-    final invoiceNo = invoiceNoRaw.trim();
-    if (invoiceNo.isEmpty) return;
+    final cleanInput = invoiceNoRaw.replaceAll('#', '').trim();
+    if (cleanInput.isEmpty) return;
 
     setDialogState(() => onLoading(true));
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('transactions')
-          .where('invoiceNo', isEqualTo: invoiceNo)
-          .limit(1)
-          .get();
-
       Map<String, dynamic>? data;
-      if (snapshot.docs.isNotEmpty) {
-        data = snapshot.docs.first.data();
-      } else {
-        final docSnap = await FirebaseFirestore.instance.collection('transactions').doc(invoiceNo).get();
-        if (docSnap.exists) {
-          data = docSnap.data();
+      String matchedInvoiceNo = cleanInput;
+
+      // 1. Try local TransactionProvider in memory first (fast & case-insensitive)
+      try {
+        final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+        final match = trProvider.transactions.where((t) {
+          final tInv = t.invoiceNo.toString().replaceAll('#', '').trim().toLowerCase();
+          return tInv == cleanInput.toLowerCase() ||
+                 tInv.replaceAll(' ', '') == cleanInput.toLowerCase().replaceAll(' ', '');
+        }).firstOrNull;
+
+        if (match != null) {
+          data = match.toMap();
+          matchedInvoiceNo = match.invoiceNo.toString().replaceAll('#', '');
+        }
+      } catch (_) {}
+
+      // 2. If not found in memory, query Firestore with variations
+      if (data == null) {
+        final variations = [
+          cleanInput,
+          cleanInput.toUpperCase(),
+          cleanInput.toLowerCase(),
+          cleanInput.replaceAll(' ', '').toUpperCase(),
+        ];
+
+        for (var queryVar in variations) {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('transactions')
+              .where('invoiceNo', isEqualTo: queryVar)
+              .limit(1)
+              .get();
+
+          if (snapshot.docs.isNotEmpty) {
+            data = snapshot.docs.first.data();
+            matchedInvoiceNo = snapshot.docs.first.id;
+            break;
+          }
+
+          final docSnap = await FirebaseFirestore.instance.collection('transactions').doc(queryVar).get();
+          if (docSnap.exists) {
+            data = docSnap.data();
+            matchedInvoiceNo = docSnap.id;
+            break;
+          }
         }
       }
 
@@ -472,6 +506,8 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         final String customerName = data['aliasName'] ?? data['customerName'] ?? '';
         final String city = data['city'] ?? '';
         final double grandTotal = (data['grandTotal'] is num) ? (data['grandTotal'] as num).toDouble() : 0.0;
+        final double returnAmount = (data['returnAmount'] is num) ? (data['returnAmount'] as num).toDouble() : 0.0;
+        final double effectiveNominal = (grandTotal - returnAmount).clamp(0.0, double.infinity);
 
         DateTime delivDate = DateTime.now();
         if (data['deliveryDate'] != null && data['deliveryDate'] is Timestamp) {
@@ -483,13 +519,13 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         setDialogState(() {
           if (customerName.isNotEmpty) tokoCtrl.text = customerName;
           if (city.isNotEmpty) kotaCtrl.text = city;
-          if (grandTotal > 0) nominalCtrl.text = grandTotal.toStringAsFixed(0);
+          if (effectiveNominal > 0) nominalCtrl.text = effectiveNominal.toStringAsFixed(0);
           onDateSet(delivDate);
-          onResult('Invoice #$invoiceNo ditemukan! Data Toko, Kota, & Nominal berhasil diisi.', true);
+          onResult('Invoice #$matchedInvoiceNo ditemukan! Data Toko, Kota, & Nominal berhasil diisi.', true);
         });
       } else {
         setDialogState(() {
-          onResult('Invoice "$invoiceNo" tidak ditemukan di database. Anda tetap dapat mengisi data secara manual.', false);
+          onResult('Invoice "$cleanInput" tidak ditemukan di database. Anda tetap dapat mengisi data secara manual.', false);
         });
       }
     } catch (e) {
@@ -544,8 +580,6 @@ class _ReceivableListViewState extends State<ReceivableListView> {
       return CustomerGroup(customerName: name, city: city, items: items);
     }).toList();
 
-    // Calculate overall grand total
-    final grandTotal = filteredRaw.fold<double>(0.0, (acc, r) => acc + r.nominal);
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Padding(
@@ -1156,7 +1190,8 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                         DataColumn(label: Text('NO INVOICE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
                                         DataColumn(label: Text('TANGGAL KIRIM', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
                                         DataColumn(label: Text('NOMINAL', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                        DataColumn(label: Text('STATUS', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('STATUS ERP', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        DataColumn(label: Text('STATUS BAYAR', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
                                         DataColumn(label: Text('AKSI', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
                                       ],
                                       rows: List.generate(group.items.length, (idx) {
@@ -1164,12 +1199,62 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                         return DataRow(
                                           cells: [
                                             DataCell(Text('${idx + 1}', style: const TextStyle(color: Colors.white, fontSize: 13))),
-                                            DataCell(Text(item.noInvoice, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13))),
+                                            DataCell(
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(item.noInvoice, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
+                                                  if (item.isLocked) ...[
+                                                    const SizedBox(width: 6),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.amber.withOpacity(0.2),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: Colors.amberAccent, width: 0.8),
+                                                      ),
+                                                      child: const Text('LOCK 🔒', style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
                                             DataCell(Text(dateFormatter.format(item.tglKirim), style: const TextStyle(color: Colors.white70, fontSize: 13))),
                                             DataCell(Text(currencyFormatter.format(item.nominal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))),
                                             DataCell(
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: item.erpSyncDate != null ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFF64748B).withOpacity(0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: item.erpSyncDate != null ? const Color(0xFF10B981).withOpacity(0.4) : const Color(0xFF64748B).withOpacity(0.4),
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      item.erpSyncDate != null ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+                                                      size: 13,
+                                                      color: item.erpSyncDate != null ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                                    ),
+                                                    const SizedBox(width: 5),
+                                                    Text(
+                                                      item.erpSyncDate != null ? 'ERP: ${dateFormatter.format(item.erpSyncDate!)}' : 'Belum ERP',
+                                                      style: TextStyle(
+                                                        color: item.erpSyncDate != null ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(
                                               InkWell(
-                                                onTap: () => provider.toggleLunas(item.id, item.isLunas),
+                                                onTap: () => _handleToggleLunas(context, provider, item),
                                                 child: Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                                   decoration: BoxDecoration(
@@ -1369,6 +1454,155 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleToggleLunas(BuildContext context, ReceivableProvider provider, Receivable item) async {
+    if (!item.isLunas) {
+      DateTime chosenDate = DateTime.now();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDlgState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Pelunasan Invoice #${item.noInvoice}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Toko: ${item.toko}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Nominal Tagihan: ${currencyFormatter.format(item.nominal)}',
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Tanggal Pelunasan / Transfer:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: chosenDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setDlgState(() => chosenDate = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            dateFormatter.format(chosenDate),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Tandai Lunas ✅', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      if (confirmed == true) {
+        await provider.markLunasWithDate(item.id, item.noInvoice, true, chosenDate);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invoice #${item.noInvoice} berhasil ditandai LUNAS.'),
+              backgroundColor: Colors.teal,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Kembalikan ke Belum Lunas?', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          content: Text(
+            'Status invoice #${item.noInvoice} (${item.toko}) akan diubah kembali menjadi BELUM LUNAS (UNPAID).',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Ya, Kembalikan ke UNPAID', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        await provider.markLunasWithDate(item.id, item.noInvoice, false, null);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invoice #${item.noInvoice} dikembalikan ke status BELUM LUNAS.'),
+              backgroundColor: Colors.orange[800],
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _confirmDeletePiutang(BuildContext context, ReceivableProvider provider, Receivable item) {
