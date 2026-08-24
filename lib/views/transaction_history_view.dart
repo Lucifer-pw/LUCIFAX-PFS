@@ -5531,7 +5531,20 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     // Use Provider transactions if trList is empty, ensuring invoice list is never 0 total
     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
     final allTrs = trProvider.transactions.isNotEmpty ? trProvider.transactions : trList;
-    final initialTrs = allTrs;
+    
+    // Sort ascending (terlama ke terbaru: #1, #2 ... #558, #574, #640)
+    final sortedTrs = List<model_tr.Transaction>.from(allTrs);
+    sortedTrs.sort((a, b) {
+      final aNum = int.tryParse(a.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+      final bNum = int.tryParse(b.invoiceNo.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (aNum != null && bNum != null && aNum != bNum) {
+        return aNum.compareTo(bNum); // Ascending: nomor kecil/lama ke besar/baru
+      }
+      final invCmp = a.invoiceNo.compareTo(b.invoiceNo);
+      if (invCmp != 0) return invCmp;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+    final initialTrs = sortedTrs;
 
     WaContact? selectedContact;
     final phoneCtrl = TextEditingController();
