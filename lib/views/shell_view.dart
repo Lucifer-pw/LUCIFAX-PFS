@@ -30,6 +30,7 @@ import 'user_presence_view.dart';
 import 'kmeans_analysis_view.dart';
 import 'operational_invoice_view.dart';
 import 'monthly_operational_expenses_view.dart';
+import 'billing_report_view.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -734,6 +735,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Invoice Operasional Dev',
         'icon': Icons.receipt_long_rounded,
         'widget': const OperationalInvoiceView(),
+      });
+      items.add({
+        'title': 'Billing Report',
+        'icon': Icons.analytics_outlined,
+        'widget': const BillingReportView(),
       });
     }
 
