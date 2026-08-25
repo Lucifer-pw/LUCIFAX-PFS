@@ -51,42 +51,38 @@ class _BillingReportViewState extends State<BillingReportView> {
   void _startListening() {
     _subscription?.cancel();
 
-    // Get date range for the selected month
-    final startOfMonth = DateTime(_selectedYear, _selectedMonth, 1);
-    final endOfMonth = DateTime(_selectedYear, _selectedMonth + 1, 0, 23, 59, 59);
-
-    // Get previous month range for comparison
-    final startOfPrevMonth = DateTime(_selectedYear, _selectedMonth - 1, 1);
-    final endOfPrevMonth = DateTime(_selectedYear, _selectedMonth, 0, 23, 59, 59);
-
-    // Listen current month
+    // Listen to ALL billing_costs and filter in-memory (avoids Firestore composite index requirement)
     _subscription = _db
         .collection('billing_costs')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
-        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
         .orderBy('date')
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
+      final allCosts = snapshot.docs.map((doc) => BillingCost.fromFirestore(doc)).toList();
+
+      // Filter current month
+      final currentMonthCosts = allCosts.where((c) =>
+          c.date.year == _selectedYear && c.date.month == _selectedMonth).toList();
+
+      // Calculate previous month total
+      final prevMonth = _selectedMonth == 1 ? 12 : _selectedMonth - 1;
+      final prevYear = _selectedMonth == 1 ? _selectedYear - 1 : _selectedYear;
+      double prevTotal = 0;
+      for (var c in allCosts) {
+        if (c.date.year == prevYear && c.date.month == prevMonth) {
+          prevTotal += c.amount;
+        }
+      }
+
       setState(() {
-        _costs = snapshot.docs.map((doc) => BillingCost.fromFirestore(doc)).toList();
+        _costs = currentMonthCosts;
+        _prevMonthTotal = prevTotal;
         _isLoading = false;
       });
-    });
-
-    // Fetch previous month total for comparison
-    _db
-        .collection('billing_costs')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfPrevMonth))
-        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endOfPrevMonth))
-        .get()
-        .then((snapshot) {
+    }, onError: (e) {
       if (!mounted) return;
-      double total = 0;
-      for (var doc in snapshot.docs) {
-        total += (doc.data()['amount'] as num).toDouble();
-      }
-      setState(() => _prevMonthTotal = total);
+      setState(() => _isLoading = false);
+      debugPrint('BillingReport stream error: $e');
     });
   }
 
