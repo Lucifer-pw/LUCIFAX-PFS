@@ -103,20 +103,19 @@ class _BillingReportViewState extends State<BillingReportView> {
     });
   }
 
-  // Get active daily map (uses Firestore data if present, otherwise default sample data)
+  // Get active daily map: starts with base defaults, then overlays Firestore records
   Map<int, double> _getEffectiveDailyCosts() {
-    if (_costs.isNotEmpty) {
-      final Map<int, double> map = {};
-      for (var c in _costs) {
-        map[c.date.day] = (map[c.date.day] ?? 0) + c.amount;
+    final Map<int, double> map = (_selectedYear == 2026 && _selectedMonth == 8)
+        ? Map.from(_defaultAugust2026Costs)
+        : {};
+    for (var c in _costs) {
+      if (c.amount <= 0) {
+        map.remove(c.date.day);
+      } else {
+        map[c.date.day] = c.amount;
       }
-      return map;
     }
-    // Fallback to exact screenshot sample data for August 2026
-    if (_selectedYear == 2026 && _selectedMonth == 8) {
-      return Map.from(_defaultAugust2026Costs);
-    }
-    return {};
+    return map;
   }
 
   void _changeMonth(int year, int month) {
@@ -132,182 +131,212 @@ class _BillingReportViewState extends State<BillingReportView> {
   // HIDDEN CRUD DIALOGS
   // ======================================================
   Future<void> _showAddDialog([DateTime? prefilledDate]) async {
+    final daysInMonth = DateTime(_selectedYear, _selectedMonth + 1, 0).day;
+    DateTime selectedDate = prefilledDate ?? DateTime(_selectedYear, _selectedMonth, DateTime.now().day.clamp(1, daysInMonth));
     final dateController = TextEditingController(
-      text: prefilledDate != null ? DateFormat('dd/MM/yyyy').format(prefilledDate) : '',
+      text: DateFormat('dd/MM/yyyy').format(selectedDate),
     );
     final amountController = TextEditingController();
-    DateTime? selectedDate = prefilledDate;
+    bool isSaving = false;
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: gcpCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: gcpBorder),
-        ),
-        title: const Text('Input Nominal Biaya Harian', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: dateController,
-              readOnly: true,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: 'Tanggal',
-                labelStyle: const TextStyle(color: gcpTextSecondary, fontSize: 12),
-                filled: true,
-                fillColor: gcpBg,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
-                suffixIcon: const Icon(Icons.calendar_today, color: gcpBlueLink, size: 16),
-              ),
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: ctx,
-                  initialDate: selectedDate ?? DateTime(_selectedYear, _selectedMonth, 1),
-                  firstDate: DateTime(_selectedYear, _selectedMonth, 1),
-                  lastDate: DateTime(_selectedYear, _selectedMonth + 1, 0),
-                  builder: (context, child) => Theme(
-                    data: ThemeData.dark().copyWith(
-                      colorScheme: const ColorScheme.dark(primary: Color(0xFF1A73E8), surface: gcpCardBg),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: gcpCardBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: gcpBorder),
+          ),
+          title: const Text('Input Nominal Biaya Harian', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: dateController,
+                readOnly: true,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Tanggal',
+                  labelStyle: const TextStyle(color: gcpTextSecondary, fontSize: 12),
+                  filled: true,
+                  fillColor: gcpBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+                  suffixIcon: const Icon(Icons.calendar_today, color: gcpBlueLink, size: 16),
+                ),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(_selectedYear, _selectedMonth, 1),
+                    lastDate: DateTime(_selectedYear, _selectedMonth + 1, 0),
+                    builder: (context, child) => Theme(
+                      data: ThemeData.dark().copyWith(
+                        colorScheme: const ColorScheme.dark(primary: Color(0xFF1A73E8), surface: gcpCardBg),
+                      ),
+                      child: child!,
                     ),
-                    child: child!,
-                  ),
-                );
-                if (picked != null) {
-                  selectedDate = picked;
-                  dateController.text = DateFormat('dd/MM/yyyy').format(picked);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: 'Nominal Biaya (IDR)',
-                hintText: 'Contoh: 10850 atau 4708.45',
-                hintStyle: const TextStyle(color: Color(0xFF5F6368), fontSize: 12),
-                labelStyle: const TextStyle(color: gcpTextSecondary, fontSize: 12),
-                filled: true,
-                fillColor: gcpBg,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+                  );
+                  if (picked != null) {
+                    setDialogState(() {
+                      selectedDate = picked;
+                      dateController.text = DateFormat('dd/MM/yyyy').format(picked);
+                    });
+                  }
+                },
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Nominal Biaya (IDR)',
+                  hintText: 'Contoh: 2000 atau 10850',
+                  hintStyle: const TextStyle(color: Color(0xFF5F6368), fontSize: 12),
+                  labelStyle: const TextStyle(color: gcpTextSecondary, fontSize: 12),
+                  filled: true,
+                  fillColor: gcpBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: gcpTextSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8)),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final text = amountController.text.trim();
+                      if (text.isEmpty) return;
+                      final amount = double.tryParse(text.replaceAll(',', '.'));
+                      if (amount == null || amount < 0) return;
+
+                      setDialogState(() => isSaving = true);
+                      try {
+                        final docId = 'cost_${selectedDate.year}_${selectedDate.month.toString().padLeft(2, '0')}_${selectedDate.day.toString().padLeft(2, '0')}';
+                        await _db.collection('billing_costs').doc(docId).set({
+                          'date': Timestamp.fromDate(selectedDate),
+                          'amount': amount,
+                          'year': selectedDate.year,
+                          'month': selectedDate.month,
+                          'day': selectedDate.day,
+                          'updatedAt': FieldValue.serverTimestamp(),
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        debugPrint('Error saving billing cost: $e');
+                        setDialogState(() => isSaving = false);
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal', style: TextStyle(color: gcpTextSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8)),
-            onPressed: () async {
-              if (selectedDate == null || amountController.text.isEmpty) return;
-              final amount = double.tryParse(amountController.text.replaceAll(',', '.'));
-              if (amount == null || amount < 0) return;
-
-              final existingDocs = await _db
-                  .collection('billing_costs')
-                  .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day)))
-                  .where('date', isLessThanOrEqualTo: Timestamp.fromDate(DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, 23, 59, 59)))
-                  .get();
-
-              if (existingDocs.docs.isNotEmpty) {
-                await _db.collection('billing_costs').doc(existingDocs.docs.first.id).update({'amount': amount});
-              } else {
-                await _db.collection('billing_costs').add(BillingCost(
-                  id: '',
-                  date: selectedDate!,
-                  amount: amount,
-                ).toFirestore());
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
 
   Future<void> _showEditDialog(int day, double currentAmount) async {
     final amountController = TextEditingController(text: currentAmount.toStringAsFixed(2));
+    bool isProcessing = false;
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: gcpCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: gcpBorder),
-        ),
-        title: Text(
-          'Edit Biaya: Aug $day, $_selectedYear',
-          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: amountController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          decoration: InputDecoration(
-            labelText: 'Nominal Biaya (IDR)',
-            labelStyle: const TextStyle(color: gcpTextSecondary, fontSize: 12),
-            filled: true,
-            fillColor: gcpBg,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: gcpCardBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: gcpBorder),
           ),
+          title: Text(
+            'Edit Biaya: Aug $day, $_selectedYear',
+            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          content: TextField(
+            controller: amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Nominal Biaya (IDR)',
+              labelStyle: const TextStyle(color: gcpTextSecondary, fontSize: 12),
+              filled: true,
+              fillColor: gcpBg,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: gcpBorder)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isProcessing
+                  ? null
+                  : () async {
+                      setDialogState(() => isProcessing = true);
+                      try {
+                        final docId = 'cost_${_selectedYear}_${_selectedMonth.toString().padLeft(2, '0')}_${day.toString().padLeft(2, '0')}';
+                        // Set amount to 0 or delete
+                        await _db.collection('billing_costs').doc(docId).set({
+                          'date': Timestamp.fromDate(DateTime(_selectedYear, _selectedMonth, day)),
+                          'amount': 0.0,
+                          'year': _selectedYear,
+                          'month': _selectedMonth,
+                          'day': day,
+                          'updatedAt': FieldValue.serverTimestamp(),
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        debugPrint('Error deleting billing cost: $e');
+                        setDialogState(() => isProcessing = false);
+                      }
+                    },
+              child: const Text('Hapus / Reset (0)', style: TextStyle(color: Color(0xFFEA4335))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8)),
+              onPressed: isProcessing
+                  ? null
+                  : () async {
+                      final text = amountController.text.trim();
+                      if (text.isEmpty) return;
+                      final amount = double.tryParse(text.replaceAll(',', '.'));
+                      if (amount == null || amount < 0) return;
+
+                      setDialogState(() => isProcessing = true);
+                      try {
+                        final targetDate = DateTime(_selectedYear, _selectedMonth, day);
+                        final docId = 'cost_${_selectedYear}_${_selectedMonth.toString().padLeft(2, '0')}_${day.toString().padLeft(2, '0')}';
+                        await _db.collection('billing_costs').doc(docId).set({
+                          'date': Timestamp.fromDate(targetDate),
+                          'amount': amount,
+                          'year': _selectedYear,
+                          'month': _selectedMonth,
+                          'day': day,
+                          'updatedAt': FieldValue.serverTimestamp(),
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        debugPrint('Error updating billing cost: $e');
+                        setDialogState(() => isProcessing = false);
+                      }
+                    },
+              child: isProcessing
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Update', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final targetDate = DateTime(_selectedYear, _selectedMonth, day);
-              final docs = await _db
-                  .collection('billing_costs')
-                  .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(targetDate.year, targetDate.month, targetDate.day)))
-                  .where('date', isLessThanOrEqualTo: Timestamp.fromDate(DateTime(targetDate.year, targetDate.month, targetDate.day, 23, 59, 59)))
-                  .get();
-
-              for (var doc in docs.docs) {
-                await doc.reference.delete();
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Hapus / Reset', style: TextStyle(color: Color(0xFFEA4335))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8)),
-            onPressed: () async {
-              final amount = double.tryParse(amountController.text.replaceAll(',', '.'));
-              if (amount == null || amount < 0) return;
-
-              final targetDate = DateTime(_selectedYear, _selectedMonth, day);
-              final docs = await _db
-                  .collection('billing_costs')
-                  .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(targetDate.year, targetDate.month, targetDate.day)))
-                  .where('date', isLessThanOrEqualTo: Timestamp.fromDate(DateTime(targetDate.year, targetDate.month, targetDate.day, 23, 59, 59)))
-                  .get();
-
-              if (docs.docs.isNotEmpty) {
-                await docs.docs.first.reference.update({'amount': amount});
-              } else {
-                await _db.collection('billing_costs').add(BillingCost(
-                  id: '',
-                  date: targetDate,
-                  amount: amount,
-                ).toFirestore());
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Update', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
