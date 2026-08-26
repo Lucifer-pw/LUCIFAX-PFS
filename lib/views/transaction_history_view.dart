@@ -606,12 +606,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     List<model_tr.TransactionItem> editedItems = List.from(tr.items);
 
     Product? selectedProduct;
+    final kartonController = TextEditingController();
     final qtyController = TextEditingController(text: '1');
     final discountController = TextEditingController(text: '0');
     final priceController = TextEditingController();
     bool isBonus = false;
     int? editingItemIndex;
     bool isSaving = false;
+    bool isUpdatingFromKarton = false;
+    bool isUpdatingFromQty = false;
 
     showDialog(
       context: context,
@@ -619,6 +622,28 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             double grandTotal = editedItems.fold(0.0, (sum, item) => sum + item.subtotal);
+
+            void onKartonChanged(String value) {
+              if (isUpdatingFromQty) return;
+              final isiKarton = selectedProduct?.isiKarton ?? 0;
+              if (isiKarton <= 0) return;
+              isUpdatingFromKarton = true;
+              final karton = double.tryParse(value) ?? 0;
+              final qty = (karton * isiKarton).round();
+              qtyController.text = qty > 0 ? qty.toString() : '';
+              isUpdatingFromKarton = false;
+            }
+
+            void onQtyChanged(String value) {
+              if (isUpdatingFromKarton) return;
+              final isiKarton = selectedProduct?.isiKarton ?? 0;
+              if (isiKarton <= 0) return;
+              isUpdatingFromQty = true;
+              final qty = double.tryParse(value) ?? 0;
+              final karton = qty / isiKarton;
+              kartonController.text = karton > 0 ? karton.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') : '';
+              isUpdatingFromQty = false;
+            }
 
             void selectItemForEditing(int index) {
               final item = editedItems[index];
@@ -636,11 +661,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 );
               }
 
+              final isiKarton = foundProduct.isiKarton;
+              final karton = (isiKarton > 0 && item.qty > 0) ? (item.qty / isiKarton) : 0.0;
+              final kartonStr = karton > 0 ? karton.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') : '';
+
               setDialogState(() {
                 editingItemIndex = index;
                 selectedProduct = foundProduct;
                 priceController.text = item.price.toStringAsFixed(0);
                 qtyController.text = item.qty.toStringAsFixed(0);
+                kartonController.text = kartonStr;
                 discountController.text = item.discountPercent.toStringAsFixed(1);
                 isBonus = item.isBonus;
               });
@@ -650,6 +680,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               setDialogState(() {
                 editingItemIndex = null;
                 selectedProduct = null;
+                kartonController.clear();
                 qtyController.text = '1';
                 discountController.text = '0';
                 priceController.clear();
@@ -693,6 +724,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   );
                   editingItemIndex = null;
                   selectedProduct = null;
+                  kartonController.clear();
                   qtyController.text = '1';
                   discountController.text = '0';
                   priceController.clear();
@@ -872,8 +904,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         selectedProduct = p;
                         if (p != null) {
                           priceController.text = p.price.toStringAsFixed(0);
+                          final currentQty = double.tryParse(qtyController.text) ?? 0;
+                          if (p.isiKarton > 0 && currentQty > 0) {
+                            final karton = currentQty / p.isiKarton;
+                            kartonController.text = karton > 0 ? karton.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') : '';
+                          } else {
+                            kartonController.clear();
+                          }
                         } else {
                           priceController.clear();
+                          kartonController.clear();
                         }
                       });
                     },
@@ -912,13 +952,30 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     children: [
                       Expanded(
                         child: TextFormField(
+                          controller: kartonController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          enabled: selectedProduct != null && selectedProduct!.isiKarton > 0,
+                          onChanged: onKartonChanged,
+                          decoration: _buildInputDecoration(
+                            hint: selectedProduct != null && selectedProduct!.isiKarton > 0
+                                ? 'Karton (1 = ${selectedProduct!.isiKarton} Pack)'
+                                : 'Karton',
+                            icon: Icons.inventory_2_outlined,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
                           controller: qtyController,
                           keyboardType: TextInputType.number,
                           style: const TextStyle(color: Colors.white, fontSize: 12),
-                          decoration: _buildInputDecoration(hint: 'Qty (Pcs)', icon: Icons.numbers),
+                          onChanged: onQtyChanged,
+                          decoration: _buildInputDecoration(hint: 'Qty (Pack)', icon: Icons.numbers),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: TextFormField(
                           controller: discountController,
