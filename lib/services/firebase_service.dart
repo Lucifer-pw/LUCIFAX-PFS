@@ -861,12 +861,18 @@ class FirebaseService {
   Stream<List<Receivable>> streamReceivables() {
     return _db
         .collection('receivables')
-        .orderBy('tglKirim', descending: false)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final list = snapshot.docs
           .map((doc) => Receivable.fromFirestore(doc))
           .toList();
+      list.sort((a, b) {
+        if (a.tglKirim == null && b.tglKirim == null) return 0;
+        if (a.tglKirim == null) return 1;
+        if (b.tglKirim == null) return -1;
+        return a.tglKirim!.compareTo(b.tglKirim!);
+      });
+      return list;
     });
   }
 

@@ -57,6 +57,7 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   TransactionProvider() {
+    bool hasSyncedPending = false;
     _authSubscription = _auth.authStateChanges().listen((user) {
       _subscription?.cancel();
       if (user != null) {
@@ -66,10 +67,20 @@ class TransactionProvider extends ChangeNotifier {
           _transactions = trList;
           _isLoading = false;
           notifyListeners();
+
+          if (!hasSyncedPending && trList.isNotEmpty) {
+            hasSyncedPending = true;
+            for (final tr in trList) {
+              if (tr.status != 'DIKIRIM') {
+                _dbService.syncReceivableFromTransaction(tr);
+              }
+            }
+          }
         }, onError: (error) {
           debugPrint("Transaction stream error: $error");
         });
       } else {
+        hasSyncedPending = false;
         _transactions = [];
         _isLoading = false;
         notifyListeners();
