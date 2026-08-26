@@ -249,6 +249,14 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 25. BILLING_COSTS — Laporan Biaya Billing GCP
+    // ═══════════════════════════════════════════════════
+    match /billing_costs/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {

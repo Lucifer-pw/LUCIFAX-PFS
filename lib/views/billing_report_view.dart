@@ -84,7 +84,6 @@ class _BillingReportViewState extends State<BillingReportView> {
     _subscription?.cancel();
     _subscription = _db
         .collection('billing_costs')
-        .orderBy('date')
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
@@ -125,6 +124,15 @@ class _BillingReportViewState extends State<BillingReportView> {
       _isLoading = true;
     });
     _startListening();
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return 'August';
   }
 
   // ======================================================
@@ -367,6 +375,7 @@ class _BillingReportViewState extends State<BillingReportView> {
 
     final dailyCosts = _getEffectiveDailyCosts();
     final daysInMonth = DateTime(_selectedYear, _selectedMonth + 1, 0).day;
+    final int maxDay = dailyCosts.isNotEmpty ? dailyCosts.keys.reduce((a, b) => a > b ? a : b) : 24;
 
     final double totalCost = dailyCosts.values.fold(0.0, (sum, v) => sum + v);
 
@@ -436,6 +445,8 @@ class _BillingReportViewState extends State<BillingReportView> {
                             forecastedCost: forecastedCost,
                             forecastPctChange: forecastPctChange,
                             forecastDiffAmount: forecastDiffAmount,
+                            maxDay: maxDay,
+                            daysInMonth: daysInMonth,
                           ),
 
                           // Daily Bar Chart Area
@@ -873,6 +884,8 @@ class _BillingReportViewState extends State<BillingReportView> {
     required double forecastedCost,
     required double forecastPctChange,
     required double forecastDiffAmount,
+    required int maxDay,
+    required int daysInMonth,
   }) {
     return GestureDetector(
       onDoubleTap: () => _showAddDialog(),
@@ -921,9 +934,9 @@ class _BillingReportViewState extends State<BillingReportView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'August 1 – 24, 2026',
-                        style: TextStyle(color: gcpTextSecondary, fontSize: 12),
+                      Text(
+                        '${_getMonthName(_selectedMonth)} 1 – $maxDay, $_selectedYear',
+                        style: const TextStyle(color: gcpTextSecondary, fontSize: 12),
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -978,9 +991,9 @@ class _BillingReportViewState extends State<BillingReportView> {
                     children: [
                       Row(
                         children: [
-                          const Text(
-                            'August 1 – 31, 2026 (forecasted)',
-                            style: TextStyle(color: gcpTextSecondary, fontSize: 12),
+                          Text(
+                            '${_getMonthName(_selectedMonth)} 1 – $daysInMonth, $_selectedYear (forecasted)',
+                            style: const TextStyle(color: gcpTextSecondary, fontSize: 12),
                           ),
                           const SizedBox(width: 4),
                           Icon(Icons.info_outline, color: Colors.white.withOpacity(0.35), size: 13),
