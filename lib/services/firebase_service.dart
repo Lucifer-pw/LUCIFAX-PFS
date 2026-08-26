@@ -771,7 +771,7 @@ class FirebaseService {
           await doc.reference.update({
             'toko': customerName,
             'kota': tr.city,
-            'tglKirim': Timestamp.fromDate(tr.deliveryDate ?? tr.date),
+            'tglKirim': tr.deliveryDate != null ? Timestamp.fromDate(tr.deliveryDate!) : null,
             'nominal': effectiveNominal,
             'isLunas': isLunas,
             'erpSyncDate': tr.erpSyncDate != null ? Timestamp.fromDate(tr.erpSyncDate!) : null,
@@ -784,7 +784,7 @@ class FirebaseService {
           'toko': customerName,
           'kota': tr.city,
           'noInvoice': invClean,
-          'tglKirim': Timestamp.fromDate(tr.deliveryDate ?? tr.date),
+          'tglKirim': tr.deliveryDate != null ? Timestamp.fromDate(tr.deliveryDate!) : null,
           'nominal': effectiveNominal,
           'keterangan': tr.note,
           'isLunas': isLunas,

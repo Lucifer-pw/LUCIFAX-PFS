@@ -700,7 +700,7 @@ class PrintService {
                         _buildCell(rec.noInvoice, align: pw.TextAlign.center),
                         _buildCell(rec.toko),
                         _buildCell(rec.kota.isEmpty ? '-' : rec.kota, align: pw.TextAlign.center),
-                        _buildCell(DateFormat('dd-MM-yyyy').format(rec.tglKirim), align: pw.TextAlign.center),
+                        _buildCell(rec.tglKirim != null ? DateFormat('dd-MM-yyyy').format(rec.tglKirim!) : '—', align: pw.TextAlign.center),
                         _buildCell(_rupiahFormatter.format(rec.nominal), align: pw.TextAlign.right),
                       ],
                     );

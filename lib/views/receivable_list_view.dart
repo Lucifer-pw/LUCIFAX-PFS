@@ -575,7 +575,12 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     final customerGroups = groupedMap.entries.map((entry) {
       final name = entry.key;
       final items = List<Receivable>.from(entry.value)
-        ..sort((a, b) => a.tglKirim.compareTo(b.tglKirim));
+        ..sort((a, b) {
+          if (a.tglKirim == null && b.tglKirim == null) return 0;
+          if (a.tglKirim == null) return 1;
+          if (b.tglKirim == null) return -1;
+          return a.tglKirim!.compareTo(b.tglKirim!);
+        });
       final city = items.firstWhere((r) => r.kota.isNotEmpty, orElse: () => items.first).kota;
       return CustomerGroup(customerName: name, city: city, items: items);
     }).toList();
@@ -1219,7 +1224,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                                 ],
                                               ),
                                             ),
-                                            DataCell(Text(dateFormatter.format(item.tglKirim), style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                                            DataCell(Text(item.tglKirim != null ? dateFormatter.format(item.tglKirim!) : '—', style: const TextStyle(color: Colors.white70, fontSize: 13))),
                                             DataCell(Text(currencyFormatter.format(item.nominal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))),
                                             DataCell(
                                               Container(

@@ -5,7 +5,7 @@ class Receivable {
   final String toko;
   final String kota;
   final String noInvoice;
-  final DateTime tglKirim;
+  final DateTime? tglKirim;
   final double nominal;
   final String keterangan;
   final bool isLunas;
@@ -19,7 +19,7 @@ class Receivable {
     required this.toko,
     this.kota = '',
     required this.noInvoice,
-    required this.tglKirim,
+    this.tglKirim,
     required this.nominal,
     this.keterangan = '',
     this.isLunas = false,
@@ -32,12 +32,12 @@ class Receivable {
   factory Receivable.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
-    DateTime parsedTglKirim = DateTime.now();
+    DateTime? parsedTglKirim;
     if (data['tglKirim'] != null) {
       if (data['tglKirim'] is Timestamp) {
         parsedTglKirim = (data['tglKirim'] as Timestamp).toDate();
       } else if (data['tglKirim'] is String) {
-        parsedTglKirim = DateTime.tryParse(data['tglKirim']) ?? DateTime.now();
+        parsedTglKirim = DateTime.tryParse(data['tglKirim']);
       }
     }
 
@@ -74,7 +74,7 @@ class Receivable {
       'toko': toko,
       'kota': kota,
       'noInvoice': noInvoice,
-      'tglKirim': Timestamp.fromDate(tglKirim),
+      'tglKirim': tglKirim != null ? Timestamp.fromDate(tglKirim!) : null,
       'nominal': nominal,
       'keterangan': keterangan,
       'isLunas': isLunas,
