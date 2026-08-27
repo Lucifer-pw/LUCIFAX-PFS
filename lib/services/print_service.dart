@@ -557,9 +557,32 @@ class PrintService {
   }
 
   // ============================================================
-  // PRINT KARTU PIUTANG PDF (PER TOKO / CUSTOMER OR ALL)
+  // KARTU PIUTANG PDF BUILDER & METHODS
   // ============================================================
-  static Future<void> printKartuPiutang({
+  static String _getIndonesianMonthYear(DateTime dt) {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    final monthName = months[dt.month - 1];
+    return '$monthName ${dt.year}';
+  }
+
+  static String generateKartuPiutangFilename({
+    required String customerName,
+    DateTime? periodDate,
+  }) {
+    final targetDate = periodDate ?? DateTime.now();
+    final periodStr = _getIndonesianMonthYear(targetDate);
+    final cleanCust = customerName.trim();
+    if (cleanCust.isNotEmpty && cleanCust.toUpperCase() != 'ALL' && cleanCust.toUpperCase() != 'SEMUA') {
+      return 'Kartu Piutang $cleanCust Periode $periodStr.pdf';
+    } else {
+      return 'Kartu Piutang Semua Toko Periode $periodStr.pdf';
+    }
+  }
+
+  static Future<pw.Document> buildKartuPiutangDocument({
     required String customerName,
     required String city,
     required List<Receivable> items,
@@ -778,12 +801,53 @@ class PrintService {
       ),
     );
 
-    final cleanName = customerName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    final filename = customerName.isNotEmpty ? 'Kartu_Piutang_${cleanName}_$dateStr.pdf' : 'Kartu_Piutang_Semua_$dateStr.pdf';
+    return pdf;
+  }
+
+  // Opens direct browser/system print dialog with generated filename
+  static Future<void> printKartuPiutang({
+    required String customerName,
+    required String city,
+    required List<Receivable> items,
+    DateTime? periodDate,
+  }) async {
+    final pdf = await buildKartuPiutangDocument(
+      customerName: customerName,
+      city: city,
+      items: items,
+    );
+    final filename = generateKartuPiutangFilename(
+      customerName: customerName,
+      periodDate: periodDate,
+    );
+
+    SystemChrome.setApplicationSwitcherDescription(
+      ApplicationSwitcherDescription(label: filename.replaceAll('.pdf', '')),
+    );
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: filename,
     );
+  }
+
+  // Downloads PDF directly to user's device
+  static Future<void> downloadKartuPiutangPdf({
+    required String customerName,
+    required String city,
+    required List<Receivable> items,
+    DateTime? periodDate,
+  }) async {
+    final pdf = await buildKartuPiutangDocument(
+      customerName: customerName,
+      city: city,
+      items: items,
+    );
+    final filename = generateKartuPiutangFilename(
+      customerName: customerName,
+      periodDate: periodDate,
+    );
+    final bytes = await pdf.save();
+    await Printing.sharePdf(bytes: bytes, filename: filename);
   }
 }

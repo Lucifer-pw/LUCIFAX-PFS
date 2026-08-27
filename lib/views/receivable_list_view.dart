@@ -611,6 +611,43 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () async {
+                              if (filteredRaw.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Tidak ada data piutang untuk di-download!'), backgroundColor: Colors.redAccent),
+                                );
+                                return;
+                              }
+                              final custName = _selectedCustomerFilter == 'ALL' ? '' : _selectedCustomerFilter;
+                              final city = filteredRaw.firstWhere((r) => r.kota.isNotEmpty, orElse: () => filteredRaw.first).kota;
+                              await PrintService.downloadKartuPiutangPdf(
+                                customerName: custName,
+                                city: city,
+                                items: filteredRaw,
+                              );
+                              if (mounted) {
+                                final fname = PrintService.generateKartuPiutangFilename(customerName: custName);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('PDF $fname berhasil di-download!'), backgroundColor: Colors.teal),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
+                            label: const Text(
+                              'Download PDF',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF38BDF8),
                               foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -632,15 +669,13 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                               );
                             },
                             icon: const Icon(Icons.print_rounded, color: Colors.black, size: 16),
-                            label: Text(
-                              _selectedCustomerFilter == 'ALL'
-                                  ? 'Cetak Semua'
-                                  : 'Cetak Piutang',
-                              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                            label: const Text(
+                              'Cetak',
+                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
@@ -650,7 +685,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                             ),
                             onPressed: () => _showAddEditPiutangDialog(),
                             icon: const Icon(Icons.add_rounded, color: Colors.black, size: 18),
-                            label: const Text('Tambah Piutang', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: const Text('Tambah', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ),
                       ],
@@ -675,6 +710,43 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                     ),
                     Row(
                       children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () async {
+                            if (filteredRaw.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Tidak ada data piutang untuk di-download!'), backgroundColor: Colors.redAccent),
+                              );
+                              return;
+                            }
+                            final custName = _selectedCustomerFilter == 'ALL' ? '' : _selectedCustomerFilter;
+                            final city = filteredRaw.firstWhere((r) => r.kota.isNotEmpty, orElse: () => filteredRaw.first).kota;
+                            await PrintService.downloadKartuPiutangPdf(
+                              customerName: custName,
+                              city: city,
+                              items: filteredRaw,
+                            );
+                            if (mounted) {
+                              final fname = PrintService.generateKartuPiutangFilename(customerName: custName);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('PDF $fname berhasil di-download!'), backgroundColor: Colors.teal),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            _selectedCustomerFilter == 'ALL'
+                                ? 'Download Semua Piutang'
+                                : 'Download Piutang ($_selectedCustomerFilter)',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF38BDF8),
@@ -1095,6 +1167,26 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                             IconButton(
                                               padding: EdgeInsets.zero,
                                               constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.download_rounded, color: Colors.greenAccent, size: 20),
+                                              tooltip: 'Download PDF Kartu Piutang ${group.customerName}',
+                                              onPressed: () async {
+                                                await PrintService.downloadKartuPiutangPdf(
+                                                  customerName: group.customerName,
+                                                  city: group.city,
+                                                  items: group.items,
+                                                );
+                                                if (mounted) {
+                                                  final fname = PrintService.generateKartuPiutangFilename(customerName: group.customerName);
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(content: Text('PDF $fname berhasil di-download!'), backgroundColor: Colors.teal),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                            const SizedBox(width: 4),
+                                            IconButton(
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
                                               icon: const Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 20),
                                               tooltip: 'Cetak Kartu Piutang ${group.customerName}',
                                               onPressed: () {
@@ -1370,51 +1462,118 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                                 ],
                                               ),
                                               const SizedBox(height: 8),
-                                              ElevatedButton.icon(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(0xFF38BDF8),
-                                                  foregroundColor: Colors.black,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                ),
-                                                onPressed: () {
-                                                  PrintService.printKartuPiutang(
-                                                    customerName: group.customerName,
-                                                    city: group.city,
-                                                    items: group.items,
-                                                  );
-                                                },
-                                                icon: const Icon(Icons.print_rounded, color: Colors.black, size: 16),
-                                                label: Text(
-                                                  'Cetak Kartu (${group.customerName})',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: ElevatedButton.icon(
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: Colors.teal,
+                                                        foregroundColor: Colors.white,
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      ),
+                                                      onPressed: () async {
+                                                        await PrintService.downloadKartuPiutangPdf(
+                                                          customerName: group.customerName,
+                                                          city: group.city,
+                                                          items: group.items,
+                                                        );
+                                                        if (mounted) {
+                                                          final fname = PrintService.generateKartuPiutangFilename(customerName: group.customerName);
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(content: Text('PDF $fname berhasil di-download!'), backgroundColor: Colors.teal),
+                                                          );
+                                                        }
+                                                      },
+                                                      icon: const Icon(Icons.download_rounded, color: Colors.white, size: 15),
+                                                      label: const Text(
+                                                        'Download PDF',
+                                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: ElevatedButton.icon(
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: const Color(0xFF38BDF8),
+                                                        foregroundColor: Colors.black,
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      ),
+                                                      onPressed: () {
+                                                        PrintService.printKartuPiutang(
+                                                          customerName: group.customerName,
+                                                          city: group.city,
+                                                          items: group.items,
+                                                        );
+                                                      },
+                                                      icon: const Icon(Icons.print_rounded, color: Colors.black, size: 15),
+                                                      label: const Text(
+                                                        'Cetak',
+                                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           )
                                         : Row(
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
-                                              ElevatedButton.icon(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(0xFF38BDF8),
-                                                  foregroundColor: Colors.black,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                ),
-                                                onPressed: () {
-                                                  PrintService.printKartuPiutang(
-                                                    customerName: group.customerName,
-                                                    city: group.city,
-                                                    items: group.items,
-                                                  );
-                                                },
-                                                icon: const Icon(Icons.print_rounded, color: Colors.black, size: 18),
-                                                label: Text(
-                                                  'Cetak Kartu (${group.customerName})',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                                ),
+                                              Row(
+                                                children: [
+                                                  ElevatedButton.icon(
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.teal,
+                                                      foregroundColor: Colors.white,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    ),
+                                                    onPressed: () async {
+                                                      await PrintService.downloadKartuPiutangPdf(
+                                                        customerName: group.customerName,
+                                                        city: group.city,
+                                                        items: group.items,
+                                                      );
+                                                      if (mounted) {
+                                                        final fname = PrintService.generateKartuPiutangFilename(customerName: group.customerName);
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(content: Text('PDF $fname berhasil di-download!'), backgroundColor: Colors.teal),
+                                                        );
+                                                      }
+                                                    },
+                                                    icon: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                                                    label: Text(
+                                                      'Download PDF (${group.customerName})',
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  ElevatedButton.icon(
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: const Color(0xFF38BDF8),
+                                                      foregroundColor: Colors.black,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                    ),
+                                                    onPressed: () {
+                                                      PrintService.printKartuPiutang(
+                                                        customerName: group.customerName,
+                                                        city: group.city,
+                                                        items: group.items,
+                                                      );
+                                                    },
+                                                    icon: const Icon(Icons.print_rounded, color: Colors.black, size: 18),
+                                                    label: Text(
+                                                      'Cetak Kartu (${group.customerName})',
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                               Row(
                                                 children: [

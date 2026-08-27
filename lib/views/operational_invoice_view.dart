@@ -1813,23 +1813,63 @@ class _OperationalInvoiceViewState extends State<OperationalInvoiceView> {
             icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 16),
             label: const Text('Edit Invoice', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
           ),
-          // Cetak Titik 3 Menu
+          // Cetak & Download Menu
           PopupMenuButton<String>(
             color: const Color(0xFF1E293B),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             onSelected: (value) async {
+              final dateStr = DateFormat('dd_MM_yyyy').format(inv.date);
               switch (value) {
+                case 'download_pt':
+                  final pdfBytes = await OperationalInvoicePdfService.generatePdf(inv);
+                  final filename = 'Invoice_Operasional_$dateStr.pdf';
+                  await Printing.sharePdf(bytes: pdfBytes, filename: filename);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('PDF $filename berhasil di-download!'), backgroundColor: Colors.teal),
+                    );
+                  }
+                  break;
+                case 'download_dana':
+                  final pdfBytes2 = await OperationalInvoicePdfService.generateDanaStylePdf(inv);
+                  final filename2 = 'Resi_Dana_$dateStr.pdf';
+                  await Printing.sharePdf(bytes: pdfBytes2, filename: filename2);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('PDF $filename2 berhasil di-download!'), backgroundColor: Colors.teal),
+                    );
+                  }
+                  break;
+                case 'download_faktur':
+                  final pdfBytes3 = await OperationalInvoicePdfService.generateFakturPajakStylePdf(inv);
+                  final filename3 = 'Faktur_Pajak_$dateStr.pdf';
+                  await Printing.sharePdf(bytes: pdfBytes3, filename: filename3);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('PDF $filename3 berhasil di-download!'), backgroundColor: Colors.teal),
+                    );
+                  }
+                  break;
                 case 'cetak_pt':
                   final pdfBytes = await OperationalInvoicePdfService.generatePdf(inv);
-                  await Printing.layoutPdf(onLayout: (_) => pdfBytes, name: 'Invoice_Operasional_${inv.invoiceNo}.pdf');
+                  SystemChrome.setApplicationSwitcherDescription(
+                    ApplicationSwitcherDescription(label: 'Invoice_Operasional_$dateStr'),
+                  );
+                  await Printing.layoutPdf(onLayout: (_) => pdfBytes, name: 'Invoice_Operasional_$dateStr.pdf');
                   break;
                 case 'cetak_dana':
                   final pdfBytes2 = await OperationalInvoicePdfService.generateDanaStylePdf(inv);
-                  await Printing.layoutPdf(onLayout: (_) => pdfBytes2, name: 'Resi_Dana_${inv.invoiceNo}.pdf');
+                  SystemChrome.setApplicationSwitcherDescription(
+                    ApplicationSwitcherDescription(label: 'Resi_Dana_$dateStr'),
+                  );
+                  await Printing.layoutPdf(onLayout: (_) => pdfBytes2, name: 'Resi_Dana_$dateStr.pdf');
                   break;
                 case 'cetak_faktur':
                   final pdfBytes3 = await OperationalInvoicePdfService.generateFakturPajakStylePdf(inv);
-                  await Printing.layoutPdf(onLayout: (_) => pdfBytes3, name: 'Faktur_Pajak_${inv.invoiceNo}.pdf');
+                  SystemChrome.setApplicationSwitcherDescription(
+                    ApplicationSwitcherDescription(label: 'Faktur_Pajak_$dateStr'),
+                  );
+                  await Printing.layoutPdf(onLayout: (_) => pdfBytes3, name: 'Faktur_Pajak_$dateStr.pdf');
                   break;
               }
             },
@@ -1842,18 +1882,76 @@ class _OperationalInvoiceViewState extends State<OperationalInvoiceView> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.print_rounded, color: Colors.white, size: 16),
-                  SizedBox(width: 8),
-                  Text('Cetak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  Icon(Icons.download_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 6),
+                  Text('Download / Cetak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   SizedBox(width: 4),
                   Icon(Icons.arrow_drop_down_rounded, color: Colors.white, size: 18),
                 ],
               ),
             ),
             itemBuilder: (ctx) => [
-              const PopupMenuItem(value: 'cetak_pt', child: Row(children: [Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18), SizedBox(width: 10), Text('Cetak Format PT', style: TextStyle(color: Colors.white))])),
-              const PopupMenuItem(value: 'cetak_dana', child: Row(children: [Icon(Icons.receipt_rounded, color: Color(0xFF118EEA), size: 18), SizedBox(width: 10), Text('Cetak Resi DANA', style: TextStyle(color: Colors.white))])),
-              const PopupMenuItem(value: 'cetak_faktur', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, color: Color(0xFF94A3B8), size: 18), SizedBox(width: 10), Text('Cetak Faktur Pajak', style: TextStyle(color: Colors.white))])),
+              const PopupMenuItem(
+                value: 'download_pt',
+                child: Row(
+                  children: [
+                    Icon(Icons.download_rounded, color: Colors.greenAccent, size: 18),
+                    SizedBox(width: 10),
+                    Text('Download PDF (Format PT)', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'download_dana',
+                child: Row(
+                  children: [
+                    Icon(Icons.download_rounded, color: Color(0xFF38BDF8), size: 18),
+                    SizedBox(width: 10),
+                    Text('Download PDF (Resi DANA)', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'download_faktur',
+                child: Row(
+                  children: [
+                    Icon(Icons.download_rounded, color: Colors.amberAccent, size: 18),
+                    SizedBox(width: 10),
+                    Text('Download PDF (Faktur Pajak)', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'cetak_pt',
+                child: Row(
+                  children: [
+                    Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
+                    SizedBox(width: 10),
+                    Text('Cetak Format PT', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'cetak_dana',
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_rounded, color: Color(0xFF118EEA), size: 18),
+                    SizedBox(width: 10),
+                    Text('Cetak Resi DANA', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'cetak_faktur',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf_rounded, color: Color(0xFF94A3B8), size: 18),
+                    SizedBox(width: 10),
+                    Text('Cetak Faktur Pajak', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
