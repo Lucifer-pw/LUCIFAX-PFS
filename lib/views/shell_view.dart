@@ -41,7 +41,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.144';
+  String _appVersion = '3.3.145';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
@@ -254,13 +254,13 @@ class _ShellViewState extends State<ShellView> {
         });
       } else if (mounted) {
         setState(() {
-          _appVersion = '3.3.144';
+          _appVersion = '3.3.145';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '3.3.144';
+          _appVersion = '3.3.145';
         });
       }
     }
@@ -989,7 +989,16 @@ class _ShellViewState extends State<ShellView> {
               color: const Color(0xFF0F172A),
               child: IndexedStack(
                 index: _currentIndex,
-                children: navItems.map<Widget>((item) => item['widget'] as Widget).toList(),
+                children: navItems.asMap().entries.map<Widget>((entry) {
+                  final isSelected = entry.key == _currentIndex;
+                  return ExcludeFocus(
+                    excluding: !isSelected,
+                    child: FocusScope(
+                      canRequestFocus: isSelected,
+                      child: entry.value['widget'] as Widget,
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ),
