@@ -1919,13 +1919,93 @@ class _ProductListViewState extends State<ProductListView> {
                           );
                         }
 
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minWidth: isDeveloper ? 950 : 880),
-                              child: DataTable(
+                        // Summary Stats (Pack & Karton)
+                        double totalKeluarPack = 0;
+                        double totalMasukPack = 0;
+                        double totalKeluarKarton = 0;
+                        double totalMasukKarton = 0;
+
+                        for (var m in mutations) {
+                          final double karton = product.isiKarton > 0 ? (m.qty.abs() / product.isiKarton) : 0.0;
+                          if (m.qty < 0) {
+                            totalKeluarPack += m.qty.abs();
+                            totalKeluarKarton += karton;
+                          } else {
+                            totalMasukPack += m.qty;
+                            totalMasukKarton += karton;
+                          }
+                        }
+
+                        String formatKarton(double ktn) {
+                          return (ktn % 1 == 0) ? '${ktn.toInt()} Karton' : '${ktn.toStringAsFixed(1)} Karton';
+                        }
+
+                        return Column(
+                          children: [
+                            // Summary Banner inside Dialog
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF334155)),
+                              ),
+                              child: isMobile
+                                  ? Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Ditemukan: ${mutations.length} Mutasi (${range['label']})',
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Stock Out: -${totalKeluarPack.toStringAsFixed(0)} Pack (${formatKarton(totalKeluarKarton)})',
+                                              style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                            Text(
+                                              'Stock In: +${totalMasukPack.toStringAsFixed(0)} Pack (${formatKarton(totalMasukKarton)})',
+                                              style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Ditemukan: ${mutations.length} Mutasi (${range['label']})',
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'Total Stock Out: -${totalKeluarPack.toStringAsFixed(0)} Pack (${formatKarton(totalKeluarKarton)})',
+                                              style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Text(
+                                              'Total Stock In: +${totalMasukPack.toStringAsFixed(0)} Pack (${formatKarton(totalMasukKarton)})',
+                                              style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.vertical,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(minWidth: isDeveloper ? 950 : 880),
+                                    child: DataTable(
                                 columnSpacing: 12,
                                 horizontalMargin: 0,
                                 headingRowHeight: 36,
@@ -2059,13 +2139,16 @@ class _ProductListViewState extends State<ProductListView> {
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
-              actions: [
+            );
+          },
+        ),
+        actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Tutup', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
@@ -2314,19 +2397,40 @@ class _ProductListViewState extends State<ProductListView> {
                       );
                     }
 
-                    // Summary Stats
-                    double totalKeluar = 0;
-                    double totalMasuk = 0;
+                    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+                    final prodMap = {for (var p in productProvider.products) p.kodeInduk: p};
+
+                    // Summary Stats (Pack & Karton)
+                    double totalKeluarPack = 0;
+                    double totalMasukPack = 0;
+                    double totalKeluarKarton = 0;
+                    double totalMasukKarton = 0;
+
                     for (var m in mutations) {
+                      Product? p = prodMap[m.kodeInduk];
+                      if (p == null) {
+                        for (var prod in productProvider.products) {
+                          if (prod.name.toLowerCase() == m.productName.toLowerCase() || prod.kodeInduk == m.kodeInduk) {
+                            p = prod;
+                            break;
+                          }
+                        }
+                      }
+                      final isiKarton = p?.isiKarton ?? 0;
+                      final double karton = isiKarton > 0 ? (m.qty.abs() / isiKarton) : 0.0;
+
                       if (m.qty < 0) {
-                        totalKeluar += m.qty.abs();
+                        totalKeluarPack += m.qty.abs();
+                        totalKeluarKarton += karton;
                       } else {
-                        totalMasuk += m.qty;
+                        totalMasukPack += m.qty;
+                        totalMasukKarton += karton;
                       }
                     }
 
-                    final productProvider = Provider.of<ProductProvider>(context, listen: false);
-                    final prodMap = {for (var p in productProvider.products) p.kodeInduk: p};
+                    String formatKarton(double ktn) {
+                      return (ktn % 1 == 0) ? '${ktn.toInt()} Karton' : '${ktn.toStringAsFixed(1)} Karton';
+                    }
 
                     return Column(
                       children: [
@@ -2352,11 +2456,11 @@ class _ProductListViewState extends State<ProductListView> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          'Stock Out: -${totalKeluar.toStringAsFixed(0)} Pack',
+                                          'Stock Out: -${totalKeluarPack.toStringAsFixed(0)} Pack (${formatKarton(totalKeluarKarton)})',
                                           style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                         Text(
-                                          'Stock In: +${totalMasuk.toStringAsFixed(0)} Pack',
+                                          'Stock In: +${totalMasukPack.toStringAsFixed(0)} Pack (${formatKarton(totalMasukKarton)})',
                                           style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                       ],
@@ -2373,12 +2477,12 @@ class _ProductListViewState extends State<ProductListView> {
                                     Row(
                                       children: [
                                         Text(
-                                          'Total Stock Out: -${totalKeluar.toStringAsFixed(0)} Pack',
+                                          'Total Stock Out: -${totalKeluarPack.toStringAsFixed(0)} Pack (${formatKarton(totalKeluarKarton)})',
                                           style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                         const SizedBox(width: 16),
                                         Text(
-                                          'Total Stock In: +${totalMasuk.toStringAsFixed(0)} Pack',
+                                          'Total Stock In: +${totalMasukPack.toStringAsFixed(0)} Pack (${formatKarton(totalMasukKarton)})',
                                           style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                       ],
