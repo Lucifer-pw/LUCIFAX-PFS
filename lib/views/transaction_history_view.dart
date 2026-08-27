@@ -610,6 +610,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final qtyController = TextEditingController(text: '1');
     final discountController = TextEditingController(text: '0');
     final priceController = TextEditingController();
+
+    final editCustomerFocus = FocusNode();
+    final editProductFocus = FocusNode();
+    final editPriceFocus = FocusNode();
+    final editKartonFocus = FocusNode();
+    final editQtyFocus = FocusNode();
+    final editDiscountFocus = FocusNode();
+
     bool isBonus = false;
     int? editingItemIndex;
     bool isSaving = false;
@@ -686,6 +694,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 priceController.clear();
                 isBonus = false;
               });
+              editProductFocus.requestFocus();
             }
 
             void addItem() {
@@ -843,6 +852,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   SearchableCustomerField(
                     selectedCustomer: selectedCustomer,
                     customers: customers,
+                    focusNode: editCustomerFocus,
+                    onNextFocus: () => editProductFocus.requestFocus(),
                     onSelected: (c) {
                       setDialogState(() {
                         selectedCustomer = c;
@@ -899,6 +910,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   SearchableProductField(
                     selectedProduct: selectedProduct,
                     products: products,
+                    focusNode: editProductFocus,
+                    onNextFocus: () {
+                      if (selectedProduct != null && selectedProduct!.isiKarton > 0) {
+                        editKartonFocus.requestFocus();
+                      } else {
+                        editQtyFocus.requestFocus();
+                      }
+                    },
                     onSelected: (p) {
                       setDialogState(() {
                         selectedProduct = p;
@@ -943,8 +962,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: priceController,
+                    focusNode: editPriceFocus,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white, fontSize: 12),
+                    onFieldSubmitted: (_) {
+                      if (selectedProduct != null && selectedProduct!.isiKarton > 0) {
+                        editKartonFocus.requestFocus();
+                      } else {
+                        editQtyFocus.requestFocus();
+                      }
+                    },
                     decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
                   ),
                   const SizedBox(height: 12),
@@ -953,10 +980,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       Expanded(
                         child: TextFormField(
                           controller: kartonController,
+                          focusNode: editKartonFocus,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(color: Colors.white, fontSize: 12),
                           enabled: selectedProduct != null && selectedProduct!.isiKarton > 0,
                           onChanged: onKartonChanged,
+                          onFieldSubmitted: (_) => editQtyFocus.requestFocus(),
                           decoration: _buildInputDecoration(
                             hint: selectedProduct != null && selectedProduct!.isiKarton > 0
                                 ? 'Karton (1 = ${selectedProduct!.isiKarton} Pack)'
@@ -969,9 +998,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       Expanded(
                         child: TextFormField(
                           controller: qtyController,
+                          focusNode: editQtyFocus,
                           keyboardType: TextInputType.number,
                           style: const TextStyle(color: Colors.white, fontSize: 12),
                           onChanged: onQtyChanged,
+                          onFieldSubmitted: (_) => addItem(),
                           decoration: _buildInputDecoration(hint: 'Qty (Pack)', icon: Icons.numbers),
                         ),
                       ),
@@ -979,8 +1010,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       Expanded(
                         child: TextFormField(
                           controller: discountController,
+                          focusNode: editDiscountFocus,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(color: Colors.white, fontSize: 12),
+                          onFieldSubmitted: (_) => addItem(),
                           decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
                         ),
                       ),

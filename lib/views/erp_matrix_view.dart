@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -2588,12 +2589,15 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final LayerLink _layerLink = LayerLink();
+  final ScrollController _scrollController = ScrollController();
   OverlayEntry? _overlayEntry;
   List<Customer> _filteredCustomers = [];
+  int _highlightedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _focusNode.onKeyEvent = _handleKeyEvent;
     _filteredCustomers = List.from(widget.customers)..sort((a, b) => a.displayName.compareTo(b.displayName));
     if (widget.selectedCustomer != null) {
       _controller.text = widget.selectedCustomer!.displayName;
@@ -2612,12 +2616,97 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
     });
   }
 
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+        return KeyEventResult.handled;
+      }
+      if (_filteredCustomers.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex + 1).clamp(0, _filteredCustomers.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+        return KeyEventResult.handled;
+      }
+      if (_filteredCustomers.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex - 1).clamp(0, _filteredCustomers.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_overlayEntry != null &&
+          _overlayEntry!.mounted &&
+          _filteredCustomers.isNotEmpty &&
+          _highlightedIndex >= 0 &&
+          _highlightedIndex < _filteredCustomers.length) {
+        final c = _filteredCustomers[_highlightedIndex];
+        _selectCustomer(c);
+        return KeyEventResult.handled;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_overlayEntry != null && _overlayEntry!.mounted) {
+        _hideOverlay();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _scrollToIndex(int index) {
+    if (_scrollController.hasClients) {
+      const itemHeight = 58.0;
+      final targetOffset = index * itemHeight;
+      final currentOffset = _scrollController.offset;
+      const viewportHeight = 240.0;
+      if (targetOffset < currentOffset) {
+        _scrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      } else if (targetOffset + itemHeight > currentOffset + viewportHeight) {
+        _scrollController.animateTo(
+          targetOffset + itemHeight - viewportHeight,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
+  void _selectCustomer(Customer? c) {
+    if (c != null) {
+      _controller.text = c.displayName;
+    } else {
+      _controller.clear();
+    }
+    widget.onSelected(c);
+    _hideOverlay();
+    _focusNode.unfocus();
+  }
+
   @override
   void didUpdateWidget(SearchableCustomerFilter oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedCustomer == null && oldWidget.selectedCustomer != null) {
       _controller.clear();
       _filteredCustomers = List.from(widget.customers)..sort((a, b) => a.displayName.compareTo(b.displayName));
+      _highlightedIndex = 0;
     } else if (widget.selectedCustomer != null && widget.selectedCustomer != oldWidget.selectedCustomer) {
       _controller.text = widget.selectedCustomer!.displayName;
     }
@@ -2627,6 +2716,7 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
   void dispose() {
     _hideOverlay();
     _controller.dispose();
+    _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -2634,6 +2724,7 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
   void _filter(String query) {
     final cleanQuery = query.trim().toLowerCase();
     setState(() {
+      _highlightedIndex = 0;
       if (cleanQuery.isEmpty) {
         _filteredCustomers = List.from(widget.customers)..sort((a, b) => a.displayName.compareTo(b.displayName));
       } else {
@@ -2643,9 +2734,9 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
           final display = c.displayName.toLowerCase();
           final city = c.city.toLowerCase();
           return alias.contains(cleanQuery) ||
-                 name.contains(cleanQuery) ||
-                 display.contains(cleanQuery) ||
-                 city.contains(cleanQuery);
+              name.contains(cleanQuery) ||
+              display.contains(cleanQuery) ||
+              city.contains(cleanQuery);
         }).toList()
           ..sort((a, b) => a.displayName.compareTo(b.displayName));
       }
@@ -2688,11 +2779,7 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
                   ListTile(
                     dense: true,
                     title: const Text('-- Semua Customer --', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
-                    onTap: () {
-                      _controller.clear();
-                      widget.onSelected(null);
-                      _focusNode.unfocus();
-                    },
+                    onTap: () => _selectCustomer(null),
                   ),
                   const Divider(height: 1, color: Color(0xFF334155)),
                   Expanded(
@@ -2702,27 +2789,38 @@ class _SearchableCustomerFilterState extends State<SearchableCustomerFilter> {
                             child: Text('Customer tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
                           )
                         : ListView.separated(
+                            controller: _scrollController,
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             shrinkWrap: true,
                             itemCount: _filteredCustomers.length,
                             separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF334155)),
                             itemBuilder: (context, index) {
                               final c = _filteredCustomers[index];
-                              return ListTile(
-                                dense: true,
-                                title: Text(
-                                  c.displayName,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              final isHighlighted = index == _highlightedIndex;
+                              return Container(
+                                color: isHighlighted ? const Color(0xFF0284C7).withOpacity(0.35) : Colors.transparent,
+                                child: ListTile(
+                                  dense: true,
+                                  leading: isHighlighted
+                                      ? const Icon(Icons.arrow_right_rounded, color: Color(0xFF38BDF8), size: 22)
+                                      : null,
+                                  title: Text(
+                                    c.displayName,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${c.city}, ${c.province}',
+                                    style: TextStyle(
+                                      color: isHighlighted ? const Color(0xFFBAE6FD) : const Color(0xFF94A3B8),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  onTap: () => _selectCustomer(c),
                                 ),
-                                subtitle: Text(
-                                  '${c.city}, ${c.province}',
-                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                ),
-                                onTap: () {
-                                  _controller.text = c.displayName;
-                                  widget.onSelected(c);
-                                  _focusNode.unfocus();
-                                },
                               );
                             },
                           ),

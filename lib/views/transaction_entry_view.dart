@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -28,6 +29,15 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   final _noteController = TextEditingController();
   final _customerTextController = TextEditingController();
   final _productTextController = TextEditingController();
+
+  final _customerFocusNode = FocusNode();
+  final _productFocusNode = FocusNode();
+  final _priceFocusNode = FocusNode();
+  final _kartonFocusNode = FocusNode();
+  final _qtyFocusNode = FocusNode();
+  final _discountFocusNode = FocusNode();
+  final _addButtonFocusNode = FocusNode();
+
   bool _isBonus = false;
   bool _isSaving = false;
   bool _isUpdatingFromKarton = false;
@@ -49,6 +59,15 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     _noteController.dispose();
     _customerTextController.dispose();
     _productTextController.dispose();
+
+    _customerFocusNode.dispose();
+    _productFocusNode.dispose();
+    _priceFocusNode.dispose();
+    _kartonFocusNode.dispose();
+    _qtyFocusNode.dispose();
+    _discountFocusNode.dispose();
+    _addButtonFocusNode.dispose();
+
     super.dispose();
   }
 
@@ -116,6 +135,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
         _priceController.clear();
         _isBonus = false;
       });
+      _productFocusNode.requestFocus();
     } catch (e) {
       // 10-item limit exceeded!
       showDialog(
@@ -318,6 +338,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               SearchableCustomerField(
                 selectedCustomer: _selectedCustomer,
                 customers: customerProvider.customers,
+                focusNode: _customerFocusNode,
+                onNextFocus: () => _productFocusNode.requestFocus(),
                 onSelected: (customer) {
                   setState(() {
                     _selectedCustomer = customer;
@@ -506,6 +528,14 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               SearchableProductField(
                 selectedProduct: _selectedProduct,
                 products: productProvider.products,
+                focusNode: _productFocusNode,
+                onNextFocus: () {
+                  if (_selectedProduct != null && _selectedProduct!.isiKarton > 0) {
+                    _kartonFocusNode.requestFocus();
+                  } else {
+                    _qtyFocusNode.requestFocus();
+                  }
+                },
                 onSelected: (product) {
                   setState(() {
                     _selectedProduct = product;
@@ -540,8 +570,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _priceController,
+                  focusNode: _priceFocusNode,
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: Colors.white),
+                  onFieldSubmitted: (_) {
+                    if (_selectedProduct != null && _selectedProduct!.isiKarton > 0) {
+                      _kartonFocusNode.requestFocus();
+                    } else {
+                      _qtyFocusNode.requestFocus();
+                    }
+                  },
                   decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
                 ),
                 const SizedBox(height: 16),
@@ -553,10 +591,12 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   Expanded(
                     child: TextFormField(
                       controller: _kartonController,
+                      focusNode: _kartonFocusNode,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: const TextStyle(color: Colors.white),
                       enabled: _selectedProduct != null && (_selectedProduct!.isiKarton) > 0,
                       onChanged: _onKartonChanged,
+                      onFieldSubmitted: (_) => _qtyFocusNode.requestFocus(),
                       decoration: _buildInputDecoration(
                         hint: _selectedProduct != null && _selectedProduct!.isiKarton > 0
                             ? 'Karton (1 = ${_selectedProduct!.isiKarton} Pack)'
@@ -569,9 +609,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   Expanded(
                     child: TextFormField(
                       controller: _qtyController,
+                      focusNode: _qtyFocusNode,
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: Colors.white),
                       onChanged: _onQtyChanged,
+                      onFieldSubmitted: (_) => _addItemToCart(trProvider),
                       decoration: _buildInputDecoration(hint: 'Qty (Pack)', icon: Icons.numbers),
                     ),
                   ),
@@ -579,8 +621,10 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   Expanded(
                     child: TextFormField(
                       controller: _discountController,
+                      focusNode: _discountFocusNode,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: const TextStyle(color: Colors.white),
+                      onFieldSubmitted: (_) => _addItemToCart(trProvider),
                       decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
                     ),
                   ),
@@ -1057,12 +1101,16 @@ class SearchableCustomerField extends StatefulWidget {
   final Customer? selectedCustomer;
   final List<Customer> customers;
   final ValueChanged<Customer?> onSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onNextFocus;
 
   const SearchableCustomerField({
     super.key,
     required this.selectedCustomer,
     required this.customers,
     required this.onSelected,
+    this.focusNode,
+    this.onNextFocus,
   });
 
   @override
@@ -1071,14 +1119,18 @@ class SearchableCustomerField extends StatefulWidget {
 
 class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
+  final ScrollController _scrollController = ScrollController();
   OverlayEntry? _overlayEntry;
   List<Customer> _filteredCustomers = [];
+  int _highlightedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.onKeyEvent = _handleKeyEvent;
     _filteredCustomers = widget.customers;
     if (widget.selectedCustomer != null) {
       _controller.text = '${widget.selectedCustomer!.aliasName} (${widget.selectedCustomer!.customerName})';
@@ -1097,12 +1149,96 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
     });
   }
 
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+        return KeyEventResult.handled;
+      }
+      if (_filteredCustomers.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex + 1).clamp(0, _filteredCustomers.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+        return KeyEventResult.handled;
+      }
+      if (_filteredCustomers.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex - 1).clamp(0, _filteredCustomers.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_overlayEntry != null &&
+          _overlayEntry!.mounted &&
+          _filteredCustomers.isNotEmpty &&
+          _highlightedIndex >= 0 &&
+          _highlightedIndex < _filteredCustomers.length) {
+        final c = _filteredCustomers[_highlightedIndex];
+        _selectCustomer(c);
+        return KeyEventResult.handled;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_overlayEntry != null && _overlayEntry!.mounted) {
+        _hideOverlay();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _scrollToIndex(int index) {
+    if (_scrollController.hasClients) {
+      const itemHeight = 58.0;
+      final targetOffset = index * itemHeight;
+      final currentOffset = _scrollController.offset;
+      const viewportHeight = 240.0;
+      if (targetOffset < currentOffset) {
+        _scrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      } else if (targetOffset + itemHeight > currentOffset + viewportHeight) {
+        _scrollController.animateTo(
+          targetOffset + itemHeight - viewportHeight,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
+  void _selectCustomer(Customer c) {
+    _controller.text = c.displayName;
+    widget.onSelected(c);
+    _hideOverlay();
+    _focusNode.unfocus();
+    if (widget.onNextFocus != null) {
+      widget.onNextFocus!();
+    }
+  }
+
   @override
   void didUpdateWidget(SearchableCustomerField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedCustomer == null && oldWidget.selectedCustomer != null) {
       _controller.clear();
       _filteredCustomers = widget.customers;
+      _highlightedIndex = 0;
     } else if (widget.selectedCustomer != null && widget.selectedCustomer != oldWidget.selectedCustomer) {
       _controller.text = '${widget.selectedCustomer!.aliasName} (${widget.selectedCustomer!.customerName})';
     }
@@ -1112,13 +1248,17 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
   void dispose() {
     _hideOverlay();
     _controller.dispose();
-    _focusNode.dispose();
+    _scrollController.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
   void _filter(String query) {
     final cleanQuery = query.trim().toLowerCase();
     setState(() {
+      _highlightedIndex = 0;
       if (cleanQuery.isEmpty) {
         _filteredCustomers = widget.customers;
       } else {
@@ -1129,10 +1269,10 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
           final city = c.city.toLowerCase();
           final id = c.id.toLowerCase();
           return alias.contains(cleanQuery) ||
-                 name.contains(cleanQuery) ||
-                 display.contains(cleanQuery) ||
-                 city.contains(cleanQuery) ||
-                 id.contains(cleanQuery);
+              name.contains(cleanQuery) ||
+              display.contains(cleanQuery) ||
+              city.contains(cleanQuery) ||
+              id.contains(cleanQuery);
         }).toList();
       }
     });
@@ -1174,26 +1314,47 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
                       child: Text('Pelanggan tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
                     )
                   : ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       shrinkWrap: true,
                       itemCount: _filteredCustomers.length,
                       itemBuilder: (context, index) {
                         final c = _filteredCustomers[index];
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                            c.displayName,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        final isHighlighted = index == _highlightedIndex;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isHighlighted
+                                ? const Color(0xFF0284C7).withOpacity(0.35)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isHighlighted ? const Color(0xFF38BDF8) : Colors.transparent,
+                              width: 1,
+                            ),
                           ),
-                          subtitle: Text(
-                            'ID: ${c.id} • ${c.city}, ${c.province}',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          child: ListTile(
+                            dense: true,
+                            leading: isHighlighted
+                                ? const Icon(Icons.arrow_right_rounded, color: Color(0xFF38BDF8), size: 22)
+                                : null,
+                            title: Text(
+                              c.displayName,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'ID: ${c.id} • ${c.city}, ${c.province}',
+                              style: TextStyle(
+                                color: isHighlighted ? const Color(0xFFBAE6FD) : const Color(0xFF94A3B8),
+                                fontSize: 11,
+                              ),
+                            ),
+                            onTap: () => _selectCustomer(c),
                           ),
-                          onTap: () {
-                            _controller.text = c.displayName;
-                            widget.onSelected(c);
-                            _focusNode.unfocus();
-                          },
                         );
                       },
                     ),
@@ -1269,12 +1430,16 @@ class SearchableProductField extends StatefulWidget {
   final Product? selectedProduct;
   final List<Product> products;
   final ValueChanged<Product?> onSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onNextFocus;
 
   const SearchableProductField({
     super.key,
     required this.selectedProduct,
     required this.products,
     required this.onSelected,
+    this.focusNode,
+    this.onNextFocus,
   });
 
   @override
@@ -1283,10 +1448,12 @@ class SearchableProductField extends StatefulWidget {
 
 class _SearchableProductFieldState extends State<SearchableProductField> {
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
+  final ScrollController _scrollController = ScrollController();
   OverlayEntry? _overlayEntry;
   List<Product> _filteredProducts = [];
+  int _highlightedIndex = 0;
 
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -1297,6 +1464,8 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.onKeyEvent = _handleKeyEvent;
     _filteredProducts = widget.products;
     if (widget.selectedProduct != null) {
       _controller.text = widget.selectedProduct!.name;
@@ -1315,12 +1484,96 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
     });
   }
 
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+        return KeyEventResult.handled;
+      }
+      if (_filteredProducts.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex + 1).clamp(0, _filteredProducts.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+        return KeyEventResult.handled;
+      }
+      if (_filteredProducts.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex - 1).clamp(0, _filteredProducts.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_overlayEntry != null &&
+          _overlayEntry!.mounted &&
+          _filteredProducts.isNotEmpty &&
+          _highlightedIndex >= 0 &&
+          _highlightedIndex < _filteredProducts.length) {
+        final p = _filteredProducts[_highlightedIndex];
+        _selectProduct(p);
+        return KeyEventResult.handled;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_overlayEntry != null && _overlayEntry!.mounted) {
+        _hideOverlay();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _scrollToIndex(int index) {
+    if (_scrollController.hasClients) {
+      const itemHeight = 58.0;
+      final targetOffset = index * itemHeight;
+      final currentOffset = _scrollController.offset;
+      const viewportHeight = 240.0;
+      if (targetOffset < currentOffset) {
+        _scrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      } else if (targetOffset + itemHeight > currentOffset + viewportHeight) {
+        _scrollController.animateTo(
+          targetOffset + itemHeight - viewportHeight,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
+  void _selectProduct(Product p) {
+    _controller.text = p.name;
+    widget.onSelected(p);
+    _hideOverlay();
+    _focusNode.unfocus();
+    if (widget.onNextFocus != null) {
+      widget.onNextFocus!();
+    }
+  }
+
   @override
   void didUpdateWidget(SearchableProductField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedProduct == null && oldWidget.selectedProduct != null) {
       _controller.clear();
       _filteredProducts = widget.products;
+      _highlightedIndex = 0;
     } else if (widget.selectedProduct != null && widget.selectedProduct != oldWidget.selectedProduct) {
       _controller.text = widget.selectedProduct!.name;
     }
@@ -1330,13 +1583,17 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
   void dispose() {
     _hideOverlay();
     _controller.dispose();
-    _focusNode.dispose();
+    _scrollController.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
   void _filter(String query) {
     final cleanQuery = query.trim().toLowerCase();
     setState(() {
+      _highlightedIndex = 0;
       if (cleanQuery.isEmpty) {
         _filteredProducts = widget.products;
       } else {
@@ -1385,26 +1642,47 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
                       child: Text('Produk tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
                     )
                   : ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       shrinkWrap: true,
                       itemCount: _filteredProducts.length,
                       itemBuilder: (context, index) {
                         final p = _filteredProducts[index];
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                            p.name,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        final isHighlighted = index == _highlightedIndex;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isHighlighted
+                                ? const Color(0xFF0284C7).withOpacity(0.35)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isHighlighted ? const Color(0xFF38BDF8) : Colors.transparent,
+                              width: 1,
+                            ),
                           ),
-                          subtitle: Text(
-                            'Harga: ${_rupiahFormatter.format(p.price)} • Stok: ${p.stock.toStringAsFixed(0)} pcs',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          child: ListTile(
+                            dense: true,
+                            leading: isHighlighted
+                                ? const Icon(Icons.arrow_right_rounded, color: Color(0xFF38BDF8), size: 22)
+                                : null,
+                            title: Text(
+                              p.name,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Harga: ${_rupiahFormatter.format(p.price)} • Stok: ${p.stock.toStringAsFixed(0)} pcs',
+                              style: TextStyle(
+                                color: isHighlighted ? const Color(0xFFBAE6FD) : const Color(0xFF94A3B8),
+                                fontSize: 11,
+                              ),
+                            ),
+                            onTap: () => _selectProduct(p),
                           ),
-                          onTap: () {
-                            _controller.text = p.name;
-                            widget.onSelected(p);
-                            _focusNode.unfocus();
-                          },
                         );
                       },
                     ),
