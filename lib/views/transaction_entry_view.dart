@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -28,6 +29,17 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   final _noteController = TextEditingController();
   final _customerTextController = TextEditingController();
   final _productTextController = TextEditingController();
+
+  final _customerFocusNode = FocusNode();
+  final _deliveryDateFocusNode = FocusNode();
+  final _invoiceTypeFocusNode = FocusNode();
+  final _productFocusNode = FocusNode();
+  final _priceFocusNode = FocusNode();
+  final _kartonFocusNode = FocusNode();
+  final _qtyFocusNode = FocusNode();
+  final _discountFocusNode = FocusNode();
+  final _addButtonFocusNode = FocusNode();
+
   bool _isBonus = false;
   bool _isSaving = false;
   bool _isUpdatingFromKarton = false;
@@ -41,6 +53,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _customerFocusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _qtyController.dispose();
     _kartonController.dispose();
@@ -49,6 +71,17 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     _noteController.dispose();
     _customerTextController.dispose();
     _productTextController.dispose();
+
+    _customerFocusNode.dispose();
+    _deliveryDateFocusNode.dispose();
+    _invoiceTypeFocusNode.dispose();
+    _productFocusNode.dispose();
+    _priceFocusNode.dispose();
+    _kartonFocusNode.dispose();
+    _qtyFocusNode.dispose();
+    _discountFocusNode.dispose();
+    _addButtonFocusNode.dispose();
+
     super.dispose();
   }
 
@@ -72,6 +105,31 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final karton = qty / isiKarton;
     _kartonController.text = karton > 0 ? karton.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') : '';
     _isUpdatingFromQty = false;
+  }
+
+  Future<void> _openDatePicker(TransactionProvider trProvider) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: trProvider.deliveryDate,
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF38BDF8),
+              onPrimary: Colors.white,
+              surface: Color(0xFF1E293B),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      trProvider.setDeliveryDate(picked);
+    }
   }
 
   void _addItemToCart(TransactionProvider trProvider) {
@@ -116,6 +174,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
         _priceController.clear();
         _isBonus = false;
       });
+      _productFocusNode.requestFocus();
     } catch (e) {
       // 10-item limit exceeded!
       showDialog(
@@ -318,6 +377,9 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               SearchableCustomerField(
                 selectedCustomer: _selectedCustomer,
                 customers: customerProvider.customers,
+                focusNode: _customerFocusNode,
+                onNextFocus: () => _productFocusNode.requestFocus(),
+                onNextTabFocus: () => _deliveryDateFocusNode.requestFocus(),
                 onSelected: (customer) {
                   setState(() {
                     _selectedCustomer = customer;
@@ -344,98 +406,135 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 const SizedBox(height: 12),
               ],
               
-              // Date Picker Input
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                subtitle: Text(
-                  DateFormat('dd MMMM yyyy').format(trProvider.deliveryDate),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: trProvider.deliveryDate,
-                    firstDate: DateTime(2025),
-                    lastDate: DateTime(2030),
-                    builder: (context, child) {
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: const ColorScheme.dark(
-                            primary: Color(0xFF38BDF8),
-                            onPrimary: Colors.white,
-                            surface: Color(0xFF1E293B),
-                            onSurface: Colors.white,
-                          ),
-                        ),
-                        child: child!,
-                      );
-                    },
-                  );
-                  if (picked != null) {
-                    trProvider.setDeliveryDate(picked);
+              // Date Picker Input with Keyboard Focus
+              Focus(
+                focusNode: _deliveryDateFocusNode,
+                onKeyEvent: (node, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space) {
+                    _openDatePicker(trProvider);
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+                    if (HardwareKeyboard.instance.isShiftPressed) {
+                      _customerFocusNode.requestFocus();
+                    } else {
+                      _invoiceTypeFocusNode.requestFocus();
+                    }
+                    return KeyEventResult.handled;
                   }
+                  return KeyEventResult.ignored;
                 },
+                child: Builder(
+                  builder: (context) {
+                    final hasFocus = Focus.of(context).hasFocus;
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: hasFocus ? const Color(0xFF0284C7).withOpacity(0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: hasFocus ? const Color(0xFF38BDF8) : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                        title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        subtitle: Text(
+                          DateFormat('dd MMMM yyyy').format(trProvider.deliveryDate),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                        onTap: () => _openDatePicker(trProvider),
+                      ),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 8),
 
-              // Invoice Type & Numbering Option Dropdown (PO vs SA)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 18),
-                        const SizedBox(width: 8),
-                        const Text('Jenis Invoice:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: trProvider.invoiceType,
-                              dropdownColor: const Color(0xFF1E293B),
-                              isExpanded: true,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'PO',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.shopping_bag_rounded, color: Colors.greenAccent, size: 16),
-                                      SizedBox(width: 6),
-                                      Text('PO (Penjualan)'),
-                                    ],
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'SA',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.card_giftcard_rounded, color: Colors.amberAccent, size: 16),
-                                      SizedBox(width: 6),
-                                      Text('SA (Sample / Bonus)'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  trProvider.setInvoiceType(val);
-                                }
-                              },
-                            ),
-                          ),
+              // Invoice Type & Numbering Option Dropdown (PO vs SA) with Keyboard Focus
+              Focus(
+                focusNode: _invoiceTypeFocusNode,
+                onKeyEvent: (node, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown || event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    final newType = trProvider.invoiceType == 'PO' ? 'SA' : 'PO';
+                    trProvider.setInvoiceType(newType);
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+                    if (HardwareKeyboard.instance.isShiftPressed) {
+                      _deliveryDateFocusNode.requestFocus();
+                    } else {
+                      _productFocusNode.requestFocus();
+                    }
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+                    _productFocusNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Builder(
+                  builder: (context) {
+                    final hasFocus = Focus.of(context).hasFocus;
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: hasFocus ? const Color(0xFF38BDF8) : const Color(0xFF38BDF8).withOpacity(0.2),
+                          width: hasFocus ? 1.5 : 1.0,
                         ),
-                      ],
-                    ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 18),
+                              const SizedBox(width: 8),
+                              const Text('Jenis Invoice:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: trProvider.invoiceType,
+                                    dropdownColor: const Color(0xFF1E293B),
+                                    isExpanded: true,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'PO',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.shopping_bag_rounded, color: Colors.greenAccent, size: 16),
+                                            SizedBox(width: 6),
+                                            Text('PO (Penjualan)'),
+                                          ],
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'SA',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.card_giftcard_rounded, color: Colors.amberAccent, size: 16),
+                                            SizedBox(width: 6),
+                                            Text('SA (Sample / Bonus)'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        trProvider.setInvoiceType(val);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                     if (trProvider.invoiceType == 'SA') ...[
                       const SizedBox(height: 10),
                       FutureBuilder<String>(
@@ -489,10 +588,13 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                     ],
                   ],
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
+      ],
+    ),
+  ),
         const SizedBox(height: 20),
 
         // Product Adder Form
@@ -506,6 +608,15 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               SearchableProductField(
                 selectedProduct: _selectedProduct,
                 products: productProvider.products,
+                focusNode: _productFocusNode,
+                onPrevFocus: () => _invoiceTypeFocusNode.requestFocus(),
+                onNextFocus: () {
+                  if (_selectedProduct != null && _selectedProduct!.isiKarton > 0) {
+                    _kartonFocusNode.requestFocus();
+                  } else {
+                    _qtyFocusNode.requestFocus();
+                  }
+                },
                 onSelected: (product) {
                   setState(() {
                     _selectedProduct = product;
@@ -540,8 +651,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _priceController,
+                  focusNode: _priceFocusNode,
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: Colors.white),
+                  onFieldSubmitted: (_) {
+                    if (_selectedProduct != null && _selectedProduct!.isiKarton > 0) {
+                      _kartonFocusNode.requestFocus();
+                    } else {
+                      _qtyFocusNode.requestFocus();
+                    }
+                  },
                   decoration: _buildInputDecoration(hint: 'Harga Transaksi (Rp)', icon: Icons.payments_outlined),
                 ),
                 const SizedBox(height: 16),
@@ -553,10 +672,12 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   Expanded(
                     child: TextFormField(
                       controller: _kartonController,
+                      focusNode: _kartonFocusNode,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: const TextStyle(color: Colors.white),
                       enabled: _selectedProduct != null && (_selectedProduct!.isiKarton) > 0,
                       onChanged: _onKartonChanged,
+                      onFieldSubmitted: (_) => _qtyFocusNode.requestFocus(),
                       decoration: _buildInputDecoration(
                         hint: _selectedProduct != null && _selectedProduct!.isiKarton > 0
                             ? 'Karton (1 = ${_selectedProduct!.isiKarton} Pack)'
@@ -569,9 +690,11 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   Expanded(
                     child: TextFormField(
                       controller: _qtyController,
+                      focusNode: _qtyFocusNode,
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: Colors.white),
                       onChanged: _onQtyChanged,
+                      onFieldSubmitted: (_) => _addItemToCart(trProvider),
                       decoration: _buildInputDecoration(hint: 'Qty (Pack)', icon: Icons.numbers),
                     ),
                   ),
@@ -579,8 +702,10 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                   Expanded(
                     child: TextFormField(
                       controller: _discountController,
+                      focusNode: _discountFocusNode,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       style: const TextStyle(color: Colors.white),
+                      onFieldSubmitted: (_) => _addItemToCart(trProvider),
                       decoration: _buildInputDecoration(hint: 'Diskon %', icon: Icons.percent),
                     ),
                   ),
@@ -647,19 +772,53 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               ),
               const SizedBox(height: 20),
 
-              // Add to Cart Button
-              ElevatedButton.icon(
-                onPressed: () => _addItemToCart(trProvider),
-                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                label: Text(
-                  _isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
-                ),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: _isBonus ? Colors.green[700] : const Color(0xFF0284C7),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              // Add to Cart Button with Keyboard Focus
+              Focus(
+                focusNode: _addButtonFocusNode,
+                onKeyEvent: (node, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space) {
+                    _addItemToCart(trProvider);
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.tab && HardwareKeyboard.instance.isShiftPressed) {
+                    _discountFocusNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Builder(
+                  builder: (context) {
+                    final hasFocus = Focus.of(context).hasFocus;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: hasFocus
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF38BDF8).withOpacity(0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _addItemToCart(trProvider),
+                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                        label: Text(
+                          _isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: _isBonus ? Colors.green[700] : const Color(0xFF0284C7),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -916,7 +1075,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       icon: _isSaving
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja (Ctrl + S)', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         backgroundColor: _isSaving ? Colors.teal[800] : Colors.teal[600],
@@ -934,7 +1093,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       icon: _isSaving
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.print_rounded, color: Colors.white, size: 18),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak (Ctrl + Enter)', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         backgroundColor: _isSaving ? const Color(0xFF015B8C) : const Color(0xFF0284C7),
@@ -951,36 +1110,53 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       ],
     );
 
-    if (isDesktop) {
-      return Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 2,
-              child: SingleChildScrollView(child: leftPanel),
+    final mainContent = isDesktop
+        ? Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: SingleChildScrollView(child: leftPanel),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  flex: 3,
+                  child: SingleChildScrollView(child: rightPanel),
+                ),
+              ],
             ),
-            const SizedBox(width: 24),
-            Expanded(
-              flex: 3,
-              child: SingleChildScrollView(child: rightPanel),
+          )
+        : SingleChildScrollView(
+            padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
+            child: Column(
+              children: [
+                leftPanel,
+                SizedBox(height: isMobile ? 16 : 24),
+                rightPanel,
+              ],
             ),
-          ],
-        ),
-      );
-    } else {
-      return SingleChildScrollView(
-        padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
-        child: Column(
-          children: [
-            leftPanel,
-            SizedBox(height: isMobile ? 16 : 24),
-            rightPanel,
-          ],
-        ),
-      );
-    }
+          );
+
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
+          if (trProvider.cartItems.isNotEmpty && _selectedCustomer != null && !_isSaving) {
+            _submitAndPrint(trProvider, user.uid);
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+          if (trProvider.cartItems.isNotEmpty && _selectedCustomer != null && !_isSaving) {
+            _submitOnly(trProvider, user.uid);
+          }
+        },
+      },
+      child: Focus(
+        autofocus: false,
+        child: mainContent,
+      ),
+    );
   }
 
   // Builder for form input cards
@@ -1057,12 +1233,18 @@ class SearchableCustomerField extends StatefulWidget {
   final Customer? selectedCustomer;
   final List<Customer> customers;
   final ValueChanged<Customer?> onSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onNextFocus;
+  final VoidCallback? onNextTabFocus;
 
   const SearchableCustomerField({
     super.key,
     required this.selectedCustomer,
     required this.customers,
     required this.onSelected,
+    this.focusNode,
+    this.onNextFocus,
+    this.onNextTabFocus,
   });
 
   @override
@@ -1071,18 +1253,23 @@ class SearchableCustomerField extends StatefulWidget {
 
 class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
   List<Customer> _filteredCustomers = [];
+  int _highlightedIndex = 0;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
     _filteredCustomers = widget.customers;
     if (widget.selectedCustomer != null) {
       _controller.text = '${widget.selectedCustomer!.aliasName} (${widget.selectedCustomer!.customerName})';
     }
+
+    _focusNode.onKeyEvent = _onKeyEvent;
 
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
@@ -1095,6 +1282,86 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
         }).catchError((_) {});
       }
     });
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+      } else if (_filteredCustomers.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex + 1).clamp(0, _filteredCustomers.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (_overlayEntry != null && _overlayEntry!.mounted && _filteredCustomers.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex - 1).clamp(0, _filteredCustomers.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_overlayEntry != null &&
+          _overlayEntry!.mounted &&
+          _filteredCustomers.isNotEmpty &&
+          _highlightedIndex >= 0 &&
+          _highlightedIndex < _filteredCustomers.length) {
+        final c = _filteredCustomers[_highlightedIndex];
+        _selectCustomer(c);
+        return KeyEventResult.handled;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+      _hideOverlay();
+      if (!HardwareKeyboard.instance.isShiftPressed) {
+        if (widget.onNextTabFocus != null) {
+          widget.onNextTabFocus!();
+          return KeyEventResult.handled;
+        } else if (widget.onNextFocus != null) {
+          widget.onNextFocus!();
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
+    } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_overlayEntry != null && _overlayEntry!.mounted) {
+        _hideOverlay();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _scrollToIndex(int index) {
+    if (!_scrollController.hasClients) return;
+    const itemHeight = 48.0;
+    final targetOffset = index * itemHeight;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final minScroll = _scrollController.position.minScrollExtent;
+    final clampedOffset = targetOffset.clamp(minScroll, maxScroll);
+    _scrollController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _selectCustomer(Customer c) {
+    _controller.text = c.displayName;
+    widget.onSelected(c);
+    _hideOverlay();
+    if (widget.onNextFocus != null) {
+      widget.onNextFocus!();
+    } else {
+      _focusNode.unfocus();
+    }
   }
 
   @override
@@ -1112,13 +1379,17 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
   void dispose() {
     _hideOverlay();
     _controller.dispose();
-    _focusNode.dispose();
+    _scrollController.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
   void _filter(String query) {
     final cleanQuery = query.trim().toLowerCase();
     setState(() {
+      _highlightedIndex = 0;
       if (cleanQuery.isEmpty) {
         _filteredCustomers = widget.customers;
       } else {
@@ -1174,26 +1445,34 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
                       child: Text('Pelanggan tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
                     )
                   : ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       shrinkWrap: true,
                       itemCount: _filteredCustomers.length,
                       itemBuilder: (context, index) {
                         final c = _filteredCustomers[index];
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                            c.displayName,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        final isHighlighted = index == _highlightedIndex;
+                        return Container(
+                          color: isHighlighted ? const Color(0xFF0284C7).withOpacity(0.35) : Colors.transparent,
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              c.displayName,
+                              style: TextStyle(
+                                color: isHighlighted ? const Color(0xFF38BDF8) : Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'ID: ${c.id} • ${c.city}, ${c.province}',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                            ),
+                            trailing: isHighlighted
+                                ? const Icon(Icons.arrow_right_rounded, color: Color(0xFF38BDF8), size: 24)
+                                : null,
+                            onTap: () => _selectCustomer(c),
                           ),
-                          subtitle: Text(
-                            'ID: ${c.id} • ${c.city}, ${c.province}',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                          ),
-                          onTap: () {
-                            _controller.text = c.displayName;
-                            widget.onSelected(c);
-                            _focusNode.unfocus();
-                          },
                         );
                       },
                     ),
@@ -1269,12 +1548,18 @@ class SearchableProductField extends StatefulWidget {
   final Product? selectedProduct;
   final List<Product> products;
   final ValueChanged<Product?> onSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onNextFocus;
+  final VoidCallback? onPrevFocus;
 
   const SearchableProductField({
     super.key,
     required this.selectedProduct,
     required this.products,
     required this.onSelected,
+    this.focusNode,
+    this.onNextFocus,
+    this.onPrevFocus,
   });
 
   @override
@@ -1283,10 +1568,12 @@ class SearchableProductField extends StatefulWidget {
 
 class _SearchableProductFieldState extends State<SearchableProductField> {
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
   List<Product> _filteredProducts = [];
+  int _highlightedIndex = 0;
+  final ScrollController _scrollController = ScrollController();
 
   final _rupiahFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -1297,10 +1584,13 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
     _filteredProducts = widget.products;
     if (widget.selectedProduct != null) {
       _controller.text = widget.selectedProduct!.name;
     }
+
+    _focusNode.onKeyEvent = _onKeyEvent;
 
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
@@ -1313,6 +1603,88 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
         }).catchError((_) {});
       }
     });
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      if (_overlayEntry == null || !_overlayEntry!.mounted) {
+        _showOverlay();
+      } else if (_filteredProducts.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex + 1).clamp(0, _filteredProducts.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (_overlayEntry != null && _overlayEntry!.mounted && _filteredProducts.isNotEmpty) {
+        setState(() {
+          _highlightedIndex = (_highlightedIndex - 1).clamp(0, _filteredProducts.length - 1);
+        });
+        _scrollToIndex(_highlightedIndex);
+        _overlayEntry?.markNeedsBuild();
+      }
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_overlayEntry != null &&
+          _overlayEntry!.mounted &&
+          _filteredProducts.isNotEmpty &&
+          _highlightedIndex >= 0 &&
+          _highlightedIndex < _filteredProducts.length) {
+        final p = _filteredProducts[_highlightedIndex];
+        _selectProduct(p);
+        return KeyEventResult.handled;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+      _hideOverlay();
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        if (widget.onPrevFocus != null) {
+          widget.onPrevFocus!();
+          return KeyEventResult.handled;
+        }
+      } else {
+        if (widget.onNextFocus != null) {
+          widget.onNextFocus!();
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
+    } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_overlayEntry != null && _overlayEntry!.mounted) {
+        _hideOverlay();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _scrollToIndex(int index) {
+    if (!_scrollController.hasClients) return;
+    const itemHeight = 48.0;
+    final targetOffset = index * itemHeight;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final minScroll = _scrollController.position.minScrollExtent;
+    final clampedOffset = targetOffset.clamp(minScroll, maxScroll);
+    _scrollController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _selectProduct(Product p) {
+    _controller.text = p.name;
+    widget.onSelected(p);
+    _hideOverlay();
+    if (widget.onNextFocus != null) {
+      widget.onNextFocus!();
+    } else {
+      _focusNode.unfocus();
+    }
   }
 
   @override
@@ -1330,13 +1702,17 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
   void dispose() {
     _hideOverlay();
     _controller.dispose();
-    _focusNode.dispose();
+    _scrollController.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
   void _filter(String query) {
     final cleanQuery = query.trim().toLowerCase();
     setState(() {
+      _highlightedIndex = 0;
       if (cleanQuery.isEmpty) {
         _filteredProducts = widget.products;
       } else {
@@ -1385,26 +1761,34 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
                       child: Text('Produk tidak ditemukan', style: TextStyle(color: Color(0xFF94A3B8))),
                     )
                   : ListView.builder(
+                      controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       shrinkWrap: true,
                       itemCount: _filteredProducts.length,
                       itemBuilder: (context, index) {
                         final p = _filteredProducts[index];
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                            p.name,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        final isHighlighted = index == _highlightedIndex;
+                        return Container(
+                          color: isHighlighted ? const Color(0xFF0284C7).withOpacity(0.35) : Colors.transparent,
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              p.name,
+                              style: TextStyle(
+                                color: isHighlighted ? const Color(0xFF38BDF8) : Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Harga: ${_rupiahFormatter.format(p.price)} • Stok: ${p.stock.toStringAsFixed(0)} pcs',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                            ),
+                            trailing: isHighlighted
+                                ? const Icon(Icons.arrow_right_rounded, color: Color(0xFF38BDF8), size: 24)
+                                : null,
+                            onTap: () => _selectProduct(p),
                           ),
-                          subtitle: Text(
-                            'Harga: ${_rupiahFormatter.format(p.price)} • Stok: ${p.stock.toStringAsFixed(0)} pcs',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                          ),
-                          onTap: () {
-                            _controller.text = p.name;
-                            widget.onSelected(p);
-                            _focusNode.unfocus();
-                          },
                         );
                       },
                     ),
