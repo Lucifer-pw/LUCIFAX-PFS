@@ -31,6 +31,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   final _productTextController = TextEditingController();
 
   final _customerFocusNode = FocusNode();
+  final _deliveryDateFocusNode = FocusNode();
+  final _invoiceTypeFocusNode = FocusNode();
   final _productFocusNode = FocusNode();
   final _priceFocusNode = FocusNode();
   final _kartonFocusNode = FocusNode();
@@ -51,6 +53,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _customerFocusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _qtyController.dispose();
     _kartonController.dispose();
@@ -61,6 +73,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     _productTextController.dispose();
 
     _customerFocusNode.dispose();
+    _deliveryDateFocusNode.dispose();
+    _invoiceTypeFocusNode.dispose();
     _productFocusNode.dispose();
     _priceFocusNode.dispose();
     _kartonFocusNode.dispose();
@@ -91,6 +105,31 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final karton = qty / isiKarton;
     _kartonController.text = karton > 0 ? karton.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') : '';
     _isUpdatingFromQty = false;
+  }
+
+  Future<void> _openDatePicker(TransactionProvider trProvider) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: trProvider.deliveryDate,
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF38BDF8),
+              onPrimary: Colors.white,
+              surface: Color(0xFF1E293B),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      trProvider.setDeliveryDate(picked);
+    }
   }
 
   void _addItemToCart(TransactionProvider trProvider) {
@@ -340,6 +379,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 customers: customerProvider.customers,
                 focusNode: _customerFocusNode,
                 onNextFocus: () => _productFocusNode.requestFocus(),
+                onNextTabFocus: () => _deliveryDateFocusNode.requestFocus(),
                 onSelected: (customer) {
                   setState(() {
                     _selectedCustomer = customer;
@@ -366,150 +406,190 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 const SizedBox(height: 12),
               ],
               
-              // Date Picker Input
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                subtitle: Text(
-                  DateFormat('dd MMMM yyyy').format(trProvider.deliveryDate),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: trProvider.deliveryDate,
-                    firstDate: DateTime(2025),
-                    lastDate: DateTime(2030),
-                    builder: (context, child) {
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: const ColorScheme.dark(
-                            primary: Color(0xFF38BDF8),
-                            onPrimary: Colors.white,
-                            surface: Color(0xFF1E293B),
-                            onSurface: Colors.white,
-                          ),
-                        ),
-                        child: child!,
-                      );
-                    },
-                  );
-                  if (picked != null) {
-                    trProvider.setDeliveryDate(picked);
+              // Date Picker Input with Keyboard Focus
+              Focus(
+                focusNode: _deliveryDateFocusNode,
+                onKeyEvent: (node, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space) {
+                    _openDatePicker(trProvider);
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+                    if (HardwareKeyboard.instance.isShiftPressed) {
+                      _customerFocusNode.requestFocus();
+                    } else {
+                      _invoiceTypeFocusNode.requestFocus();
+                    }
+                    return KeyEventResult.handled;
                   }
+                  return KeyEventResult.ignored;
                 },
+                child: Builder(
+                  builder: (context) {
+                    final hasFocus = Focus.of(context).hasFocus;
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: hasFocus ? const Color(0xFF0284C7).withOpacity(0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: hasFocus ? const Color(0xFF38BDF8) : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                        title: const Text('Tanggal Pengiriman:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                        subtitle: Text(
+                          DateFormat('dd MMMM yyyy').format(trProvider.deliveryDate),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
+                        onTap: () => _openDatePicker(trProvider),
+                      ),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 8),
 
-              // Invoice Type & Numbering Option Dropdown (PO vs SA)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 18),
-                        const SizedBox(width: 8),
-                        const Text('Jenis Invoice:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: trProvider.invoiceType,
-                              dropdownColor: const Color(0xFF1E293B),
-                              isExpanded: true,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'PO',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.shopping_bag_rounded, color: Colors.greenAccent, size: 16),
-                                      SizedBox(width: 6),
-                                      Text('PO (Penjualan)'),
-                                    ],
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'SA',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.card_giftcard_rounded, color: Colors.amberAccent, size: 16),
-                                      SizedBox(width: 6),
-                                      Text('SA (Sample / Bonus)'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  trProvider.setInvoiceType(val);
-                                }
-                              },
-                            ),
-                          ),
+              // Invoice Type & Numbering Option Dropdown (PO vs SA) with Keyboard Focus
+              Focus(
+                focusNode: _invoiceTypeFocusNode,
+                onKeyEvent: (node, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown || event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    final newType = trProvider.invoiceType == 'PO' ? 'SA' : 'PO';
+                    trProvider.setInvoiceType(newType);
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+                    if (HardwareKeyboard.instance.isShiftPressed) {
+                      _deliveryDateFocusNode.requestFocus();
+                    } else {
+                      _productFocusNode.requestFocus();
+                    }
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+                    _productFocusNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Builder(
+                  builder: (context) {
+                    final hasFocus = Focus.of(context).hasFocus;
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: hasFocus ? const Color(0xFF38BDF8) : const Color(0xFF38BDF8).withOpacity(0.2),
+                          width: hasFocus ? 1.5 : 1.0,
                         ),
-                      ],
-                    ),
-                    if (trProvider.invoiceType == 'SA') ...[
-                      const SizedBox(height: 10),
-                      FutureBuilder<String>(
-                        future: trProvider.peekNextInvoiceNo(),
-                        builder: (context, snapshot) {
-                          final autoSaNo = snapshot.data ?? 'SA55';
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                margin: const EdgeInsets.only(bottom: 8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.amberAccent.withOpacity(0.4)),
+                              const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 18),
+                              const SizedBox(width: 8),
+                              const Text('Jenis Invoice:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: trProvider.invoiceType,
+                                    dropdownColor: const Color(0xFF1E293B),
+                                    isExpanded: true,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'PO',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.shopping_bag_rounded, color: Colors.greenAccent, size: 16),
+                                            SizedBox(width: 6),
+                                            Text('PO (Penjualan)'),
+                                          ],
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'SA',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.card_giftcard_rounded, color: Colors.amberAccent, size: 16),
+                                            SizedBox(width: 6),
+                                            Text('SA (Sample / Bonus)'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        trProvider.setInvoiceType(val);
+                                      }
+                                    },
+                                  ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.auto_awesome_rounded, color: Colors.amberAccent, size: 14),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Counter Otomatis Berikutnya: $autoSaNo',
-                                      style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              TextFormField(
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
-                                decoration: InputDecoration(
-                                  labelText: 'No. Invoice SA (Default Otomatis: $autoSaNo)',
-                                  labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
-                                  hintText: 'Kosongkan untuk otomatis ($autoSaNo), atau ketik nomor manual',
-                                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                  isDense: true,
-                                  filled: true,
-                                  fillColor: const Color(0xFF1E293B),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
-                                ),
-                                onChanged: (val) {
-                                  trProvider.setInvoiceType('SA', customSaNo: val);
-                                },
                               ),
                             ],
-                          );
-                        },
+                          ),
+                          if (trProvider.invoiceType == 'SA') ...[
+                            const SizedBox(height: 10),
+                            FutureBuilder<String>(
+                              future: trProvider.peekNextInvoiceNo(),
+                              builder: (context, snapshot) {
+                                final autoSaNo = snapshot.data ?? 'SA55';
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1E293B),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.amberAccent.withOpacity(0.4)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.auto_awesome_rounded, color: Colors.amberAccent, size: 14),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Counter Otomatis Berikutnya: $autoSaNo',
+                                            style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    TextFormField(
+                                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                                      decoration: InputDecoration(
+                                        labelText: 'No. Invoice SA (Default Otomatis: $autoSaNo)',
+                                        labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                                        hintText: 'Kosongkan untuk otomatis ($autoSaNo), atau ketik nomor manual',
+                                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                        isDense: true,
+                                        filled: true,
+                                        fillColor: const Color(0xFF1E293B),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                                      ),
+                                      onChanged: (val) {
+                                        trProvider.setInvoiceType('SA', customSaNo: val);
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
+                    );
+                  },
                 ),
               ),
             ],
@@ -529,6 +609,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 selectedProduct: _selectedProduct,
                 products: productProvider.products,
                 focusNode: _productFocusNode,
+                onPrevFocus: () => _invoiceTypeFocusNode.requestFocus(),
                 onNextFocus: () {
                   if (_selectedProduct != null && _selectedProduct!.isiKarton > 0) {
                     _kartonFocusNode.requestFocus();
@@ -691,19 +772,53 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
               ),
               const SizedBox(height: 20),
 
-              // Add to Cart Button
-              ElevatedButton.icon(
-                onPressed: () => _addItemToCart(trProvider),
-                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                label: Text(
-                  _isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
-                ),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: _isBonus ? Colors.green[700] : const Color(0xFF0284C7),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              // Add to Cart Button with Keyboard Focus
+              Focus(
+                focusNode: _addButtonFocusNode,
+                onKeyEvent: (node, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space) {
+                    _addItemToCart(trProvider);
+                    return KeyEventResult.handled;
+                  } else if (event.logicalKey == LogicalKeyboardKey.tab && HardwareKeyboard.instance.isShiftPressed) {
+                    _discountFocusNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Builder(
+                  builder: (context) {
+                    final hasFocus = Focus.of(context).hasFocus;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: hasFocus
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF38BDF8).withOpacity(0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _addItemToCart(trProvider),
+                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                        label: Text(
+                          _isBonus ? 'Tambah Bonus ke Invoice' : 'Tambah ke Invoice',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: _isBonus ? Colors.green[700] : const Color(0xFF0284C7),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -960,7 +1075,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       icon: _isSaving
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan Saja (Ctrl + S)', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         backgroundColor: _isSaving ? Colors.teal[800] : Colors.teal[600],
@@ -978,7 +1093,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                       icon: _isSaving
                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.print_rounded, color: Colors.white, size: 18),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      label: Text(_isSaving ? 'Menyimpan...' : 'Simpan & Cetak (Ctrl + Enter)', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         backgroundColor: _isSaving ? const Color(0xFF015B8C) : const Color(0xFF0284C7),
@@ -995,36 +1110,53 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
       ],
     );
 
-    if (isDesktop) {
-      return Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 2,
-              child: SingleChildScrollView(child: leftPanel),
+    final mainContent = isDesktop
+        ? Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: SingleChildScrollView(child: leftPanel),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  flex: 3,
+                  child: SingleChildScrollView(child: rightPanel),
+                ),
+              ],
             ),
-            const SizedBox(width: 24),
-            Expanded(
-              flex: 3,
-              child: SingleChildScrollView(child: rightPanel),
+          )
+        : SingleChildScrollView(
+            padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
+            child: Column(
+              children: [
+                leftPanel,
+                SizedBox(height: isMobile ? 16 : 24),
+                rightPanel,
+              ],
             ),
-          ],
-        ),
-      );
-    } else {
-      return SingleChildScrollView(
-        padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
-        child: Column(
-          children: [
-            leftPanel,
-            SizedBox(height: isMobile ? 16 : 24),
-            rightPanel,
-          ],
-        ),
-      );
-    }
+          );
+
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
+          if (trProvider.cartItems.isNotEmpty && _selectedCustomer != null && !_isSaving) {
+            _submitAndPrint(trProvider, user.uid);
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+          if (trProvider.cartItems.isNotEmpty && _selectedCustomer != null && !_isSaving) {
+            _submitOnly(trProvider, user.uid);
+          }
+        },
+      },
+      child: Focus(
+        autofocus: false,
+        child: mainContent,
+      ),
+    );
   }
 
   // Builder for form input cards
@@ -1103,6 +1235,7 @@ class SearchableCustomerField extends StatefulWidget {
   final ValueChanged<Customer?> onSelected;
   final FocusNode? focusNode;
   final VoidCallback? onNextFocus;
+  final VoidCallback? onNextTabFocus;
 
   const SearchableCustomerField({
     super.key,
@@ -1111,6 +1244,7 @@ class SearchableCustomerField extends StatefulWidget {
     required this.onSelected,
     this.focusNode,
     this.onNextFocus,
+    this.onNextTabFocus,
   });
 
   @override
@@ -1190,6 +1324,18 @@ class _SearchableCustomerFieldState extends State<SearchableCustomerField> {
         _selectCustomer(c);
         return KeyEventResult.handled;
       }
+    } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+      _hideOverlay();
+      if (!HardwareKeyboard.instance.isShiftPressed) {
+        if (widget.onNextTabFocus != null) {
+          widget.onNextTabFocus!();
+          return KeyEventResult.handled;
+        } else if (widget.onNextFocus != null) {
+          widget.onNextFocus!();
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
     } else if (event.logicalKey == LogicalKeyboardKey.escape) {
       if (_overlayEntry != null && _overlayEntry!.mounted) {
         _hideOverlay();
@@ -1432,6 +1578,7 @@ class SearchableProductField extends StatefulWidget {
   final ValueChanged<Product?> onSelected;
   final FocusNode? focusNode;
   final VoidCallback? onNextFocus;
+  final VoidCallback? onPrevFocus;
 
   const SearchableProductField({
     super.key,
@@ -1440,6 +1587,7 @@ class SearchableProductField extends StatefulWidget {
     required this.onSelected,
     this.focusNode,
     this.onNextFocus,
+    this.onPrevFocus,
   });
 
   @override
@@ -1525,6 +1673,20 @@ class _SearchableProductFieldState extends State<SearchableProductField> {
         _selectProduct(p);
         return KeyEventResult.handled;
       }
+    } else if (event.logicalKey == LogicalKeyboardKey.tab) {
+      _hideOverlay();
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        if (widget.onPrevFocus != null) {
+          widget.onPrevFocus!();
+          return KeyEventResult.handled;
+        }
+      } else {
+        if (widget.onNextFocus != null) {
+          widget.onNextFocus!();
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
     } else if (event.logicalKey == LogicalKeyboardKey.escape) {
       if (_overlayEntry != null && _overlayEntry!.mounted) {
         _hideOverlay();
