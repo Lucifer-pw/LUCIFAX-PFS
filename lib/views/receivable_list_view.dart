@@ -58,7 +58,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     final nominalController = TextEditingController(text: item != null && item.nominal > 0 ? item.nominal.toStringAsFixed(0) : '');
     final keteranganController = TextEditingController(text: item?.keterangan ?? '');
     final customerFocusNode = FocusNode();
-    DateTime selectedDate = item?.tglKirim ?? DateTime.now();
+    DateTime? selectedDate = item?.tglKirim;
 
     bool isSearching = false;
     String? searchMessage;
@@ -318,40 +318,77 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                     const SizedBox(height: 12),
 
                     // Tanggal Kirim Field
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setDialogState(() {
-                            selectedDate = picked;
-                          });
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 20),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Tanggal Kirim', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                                Text(
-                                  dateFormatter.format(selectedDate),
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDate ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() {
+                                    selectedDate = picked;
+                                  });
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 20),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Tanggal Kirim', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                        Text(
+                                          selectedDate != null ? dateFormatter.format(selectedDate!) : 'Belum Ditentukan (-)',
+                                          style: TextStyle(
+                                            color: selectedDate != null ? Colors.white : const Color(0xFF94A3B8),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Spacer(),
+                                    const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF94A3B8)),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                            const Spacer(),
-                            const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF94A3B8)),
+                          ),
+                          if (selectedDate != null) ...[
+                            const SizedBox(width: 6),
+                            Tooltip(
+                              message: 'Kosongkan Tanggal Kirim (-)',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(6),
+                                onTap: () {
+                                  setDialogState(() {
+                                    selectedDate = null;
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                                  ),
+                                  child: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 16),
+                                ),
+                              ),
+                            ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
                     const Divider(color: Color(0xFF475569), height: 1),
@@ -443,7 +480,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     TextEditingController tokoCtrl,
     TextEditingController kotaCtrl,
     TextEditingController nominalCtrl,
-    Function(DateTime) onDateSet,
+    Function(DateTime?) onDateSet,
     Function(String, bool) onResult,
     Function(bool) onLoading,
   ) async {
