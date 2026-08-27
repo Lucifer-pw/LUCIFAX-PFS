@@ -9,6 +9,7 @@ class StockMutation {
   final double stockBefore;
   final double stockAfter;
   final String reference; // e.g. 'Invoice #632', 'Input Stok', 'Edit Manual'
+  final String referenceId; // e.g. stockEntryId or invoiceId
   final String customerName; // customer name if from invoice
   final DateTime timestamp;
 
@@ -21,6 +22,7 @@ class StockMutation {
     required this.stockBefore,
     required this.stockAfter,
     required this.reference,
+    this.referenceId = '',
     this.customerName = '',
     required this.timestamp,
   });
@@ -42,6 +44,7 @@ class StockMutation {
       stockBefore: (data['stockBefore'] is num) ? (data['stockBefore'] as num).toDouble() : 0.0,
       stockAfter: (data['stockAfter'] is num) ? (data['stockAfter'] as num).toDouble() : 0.0,
       reference: data['reference'] ?? '',
+      referenceId: data['referenceId'] ?? '',
       customerName: data['customerName'] ?? '',
       timestamp: parsedTimestamp,
     );
@@ -56,6 +59,7 @@ class StockMutation {
       'stockBefore': stockBefore,
       'stockAfter': stockAfter,
       'reference': reference,
+      'referenceId': referenceId,
       'customerName': customerName,
       'timestamp': Timestamp.fromDate(timestamp),
     };

@@ -10,9 +10,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/product.dart';
 import '../models/stock_mutation.dart';
+import '../providers/auth_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/firebase_service.dart';
 import '../services/import_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProductListView extends StatefulWidget {
   const ProductListView({super.key});
@@ -1674,6 +1676,74 @@ class _ProductListViewState extends State<ProductListView> {
     );
   }
 
+  void _confirmDeleteMutation(BuildContext dialogCtx, StockMutation m) {
+    showDialog(
+      context: dialogCtx,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+            SizedBox(width: 10),
+            Text('Hapus Log Mutasi?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus log mutasi untuk ${m.productName} (${m.qty > 0 ? "+${m.qty.toStringAsFixed(0)}" : m.qty.toStringAsFixed(0)} Pack) tanggal ${DateFormat("dd/MM/yyyy HH:mm").format(m.timestamp)}?\n\nCatatan: Tindakan ini hanya menghapus catatan log riwayat dan tidak mengubah stok fisik di master barang.',
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                if (m.id.isNotEmpty) {
+                  await FirebaseFirestore.instance.collection('stock_mutations').doc(m.id).delete();
+                } else {
+                  final snap = await FirebaseFirestore.instance.collection('stock_mutations')
+                      .where('kodeInduk', isEqualTo: m.kodeInduk)
+                      .where('qty', isEqualTo: m.qty)
+                      .where('reference', isEqualTo: m.reference)
+                      .get();
+                  for (var doc in snap.docs) {
+                    await doc.reference.delete();
+                  }
+                }
+                if (dialogCtx.mounted) {
+                  ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                    const SnackBar(
+                      content: Text('Log mutasi berhasil dihapus.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (dialogCtx.mounted) {
+                  ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                    SnackBar(
+                      content: Text('Gagal menghapus log mutasi: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Hapus Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ==========================================
   // SINGLE PRODUCT STOCK MUTATION DIALOG
   // ==========================================
@@ -1801,6 +1871,9 @@ class _ProductListViewState extends State<ProductListView> {
               content: Builder(
                 builder: (context) {
                   final isMobile = MediaQuery.of(context).size.width < 768;
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  final isDeveloper = authProvider.currentUser?.role == 'developer' || authProvider.currentUser?.role == 'admin';
+
                   return SizedBox(
                     width: isMobile ? double.maxFinite : 980,
                     height: 440,
@@ -1851,7 +1924,7 @@ class _ProductListViewState extends State<ProductListView> {
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: ConstrainedBox(
-                              constraints: const BoxConstraints(minWidth: 880),
+                              constraints: BoxConstraints(minWidth: isDeveloper ? 950 : 880),
                               child: DataTable(
                                 columnSpacing: 12,
                                 horizontalMargin: 0,
@@ -1863,15 +1936,16 @@ class _ProductListViewState extends State<ProductListView> {
                                   fontWeight: FontWeight.bold,
                                   fontSize: 11,
                                 ),
-                                columns: const [
-                                  DataColumn(label: Text('NO')),
-                                  DataColumn(label: Text('TANGGAL')),
-                                  DataColumn(label: Text('ISI PER KARTON'), numeric: true),
-                                  DataColumn(label: Text('JENIS')),
-                                  DataColumn(label: Text('QTY'), numeric: true),
-                                  DataColumn(label: Text('TOTAL KARTON'), numeric: true),
-                                  DataColumn(label: Text('STOK'), numeric: true),
-                                  DataColumn(label: Text('REFERENSI')),
+                                columns: [
+                                  const DataColumn(label: Text('NO')),
+                                  const DataColumn(label: Text('TANGGAL')),
+                                  const DataColumn(label: Text('ISI PER KARTON'), numeric: true),
+                                  const DataColumn(label: Text('JENIS')),
+                                  const DataColumn(label: Text('QTY'), numeric: true),
+                                  const DataColumn(label: Text('TOTAL KARTON'), numeric: true),
+                                  const DataColumn(label: Text('STOK'), numeric: true),
+                                  const DataColumn(label: Text('REFERENSI')),
+                                  if (isDeveloper) const DataColumn(label: Text('AKSI')),
                                 ],
                                 rows: mutations.asMap().entries.map((entry) {
                                   final idx = entry.key;
@@ -1971,6 +2045,14 @@ class _ProductListViewState extends State<ProductListView> {
                                           ),
                                         ),
                                       ),
+                                      if (isDeveloper)
+                                        DataCell(
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                            tooltip: 'Hapus Log Mutasi (Developer)',
+                                            onPressed: () => _confirmDeleteMutation(context, m),
+                                          ),
+                                        ),
                                     ],
                                   );
                                 }).toList(),
@@ -2180,6 +2262,8 @@ class _ProductListViewState extends State<ProductListView> {
               content: Builder(
                 builder: (context) {
                   final isMobile = MediaQuery.of(context).size.width < 768;
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  final isDeveloper = authProvider.currentUser?.role == 'developer' || authProvider.currentUser?.role == 'admin';
                   return SizedBox(
                     width: isMobile ? double.maxFinite : 1240,
                     height: isMobile ? MediaQuery.of(context).size.height * 0.6 : 480,
@@ -2310,7 +2394,7 @@ class _ProductListViewState extends State<ProductListView> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(minWidth: 1120),
+                                constraints: BoxConstraints(minWidth: isDeveloper ? 1220 : 1120),
                                 child: DataTable(
                                   columnSpacing: 10,
                                   horizontalMargin: 0,
@@ -2322,17 +2406,18 @@ class _ProductListViewState extends State<ProductListView> {
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,
                                   ),
-                                  columns: const [
-                                    DataColumn(label: Text('NO')),
-                                    DataColumn(label: Text('TANGGAL')),
-                                    DataColumn(label: Text('KODE INDUK')),
-                                    DataColumn(label: Text('NAMA BARANG')),
-                                    DataColumn(label: Text('ISI PER KARTON'), numeric: true),
-                                    DataColumn(label: Text('JENIS')),
-                                    DataColumn(label: Text('QTY'), numeric: true),
-                                    DataColumn(label: Text('TOTAL KARTON'), numeric: true),
-                                    DataColumn(label: Text('STOK'), numeric: true),
-                                    DataColumn(label: Text('REFERENSI')),
+                                  columns: [
+                                    const DataColumn(label: Text('NO')),
+                                    const DataColumn(label: Text('TANGGAL')),
+                                    const DataColumn(label: Text('KODE INDUK')),
+                                    const DataColumn(label: Text('NAMA BARANG')),
+                                    const DataColumn(label: Text('ISI PER KARTON'), numeric: true),
+                                    const DataColumn(label: Text('JENIS')),
+                                    const DataColumn(label: Text('QTY'), numeric: true),
+                                    const DataColumn(label: Text('TOTAL KARTON'), numeric: true),
+                                    const DataColumn(label: Text('STOK'), numeric: true),
+                                    const DataColumn(label: Text('REFERENSI')),
+                                    if (isDeveloper) const DataColumn(label: Text('AKSI')),
                                   ],
                                   rows: mutations.asMap().entries.map((entry) {
                                     final idx = entry.key;
@@ -2452,6 +2537,14 @@ class _ProductListViewState extends State<ProductListView> {
                                             ),
                                           ),
                                         ),
+                                        if (isDeveloper)
+                                          DataCell(
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                              tooltip: 'Hapus Log Mutasi (Developer)',
+                                              onPressed: () => _confirmDeleteMutation(context, m),
+                                            ),
+                                          ),
                                       ],
                                     );
                                   }).toList(),

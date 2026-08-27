@@ -133,6 +133,7 @@ class StockProvider with ChangeNotifier {
             stockBefore: stockBefore,
             stockAfter: stockBefore + entry.qty,
             reference: 'Input Stok',
+            referenceId: docRef.id,
             timestamp: DateTime.now(),
           ).toFirestore());
         } catch (e) {
@@ -158,6 +159,36 @@ class StockProvider with ChangeNotifier {
         // Decrement stock across all variants with matching kodeInduk
         if (existingEntry.productId.isNotEmpty && existingEntry.qty > 0) {
           await _updateStockForProductAndSiblings(existingEntry.productId, -existingEntry.qty);
+        }
+
+        // Auto-delete matching stock mutation log
+        try {
+          // 1. Try deleting by referenceId
+          final refSnap = await _db.collection('stock_mutations')
+              .where('referenceId', isEqualTo: id)
+              .get();
+          if (refSnap.docs.isNotEmpty) {
+            for (var doc in refSnap.docs) {
+              await doc.reference.delete();
+            }
+          } else {
+            // 2. Fallback for legacy mutations without referenceId
+            final legacySnap = await _db.collection('stock_mutations')
+                .where('reference', isEqualTo: 'Input Stok')
+                .where('qty', isEqualTo: existingEntry.qty)
+                .get();
+            for (var doc in legacySnap.docs) {
+              final data = doc.data();
+              final String kInduk = data['kodeInduk'] ?? '';
+              final String pName = data['productName'] ?? '';
+              if (kInduk == existingEntry.productId || pName.toLowerCase() == existingEntry.productName.toLowerCase()) {
+                await doc.reference.delete();
+                break; // Delete one matching entry
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint("Error auto-deleting matching stock mutation: $e");
         }
       }
 
