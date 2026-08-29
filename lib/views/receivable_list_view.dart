@@ -577,9 +577,30 @@ class _ReceivableListViewState extends State<ReceivableListView> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ReceivableProvider>(context);
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+
+    // Build lookup map for transactions with status DIKIRIM and deliveryDate != null
+    final Map<String, DateTime> deliveryDateMap = {};
+    for (var tr in trProvider.transactions) {
+      if (tr.status == 'DIKIRIM' && tr.deliveryDate != null) {
+        final cleanNo = tr.invoiceNo.toString().replaceAll('#', '').trim();
+        deliveryDateMap[cleanNo] = tr.deliveryDate!;
+      }
+    }
+
+    final enrichedReceivables = provider.receivables.map((r) {
+      if (r.tglKirim == null) {
+        final cleanNo = r.noInvoice.replaceAll('#', '').trim();
+        final fallbackDate = deliveryDateMap[cleanNo];
+        if (fallbackDate != null) {
+          return r.copyWith(tglKirim: fallbackDate);
+        }
+      }
+      return r;
+    }).toList();
 
     // Get list of unique customer names for filter dropdown
-    final uniqueCustomers = provider.receivables
+    final uniqueCustomers = enrichedReceivables
         .map((r) => r.toko.trim())
         .where((t) => t.isNotEmpty)
         .toSet()
@@ -587,7 +608,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
       ..sort();
 
     // Raw filtered items by search & status & dropdown customer filter
-    final filteredRaw = provider.receivables.where((r) {
+    final filteredRaw = enrichedReceivables.where((r) {
       final query = _searchQuery.toLowerCase();
       final matchesSearch = r.toko.toLowerCase().contains(query) ||
           r.kota.toLowerCase().contains(query) ||

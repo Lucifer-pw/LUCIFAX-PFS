@@ -1174,6 +1174,22 @@ class FirebaseService {
 
       await _logStockMutations(mutations);
     }
+
+    // Auto-sync tglKirim to receivables collection
+    try {
+      final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+      final recSnap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      final effectiveTglKirim = (newStatus == 'PENDING')
+          ? null
+          : (newDeliveryDate != null ? Timestamp.fromDate(newDeliveryDate) : null);
+      for (var doc in recSnap.docs) {
+        await doc.reference.update({
+          'tglKirim': effectiveTglKirim,
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing tglKirim to receivables in updateTransactionDeliveryStatus: $e");
+    }
   }
 
   // Get ERP summaries for a specific month - reads directly from transactions for 100% accuracy (0 Reads when cached)
