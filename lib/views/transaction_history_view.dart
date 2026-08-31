@@ -2877,6 +2877,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       return;
     }
 
+    final bool initialHasSync = tr.erpSyncDate != null;
+    final DateTime? initialSyncDate = tr.erpSyncDate;
     bool hasSync = tr.erpSyncDate != null;
     DateTime? currentSyncDate = tr.erpSyncDate ?? DateTime.now();
     bool isSubmitting = false;
@@ -2887,6 +2889,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final bool hasChanges = () {
+              if (hasSync != initialHasSync) return true;
+              if (hasSync) {
+                if (initialSyncDate == null) return true;
+                return currentSyncDate?.year != initialSyncDate.year ||
+                    currentSyncDate?.month != initialSyncDate.month ||
+                    currentSyncDate?.day != initialSyncDate.day ||
+                    currentSyncDate?.hour != initialSyncDate.hour ||
+                    currentSyncDate?.minute != initialSyncDate.minute;
+              }
+              return false;
+            }();
+
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
               title: Text('Update Status ERP #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
@@ -2977,6 +2992,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           }
                         },
                       ),
+                      if (!hasChanges && initialHasSync) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 16),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Status ERP sudah aktif & tersimpan. Ubah status atau tanggal jika ingin memperbarui.',
+                                  style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 ],
@@ -2989,10 +3027,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isSubmitting ? Colors.grey[800] : const Color(0xFF0284C7),
+                    backgroundColor: (isSubmitting || !hasChanges) ? Colors.grey[800] : const Color(0xFF0284C7),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
-                  onPressed: isSubmitting
+                  onPressed: (isSubmitting || !hasChanges)
                       ? null
                       : () async {
                           setDialogState(() {
@@ -3026,10 +3064,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+                      : Icon(
+                          Icons.save_rounded,
+                          color: (isSubmitting || !hasChanges) ? Colors.white38 : Colors.white,
+                          size: 18,
+                        ),
                   label: Text(
                     isSubmitting ? 'Memproses...' : 'Simpan',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: (isSubmitting || !hasChanges) ? Colors.white38 : Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
