@@ -1558,6 +1558,43 @@ class FirebaseService {
       transaction.set(docRef, data);
     });
 
+    // Log stock mutations AFTER transaction succeeds (for edited DIKIRIM invoices)
+    if (netStockDeltaPerKodeInduk.isNotEmpty) {
+      final List<StockMutation> mutations = [];
+
+      for (var entry in netStockDeltaPerKodeInduk.entries) {
+        final kInduk = entry.key;
+        final delta = entry.value; // delta < 0 means stock deducted (out), delta > 0 means stock restored (in)
+        final refs = resolver.getRefsForKodeInduk(kInduk);
+        String pName = kInduk;
+        double currentStockAfter = 0;
+        if (refs.isNotEmpty) {
+          final pSnap = await refs.first.get();
+          if (pSnap.exists) {
+            final data = pSnap.data() as Map<String, dynamic>?;
+            currentStockAfter = (data?['stock'] ?? 0.0).toDouble();
+            pName = data?['name'] ?? kInduk;
+          }
+        }
+        final stockBefore = currentStockAfter - delta;
+
+        mutations.add(StockMutation(
+          id: '',
+          kodeInduk: kInduk,
+          productName: pName,
+          type: delta < 0 ? 'KELUAR' : 'MASUK',
+          qty: delta,
+          stockBefore: stockBefore,
+          stockAfter: currentStockAfter,
+          reference: 'Edit Invoice #${updatedTr.invoiceNo.toString()}',
+          customerName: updatedTr.customerName,
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      await _logStockMutations(mutations);
+    }
+
     // Auto-sync updated transaction data to receivables collection
     await syncReceivableFromTransaction(updatedTr);
   }
