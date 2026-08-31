@@ -643,6 +643,10 @@ class FirebaseService {
       }
     }
 
+    final bool isZeroNominal = (grandTotal <= 0);
+    final String initialTransferStatus = isZeroNominal ? 'PAID' : 'UNPAID';
+    final DateTime? initialTransferDate = isZeroNominal ? now : null;
+
     final trDoc = model_tr.Transaction(
       invoiceNo: docId,
       customerId: customerId,
@@ -657,7 +661,8 @@ class FirebaseService {
       grandTotal: grandTotal,
       note: note,
       status: 'PENDING',
-      statusTransfer: 'UNPAID',
+      statusTransfer: initialTransferStatus,
+      transferDate: initialTransferDate,
       createdBy: createdBy,
       createdAt: now,
     );
