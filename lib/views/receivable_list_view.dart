@@ -7,6 +7,7 @@ import '../providers/customer_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../models/receivable.dart';
 import '../models/customer.dart';
+import '../models/transaction.dart' as model_tr;
 import '../services/print_service.dart';
 
 class CustomerGroup {
@@ -579,24 +580,43 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     final provider = Provider.of<ReceivableProvider>(context);
     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
 
-    // Build lookup map for transactions with status DIKIRIM and deliveryDate != null
-    final Map<String, DateTime> deliveryDateMap = {};
+    // Build lookup map for transactions
+    final Map<String, model_tr.Transaction> trMap = {};
     for (var tr in trProvider.transactions) {
-      if (tr.status == 'DIKIRIM' && tr.deliveryDate != null) {
-        final cleanNo = tr.invoiceNo.toString().replaceAll('#', '').trim();
-        deliveryDateMap[cleanNo] = tr.deliveryDate!;
-      }
+      final cleanNo = tr.invoiceNo.toString().replaceAll('#', '').trim();
+      trMap[cleanNo] = tr;
     }
 
     final enrichedReceivables = provider.receivables.map((r) {
-      if (r.tglKirim == null) {
-        final cleanNo = r.noInvoice.replaceAll('#', '').trim();
-        final fallbackDate = deliveryDateMap[cleanNo];
-        if (fallbackDate != null) {
-          return r.copyWith(tglKirim: fallbackDate);
+      final cleanNo = r.noInvoice.replaceAll('#', '').trim();
+      final matchingTr = trMap[cleanNo];
+
+      DateTime? effTglKirim = r.tglKirim;
+      double effNominal = r.nominal;
+      bool effIsLunas = r.isLunas;
+
+      if (matchingTr != null) {
+        if (effTglKirim == null && matchingTr.status == 'DIKIRIM' && matchingTr.deliveryDate != null) {
+          effTglKirim = matchingTr.deliveryDate;
         }
+        if (matchingTr.status == 'DIPINDAH' || matchingTr.grandTotal <= 0) {
+          effNominal = 0.0;
+          effIsLunas = true;
+        } else if (matchingTr.grandTotal > 0) {
+          effNominal = (matchingTr.grandTotal - matchingTr.returnAmount).clamp(0.0, double.infinity);
+          if (matchingTr.statusTransfer == 'PAID') {
+            effIsLunas = true;
+          }
+        }
+      } else if (effNominal <= 0) {
+        effIsLunas = true;
       }
-      return r;
+
+      return r.copyWith(
+        tglKirim: effTglKirim,
+        nominal: effNominal,
+        isLunas: effIsLunas,
+      );
     }).toList();
 
     // Get list of unique customer names for filter dropdown

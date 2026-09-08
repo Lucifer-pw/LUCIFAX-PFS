@@ -1428,6 +1428,18 @@ class FirebaseService {
 
     await sourceRef.set(sourceTr.toMap(), SetOptions(merge: true));
     await targetRef.set(targetTr.toMap(), SetOptions(merge: true));
+
+    // Auto-sync to receivables collection
+    try {
+      if (sourceTr.status == 'DIPINDAH' || sourceTr.items.isEmpty || sourceTr.grandTotal <= 0) {
+        await deleteReceivableByInvoiceNo(sourceTr.invoiceNo);
+      } else {
+        await syncReceivableFromTransaction(sourceTr);
+      }
+      await syncReceivableFromTransaction(targetTr);
+    } catch (e) {
+      debugPrint("Error auto-syncing receivables in moveInvoiceItems: $e");
+    }
   }
 
   // Update existing transaction with stock and ERP summary updates

@@ -1444,17 +1444,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       final currentUser = authProvider.currentUser;
 
       final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
-      Customer? c;
-      try {
-        c = masterCustomers.firstWhere((cust) => cust.id == tr.customerId);
-      } catch (_) {}
+      final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
 
-      final String alias = (c != null && c.aliasName.trim().isNotEmpty)
-          ? c.aliasName.trim()
-          : (tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : '');
-      final String formattedCustomer = alias.isNotEmpty
-          ? '$alias (${tr.customerName.trim()})'
-          : tr.customerName.trim();
+      Customer? c;
+      if (tr.customerId.isNotEmpty) {
+        try {
+          c = masterCustomers.firstWhere((cust) => cust.id == tr.customerId);
+        } catch (_) {}
+      }
+
+      final String resolvedStore = (customerInfo['firstLine'] != null && customerInfo['firstLine'] != '-')
+          ? customerInfo['firstLine']!
+          : tr.aliasName;
+      final String resolvedOwner = (customerInfo['secondLine'] != null && customerInfo['secondLine']!.isNotEmpty)
+          ? customerInfo['secondLine']!.replaceAll(RegExp(r'[\(\)]'), '').trim()
+          : tr.customerName;
+      final String formattedCustomer = customerInfo['fullDisplay'] ??
+          (resolvedStore.isNotEmpty ? '$resolvedStore (${resolvedOwner.isNotEmpty ? resolvedOwner : tr.customerName})' : tr.customerName);
+
+      final String resolvedAlias = resolvedStore.isNotEmpty ? resolvedStore : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
+      final String resolvedCustName = resolvedOwner.isNotEmpty ? resolvedOwner : (tr.customerName.isNotEmpty ? tr.customerName : resolvedStore);
+      final String resolvedCity = (c != null && c.city.isNotEmpty) ? c.city : tr.city;
+      final String resolvedProvince = (c != null && c.province.isNotEmpty) ? c.province : tr.province;
+      final String resolvedCountry = (c != null && c.country.isNotEmpty) ? c.country : tr.country;
 
       // 1. Log print action to Firestore for Developer Monitoring
       try {
@@ -1480,13 +1492,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       final toPrint = model_tr.Transaction(
         invoiceNo: tr.invoiceNo,
         customerId: tr.customerId,
-        customerName: tr.customerName,
-        aliasName: (c != null && c.aliasName.isNotEmpty) ? c.aliasName : tr.customerName,
+        customerName: resolvedCustName,
+        aliasName: resolvedAlias,
         date: tr.date,
         deliveryDate: tr.deliveryDate,
-        city: (c != null && c.city.isNotEmpty) ? c.city : tr.city,
-        province: (c != null && c.province.isNotEmpty) ? c.province : tr.province,
-        country: (c != null && c.country.isNotEmpty) ? c.country : tr.country,
+        city: resolvedCity,
+        province: resolvedProvince,
+        country: resolvedCountry,
         items: tr.items,
         grandTotal: tr.grandTotal,
         note: tr.note,
@@ -1709,7 +1721,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         Row(
                           children: [
                             Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
-                            Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
+                            Expanded(child: _buildDetailRow('Status Bayar:', (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH')) ? 'DIPINDAH' : tr.statusTransfer, isBadge: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -1739,7 +1751,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           children: [
                             Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
                             const SizedBox(width: 16),
-                            Expanded(child: _buildDetailRow('Status Bayar:', tr.statusTransfer, isBadge: true)),
+                            Expanded(child: _buildDetailRow('Status Bayar:', (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH')) ? 'DIPINDAH' : tr.statusTransfer, isBadge: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -3646,8 +3658,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               grandTotal: newSourceTotal,
                               note: newSourceNote,
                               status: newSourceStatus,
-                              statusTransfer: sourceTr.statusTransfer,
-                              transferDate: sourceTr.transferDate,
+                              statusTransfer: (allItemsMoved || newSourceTotal <= 0) ? 'PAID' : sourceTr.statusTransfer,
+                              transferDate: (allItemsMoved || newSourceTotal <= 0) ? (sourceTr.transferDate ?? DateTime.now()) : sourceTr.transferDate,
                               erpSyncDate: newSourceErpSyncDate,
                               createdBy: sourceTr.createdBy,
                               createdAt: sourceTr.createdAt,
@@ -4722,19 +4734,27 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                       child: Container(
                                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                                         decoration: BoxDecoration(
-                                                          color: tr.statusTransfer == 'PAID'
-                                                              ? Colors.tealAccent.withOpacity(0.15)
-                                                              : Colors.redAccent.withOpacity(0.15),
+                                                          color: (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
+                                                              ? Colors.purpleAccent.withOpacity(0.15)
+                                                              : (tr.statusTransfer == 'PAID'
+                                                                  ? Colors.tealAccent.withOpacity(0.15)
+                                                                  : Colors.redAccent.withOpacity(0.15)),
                                                           borderRadius: BorderRadius.circular(12),
                                                           border: Border.all(
-                                                            color: tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent,
+                                                            color: (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
+                                                                ? Colors.purpleAccent
+                                                                : (tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent),
                                                             width: 0.5,
                                                           ),
                                                         ),
                                                         child: Text(
-                                                          tr.statusTransfer,
+                                                          (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
+                                                              ? 'DIPINDAH'
+                                                              : tr.statusTransfer,
                                                           style: TextStyle(
-                                                            color: tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent,
+                                                            color: (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
+                                                                ? Colors.purpleAccent
+                                                                : (tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent),
                                                             fontSize: 10,
                                                             fontWeight: FontWeight.bold,
                                                           ),
