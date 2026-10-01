@@ -522,6 +522,14 @@ class FirebaseService {
           current = snap.data()?['lastSaNo'] ?? 54;
         }
         return 'SA${current + 1}';
+      } else if (type == 'LA') {
+        final counterRef = _db.collection('counters').doc('lampiran_transactions');
+        final snap = await counterRef.get();
+        int current = 0;
+        if (snap.exists) {
+          current = snap.data()?['lastLaNo'] ?? 0;
+        }
+        return 'LA${current + 1}';
       } else {
         final counterRef = _db.collection('counters').doc('transactions');
         final snap = await counterRef.get();
@@ -534,13 +542,18 @@ class FirebaseService {
     } catch (e) {
       debugPrint("peekNextInvoiceNo fallback due to: $e");
       try {
-        final snap = await _db.collection('transactions').orderBy('date', descending: true).limit(20).get();
-        int maxNo = (type == 'SA' ? 54 : 180);
+        final snap = await _db.collection('transactions').orderBy('date', descending: true).limit(30).get();
+        int maxNo = (type == 'SA' ? 54 : (type == 'LA' ? 0 : 180));
         for (var doc in snap.docs) {
           final id = doc.id;
           if (type == 'SA') {
             if (id.startsWith('SA')) {
               final numPart = int.tryParse(id.replaceAll('SA', '')) ?? 0;
+              if (numPart > maxNo) maxNo = numPart;
+            }
+          } else if (type == 'LA') {
+            if (id.startsWith('LA')) {
+              final numPart = int.tryParse(id.replaceAll('LA', '')) ?? 0;
               if (numPart > maxNo) maxNo = numPart;
             }
           } else {
@@ -549,15 +562,19 @@ class FirebaseService {
           }
         }
         final next = maxNo + 1;
-        return type == 'SA' ? 'SA$next' : '$next';
+        if (type == 'SA') return 'SA$next';
+        if (type == 'LA') return 'LA$next';
+        return '$next';
       } catch (_) {
         final nowTs = DateTime.now().millisecondsSinceEpoch % 10000;
-        return type == 'SA' ? 'SA$nowTs' : '$nowTs';
+        if (type == 'SA') return 'SA$nowTs';
+        if (type == 'LA') return 'LA$nowTs';
+        return '$nowTs';
       }
     }
   }
 
-  // Save transaction with Auto-Increment Invoice Number (PO or SA) & ERP update inside a Firestore Transaction
+  // Save transaction with Auto-Increment Invoice Number (PO, SA, or LA) & ERP update inside a Firestore Transaction
   Future<model_tr.Transaction> createTransaction({
     required String customerId,
     required String customerName,
@@ -570,8 +587,9 @@ class FirebaseService {
     required double grandTotal,
     required String note,
     required String createdBy,
-    String invoiceType = 'PO', // 'PO' or 'SA'
+    String invoiceType = 'PO', // 'PO', 'SA', or 'LA'
     String? customSaNo,
+    String? customLaNo,
     String? idempotencyKey,
   }) async {
     // Idempotency check: if this key was already used, return existing transaction
@@ -621,6 +639,32 @@ class FirebaseService {
         } catch (e) {
           debugPrint("SA counter transaction error: $e, using fallback");
           docId = await peekNextInvoiceNo(type: 'SA');
+        }
+      }
+    } else if (invoiceType == 'LA') {
+      if (customLaNo != null && customLaNo.trim().isNotEmpty) {
+        String clean = customLaNo.trim().toUpperCase();
+        if (!clean.startsWith('LA')) {
+          clean = 'LA$clean';
+        }
+        docId = clean;
+      } else {
+        try {
+          final laCounterRef = _db.collection('counters').doc('lampiran_transactions');
+          int nextLa = await _db.runTransaction<int>((transaction) async {
+            final snap = await transaction.get(laCounterRef);
+            int current = 0;
+            if (snap.exists) {
+              current = snap.data()?['lastLaNo'] ?? 0;
+            }
+            final next = current + 1;
+            transaction.set(laCounterRef, {'lastLaNo': next});
+            return next;
+          });
+          docId = 'LA$nextLa';
+        } catch (e) {
+          debugPrint("LA counter transaction error: $e, using fallback");
+          docId = await peekNextInvoiceNo(type: 'LA');
         }
       }
     } else {
@@ -692,6 +736,77 @@ class FirebaseService {
     }
 
     return trDoc;
+  }
+
+  // Create merged Lampiran (LA) transaction aggregating items from multiple source transactions
+  Future<model_tr.Transaction> createMergedLampiranTransaction({
+    required List<model_tr.Transaction> sourceTransactions,
+    required String customerId,
+    required String customerName,
+    required String aliasName,
+    required DateTime deliveryDate,
+    required String city,
+    required String province,
+    required String country,
+    required String note,
+    required String createdBy,
+    String? customLaNo,
+  }) async {
+    final Map<String, model_tr.TransactionItem> mergedMap = {};
+    for (var src in sourceTransactions) {
+      for (var item in src.items) {
+        final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+        if (mergedMap.containsKey(key)) {
+          final existing = mergedMap[key]!;
+          final double combinedQty = existing.qty + item.qty;
+          final double combinedSubtotal = existing.subtotal + item.subtotal;
+          mergedMap[key] = model_tr.TransactionItem(
+            productId: existing.productId.isNotEmpty ? existing.productId : item.productId,
+            productName: existing.productName,
+            price: existing.price > 0 ? existing.price : item.price,
+            qty: combinedQty,
+            discountPercent: existing.discountPercent,
+            subtotal: combinedSubtotal,
+            sizeGrams: existing.sizeGrams > 0 ? existing.sizeGrams : item.sizeGrams,
+            isBonus: existing.isBonus && item.isBonus,
+          );
+        } else {
+          mergedMap[key] = model_tr.TransactionItem(
+            productId: item.productId,
+            productName: item.productName,
+            price: item.price,
+            qty: item.qty,
+            discountPercent: item.discountPercent,
+            subtotal: item.subtotal,
+            sizeGrams: item.sizeGrams,
+            isBonus: item.isBonus,
+          );
+        }
+      }
+    }
+
+    final mergedItems = mergedMap.values.toList();
+    final double calculatedGrandTotal = mergedItems.fold(0.0, (sum, i) => sum + i.subtotal);
+
+    final String finalNote = note.trim().isNotEmpty
+        ? note.trim()
+        : 'Lampiran penggabungan dari Invoice: #${sourceTransactions.map((t) => t.invoiceNo).join(', #')}';
+
+    return await createTransaction(
+      customerId: customerId,
+      customerName: customerName,
+      aliasName: aliasName,
+      deliveryDate: deliveryDate,
+      city: city,
+      province: province,
+      country: country,
+      items: mergedItems,
+      grandTotal: calculatedGrandTotal,
+      note: finalNote,
+      createdBy: createdBy,
+      invoiceType: 'LA',
+      customLaNo: customLaNo,
+    );
   }
 
   Future<void> updateTransactionTransferStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {

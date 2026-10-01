@@ -24,8 +24,9 @@ class TransactionProvider extends ChangeNotifier {
   String? _selectedCountry;
   String _note = "";
   DateTime _deliveryDate = DateTime.now();
-  String _invoiceType = 'PO'; // 'PO' or 'SA'
+  String _invoiceType = 'PO'; // 'PO', 'SA', or 'LA'
   String _customSaNo = '';
+  String _customLaNo = '';
 
   List<model_tr.Transaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
@@ -41,10 +42,22 @@ class TransactionProvider extends ChangeNotifier {
   DateTime get deliveryDate => _deliveryDate;
   String get invoiceType => _invoiceType;
   String get customSaNo => _customSaNo;
+  String get customLaNo => _customLaNo;
 
-  void setInvoiceType(String type, {String? customSaNo}) {
+  void setInvoiceType(String type, {String? customSaNo, String? customLaNo}) {
     _invoiceType = type;
     if (customSaNo != null) _customSaNo = customSaNo;
+    if (customLaNo != null) _customLaNo = customLaNo;
+    notifyListeners();
+  }
+
+  void setCustomLaNo(String val) {
+    _customLaNo = val;
+    notifyListeners();
+  }
+
+  void setCustomSaNo(String val) {
+    _customSaNo = val;
     notifyListeners();
   }
 
@@ -222,11 +235,42 @@ class TransactionProvider extends ChangeNotifier {
       createdBy: createdBy,
       invoiceType: _invoiceType,
       customSaNo: _customSaNo,
+      customLaNo: _customLaNo,
       idempotencyKey: idempotencyKey,
     );
 
     clearCart();
     return savedTr;
+  }
+
+  Future<model_tr.Transaction> createMergedLampiranTransaction({
+    required List<model_tr.Transaction> sourceTransactions,
+    required String customerId,
+    required String customerName,
+    required String aliasName,
+    required DateTime deliveryDate,
+    required String city,
+    required String province,
+    required String country,
+    required String note,
+    required String createdBy,
+    String? customLaNo,
+  }) async {
+    final tr = await _dbService.createMergedLampiranTransaction(
+      sourceTransactions: sourceTransactions,
+      customerId: customerId,
+      customerName: customerName,
+      aliasName: aliasName,
+      deliveryDate: deliveryDate,
+      city: city,
+      province: province,
+      country: country,
+      note: note,
+      createdBy: createdBy,
+      customLaNo: customLaNo,
+    );
+    notifyListeners();
+    return tr;
   }
 
   Future<void> updatePaymentStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {

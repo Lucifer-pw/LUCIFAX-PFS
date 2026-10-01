@@ -121,7 +121,9 @@ class PrintService {
                 padding: const pw.EdgeInsets.symmetric(vertical: 3),
                 alignment: pw.Alignment.center,
                 child: pw.Text(
-                  'INVOICE',
+                  transaction.invoiceNo.toString().toUpperCase().startsWith('LA')
+                      ? 'INVOICE LAMPIRAN'
+                      : 'INVOICE',
                   style: pw.TextStyle(
                     fontSize: 14,
                     fontWeight: pw.FontWeight.bold,

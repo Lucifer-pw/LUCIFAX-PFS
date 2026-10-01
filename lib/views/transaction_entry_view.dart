@@ -524,6 +524,16 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                                           ],
                                         ),
                                       ),
+                                      DropdownMenuItem(
+                                        value: 'LA',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 16),
+                                            SizedBox(width: 6),
+                                            Text('LA (Lampiran / Rekap)'),
+                                          ],
+                                        ),
+                                      ),
                                     ],
                                     onChanged: (val) {
                                       if (val != null) {
@@ -579,6 +589,57 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                                 ),
                                 onChanged: (val) {
                                   trProvider.setInvoiceType('SA', customSaNo: val);
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                    if (trProvider.invoiceType == 'LA') ...[
+                      const SizedBox(height: 10),
+                      FutureBuilder<String>(
+                        future: trProvider.peekNextInvoiceNo(),
+                        builder: (context, snapshot) {
+                          final autoLaNo = snapshot.data ?? 'LA1';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.cyanAccent.withOpacity(0.4)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.auto_awesome_rounded, color: Colors.cyanAccent, size: 14),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Counter Otomatis Berikutnya: $autoLaNo',
+                                      style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextFormField(
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                decoration: InputDecoration(
+                                  labelText: 'No. Invoice LA (Default Otomatis: $autoLaNo)',
+                                  labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                                  hintText: 'Kosongkan untuk otomatis ($autoLaNo), atau ketik nomor manual',
+                                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: const Color(0xFF1E293B),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                                ),
+                                onChanged: (val) {
+                                  trProvider.setInvoiceType('LA', customLaNo: val);
                                 },
                               ),
                             ],
