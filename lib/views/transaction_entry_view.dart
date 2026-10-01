@@ -340,6 +340,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final productProvider = Provider.of<ProductProvider>(context);
     final trProvider = Provider.of<TransactionProvider>(context);
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
+    final isDeveloper = user.isDeveloper;
 
     final isDesktop = MediaQuery.of(context).size.width > 1000;
     final isMobile = MediaQuery.of(context).size.width < 768;
@@ -458,7 +459,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                 onKeyEvent: (node, event) {
                   if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
                   if (event.logicalKey == LogicalKeyboardKey.arrowDown || event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                    final newType = trProvider.invoiceType == 'PO' ? 'SA' : 'PO';
+                    final newType = trProvider.invoiceType == 'PO' ? 'SA' : (trProvider.invoiceType == 'SA' && isDeveloper ? 'LA' : 'PO');
                     trProvider.setInvoiceType(newType);
                     return KeyEventResult.handled;
                   } else if (event.logicalKey == LogicalKeyboardKey.tab) {
@@ -503,8 +504,8 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                                     dropdownColor: const Color(0xFF1E293B),
                                     isExpanded: true,
                                     style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                                    items: const [
-                                      DropdownMenuItem(
+                                    items: [
+                                      const DropdownMenuItem(
                                         value: 'PO',
                                         child: Row(
                                           children: [
@@ -514,7 +515,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                                           ],
                                         ),
                                       ),
-                                      DropdownMenuItem(
+                                      const DropdownMenuItem(
                                         value: 'SA',
                                         child: Row(
                                           children: [
@@ -524,16 +525,17 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                                           ],
                                         ),
                                       ),
-                                      DropdownMenuItem(
-                                        value: 'LA',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 16),
-                                            SizedBox(width: 6),
-                                            Text('LA (Lampiran / Rekap)'),
-                                          ],
+                                      if (isDeveloper)
+                                        const DropdownMenuItem(
+                                          value: 'LA',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 16),
+                                              SizedBox(width: 6),
+                                              Text('LA (Lampiran / Rekap)'),
+                                            ],
+                                          ),
                                         ),
-                                      ),
                                     ],
                                     onChanged: (val) {
                                       if (val != null) {
