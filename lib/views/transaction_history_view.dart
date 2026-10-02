@@ -3900,7 +3900,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                       // Counter Auto & Custom LA
                       FutureBuilder<String>(
-                        future: trProvider.peekNextInvoiceNo(),
+                        future: _firebaseService.peekNextInvoiceNo(type: 'LA'),
                         builder: (context, snapshot) {
                           final autoLaNo = snapshot.data ?? 'LA1';
                           return Container(
