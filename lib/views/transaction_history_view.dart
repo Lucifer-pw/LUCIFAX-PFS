@@ -2538,15 +2538,36 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 18),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              currentDeliveryStatus == 'DIKIRIM'
-                                  ? 'Status DIKIRIM akan otomatis mengurangi stok barang pada database produk.'
-                                  : 'Status PENDING mengembalikan stok barang ke database produk.',
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (tr.isLampiran || tr.invoiceNo.toString().toUpperCase().startsWith('LA'))
+                                  Text(
+                                    currentDeliveryStatus == 'DIKIRIM'
+                                        ? 'Invoice Lampiran: Mengubah ke DIKIRIM akan otomatis memotong stok untuk invoice sampel (SA) yang masih PENDING dan menandai seluruh sampel DIKIRIM (tanpa double stock).'
+                                        : 'Invoice Lampiran: Mengubah ke PENDING akan mengembalikan stok untuk seluruh invoice sampel (SA) dan mengubah statusnya menjadi PENDING.',
+                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                  )
+                                else
+                                  Text(
+                                    currentDeliveryStatus == 'DIKIRIM'
+                                        ? 'Status DIKIRIM akan otomatis mengurangi stok barang pada database produk.'
+                                        : 'Status PENDING mengembalikan stok barang ke database produk.',
+                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                  ),
+                                if (tr.lampiranInvoiceNo.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'ℹ️ Terhubung dengan Lampiran #${tr.lampiranInvoiceNo}. Status Lampiran akan otomatis tersinkronisasi jika seluruh sampel terkirim.',
+                                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         ],
@@ -4651,6 +4672,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       endIndex,
     );
 
+    // Build relations between LA invoices and their child source invoices
+    final Map<String, String> childToLaMap = {};
+    final Map<String, List<String>> laToChildrenMap = {};
+    for (var t in trProvider.transactions) {
+      final isLa = t.isLampiran ||
+          t.invoiceNo.toString().toUpperCase().replaceAll('#', '').trim().startsWith('LA') ||
+          t.sourceInvoices.isNotEmpty;
+      if (isLa) {
+        final sources = _firebaseService.getResolvedSourceInvoices(t);
+        final cleanLaNo = t.invoiceNo.toString().replaceAll('#', '').trim();
+        laToChildrenMap[cleanLaNo] = sources;
+        for (var s in sources) {
+          childToLaMap[s] = cleanLaNo;
+        }
+      }
+    }
+
     final isMobile = MediaQuery.of(context).size.width < 900;
 
     final searchField = TextField(
@@ -5054,7 +5092,25 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   ? trCInfo['firstLine']!.trim().toUpperCase()
                                                   : (tr.aliasName.isNotEmpty ? tr.aliasName.trim().toUpperCase() : tr.customerName.trim().toUpperCase());
 
-                                              final bool canSelect = _selectedInvoiceNos.isEmpty || (lockedCustomerKey != null && currentCustomerKey == lockedCustomerKey);
+                                              final trClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+                                              final bool isThisLa = tr.isLampiran ||
+                                                  trClean.toUpperCase().startsWith('LA') ||
+                                                  laToChildrenMap.containsKey(trClean);
+                                              final String linkedLaNo = tr.lampiranInvoiceNo.isNotEmpty
+                                                  ? tr.lampiranInvoiceNo.replaceAll('#', '').trim()
+                                                  : (childToLaMap[trClean] ?? '');
+
+                                              final bool canSelect = !isThisLa &&
+                                                  linkedLaNo.isEmpty &&
+                                                  (_selectedInvoiceNos.isEmpty || (lockedCustomerKey != null && currentCustomerKey == lockedCustomerKey));
+
+                                              final String selectTooltip = isThisLa
+                                                  ? 'Invoice Lampiran tidak dapat digabung ke Lampiran lain'
+                                                  : (linkedLaNo.isNotEmpty
+                                                      ? 'Invoice sudah digabung ke #$linkedLaNo'
+                                                      : (canSelect
+                                                          ? 'Centang untuk gabung ke Invoice Lampiran'
+                                                          : 'Hanya bisa memilih invoice untuk pelanggan yang sama ($lockedCustomerKey)'));
 
                                               return DataRow(
                                                 selected: isSelected,
@@ -5063,9 +5119,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                     DataCell(
                                                       Center(
                                                         child: Tooltip(
-                                                          message: canSelect
-                                                              ? 'Centang untuk gabung ke Invoice Lampiran'
-                                                              : 'Hanya bisa memilih invoice untuk pelanggan yang sama ($lockedCustomerKey)',
+                                                          message: selectTooltip,
                                                           child: Checkbox(
                                                             value: isSelected,
                                                             activeColor: Colors.cyanAccent,
@@ -5099,6 +5153,36 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                             decoration: TextDecoration.underline,
                                                           ),
                                                         ),
+                                                        if (isThisLa) ...[
+                                                          const SizedBox(width: 4),
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.purpleAccent.withOpacity(0.2),
+                                                              borderRadius: BorderRadius.circular(4),
+                                                              border: Border.all(color: Colors.purpleAccent, width: 0.6),
+                                                            ),
+                                                            child: const Text('LA', style: TextStyle(color: Colors.purpleAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                                          ),
+                                                        ],
+                                                        if (linkedLaNo.isNotEmpty) ...[
+                                                          const SizedBox(width: 4),
+                                                          Tooltip(
+                                                            message: 'Tergabung dalam Invoice Lampiran #$linkedLaNo',
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.cyanAccent.withOpacity(0.15),
+                                                                borderRadius: BorderRadius.circular(4),
+                                                                border: Border.all(color: Colors.cyanAccent.withOpacity(0.8), width: 0.6),
+                                                              ),
+                                                              child: Text(
+                                                                '[#$linkedLaNo]',
+                                                                style: const TextStyle(color: Colors.cyanAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
                                                         if (tr.isLocked) ...[
                                                           const SizedBox(width: 4),
                                                           Container(
@@ -5223,32 +5307,75 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   ),
                                                   DataCell(
                                                     Center(
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                        decoration: BoxDecoration(
-                                                          color: tr.status == 'DIKIRIM'
-                                                              ? Colors.greenAccent.withOpacity(0.15)
-                                                              : (tr.status == 'DIPINDAH'
-                                                                  ? Colors.purpleAccent.withOpacity(0.15)
-                                                                  : Colors.orangeAccent.withOpacity(0.15)),
-                                                          borderRadius: BorderRadius.circular(12),
-                                                          border: Border.all(
-                                                            color: tr.status == 'DIKIRIM'
-                                                                ? Colors.greenAccent
-                                                                : (tr.status == 'DIPINDAH' ? Colors.purpleAccent : Colors.orangeAccent),
-                                                            width: 0.5,
-                                                          ),
-                                                        ),
-                                                        child: Text(
-                                                          tr.status,
-                                                          style: TextStyle(
-                                                            color: tr.status == 'DIKIRIM'
-                                                                ? Colors.greenAccent
-                                                                : (tr.status == 'DIPINDAH' ? Colors.purpleAccent : Colors.orangeAccent),
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.bold,
-                                                          ),
-                                                        ),
+                                                      child: Builder(
+                                                        builder: (context) {
+                                                          int deliveredCount = 0;
+                                                          final List<String> childSourceIds = isThisLa
+                                                              ? (laToChildrenMap[trClean] ?? _firebaseService.getResolvedSourceInvoices(tr))
+                                                              : const [];
+                                                          if (isThisLa && childSourceIds.isNotEmpty) {
+                                                            for (var cId in childSourceIds) {
+                                                              final match = trProvider.transactions.firstWhere(
+                                                                (t) => t.invoiceNo.toString().replaceAll('#', '').trim() == cId,
+                                                                orElse: () => model_tr.Transaction(
+                                                                  invoiceNo: '',
+                                                                  customerId: '',
+                                                                  customerName: '',
+                                                                  aliasName: '',
+                                                                  date: DateTime.now(),
+                                                                  deliveryDate: null,
+                                                                  city: '',
+                                                                  province: '',
+                                                                  country: '',
+                                                                  items: [],
+                                                                  grandTotal: 0,
+                                                                  note: '',
+                                                                  status: '',
+                                                                  statusTransfer: '',
+                                                                  transferDate: null,
+                                                                  createdBy: '',
+                                                                  createdAt: DateTime.now(),
+                                                                ),
+                                                              );
+                                                              if (match.invoiceNo.isNotEmpty && match.status == 'DIKIRIM') {
+                                                                deliveredCount++;
+                                                              }
+                                                            }
+                                                          }
+
+                                                          final bool isPartial = isThisLa && tr.status != 'DIKIRIM' && deliveredCount > 0;
+                                                          final String displayStatus = isThisLa
+                                                              ? (tr.status == 'DIKIRIM'
+                                                                  ? 'DIKIRIM'
+                                                                  : (childSourceIds.isNotEmpty ? 'PENDING ($deliveredCount/${childSourceIds.length})' : tr.status))
+                                                              : tr.status;
+
+                                                          final Color statusColor = tr.status == 'DIKIRIM'
+                                                              ? Colors.greenAccent
+                                                              : (isPartial
+                                                                  ? Colors.amberAccent
+                                                                  : (tr.status == 'DIPINDAH' ? Colors.purpleAccent : Colors.orangeAccent));
+
+                                                          return Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: statusColor.withOpacity(0.15),
+                                                              borderRadius: BorderRadius.circular(12),
+                                                              border: Border.all(
+                                                                color: statusColor,
+                                                                width: 0.5,
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              displayStatus,
+                                                              style: TextStyle(
+                                                                color: statusColor,
+                                                                fontSize: 10,
+                                                                fontWeight: FontWeight.bold,
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
                                                       ),
                                                     ),
                                                   ),

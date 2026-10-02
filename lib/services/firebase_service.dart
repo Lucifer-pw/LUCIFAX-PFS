@@ -591,6 +591,9 @@ class FirebaseService {
     String? customSaNo,
     String? customLaNo,
     String? idempotencyKey,
+    List<String> sourceInvoices = const [],
+    String lampiranInvoiceNo = '',
+    bool isLampiran = false,
   }) async {
     // Idempotency check: if this key was already used, return existing transaction
     if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
@@ -709,6 +712,9 @@ class FirebaseService {
       transferDate: initialTransferDate,
       createdBy: createdBy,
       createdAt: now,
+      sourceInvoices: sourceInvoices,
+      lampiranInvoiceNo: lampiranInvoiceNo,
+      isLampiran: (invoiceType == 'LA') || isLampiran,
     );
 
     // Save transaction (status PENDING = no stock deduction, no ERP sync)
@@ -788,11 +794,16 @@ class FirebaseService {
     final mergedItems = mergedMap.values.toList();
     final double calculatedGrandTotal = mergedItems.fold(0.0, (sum, i) => sum + i.subtotal);
 
+    final cleanSourceInvoices = sourceTransactions
+        .map((t) => t.invoiceNo.toString().replaceAll('#', '').trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
     final String finalNote = note.trim().isNotEmpty
         ? note.trim()
-        : 'Lampiran penggabungan dari Invoice: #${sourceTransactions.map((t) => t.invoiceNo).join(', #')}';
+        : 'Lampiran penggabungan dari Invoice: #${cleanSourceInvoices.join(', #')}';
 
-    return await createTransaction(
+    final createdLa = await createTransaction(
       customerId: customerId,
       customerName: customerName,
       aliasName: aliasName,
@@ -806,7 +817,24 @@ class FirebaseService {
       createdBy: createdBy,
       invoiceType: 'LA',
       customLaNo: customLaNo,
+      sourceInvoices: cleanSourceInvoices,
+      isLampiran: true,
     );
+
+    // Link all source transactions to this LA invoice in Firestore
+    try {
+      final batch = _db.batch();
+      for (var srcId in cleanSourceInvoices) {
+        batch.update(_db.collection('transactions').doc(srcId), {
+          'lampiranInvoiceNo': createdLa.invoiceNo,
+        });
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint("Error linking source invoices to LA in createMergedLampiranTransaction: $e");
+    }
+
+    return createdLa;
   }
 
   Future<void> updateTransactionTransferStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {
@@ -1152,13 +1180,39 @@ class FirebaseService {
     return resolver.getRefsForKodeInduk(kInduk);
   }
 
+  // Resolves the list of child/source invoice numbers for an LA invoice.
+  // Checks sourceInvoices field first; if empty, falls back to parsing invoice numbers from note.
+  List<String> getResolvedSourceInvoices(model_tr.Transaction tr) {
+    if (tr.sourceInvoices.isNotEmpty) {
+      return tr.sourceInvoices
+          .map((e) => e.replaceAll('#', '').trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    final isLa = tr.isLampiran ||
+        tr.invoiceNo.toUpperCase().replaceAll('#', '').trim().startsWith('LA');
+    if (isLa && tr.note.isNotEmpty) {
+      final matches = RegExp(r'#([a-zA-Z0-9_-]+)').allMatches(tr.note);
+      final list = <String>[];
+      for (final m in matches) {
+        final code = m.group(1)?.replaceAll('#', '').trim();
+        if (code != null && code.isNotEmpty && !list.contains(code)) {
+          list.add(code);
+        }
+      }
+      return list;
+    }
+    return [];
+  }
+
   // Update delivery status (DIKIRIM / PENDING) and deliveryDate with automatic stock deduction/restoration
   Future<void> updateTransactionDeliveryStatus(
     dynamic invoiceNo,
     String newStatus,
     DateTime? newDeliveryDate,
   ) async {
-    final docRef = _db.collection('transactions').doc(invoiceNo.toString());
+    final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+    final docRef = _db.collection('transactions').doc(invClean);
 
     // Read initial transaction doc to determine items and old status BEFORE transaction
     final initSnap = await docRef.get();
@@ -1167,6 +1221,275 @@ class FirebaseService {
     }
     final initTr = model_tr.Transaction.fromMap(initSnap.data()!, initSnap.id);
     final String oldStatus = initTr.status;
+
+    final isLa = initTr.isLampiran ||
+        invClean.toUpperCase().startsWith('LA') ||
+        getResolvedSourceInvoices(initTr).isNotEmpty;
+
+    if (isLa) {
+      // =========================================================================
+      // LAMPIRAN (LA) TRANSACTIONS:
+      // Single-cut stock rule: Stock is NEVER deducted directly on the LA invoice.
+      // Stock is deducted / restored on its child source (SA) invoices!
+      // =========================================================================
+      final sourceIds = getResolvedSourceInvoices(initTr);
+      final List<model_tr.Transaction> childTransactions = [];
+      for (var srcId in sourceIds) {
+        final snap = await _db.collection('transactions').doc(srcId).get();
+        if (snap.exists) {
+          childTransactions.add(model_tr.Transaction.fromMap(snap.data()!, snap.id));
+        }
+      }
+
+      if (newStatus == 'DIKIRIM') {
+        // Find children that are NOT yet DIKIRIM (PENDING)
+        final pendingChildren = childTransactions.where((c) => c.status != 'DIKIRIM').toList();
+
+        if (pendingChildren.isNotEmpty) {
+          final resolver = await _KodeIndukResolver.create(_db);
+
+          // Aggregate delta per kodeInduk for pending children only
+          final Map<String, double> deltaPerKodeInduk = {};
+          for (var child in pendingChildren) {
+            for (var item in child.items) {
+              final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+              deltaPerKodeInduk[kInduk] = (deltaPerKodeInduk[kInduk] ?? 0.0) - item.qty;
+            }
+          }
+
+          // PRE-CHECK PHYSICAL STOCK SUFFICIENCY
+          final List<String> insufficientStockProducts = [];
+          for (var entry in deltaPerKodeInduk.entries) {
+            final kInduk = entry.key;
+            final delta = entry.value;
+            if (delta < 0) {
+              final requiredQty = delta.abs();
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              for (var ref in refs) {
+                final pSnap = await ref.get();
+                if (pSnap.exists) {
+                  final currentStock = (pSnap.data()?['stock'] ?? 0.0).toDouble();
+                  if (currentStock < requiredQty) {
+                    final pName = pSnap.data()?['name'] ?? kInduk;
+                    insufficientStockProducts.add("• $pName (Stok Ada: ${currentStock.toInt()} pcs, Dibutuhkan: ${requiredQty.toInt()} pcs)");
+                  }
+                }
+              }
+            }
+          }
+
+          if (insufficientStockProducts.isNotEmpty) {
+            throw Exception("STOK_TIDAK_CUKUP:\n${insufficientStockProducts.join('\n')}");
+          }
+
+          final effectiveDeliveryDate = newDeliveryDate != null
+              ? Timestamp.fromDate(newDeliveryDate)
+              : Timestamp.fromDate(DateTime.now());
+
+          await _db.runTransaction((transaction) async {
+            final Map<String, DocumentSnapshot> pSnapshots = {};
+            for (var entry in deltaPerKodeInduk.entries) {
+              final kInduk = entry.key;
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              for (var ref in refs) {
+                final pSnap = await transaction.get(ref);
+                if (pSnap.exists) pSnapshots[ref.path] = pSnap;
+              }
+            }
+
+            for (var entry in deltaPerKodeInduk.entries) {
+              final kInduk = entry.key;
+              final delta = entry.value;
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              for (var ref in refs) {
+                final pSnap = pSnapshots[ref.path];
+                if (pSnap != null && pSnap.exists) {
+                  final data = pSnap.data() as Map<String, dynamic>?;
+                  final currentStock = (data?['stock'] ?? 0.0).toDouble();
+                  transaction.update(ref, {'stock': currentStock + delta});
+                }
+              }
+            }
+
+            // Update all pending children to DIKIRIM and link lampiranInvoiceNo
+            for (var child in pendingChildren) {
+              transaction.update(_db.collection('transactions').doc(child.invoiceNo), {
+                'status': 'DIKIRIM',
+                'deliveryDate': effectiveDeliveryDate,
+                'lampiranInvoiceNo': invClean,
+              });
+            }
+
+            // Update parent LA document to DIKIRIM
+            transaction.update(docRef, {
+              'status': 'DIKIRIM',
+              'deliveryDate': effectiveDeliveryDate,
+            });
+          });
+
+          // Log stock mutations for pending children
+          final List<StockMutation> mutations = [];
+          for (var child in pendingChildren) {
+            for (var item in child.items) {
+              final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              String pName = item.productName;
+              double currentStockAfter = 0;
+              if (refs.isNotEmpty) {
+                final pSnap = await refs.first.get();
+                if (pSnap.exists) {
+                  final data = pSnap.data() as Map<String, dynamic>?;
+                  currentStockAfter = (data?['stock'] ?? 0.0).toDouble();
+                  pName = data?['name'] ?? item.productName;
+                }
+              }
+              final stockBefore = currentStockAfter + item.qty;
+
+              mutations.add(StockMutation(
+                id: '',
+                kodeInduk: kInduk,
+                productName: pName,
+                type: 'KELUAR',
+                qty: -item.qty,
+                stockBefore: stockBefore,
+                stockAfter: currentStockAfter,
+                reference: 'Invoice #${child.invoiceNo} (via Lampiran #$invClean)',
+                customerName: child.customerName,
+                timestamp: DateTime.now(),
+              ));
+            }
+          }
+
+          if (mutations.isNotEmpty) {
+            await _logStockMutations(mutations);
+          }
+        } else {
+          // All children already DIKIRIM, just mark LA as DIKIRIM without mutating stock
+          await docRef.update({
+            'status': 'DIKIRIM',
+            'deliveryDate': newDeliveryDate != null
+                ? Timestamp.fromDate(newDeliveryDate)
+                : Timestamp.fromDate(DateTime.now()),
+          });
+        }
+      } else {
+        // newStatus == 'PENDING'
+        // Restore stock for children that are currently DIKIRIM
+        final deliveredChildren = childTransactions.where((c) => c.status == 'DIKIRIM').toList();
+
+        if (deliveredChildren.isNotEmpty) {
+          final resolver = await _KodeIndukResolver.create(_db);
+          final Map<String, double> deltaPerKodeInduk = {};
+          for (var child in deliveredChildren) {
+            for (var item in child.items) {
+              final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+              deltaPerKodeInduk[kInduk] = (deltaPerKodeInduk[kInduk] ?? 0.0) + item.qty;
+            }
+          }
+
+          await _db.runTransaction((transaction) async {
+            final Map<String, DocumentSnapshot> pSnapshots = {};
+            for (var entry in deltaPerKodeInduk.entries) {
+              final kInduk = entry.key;
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              for (var ref in refs) {
+                final pSnap = await transaction.get(ref);
+                if (pSnap.exists) pSnapshots[ref.path] = pSnap;
+              }
+            }
+
+            for (var entry in deltaPerKodeInduk.entries) {
+              final kInduk = entry.key;
+              final delta = entry.value;
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              for (var ref in refs) {
+                final pSnap = pSnapshots[ref.path];
+                if (pSnap != null && pSnap.exists) {
+                  final data = pSnap.data() as Map<String, dynamic>?;
+                  final currentStock = (data?['stock'] ?? 0.0).toDouble();
+                  transaction.update(ref, {'stock': currentStock + delta});
+                }
+              }
+            }
+
+            // Update child documents to PENDING
+            for (var child in deliveredChildren) {
+              transaction.update(_db.collection('transactions').doc(child.invoiceNo), {
+                'status': 'PENDING',
+                'deliveryDate': null,
+              });
+            }
+
+            // Update LA document to PENDING
+            transaction.update(docRef, {
+              'status': 'PENDING',
+              'deliveryDate': null,
+            });
+          });
+
+          // Log stock mutations (RETUR_STATUS)
+          final List<StockMutation> mutations = [];
+          for (var child in deliveredChildren) {
+            for (var item in child.items) {
+              final kInduk = resolver.resolveKodeInduk(item.productId, item.productName);
+              final refs = resolver.getRefsForKodeInduk(kInduk);
+              String pName = item.productName;
+              double currentStockAfter = 0;
+              if (refs.isNotEmpty) {
+                final pSnap = await refs.first.get();
+                if (pSnap.exists) {
+                  final data = pSnap.data() as Map<String, dynamic>?;
+                  currentStockAfter = (data?['stock'] ?? 0.0).toDouble();
+                  pName = data?['name'] ?? item.productName;
+                }
+              }
+              final stockBefore = currentStockAfter - item.qty;
+
+              mutations.add(StockMutation(
+                id: '',
+                kodeInduk: kInduk,
+                productName: pName,
+                type: 'RETUR_STATUS',
+                qty: item.qty,
+                stockBefore: stockBefore,
+                stockAfter: currentStockAfter,
+                reference: 'Retur Status #${child.invoiceNo} (via Lampiran #$invClean)',
+                customerName: child.customerName,
+                timestamp: DateTime.now(),
+              ));
+            }
+          }
+
+          if (mutations.isNotEmpty) {
+            await _logStockMutations(mutations);
+          }
+        } else {
+          // No children are DIKIRIM, just set LA to PENDING
+          await docRef.update({
+            'status': 'PENDING',
+            'deliveryDate': null,
+          });
+        }
+      }
+
+      // Sync receivables for LA and all children
+      try {
+        final allInvNos = [invClean, ...sourceIds];
+        final effectiveTglKirim = (newStatus == 'PENDING')
+            ? null
+            : (newDeliveryDate != null ? Timestamp.fromDate(newDeliveryDate) : Timestamp.fromDate(DateTime.now()));
+        for (var no in allInvNos) {
+          final recSnap = await _db.collection('receivables').where('noInvoice', isEqualTo: no).get();
+          for (var doc in recSnap.docs) {
+            await doc.reference.update({'tglKirim': effectiveTglKirim});
+          }
+        }
+      } catch (e) {
+        debugPrint("Error syncing receivables in updateTransactionDeliveryStatus LA: $e");
+      }
+
+      return;
+    }
 
     bool stockShouldDecrease = (oldStatus != 'DIKIRIM' && newStatus == 'DIKIRIM');
     bool stockShouldIncrease = (oldStatus == 'DIKIRIM' && newStatus != 'DIKIRIM');
@@ -1260,7 +1583,6 @@ class FirebaseService {
         final kInduk = entry.key;
         final delta = entry.value;
         final refs = resolver.getRefsForKodeInduk(kInduk);
-        // Get representative product name from first ref
         String pName = kInduk;
         if (refs.isNotEmpty) {
           final pSnap = await refs.first.get();
@@ -1268,7 +1590,6 @@ class FirebaseService {
             pName = (pSnap.data() as Map<String, dynamic>?)?['name'] ?? kInduk;
           }
         }
-        // Get current stock (after mutation) to compute before
         double currentStockAfter = 0;
         if (refs.isNotEmpty) {
           final pSnap = await refs.first.get();
@@ -1276,7 +1597,7 @@ class FirebaseService {
             currentStockAfter = ((pSnap.data() as Map<String, dynamic>?)?['stock'] ?? 0.0).toDouble();
           }
         }
-        final stockBefore = currentStockAfter - delta; // reverse to get before
+        final stockBefore = currentStockAfter - delta;
 
         mutations.add(StockMutation(
           id: '',
@@ -1286,7 +1607,7 @@ class FirebaseService {
           qty: delta,
           stockBefore: stockBefore,
           stockAfter: currentStockAfter,
-          reference: 'Invoice #${invoiceNo.toString()}',
+          reference: 'Invoice #${invClean}',
           customerName: initTr.customerName,
           timestamp: DateTime.now(),
         ));
@@ -1297,7 +1618,6 @@ class FirebaseService {
 
     // Auto-sync tglKirim to receivables collection
     try {
-      final invClean = invoiceNo.toString().replaceAll('#', '').trim();
       final recSnap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
       final effectiveTglKirim = (newStatus == 'PENDING')
           ? null
@@ -1309,6 +1629,68 @@ class FirebaseService {
       }
     } catch (e) {
       debugPrint("Error syncing tglKirim to receivables in updateTransactionDeliveryStatus: $e");
+    }
+
+    // CHECK IF THIS CHILD INVOICE BELONGS TO A PARENT LA INVOICE
+    try {
+      String parentLaNo = initTr.lampiranInvoiceNo.trim();
+      if (parentLaNo.isEmpty) {
+        final laSnap = await _db.collection('transactions').where('isLampiran', isEqualTo: true).get();
+        for (var laDoc in laSnap.docs) {
+          final laTr = model_tr.Transaction.fromMap(laDoc.data(), laDoc.id);
+          final sources = getResolvedSourceInvoices(laTr);
+          if (sources.contains(invClean)) {
+            parentLaNo = laTr.invoiceNo;
+            docRef.update({'lampiranInvoiceNo': parentLaNo}).catchError((_) {});
+            break;
+          }
+        }
+      }
+
+      if (parentLaNo.isNotEmpty) {
+        final parentSnap = await _db.collection('transactions').doc(parentLaNo).get();
+        if (parentSnap.exists) {
+          final parentTr = model_tr.Transaction.fromMap(parentSnap.data()!, parentSnap.id);
+          final siblingIds = getResolvedSourceInvoices(parentTr);
+          bool allDelivered = true;
+          for (var sibId in siblingIds) {
+            if (sibId == invClean) {
+              if (newStatus != 'DIKIRIM') allDelivered = false;
+            } else {
+              final sibSnap = await _db.collection('transactions').doc(sibId).get();
+              if (sibSnap.exists) {
+                final sibStatus = sibSnap.data()?['status'] ?? 'PENDING';
+                if (sibStatus != 'DIKIRIM') {
+                  allDelivered = false;
+                }
+              }
+            }
+          }
+
+          if (allDelivered && parentTr.status != 'DIKIRIM') {
+            final effectiveDate = newDeliveryDate != null ? Timestamp.fromDate(newDeliveryDate) : Timestamp.fromDate(DateTime.now());
+            await _db.collection('transactions').doc(parentLaNo).update({
+              'status': 'DIKIRIM',
+              'deliveryDate': effectiveDate,
+            });
+            final pRec = await _db.collection('receivables').where('noInvoice', isEqualTo: parentLaNo).get();
+            for (var d in pRec.docs) {
+              await d.reference.update({'tglKirim': effectiveDate});
+            }
+          } else if (!allDelivered && parentTr.status == 'DIKIRIM') {
+            await _db.collection('transactions').doc(parentLaNo).update({
+              'status': 'PENDING',
+              'deliveryDate': null,
+            });
+            final pRec = await _db.collection('receivables').where('noInvoice', isEqualTo: parentLaNo).get();
+            for (var d in pRec.docs) {
+              await d.reference.update({'tglKirim': null});
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error syncing parent LA status from child invoice: $e");
     }
   }
 
@@ -1732,16 +2114,22 @@ class FirebaseService {
   }
 
 
-  // Delete transaction (with stock restoration if DIKIRIM)
+  // Delete transaction (with stock restoration if DIKIRIM, excluding LA documents which use single-cut stock)
   Future<void> deleteTransaction(dynamic invoiceNo) async {
-    final docRef = _db.collection('transactions').doc(invoiceNo.toString());
+    final invClean = invoiceNo.toString().replaceAll('#', '').trim();
+    final docRef = _db.collection('transactions').doc(invClean);
 
     final initSnap = await docRef.get();
     if (!initSnap.exists) {
       throw Exception("Transaksi tidak ditemukan!");
     }
     final initTr = model_tr.Transaction.fromMap(initSnap.data()!, initSnap.id);
-    final bool wasDelivered = (initTr.status == 'DIKIRIM');
+    final isLa = initTr.isLampiran ||
+        invClean.toUpperCase().startsWith('LA') ||
+        getResolvedSourceInvoices(initTr).isNotEmpty;
+
+    // Single-cut stock rule: LA never deducted stock directly, so deleting LA should NEVER restore physical stock!
+    final bool wasDelivered = (initTr.status == 'DIKIRIM') && !isLa;
 
     final resolver = await _KodeIndukResolver.create(_db);
 
@@ -1785,7 +2173,7 @@ class FirebaseService {
       }
 
       // 2. WRITE ALL UPDATES
-      // Restore physical stock
+      // Restore physical stock (only for non-LA documents)
       if (wasDelivered) {
         for (var entry in totalQtyPerKodeInduk.entries) {
           final kInduk = entry.key;
@@ -1811,7 +2199,38 @@ class FirebaseService {
       transaction.delete(docRef);
     });
 
-    // Log stock mutations AFTER transaction succeeds (for deleted DIKIRIM invoices)
+    // If it's an LA invoice, unlink all source child invoices
+    if (isLa) {
+      try {
+        final sourceIds = getResolvedSourceInvoices(initTr);
+        final batch = _db.batch();
+        for (var srcId in sourceIds) {
+          batch.update(_db.collection('transactions').doc(srcId), {
+            'lampiranInvoiceNo': '',
+          });
+        }
+        await batch.commit();
+      } catch (e) {
+        debugPrint("Error unlinking source invoices on LA delete: $e");
+      }
+    } else if (initTr.lampiranInvoiceNo.isNotEmpty) {
+      // If a child SA is deleted, unlink it from parent LA's sourceInvoices list
+      try {
+        final pRef = _db.collection('transactions').doc(initTr.lampiranInvoiceNo);
+        final pSnap = await pRef.get();
+        if (pSnap.exists) {
+          final pTr = model_tr.Transaction.fromMap(pSnap.data()!, pSnap.id);
+          final updatedSources = List<String>.from(pTr.sourceInvoices)..remove(invClean);
+          await pRef.update({
+            'sourceInvoices': updatedSources,
+          });
+        }
+      } catch (e) {
+        debugPrint("Error updating parent LA on child delete: $e");
+      }
+    }
+
+    // Log stock mutations AFTER transaction succeeds (for deleted DIKIRIM non-LA invoices)
     if (wasDelivered && totalQtyPerKodeInduk.isNotEmpty) {
       final List<StockMutation> mutations = [];
 
@@ -1839,7 +2258,7 @@ class FirebaseService {
           qty: totalQty,
           stockBefore: stockBefore,
           stockAfter: currentStockAfter,
-          reference: 'Hapus Invoice #${invoiceNo.toString()}',
+          reference: 'Hapus Invoice #${invClean}',
           customerName: initTr.customerName,
           timestamp: DateTime.now(),
         ));
@@ -1849,7 +2268,7 @@ class FirebaseService {
     }
 
     // Auto-delete from receivables collection
-    await deleteReceivableByInvoiceNo(invoiceNo);
+    await deleteReceivableByInvoiceNo(invClean);
   }
 
   // ==========================================

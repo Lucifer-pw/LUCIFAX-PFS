@@ -74,6 +74,9 @@ class Transaction {
   final List<TransactionItem> movedItems; // History of items moved to another invoice
   final String movedToInvoice; // Target invoice number for moved items
   final bool isLocked;
+  final List<String> sourceInvoices; // List of source invoice numbers if this is an LA invoice (e.g. ['SA58', 'SA59', ...])
+  final String lampiranInvoiceNo; // Target LA invoice number if this invoice is merged into an LA (e.g. 'LA2')
+  final bool isLampiran; // true if this invoice is an LA / Lampiran invoice
 
   Transaction({
     required this.invoiceNo,
@@ -99,6 +102,9 @@ class Transaction {
     this.movedItems = const [],
     this.movedToInvoice = '',
     this.isLocked = false,
+    this.sourceInvoices = const [],
+    this.lampiranInvoiceNo = '',
+    this.isLampiran = false,
   });
 
   double get netGrandTotal => (grandTotal - returnAmount).clamp(0.0, double.infinity);
@@ -128,6 +134,14 @@ class Transaction {
             .toList() ??
         [];
 
+    final sourceInvoicesList = (map['sourceInvoices'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
+    final lampiranInvNo = (map['lampiranInvoiceNo'] ?? '').toString();
+    final bool isLampiran = (map['isLampiran'] == true) ||
+        finalInvoiceNo.toString().toUpperCase().replaceAll('#', '').trim().startsWith('LA');
+
     return Transaction(
       invoiceNo: finalInvoiceNo,
       customerId: map['customerId'] ?? '',
@@ -152,6 +166,9 @@ class Transaction {
       movedItems: movedItemsList,
       movedToInvoice: map['movedToInvoice'] ?? '',
       isLocked: map['isLocked'] == true,
+      sourceInvoices: sourceInvoicesList,
+      lampiranInvoiceNo: lampiranInvNo,
+      isLampiran: isLampiran,
     );
   }
 
@@ -180,6 +197,9 @@ class Transaction {
       'movedItems': movedItems.map((item) => item.toMap()).toList(),
       'movedToInvoice': movedToInvoice,
       'isLocked': isLocked,
+      'sourceInvoices': sourceInvoices,
+      'lampiranInvoiceNo': lampiranInvoiceNo,
+      'isLampiran': isLampiran,
     };
   }
 }
