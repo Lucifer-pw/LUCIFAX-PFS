@@ -31,6 +31,9 @@ import 'kmeans_analysis_view.dart';
 import 'operational_invoice_view.dart';
 import 'monthly_operational_expenses_view.dart';
 import 'billing_report_view.dart';
+import 'package:flutter/services.dart';
+import '../services/walkie_talkie_service.dart';
+import '../widgets/walkie_talkie_widget.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -41,7 +44,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.159';
+  String _appVersion = '3.3.160';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
@@ -49,14 +52,34 @@ class _ShellViewState extends State<ShellView> {
   final FirebaseService _firebaseService = FirebaseService();
   bool _hasShownSyncPrompt = false;
 
+  bool _handleGlobalKeyEvent(KeyEvent event) {
+    if (event.logicalKey == LogicalKeyboardKey.altLeft ||
+        event.logicalKey == LogicalKeyboardKey.altRight) {
+      if (event is KeyDownEvent) {
+        WalkieTalkieService().startTransmitting();
+      } else if (event is KeyUpEvent) {
+        WalkieTalkieService().stopTransmitting();
+      }
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
     _loadVersionAndCheckUpdate();
+    HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupRemotePrintListener();
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.currentUser;
+      if (user != null) {
+        WalkieTalkieService().initialize(
+          userId: user.uid,
+          userName: user.name.isNotEmpty ? user.name : user.username,
+          role: user.role,
+        );
+      }
       if (user != null && !user.isDeveloper && !WebRtcScreenService().isBroadcasting) {
         FirebaseFirestore.instance.collection('webrtc_screen_sessions').doc('kacab_live').set({
           'status': 'ended',
@@ -73,6 +96,8 @@ class _ShellViewState extends State<ShellView> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    WalkieTalkieService().dispose();
     _printCommandSubscription?.cancel();
     _menuSearchController.dispose();
     super.dispose();
@@ -975,32 +1000,42 @@ class _ShellViewState extends State<ShellView> {
               backgroundColor: const Color(0xFF1E293B),
               child: _buildDrawerContent(navItems, updateProvider),
             ),
-      body: Row(
+      body: Stack(
         children: [
-          // Navigation rail for large screens (tablets/desktops)
-          if (isLargeScreen)
-            Container(
-              width: 250,
-              color: const Color(0xFF1E293B),
-              child: _buildDrawerContent(navItems, updateProvider),
-            ),
-          Expanded(
-            child: Container(
-              color: const Color(0xFF0F172A),
-              child: IndexedStack(
-                index: _currentIndex,
-                children: navItems.asMap().entries.map<Widget>((entry) {
-                  final isSelected = entry.key == _currentIndex;
-                  return ExcludeFocus(
-                    excluding: !isSelected,
-                    child: FocusScope(
-                      canRequestFocus: isSelected,
-                      child: entry.value['widget'] as Widget,
-                    ),
-                  );
-                }).toList(),
+          Row(
+            children: [
+              // Navigation rail for large screens (tablets/desktops)
+              if (isLargeScreen)
+                Container(
+                  width: 250,
+                  color: const Color(0xFF1E293B),
+                  child: _buildDrawerContent(navItems, updateProvider),
+                ),
+              Expanded(
+                child: Container(
+                  color: const Color(0xFF0F172A),
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: navItems.asMap().entries.map<Widget>((entry) {
+                      final isSelected = entry.key == _currentIndex;
+                      return ExcludeFocus(
+                        excluding: !isSelected,
+                        child: FocusScope(
+                          canRequestFocus: isSelected,
+                          child: entry.value['widget'] as Widget,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
               ),
-            ),
+            ],
+          ),
+          // Floating Walkie-Talkie (Push-to-Talk) Widget at bottom-right
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: WalkieTalkieWidget(currentUser: user),
           ),
         ],
       ),
