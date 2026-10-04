@@ -33,7 +33,7 @@ import 'monthly_operational_expenses_view.dart';
 import 'billing_report_view.dart';
 import 'package:flutter/services.dart';
 import '../services/walkie_talkie_service.dart';
-import '../widgets/walkie_talkie_widget.dart';
+import '../services/auth_service.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -947,6 +947,163 @@ class _ShellViewState extends State<ShellView> {
               ),
             ),
 
+          // ══════════════════════════════════════════════════════════
+          // WALKIE-TALKIE RADIO PILL (COMPACT IN APPBAR)
+          // ══════════════════════════════════════════════════════════
+          Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: ListenableBuilder(
+              listenable: WalkieTalkieService(),
+              builder: (context, _) {
+                final wt = WalkieTalkieService();
+                final isTransmitting = wt.isTransmitting;
+                final isReceiving = wt.isReceiving;
+                final isBusy = wt.isChannelBusy;
+
+                Color pillColor = const Color(0xFF334155);
+                Color dotColor = const Color(0xFF10B981);
+                String label = isMobile ? '' : 'Radio [Alt]';
+
+                if (isTransmitting) {
+                  pillColor = const Color(0xFFDC2626);
+                  dotColor = Colors.white;
+                  label = isMobile ? '' : 'BICARA...';
+                } else if (isReceiving) {
+                  pillColor = const Color(0xFF0284C7);
+                  dotColor = Colors.white;
+                  label = isMobile ? '' : '${wt.currentSpeakerName}';
+                } else if (isBusy) {
+                  dotColor = Colors.amber;
+                }
+
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Main Radio Pill (click to open panel)
+                    GestureDetector(
+                      onTapDown: (_) {
+                        wt.unlockAudio();
+                      },
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Radio Toko (Walkie-Talkie)',
+                        offset: Offset(0, isMobile ? 48 : 52),
+                        color: const Color(0xFF1E293B),
+                        surfaceTintColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                        ),
+                        itemBuilder: (context) => _buildRadioPopupItems(wt, user),
+                        onSelected: (val) {
+                          if (val == '__mute__') {
+                            wt.toggleSpeakerMute();
+                          } else if (val == '__broadcast__') {
+                            wt.setTarget(targetId: null, targetName: 'Semua Staff (Broadcast)');
+                          } else {
+                            // Private target UID
+                            wt.setTarget(targetId: val, targetName: val);
+                          }
+                          setState(() {});
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 8 : 12,
+                            vertical: isMobile ? 5 : 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: pillColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isTransmitting
+                                  ? Colors.redAccent.withOpacity(0.6)
+                                  : isReceiving
+                                      ? const Color(0xFF38BDF8).withOpacity(0.6)
+                                      : const Color(0xFF475569),
+                              width: isTransmitting || isReceiving ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Status dot
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: dotColor,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: dotColor.withOpacity(0.5),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Icon
+                              Icon(
+                                isTransmitting
+                                    ? Icons.mic_rounded
+                                    : isReceiving
+                                        ? Icons.volume_up_rounded
+                                        : Icons.cell_tower_rounded,
+                                size: isMobile ? 14 : 16,
+                                color: Colors.white,
+                              ),
+                              // Label (desktop only)
+                              if (!isMobile && label.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 120),
+                                  child: Text(
+                                    label,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                      letterSpacing: isTransmitting ? 0.5 : 0,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              // Mute/Unmute quick button
+                              const SizedBox(width: 4),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => wt.toggleSpeakerMute(),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2.0),
+                                  child: Icon(
+                                    wt.isSpeakerMuted
+                                        ? Icons.volume_off_rounded
+                                        : Icons.volume_up_rounded,
+                                    size: isMobile ? 13 : 14,
+                                    color: wt.isSpeakerMuted
+                                        ? Colors.redAccent
+                                        : const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ),
+                              // Expand arrow
+                              Icon(
+                                Icons.arrow_drop_down_rounded,
+                                size: 16,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
           // User profile chips and sign-out
           Padding(
             padding: EdgeInsets.symmetric(horizontal: isMobile ? 6.0 : 12.0),
@@ -1000,46 +1157,210 @@ class _ShellViewState extends State<ShellView> {
               backgroundColor: const Color(0xFF1E293B),
               child: _buildDrawerContent(navItems, updateProvider),
             ),
-      body: Stack(
+      body: Row(
         children: [
-          Row(
-            children: [
-              // Navigation rail for large screens (tablets/desktops)
-              if (isLargeScreen)
-                Container(
-                  width: 250,
-                  color: const Color(0xFF1E293B),
-                  child: _buildDrawerContent(navItems, updateProvider),
-                ),
-              Expanded(
-                child: Container(
-                  color: const Color(0xFF0F172A),
-                  child: IndexedStack(
-                    index: _currentIndex,
-                    children: navItems.asMap().entries.map<Widget>((entry) {
-                      final isSelected = entry.key == _currentIndex;
-                      return ExcludeFocus(
-                        excluding: !isSelected,
-                        child: FocusScope(
-                          canRequestFocus: isSelected,
-                          child: entry.value['widget'] as Widget,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
+          // Navigation rail for large screens (tablets/desktops)
+          if (isLargeScreen)
+            Container(
+              width: 250,
+              color: const Color(0xFF1E293B),
+              child: _buildDrawerContent(navItems, updateProvider),
+            ),
+          Expanded(
+            child: Container(
+              color: const Color(0xFF0F172A),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: navItems.asMap().entries.map<Widget>((entry) {
+                  final isSelected = entry.key == _currentIndex;
+                  return ExcludeFocus(
+                    excluding: !isSelected,
+                    child: FocusScope(
+                      canRequestFocus: isSelected,
+                      child: entry.value['widget'] as Widget,
+                    ),
+                  );
+                }).toList(),
               ),
-            ],
-          ),
-          // Floating Walkie-Talkie (Push-to-Talk) Widget at bottom-right
-          Positioned(
-            right: 12,
-            bottom: 12,
-            child: WalkieTalkieWidget(currentUser: user),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // WALKIE-TALKIE POPUP MENU ITEMS
+  // ══════════════════════════════════════════════════════════
+  List<PopupMenuEntry<String>> _buildRadioPopupItems(WalkieTalkieService wt, dynamic user) {
+    final items = <PopupMenuEntry<String>>[];
+
+    // Header
+    items.add(const PopupMenuItem<String>(
+      enabled: false,
+      height: 32,
+      child: Text(
+        '📻 Radio Toko (Walkie-Talkie)',
+        style: TextStyle(
+          color: Color(0xFF38BDF8),
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
+    ));
+    items.add(const PopupMenuDivider(height: 1));
+
+    // Current target indicator
+    items.add(PopupMenuItem<String>(
+      enabled: false,
+      height: 28,
+      child: Text(
+        'Tujuan: ${wt.currentTargetName}',
+        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600),
+      ),
+    ));
+    items.add(const PopupMenuDivider(height: 1));
+
+    // Broadcast option
+    final isBroadcast = wt.currentTargetId == null;
+    items.add(PopupMenuItem<String>(
+      value: '__broadcast__',
+      height: 38,
+      child: Row(
+        children: [
+          Icon(
+            Icons.campaign_rounded,
+            size: 16,
+            color: isBroadcast ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '📢 Semua Staff (Broadcast)',
+            style: TextStyle(
+              color: isBroadcast ? const Color(0xFF38BDF8) : Colors.white70,
+              fontWeight: isBroadcast ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+          ),
+          if (isBroadcast) ...[
+            const Spacer(),
+            const Icon(Icons.check_rounded, size: 14, color: Color(0xFF38BDF8)),
+          ],
+        ],
+      ),
+    ));
+
+    // Online users (for private targeting)
+    final authService = AuthService();
+    items.add(const PopupMenuDivider(height: 1));
+    items.add(PopupMenuItem<String>(
+      enabled: false,
+      height: 28,
+      child: FutureBuilder(
+        future: authService.getUsersStream().first,
+        builder: (context, snapshot) {
+          final users = snapshot.data ?? [];
+          final onlinePeers = users.where((u) => u.uid != user.uid && u.isActuallyOnline).toList();
+          if (onlinePeers.isEmpty) {
+            return const Text(
+              '  Tidak ada staff online lainnya',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+            );
+          }
+          return Text(
+            '  Online (${onlinePeers.length}):',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600),
+          );
+        },
+      ),
+    ));
+
+    // We need to add online users as items - use StreamBuilder approach via a sync snapshot
+    // For simplicity, we'll add a FutureBuilder-based workaround using the service
+    items.add(PopupMenuItem<String>(
+      enabled: false,
+      height: 0,
+      padding: EdgeInsets.zero,
+      child: StreamBuilder(
+        stream: authService.getUsersStream(),
+        builder: (context, snapshot) {
+          final users = snapshot.data ?? [];
+          final onlinePeers = users.where((u) => u.uid != user.uid && u.isActuallyOnline).toList();
+          if (onlinePeers.isEmpty) return const SizedBox.shrink();
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: onlinePeers.map((peer) {
+              final displayName = peer.name.isNotEmpty ? peer.name : peer.username;
+              final isSelected = wt.currentTargetId == peer.uid;
+              return InkWell(
+                onTap: () {
+                  wt.setTarget(targetId: peer.uid, targetName: displayName);
+                  Navigator.of(context).pop();
+                  setState(() {});
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '👤 $displayName (${peer.role.toUpperCase()})',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isSelected ? const Color(0xFF38BDF8) : Colors.white70,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(Icons.check_rounded, size: 14, color: Color(0xFF38BDF8)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    ));
+
+    items.add(const PopupMenuDivider(height: 1));
+
+    // Mute toggle
+    items.add(PopupMenuItem<String>(
+      value: '__mute__',
+      height: 38,
+      child: Row(
+        children: [
+          Icon(
+            wt.isSpeakerMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+            size: 16,
+            color: wt.isSpeakerMuted ? Colors.redAccent : const Color(0xFF10B981),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            wt.isSpeakerMuted ? 'Nyalakan Speaker' : 'Bisukan Speaker (Mute)',
+            style: TextStyle(
+              color: wt.isSpeakerMuted ? Colors.redAccent : Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    ));
+
+    return items;
   }
 
   // Sidebar Layout Content
