@@ -13,12 +13,16 @@ class WalkieTalkieService extends ChangeNotifier {
   bool get hasMicPermission => false;
   bool get isChannelBusy => false;
   double get speakerVolume => 1.0;
+  int get connectedPeerCount => 0;
+  Set<String> get connectedPeerIds => const {};
 
   String? get currentSpeakerId => null;
   String? get currentSpeakerName => null;
   String? get currentTargetId => null;
   String get currentTargetName => 'Semua Staff (Broadcast)';
   String get statusMessage => 'WebRTC Walkie-Talkie hanya didukung di Web.';
+
+  bool isPeerConnected(String uid) => false;
 
   Future<bool> initialize({
     required String userId,
@@ -31,6 +35,7 @@ class WalkieTalkieService extends ChangeNotifier {
 
   Future<void> startTransmitting() async {}
   Future<void> stopTransmitting() async {}
+  Future<void> toggleTransmitting() async {}
   void setTarget({String? targetId, String? targetName}) {}
   void toggleSpeakerMute() {}
   void setVolume(double volume) {}

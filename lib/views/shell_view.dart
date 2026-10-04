@@ -60,6 +60,7 @@ class _ShellViewState extends State<ShellView> {
       } else if (event is KeyUpEvent) {
         WalkieTalkieService().stopTransmitting();
       }
+      return true; // Consume event to prevent Windows/browser Alt menu activation
     }
     return false;
   }
@@ -960,9 +961,13 @@ class _ShellViewState extends State<ShellView> {
                 final isReceiving = wt.isReceiving;
                 final isBusy = wt.isChannelBusy;
 
+
+                final isConnected = wt.connectedPeerCount > 0;
                 Color pillColor = const Color(0xFF334155);
-                Color dotColor = const Color(0xFF10B981);
-                String label = isMobile ? '' : 'Radio [Alt]';
+                Color dotColor = isConnected ? const Color(0xFF10B981) : Colors.amber;
+                String label = isMobile
+                    ? ''
+                    : (isConnected ? 'Radio [Alt] (${wt.connectedPeerCount})' : 'Radio [Alt]');
 
                 if (isTransmitting) {
                   pillColor = const Color(0xFFDC2626);
@@ -979,123 +984,145 @@ class _ShellViewState extends State<ShellView> {
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Main Radio Pill (click to open panel)
-                    GestureDetector(
-                      onTapDown: (_) {
-                        wt.unlockAudio();
-                      },
-                      child: PopupMenuButton<String>(
-                        tooltip: 'Radio Toko (Walkie-Talkie)',
-                        offset: Offset(0, isMobile ? 48 : 52),
-                        color: const Color(0xFF1E293B),
-                        surfaceTintColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                    // Unified Radio Pill
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 6 : 8,
+                        vertical: isMobile ? 4 : 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: pillColor,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isTransmitting
+                              ? Colors.redAccent.withOpacity(0.8)
+                              : isReceiving
+                                  ? const Color(0xFF38BDF8).withOpacity(0.8)
+                                  : const Color(0xFF475569),
+                          width: isTransmitting || isReceiving ? 1.5 : 1.0,
                         ),
-                        itemBuilder: (context) => _buildRadioPopupItems(wt, user),
-                        onSelected: (val) {
-                          if (val == '__mute__') {
-                            wt.toggleSpeakerMute();
-                          } else if (val == '__broadcast__') {
-                            wt.setTarget(targetId: null, targetName: 'Semua Staff (Broadcast)');
-                          } else {
-                            // Private target UID
-                            wt.setTarget(targetId: val, targetName: val);
-                          }
-                          setState(() {});
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 8 : 12,
-                            vertical: isMobile ? 5 : 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: pillColor,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isTransmitting
-                                  ? Colors.redAccent.withOpacity(0.6)
-                                  : isReceiving
-                                      ? const Color(0xFF38BDF8).withOpacity(0.6)
-                                      : const Color(0xFF475569),
-                              width: isTransmitting || isReceiving ? 1.5 : 1.0,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 1. MIC TOGGLE BUTTON (Click to talk / stop)
+                          Tooltip(
+                            message: isTransmitting ? 'Klik untuk Selesai Bicara' : 'Klik untuk Mulai Bicara (atau tahan Alt)',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () async {
+                                wt.unlockAudio();
+                                await wt.toggleTransmitting();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: isTransmitting ? Colors.white.withOpacity(0.25) : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isTransmitting
+                                      ? Icons.mic_rounded
+                                      : isReceiving
+                                          ? Icons.volume_up_rounded
+                                          : Icons.mic_none_rounded,
+                                  size: isMobile ? 15 : 17,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Status dot
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: dotColor,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: dotColor.withOpacity(0.5),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
+                          const SizedBox(width: 4),
+
+                          // 2. STATUS DOT & POPUP MENU TRIGGER
+                          PopupMenuButton<String>(
+                            tooltip: 'Pilih Saluran / Pengaturan Radio',
+                            offset: Offset(0, isMobile ? 44 : 48),
+                            color: const Color(0xFF1E293B),
+                            surfaceTintColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                            ),
+                            itemBuilder: (context) => _buildRadioPopupItems(wt, user),
+                            onSelected: (val) {
+                              if (val == '__mute__') {
+                                wt.toggleSpeakerMute();
+                              } else if (val == '__broadcast__') {
+                                wt.setTarget(targetId: null, targetName: 'Semua Staff (Broadcast)');
+                              } else if (val == '__refresh__') {
+                                wt.refreshPeers();
+                              } else {
+                                wt.setTarget(targetId: val, targetName: val);
+                              }
+                              setState(() {});
+                            },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: dotColor,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: dotColor.withOpacity(0.5),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 6),
-                              // Icon
-                              Icon(
-                                isTransmitting
-                                    ? Icons.mic_rounded
-                                    : isReceiving
-                                        ? Icons.volume_up_rounded
-                                        : Icons.cell_tower_rounded,
-                                size: isMobile ? 14 : 16,
-                                color: Colors.white,
-                              ),
-                              // Label (desktop only)
-                              if (!isMobile && label.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 120),
-                                  child: Text(
-                                    label,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11,
-                                      letterSpacing: isTransmitting ? 0.5 : 0,
+                                if (!isMobile && label.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 130),
+                                    child: Text(
+                                      label,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                        letterSpacing: isTransmitting ? 0.5 : 0,
+                                      ),
                                     ),
                                   ),
+                                ],
+                                const SizedBox(width: 2),
+                                const Icon(
+                                  Icons.arrow_drop_down_rounded,
+                                  size: 16,
+                                  color: Color(0xFF94A3B8),
                                 ),
                               ],
-                              // Mute/Unmute quick button
-                              const SizedBox(width: 4),
-                              InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => wt.toggleSpeakerMute(),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(2.0),
-                                  child: Icon(
-                                    wt.isSpeakerMuted
-                                        ? Icons.volume_off_rounded
-                                        : Icons.volume_up_rounded,
-                                    size: isMobile ? 13 : 14,
-                                    color: wt.isSpeakerMuted
-                                        ? Colors.redAccent
-                                        : const Color(0xFF94A3B8),
-                                  ),
+                            ),
+                          ),
+
+                          // 3. MUTE SPEAKER TOGGLE
+                          const SizedBox(width: 2),
+                          Tooltip(
+                            message: wt.isSpeakerMuted ? 'Nyalakan Speaker' : 'Bisukan Speaker',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => wt.toggleSpeakerMute(),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3.0),
+                                child: Icon(
+                                  wt.isSpeakerMuted
+                                      ? Icons.volume_off_rounded
+                                      : Icons.volume_up_rounded,
+                                  size: isMobile ? 14 : 15,
+                                  color: wt.isSpeakerMuted
+                                      ? Colors.redAccent
+                                      : const Color(0xFF94A3B8),
                                 ),
                               ),
-                              // Expand arrow
-                              Icon(
-                                Icons.arrow_drop_down_rounded,
-                                size: 16,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ],
@@ -1292,46 +1319,65 @@ class _ShellViewState extends State<ShellView> {
             mainAxisSize: MainAxisSize.min,
             children: onlinePeers.map((peer) {
               final displayName = peer.name.isNotEmpty ? peer.name : peer.username;
+              final isConnected = wt.isPeerConnected(peer.uid);
               final isSelected = wt.currentTargetId == peer.uid;
               return InkWell(
-                onTap: () {
-                  wt.setTarget(targetId: peer.uid, targetName: displayName);
-                  Navigator.of(context).pop();
-                  setState(() {});
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF10B981),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '👤 $displayName (${peer.role.toUpperCase()})',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isSelected ? const Color(0xFF38BDF8) : Colors.white70,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 12,
+                        onTap: () {
+                          wt.setTarget(targetId: peer.uid, targetName: displayName);
+                          Navigator.of(context).pop();
+                          setState(() {});
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: isConnected ? const Color(0xFF10B981) : Colors.amber,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '👤 $displayName (${peer.role.toUpperCase()}) ${isConnected ? "● Terhubung" : "○ Menyambungkan"}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isSelected ? const Color(0xFF38BDF8) : Colors.white70,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(Icons.check_rounded, size: 14, color: Color(0xFF38BDF8)),
+                            ],
                           ),
                         ),
-                      ),
-                      if (isSelected)
-                        const Icon(Icons.check_rounded, size: 14, color: Color(0xFF38BDF8)),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          );
-        },
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ));
+
+    items.add(const PopupMenuDivider(height: 1));
+
+    // Refresh connection
+    items.add(const PopupMenuItem<String>(
+      value: '__refresh__',
+      height: 38,
+      child: Row(
+        children: [
+          Icon(Icons.sync_rounded, size: 16, color: Color(0xFF38BDF8)),
+          SizedBox(width: 8),
+          Text(
+            'Perbarui Koneksi Radio',
+            style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     ));
 

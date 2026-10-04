@@ -17,6 +17,7 @@ class WalkieTalkieService extends ChangeNotifier {
   String _myUserId = '';
   String _myUserName = '';
   String _myRole = '';
+  String _mySessionId = '';
 
   // State
   bool _isInitialized = false;
@@ -44,6 +45,8 @@ class WalkieTalkieService extends ChangeNotifier {
 
   StreamSubscription? _channelSubscription;
   StreamSubscription? _usersSubscription;
+  StreamSubscription? _incomingSignalsSubscription;
+  Timer? _healthCheckTimer;
 
   final Map<String, dynamic> _rtcConfig = {
     'iceServers': [
@@ -67,6 +70,10 @@ class WalkieTalkieService extends ChangeNotifier {
   String? get currentTargetId => _currentTargetId;
   String get currentTargetName => _currentTargetName;
   String get statusMessage => _statusMessage;
+  int get connectedPeerCount => _connectedPeerIds.length;
+  Set<String> get connectedPeerIds => Set.unmodifiable(_connectedPeerIds);
+
+  bool isPeerConnected(String uid) => _connectedPeerIds.contains(uid);
 
   // Is someone else currently speaking?
   bool get isChannelBusy =>
@@ -77,7 +84,6 @@ class WalkieTalkieService extends ChangeNotifier {
     if (_currentSpeakerId == null || _currentSpeakerId == _myUserId) {
       return false;
     }
-    // Only receiving if meant for all OR specifically for me
     return _incomingTargetId == null || _incomingTargetId == _myUserId;
   }
 
@@ -96,6 +102,7 @@ class WalkieTalkieService extends ChangeNotifier {
     _myUserId = userId;
     _myUserName = userName;
     _myRole = role;
+    _mySessionId = DateTime.now().millisecondsSinceEpoch.toString();
 
     try {
       _statusMessage = 'Meminta izin mikrofon...';
@@ -134,6 +141,13 @@ class WalkieTalkieService extends ChangeNotifier {
       _statusMessage = 'Siap (Standby)';
       notifyListeners();
 
+      // Intercept Alt key on browser window to prevent Windows system menu activation
+      html.window.onKeyDown.listen((e) {
+        if (e.key == 'Alt') {
+          e.preventDefault();
+        }
+      });
+
       // Listen to channel status (who is speaking)
       _listenToChannel();
 
@@ -143,11 +157,10 @@ class WalkieTalkieService extends ChangeNotifier {
       // Listen to incoming WebRTC signal offers from other peers
       _listenToIncomingSignals();
 
-      // Handle window blur: stop transmitting if user switches tab/window while holding Alt
-      html.window.onBlur.listen((_) {
-        if (_isTransmitting) {
-          stopTransmitting();
-        }
+      // Auto-healing health check timer: checks active peer connections every 6 seconds
+      _healthCheckTimer?.cancel();
+      _healthCheckTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+        _runConnectionHealthCheck();
       });
 
       return true;
@@ -162,12 +175,19 @@ class WalkieTalkieService extends ChangeNotifier {
   }
 
   // ══════════════════════════════════════════════════════════
-  // PUSH-TO-TALK CONTROLS
+  // PUSH-TO-TALK & TOGGLE CONTROLS
   // ══════════════════════════════════════════════════════════
+
+  Future<void> toggleTransmitting() async {
+    if (_isTransmitting) {
+      await stopTransmitting();
+    } else {
+      await startTransmitting();
+    }
+  }
 
   Future<void> startTransmitting() async {
     if (!_isInitialized || _localStream == null) {
-      // Try to re-init if not ready
       if (_myUserId.isNotEmpty) {
         await initialize(userId: _myUserId, userName: _myUserName, role: _myRole);
       }
@@ -205,8 +225,10 @@ class WalkieTalkieService extends ChangeNotifier {
     } catch (e) {
       debugPrint("Error startTransmitting: $e");
       _isTransmitting = false;
-      for (final track in _localStream!.getAudioTracks()) {
-        track.enabled = false;
+      if (_localStream != null) {
+        for (final track in _localStream!.getAudioTracks()) {
+          track.enabled = false;
+        }
       }
       notifyListeners();
     }
@@ -253,17 +275,17 @@ class WalkieTalkieService extends ChangeNotifier {
 
   void toggleSpeakerMute() {
     _isSpeakerMuted = !_isSpeakerMuted;
-    _applyVolumeSettings();
+    _syncAllAudioElements();
     notifyListeners();
   }
 
   void setVolume(double volume) {
     _speakerVolume = volume.clamp(0.0, 1.0);
-    _applyVolumeSettings();
+    _syncAllAudioElements();
     notifyListeners();
   }
 
-  void _applyVolumeSettings() {
+  void _syncAllAudioElements() {
     final effectiveVolume = _isSpeakerMuted ? 0.0 : _speakerVolume;
     for (final audioEl in _remoteAudioElements.values) {
       audioEl.volume = effectiveVolume;
@@ -272,7 +294,6 @@ class WalkieTalkieService extends ChangeNotifier {
   }
 
   Future<void> unlockAudio() async {
-    // Unlocks browser autoplay policy on user click
     for (final audioEl in _remoteAudioElements.values) {
       try {
         await audioEl.play();
@@ -305,11 +326,10 @@ class WalkieTalkieService extends ChangeNotifier {
         _currentSpeakerName = speakerName ?? 'Seseorang';
         _incomingTargetId = targetId;
 
-        // Check if message is for me (Broadcast or targeted to my UID)
+        // Is this transmission meant for me?
         final isForMe = (_currentSpeakerId != _myUserId) &&
             (_incomingTargetId == null || _incomingTargetId == _myUserId);
 
-        // Adjust volume per remote audio element
         for (final entry in _remoteAudioElements.entries) {
           final peerUid = entry.key;
           final audioEl = entry.value;
@@ -317,9 +337,8 @@ class WalkieTalkieService extends ChangeNotifier {
           if (isForMe && peerUid == _currentSpeakerId) {
             audioEl.volume = _isSpeakerMuted ? 0.0 : _speakerVolume;
             audioEl.muted = _isSpeakerMuted;
-            audioEl.play().catchError((e) => debugPrint("Autoplay play error: $e"));
+            audioEl.play().catchError((e) => debugPrint("Audio play error: $e"));
           } else {
-            // Silence any audio that is not targeted for me or not from current speaker
             audioEl.volume = 0.0;
             audioEl.muted = true;
           }
@@ -332,6 +351,7 @@ class WalkieTalkieService extends ChangeNotifier {
 
         for (final audioEl in _remoteAudioElements.values) {
           audioEl.volume = 0.0;
+          audioEl.muted = true;
         }
       }
 
@@ -340,7 +360,7 @@ class WalkieTalkieService extends ChangeNotifier {
   }
 
   // ══════════════════════════════════════════════════════════
-  // PEER CONNECTION SIGNALING (VANILLA ICE ARCHITECTURE)
+  // WEBRTC SIGNALING (ROBUST VANILLA ICE ARCHITECTURE)
   // ══════════════════════════════════════════════════════════
 
   String _getPairId(String uidA, String uidB) {
@@ -349,6 +369,28 @@ class WalkieTalkieService extends ChangeNotifier {
 
   bool _isInitiator(String myUid, String peerUid) {
     return myUid.compareTo(peerUid) < 0;
+  }
+
+  Future<void> _waitForIceGathering(html.RtcPeerConnection pc, {int timeoutMs = 2500}) async {
+    if (pc.iceGatheringState == 'complete') return;
+    final completer = Completer<void>();
+    StreamSubscription? candidateSub;
+    Timer? timer;
+
+    timer = Timer(Duration(milliseconds: timeoutMs), () {
+      candidateSub?.cancel();
+      if (!completer.isCompleted) completer.complete();
+    });
+
+    candidateSub = pc.onIceCandidate.listen((event) {
+      if (event.candidate == null || pc.iceGatheringState == 'complete') {
+        timer?.cancel();
+        candidateSub?.cancel();
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    await completer.future;
   }
 
   void _listenToOnlineUsers() {
@@ -369,21 +411,57 @@ class WalkieTalkieService extends ChangeNotifier {
         }
 
         if (isActuallyOnline && !_connectedPeerIds.contains(uid)) {
-          // Connect peer if I am the initiator
           if (_isInitiator(_myUserId, uid)) {
             _initiatePeerConnection(uid);
           }
         } else if (!isActuallyOnline && _connectedPeerIds.contains(uid)) {
-          // Cleanup peer connection if peer went offline
           _cleanupPeerConnection(uid);
         }
       }
     });
   }
 
+  void _runConnectionHealthCheck() {
+    if (!_isInitialized || _localStream == null) return;
+
+    _db.collection('users').get().then((snapshot) {
+      for (final doc in snapshot.docs) {
+        final uid = doc.id;
+        if (uid == _myUserId) continue;
+
+        final data = doc.data();
+        final isOnline = data['isOnline'] == true;
+        final lastSeen = data['lastSeen'];
+
+        bool isActuallyOnline = isOnline;
+        if (lastSeen is Timestamp) {
+          final diff = DateTime.now().difference(lastSeen.toDate());
+          isActuallyOnline = isOnline && diff.inSeconds <= 90;
+        }
+
+        if (isActuallyOnline) {
+          final pc = _peerConnections[uid];
+          final state = pc?.iceConnectionState;
+          final isStale = pc == null ||
+              state == 'failed' ||
+              state == 'disconnected' ||
+              state == 'closed';
+
+          if (isStale) {
+            debugPrint("WalkieTalkie HealthCheck: Reconnecting with peer $uid (state: $state)");
+            _cleanupPeerConnection(uid);
+            if (_isInitiator(_myUserId, uid)) {
+              _initiatePeerConnection(uid);
+            }
+          }
+        }
+      }
+    }).catchError((_) {});
+  }
+
   void _listenToIncomingSignals() {
-    // Listen for signaling docs where receiverId is my UID and status is offering
-    _db
+    _incomingSignalsSubscription?.cancel();
+    _incomingSignalsSubscription = _db
         .collection('walkie_talkie_signals')
         .where('receiverId', isEqualTo: _myUserId)
         .snapshots()
@@ -392,16 +470,21 @@ class WalkieTalkieService extends ChangeNotifier {
         final data = doc.data();
         final initiatorId = data['initiatorId'] as String?;
         final status = data['status'] as String?;
+        final offer = data['offer'];
 
-        if (initiatorId != null && status == 'offering' && data['offer'] != null) {
-          _answerPeerConnection(initiatorId, doc.id, data['offer']);
+        if (initiatorId != null && status == 'offering' && offer != null) {
+          _answerPeerConnection(initiatorId, doc.id, offer);
         }
       }
     });
   }
 
   Future<void> _initiatePeerConnection(String peerUid) async {
-    if (_peerConnections.containsKey(peerUid)) return;
+    if (_peerConnections.containsKey(peerUid)) {
+      final state = _peerConnections[peerUid]?.iceConnectionState;
+      if (state == 'connected' || state == 'completed') return;
+      _cleanupPeerConnection(peerUid);
+    }
     if (_localStream == null) return;
 
     try {
@@ -423,7 +506,7 @@ class WalkieTalkieService extends ChangeNotifier {
 
       pc.onIceConnectionStateChange.listen((_) {
         final state = pc.iceConnectionState;
-        debugPrint("WalkieTalkie ICE State with $peerUid: $state");
+        debugPrint("WalkieTalkie ICE State (Initiator) with $peerUid: $state");
         if (state == 'connected' || state == 'completed') {
           _connectedPeerIds.add(peerUid);
           notifyListeners();
@@ -440,8 +523,8 @@ class WalkieTalkieService extends ChangeNotifier {
         'type': offer.type,
       });
 
-      // Wait 1200ms for Vanilla ICE bundling
-      await Future.delayed(const Duration(milliseconds: 1200));
+      // Wait until ICE candidates (including STUN public srflx) are bundled
+      await _waitForIceGathering(pc);
 
       final localDesc = pc.localDescription;
       final signalRef = _db.collection('walkie_talkie_signals').doc(pairId);
@@ -451,6 +534,7 @@ class WalkieTalkieService extends ChangeNotifier {
         'initiatorId': _myUserId,
         'receiverId': peerUid,
         'status': 'offering',
+        'session': _mySessionId,
         'offer': {
           'sdp': localDesc?.sdp ?? offer.sdp,
           'type': localDesc?.type ?? offer.type,
@@ -492,13 +576,10 @@ class WalkieTalkieService extends ChangeNotifier {
     String pairId,
     dynamic rawOffer,
   ) async {
+    // If connection exists but received a new offer, reset to accept fresh connection
     if (_peerConnections.containsKey(initiatorId)) {
-      // Check if connection is already healthy
-      final existingState = _peerConnections[initiatorId]?.iceConnectionState;
-      if (existingState == 'connected' || existingState == 'completed') {
-        return;
-      }
       _peerConnections[initiatorId]?.close();
+      _peerConnections.remove(initiatorId);
     }
 
     if (_localStream == null) return;
@@ -545,8 +626,8 @@ class WalkieTalkieService extends ChangeNotifier {
         'type': answer.type,
       });
 
-      // 3. Wait 1200ms for ICE gathering
-      await Future.delayed(const Duration(milliseconds: 1200));
+      // 3. Wait for ICE gathering
+      await _waitForIceGathering(pc);
 
       // 4. Update Answer to Firestore
       final localDesc = pc.localDescription;
@@ -577,19 +658,23 @@ class WalkieTalkieService extends ChangeNotifier {
     }
 
     if (remoteStream != null) {
+      debugPrint("WalkieTalkie: Remote audio track received from peer $peerUid");
       var audioEl = _remoteAudioElements[peerUid];
       if (audioEl == null) {
         audioEl = html.AudioElement();
+        audioEl.id = 'wt-audio-$peerUid';
         audioEl.autoplay = true;
+        audioEl.style.display = 'none';
+        html.document.body?.append(audioEl); // Attached to DOM so Chrome plays it!
         _remoteAudioElements[peerUid] = audioEl;
       }
-      audioEl.volume = 0.0; // Start muted until speaker activates
+
+      audioEl.volume = 0.0; // Start silent until channel speaker is active
       audioEl.muted = _isSpeakerMuted;
       js_util.setProperty(audioEl, 'srcObject', remoteStream);
 
-      // Attempt play in advance
       audioEl.play().catchError((e) {
-        debugPrint("Remote audio initial play catch: $e");
+        debugPrint("Remote audio initial play catch for $peerUid: $e");
       });
     }
   }
@@ -602,15 +687,19 @@ class WalkieTalkieService extends ChangeNotifier {
     _peerConnections[peerUid]?.close();
     _peerConnections.remove(peerUid);
 
-    _remoteAudioElements[peerUid]?.srcObject = null;
-    _remoteAudioElements.remove(peerUid);
+    final audioEl = _remoteAudioElements[peerUid];
+    if (audioEl != null) {
+      audioEl.srcObject = null;
+      audioEl.remove();
+      _remoteAudioElements.remove(peerUid);
+    }
 
     _connectedPeerIds.remove(peerUid);
     notifyListeners();
   }
 
   void refreshPeers() {
-    _listenToOnlineUsers();
+    _runConnectionHealthCheck();
   }
 
   // ══════════════════════════════════════════════════════════
@@ -619,8 +708,10 @@ class WalkieTalkieService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _healthCheckTimer?.cancel();
     _channelSubscription?.cancel();
     _usersSubscription?.cancel();
+    _incomingSignalsSubscription?.cancel();
 
     for (final sub in _peerSubscriptions.values) {
       sub.cancel();
@@ -634,6 +725,7 @@ class WalkieTalkieService extends ChangeNotifier {
 
     for (final el in _remoteAudioElements.values) {
       el.srcObject = null;
+      el.remove();
     }
     _remoteAudioElements.clear();
 
