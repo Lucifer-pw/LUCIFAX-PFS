@@ -891,8 +891,8 @@ class _ShellViewState extends State<ShellView> {
                     ),
                     label: Text(
                       isActive
-                          ? (isMobile ? 'STOP' : '🛑 Hentikan Siaran')
-                          : (isMobile ? 'LAYAR' : '📺 Bagikan Layar'),
+                          ? (isMobile ? 'STOP' : '🛑 Stop Monitoring')
+                          : (isMobile ? 'MONITORING' : '📺 Monitoring'),
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -906,7 +906,7 @@ class _ShellViewState extends State<ShellView> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Siaran layar dihentikan.'),
+                              content: Text('Monitoring layar dihentikan.'),
                               backgroundColor: Color(0xFF1E293B),
                               behavior: SnackBarBehavior.floating,
                             ),
@@ -926,7 +926,7 @@ class _ShellViewState extends State<ShellView> {
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('📡 Siaran layar aktif! Developer sekarang dapat melihat layar Anda secara live.'),
+                                content: Text('📡 Monitoring layar aktif! Developer sekarang dapat memonitor layar Anda secara live.'),
                                 backgroundColor: Color(0xFF059669),
                                 behavior: SnackBarBehavior.floating,
                               ),
@@ -934,7 +934,7 @@ class _ShellViewState extends State<ShellView> {
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Gagal memulai siaran layar atau dibatalkan.'),
+                                content: Text('Gagal memulai monitoring layar atau dibatalkan.'),
                                 backgroundColor: Colors.redAccent,
                                 behavior: SnackBarBehavior.floating,
                               ),

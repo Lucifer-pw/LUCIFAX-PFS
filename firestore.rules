@@ -257,6 +257,18 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 26. WALKIE_TALKIE — Sinyal Audio & Saluran Radio Walkie-Talkie
+    // ═══════════════════════════════════════════════════
+    match /walkie_talkie_channels/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /walkie_talkie_signals/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {
