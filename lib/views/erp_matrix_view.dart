@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'dart:html' as html;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -625,27 +624,70 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         setCell(12, DoubleCellValue(totMasuk));
         setCell(13, DoubleCellValue(stokAkhir));
 
+        final ownId = prod.id.toString().trim().toLowerCase();
+        final ownName = prod.name.toString().trim().toLowerCase();
+
+        bool matchesProduct(String itemPId, String itemPName) {
+          if (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) return true;
+          if (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId)) return true;
+
+          String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+          final nItem = norm(itemPName);
+          final nOwn = norm(ownName);
+          if (nItem.isNotEmpty && nItem == nOwn) return true;
+
+          String norm2(String s) => norm(s).replaceAll(' g', 'g').replaceAll(' gr', 'g').replaceAll(' gram', 'g');
+          if (nItem.isNotEmpty && norm2(nItem) == norm2(nOwn)) return true;
+
+          return false;
+        }
+
         for (int c = 0; c < customerList.length; c++) {
           final cust = customerList[c];
-          final custProducts = cust['products'] as Map<String, dynamic>? ?? {};
+          double pcs = 0.0;
+          double kg = 0.0;
 
-          Map<String, dynamic>? prodData;
-          if (custProducts.containsKey(prod.id)) {
-            prodData = Map<String, dynamic>.from(custProducts[prod.id] as Map);
-          } else {
-            for (var entry in custProducts.entries) {
-              if (entry.key.toLowerCase().trim() == prod.id.toLowerCase().trim() ||
-                  entry.key.toLowerCase().trim() == prod.name.toLowerCase().trim()) {
-                prodData = Map<String, dynamic>.from(entry.value as Map);
-                break;
+          final invoices = cust['invoices'] as List<dynamic>?;
+          if (invoices != null && invoices.isNotEmpty) {
+            for (var inv in invoices) {
+              if (inv is! Map) continue;
+              final items = inv['items'] as List<dynamic>?;
+              if (items != null) {
+                for (var item in items) {
+                  if (item is! Map) continue;
+                  final itemMap = Map<String, dynamic>.from(item);
+                  final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
+                  final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
+
+                  if (matchesProduct(itemPId, itemPName)) {
+                    final q = (itemMap['qty'] ?? 0.0).toDouble();
+                    double w = (itemMap['weightKg'] ?? 0.0).toDouble();
+                    if (w == 0.0 && q > 0 && sizeGrams > 0) {
+                      w = (q * sizeGrams) / 1000.0;
+                    }
+                    pcs += q;
+                    kg += w;
+                  }
+                }
               }
             }
-          }
-
-          final double pcs = (prodData?['pcs'] ?? 0.0).toDouble();
-          double kg = (prodData?['kg'] ?? 0.0).toDouble();
-          if (kg == 0.0 && pcs > 0 && sizeGrams > 0) {
-            kg = (pcs * sizeGrams) / 1000.0;
+          } else {
+            final custProducts = cust['products'] as Map<String, dynamic>? ?? {};
+            for (var entry in custProducts.entries) {
+              final k = entry.key.toString().trim().toLowerCase();
+              if (matchesProduct(k, k)) {
+                if (entry.value is Map) {
+                  final pMap = Map<String, dynamic>.from(entry.value as Map);
+                  final q = (pMap['pcs'] ?? 0.0).toDouble();
+                  double w = (pMap['kg'] ?? 0.0).toDouble();
+                  if (w == 0.0 && q > 0 && sizeGrams > 0) {
+                    w = (q * sizeGrams) / 1000.0;
+                  }
+                  pcs += q;
+                  kg += w;
+                }
+              }
+            }
           }
 
           custPcsSums[c] += pcs;
@@ -702,18 +744,17 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
       // --- HELPER FOR CUSTOMER INCOME ---
       double getCustIncome(Map<String, dynamic> cMap) {
-        double inc = (cMap['totalIncome'] ?? 0.0).toDouble();
-        if (inc == 0.0) {
-          final invs = cMap['invoices'] as List<dynamic>?;
-          if (invs != null && invs.isNotEmpty) {
-            for (var inv in invs) {
-              if (inv is Map) {
-                inc += (inv['grandTotal'] ?? 0.0).toDouble();
-              }
+        final invs = cMap['invoices'] as List<dynamic>?;
+        if (invs != null && invs.isNotEmpty) {
+          double sum = 0.0;
+          for (var inv in invs) {
+            if (inv is Map) {
+              sum += (inv['grandTotal'] ?? 0.0).toDouble();
             }
           }
+          if (sum > 0) return sum;
         }
-        return inc;
+        return (cMap['totalIncome'] ?? 0.0).toDouble();
       }
 
       double grandTotalIncome = 0.0;
@@ -919,7 +960,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         // Download file langsung via browser (bukan Printing.sharePdf yang bikin 2 file)
         final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
+        html.AnchorElement(href: url)
           ..setAttribute('download', fileName)
           ..click();
         html.Url.revokeObjectUrl(url);
