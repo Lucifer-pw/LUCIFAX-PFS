@@ -6727,7 +6727,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                           // Checklist of invoices
                           Container(
-                            constraints: const BoxConstraints(maxHeight: 160),
+                            constraints: const BoxConstraints(maxHeight: 220),
                             decoration: BoxDecoration(
                               color: const Color(0xFF0F172A),
                               borderRadius: BorderRadius.circular(10),
@@ -6755,6 +6755,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         title: Text(
                                           '$storeName ($invClean)',
                                           style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        ),
+                                        subtitle: Text(
+                                          'Rp ${formatNominal(tr.grandTotal)}'
+                                          ' · ${tr.erpSyncDate != null ? "ERP: ${DateFormat('dd-MM-yyyy').format(tr.erpSyncDate!)}" : "BELUM ERP"}',
+                                          style: TextStyle(
+                                            color: tr.erpSyncDate != null
+                                                ? Colors.amberAccent.withOpacity(0.7)
+                                                : const Color(0xFF64748B),
+                                            fontSize: 11,
+                                          ),
                                         ),
                                         value: isChecked,
                                         onChanged: (val) {
