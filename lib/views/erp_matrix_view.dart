@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -427,6 +429,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       String sheet1Name = 'Matriks Stok & Penjualan';
       Sheet sheet1 = excel[sheet1Name];
       excel.setDefaultSheet(sheet1Name);
+
+      // Delete default 'Sheet1' created by Excel.createExcel()
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
 
       // Extract active customers from _erpRecords
       List<Map<String, dynamic>> customerList = [];
@@ -909,7 +916,13 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         final bytes = Uint8List.fromList(fileBytes);
         final fileName = 'Laporan_ERP_Stok_$_selectedMonthYear.xlsx'.replaceAll(' ', '_');
 
-        await Printing.sharePdf(bytes: bytes, filename: fileName);
+        // Download file langsung via browser (bukan Printing.sharePdf yang bikin 2 file)
+        final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', fileName)
+          ..click();
+        html.Url.revokeObjectUrl(url);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
