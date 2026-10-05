@@ -423,8 +423,8 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
       var excel = Excel.createExcel();
 
-      // --- SHEET 1: Matriks Stok ERP ---
-      String sheet1Name = 'Matriks Stok ERP';
+      // --- SHEET 1: Matriks Stok & Penjualan ERP ---
+      String sheet1Name = 'Matriks Stok & Penjualan';
       Sheet sheet1 = excel[sheet1Name];
       excel.setDefaultSheet(sheet1Name);
 
@@ -437,56 +437,148 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         customerList.add(r);
       }
 
+      // Compute month names (current and previous month)
+      int month = DateTime.now().month;
+      int year = DateTime.now().year;
+      final parts = _selectedMonthYear.split('-');
+      if (parts.length == 2) {
+        month = int.tryParse(parts[0]) ?? month;
+        year = int.tryParse(parts[1]) ?? year;
+      }
+      const monthNames = [
+        'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
+        'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'
+      ];
+      final currentMonthName = monthNames[(month - 1).clamp(0, 11)];
+      final prevMonthIndex = month == 1 ? 11 : month - 2;
+      final prevMonthName = monthNames[prevMonthIndex];
+
       // Title Banner Row 0
+      final title = 'PENJUALAN BULAN $currentMonthName $year';
       var titleCell = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
-      titleCell.value = TextCellValue('LAPORAN MATRIKS STOK ERP & OUTLET — PERIODE: $_selectedMonthYear');
+      titleCell.value = TextCellValue(title);
       titleCell.cellStyle = CellStyle(
         bold: true,
+        fontSize: 14,
         fontColorHex: ExcelColor.fromHexString('#0F172A'),
       );
+      sheet1.merge(
+        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+        CellIndex.indexByColumnRow(columnIndex: 13, rowIndex: 0),
+      );
 
-      // Header Columns Row 1
-      int colIdx = 0;
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('NO');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('NAMA PRODUK / ITEM');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('STOK AWAL');
+      final totalCols = 14 + (customerList.length * 2);
 
-      // Outlet Sales Header Columns (1 Column Per Customer)
-      for (var cust in customerList) {
-        final custAlias = cust['customerName'] ?? cust['aliasName'] ?? 'Outlet';
-        sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue(custAlias.toString().toUpperCase());
-      }
+      // 1. Merge Header cells FIRST so excel package does not clear styles!
+      // Vertical merges (Rows 1 to 2) for left columns
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)); // NO
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 2)); // NAMA PRODUK
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 2)); // ZISE
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 2)); // TOTAL PENJUALAN
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 2)); // STOCK AKHIR BULAN LALU
+      // Col 5: NOT vertically merged (Row 1: SAMPLE, Row 2: BONUS)
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 2)); // TOTAL BARANG KELUAR
+      // Cols 7..11: Horizontal merge at Row 1 for BARANG DATANG
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: 1)); // BARANG DATANG
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: 2)); // TOTAL BARANG MASUK
+      sheet1.merge(CellIndex.indexByColumnRow(columnIndex: 13, rowIndex: 1), CellIndex.indexByColumnRow(columnIndex: 13, rowIndex: 2)); // STOCK AKHIR
 
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('TOTAL PENJUALAN');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('SAMPLE / BONUS');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('TOTAL KELUAR');
-
-      // Influx Header Columns
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M1');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M2');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M3');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M4');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('INFLUX M5');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('TOTAL MASUK');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('STOK AKHIR');
-      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: colIdx++, rowIndex: 1)).value = TextCellValue('SATUAN');
-
-      // Header styling (Row 1)
-      for (int c = 0; c < colIdx; c++) {
-        var hCell = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 1));
-        hCell.cellStyle = CellStyle(
-          bold: true,
-          backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
-          fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
-          horizontalAlign: c == 1 ? HorizontalAlign.Left : HorizontalAlign.Center,
+      // Customer headers (Horizontal merge 2 cols each at Row 1)
+      for (int i = 0; i < customerList.length; i++) {
+        final cStart = 14 + (i * 2);
+        sheet1.merge(
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: 1),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: 1),
         );
       }
 
-      // Populate Data Rows starting at rowIndex = 2
+      // 2. Apply Header Styling (Rows 1 & 2)
+      final headerStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      for (int r = 1; r <= 2; r++) {
+        for (int c = 0; c < totalCols; c++) {
+          sheet1.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r)).cellStyle = headerStyle;
+        }
+      }
+
+      // 3. Set Header Texts
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('NO');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('NAMA PRODUK');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('ZISE');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 1)).value = TextCellValue('TOTAL PENJUALAN');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 1)).value = TextCellValue('STOCK AKHIR BULAN $prevMonthName');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 1)).value = TextCellValue('SAMPLE');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 2)).value = TextCellValue('BONUS');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 1)).value = TextCellValue('TOTAL BARANG KELUAR');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: 1)).value = TextCellValue('BARANG DATANG');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: 2)).value = TextCellValue('M1');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: 2)).value = TextCellValue('M2');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: 2)).value = TextCellValue('M3');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 2)).value = TextCellValue('M4');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: 2)).value = TextCellValue('M5');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: 1)).value = TextCellValue('TOTAL BARANG MASUK $currentMonthName');
+      sheet1.cell(CellIndex.indexByColumnRow(columnIndex: 13, rowIndex: 1)).value = TextCellValue('STOCK AKHIR $currentMonthName');
+
+      for (int i = 0; i < customerList.length; i++) {
+        final cust = customerList[i];
+        final custAlias = (cust['aliasName'] ?? cust['customerName'] ?? 'Outlet').toString();
+        final cStart = 14 + (i * 2);
+        sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: 1)).value = TextCellValue(custAlias.toUpperCase());
+        sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: 2)).value = TextCellValue('Pcs');
+        sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: 2)).value = TextCellValue('Kg');
+      }
+
+      // 4. Data Rows (Starting at rowIndex = 3)
+      double grandSumPenjualan = 0.0;
+      double grandSumStokAwal = 0.0;
+      double grandSumSample = 0.0;
+      double grandSumTotalKeluar = 0.0;
+      double grandSumM1 = 0.0;
+      double grandSumM2 = 0.0;
+      double grandSumM3 = 0.0;
+      double grandSumM4 = 0.0;
+      double grandSumM5 = 0.0;
+      double grandSumTotalMasuk = 0.0;
+      double grandSumStokAkhir = 0.0;
+
+      final List<double> custPcsSums = List.filled(customerList.length, 0.0);
+      final List<double> custKgSums = List.filled(customerList.length, 0.0);
+
       for (int i = 0; i < products.length; i++) {
         final prod = products[i];
         final wMap = _getGroupWeeklyMap(prod, weeklyMap, products);
         final stats = _calculateProductStats(prod, wMap, products);
+
+        final sizeGrams = prod.sizeGrams > 0 ? prod.sizeGrams : 0.0;
+        final totJual = (stats['totalPenjualan'] ?? 0.0).toDouble();
+        final stokAwal = (stats['stockBefore'] ?? 0.0).toDouble();
+        final sample = (stats['sampleBonus'] ?? 0.0).toDouble();
+        final totKeluar = (stats['totalKeluar'] ?? 0.0).toDouble();
+        final m1 = (stats['m1'] ?? 0.0).toDouble();
+        final m2 = (stats['m2'] ?? 0.0).toDouble();
+        final m3 = (stats['m3'] ?? 0.0).toDouble();
+        final m4 = (stats['m4'] ?? 0.0).toDouble();
+        final m5 = (stats['m5'] ?? 0.0).toDouble();
+        final totMasuk = (stats['totalMasuk'] ?? 0.0).toDouble();
+        final stokAkhir = (stats['stockAkhir'] ?? 0.0).toDouble();
+
+        grandSumPenjualan += totJual;
+        grandSumStokAwal += stokAwal;
+        grandSumSample += sample;
+        grandSumTotalKeluar += totKeluar;
+        grandSumM1 += m1;
+        grandSumM2 += m2;
+        grandSumM3 += m3;
+        grandSumM4 += m4;
+        grandSumM5 += m5;
+        grandSumTotalMasuk += totMasuk;
+        grandSumStokAkhir += stokAkhir;
 
         final bgExcelColor = _getProductRowColor(prod.name);
         final hexUpper = bgExcelColor?.colorHex.toUpperCase() ?? '';
@@ -497,88 +589,217 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
             ? (isDarkBg ? ExcelColor.fromHexString('#FFFFFF') : ExcelColor.fromHexString('#000000'))
             : null;
 
-        CellStyle rowStyle = CellStyle(
-          backgroundColorHex: bgExcelColor ?? ExcelColor.none,
-          fontColorHex: fontExcelColor ?? ExcelColor.black,
-          bold: bgExcelColor != null,
-        );
+        final rIdx = 3 + i;
 
-        int cIdx = 0;
-
-        // NO
-        var cNo = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cNo.value = IntCellValue(i + 1);
-        cNo.cellStyle = rowStyle;
-
-        // NAMA PRODUK
-        var cName = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cName.value = TextCellValue(prod.name);
-        cName.cellStyle = rowStyle;
-
-        // STOK AWAL
-        var cStokAwal = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cStokAwal.value = DoubleCellValue(stats['stockBefore'] ?? 0.0);
-        cStokAwal.cellStyle = rowStyle;
-
-        // Sales Per Customer Outlet
-        for (var cust in customerList) {
-          final custProducts = cust['products'] as Map<String, dynamic>? ?? {};
-          final soldQty = _getProductSoldQty(custProducts, prod.id, _showPcs, prod.sizeGrams);
-          var cCust = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-          cCust.value = DoubleCellValue(soldQty);
-          cCust.cellStyle = rowStyle;
+        void setCell(int col, CellValue val, {HorizontalAlign align = HorizontalAlign.Right}) {
+          var c = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rIdx));
+          c.value = val;
+          c.cellStyle = CellStyle(
+            backgroundColorHex: bgExcelColor ?? ExcelColor.none,
+            fontColorHex: fontExcelColor ?? ExcelColor.black,
+            bold: bgExcelColor != null,
+            horizontalAlign: align,
+            verticalAlign: VerticalAlign.Center,
+          );
         }
 
-        // TOTAL PENJUALAN
-        var cTotJual = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cTotJual.value = DoubleCellValue(stats['totalPenjualan'] ?? 0.0);
-        cTotJual.cellStyle = rowStyle;
+        setCell(0, IntCellValue(i + 1), align: HorizontalAlign.Center);
+        setCell(1, TextCellValue(prod.name), align: HorizontalAlign.Left);
+        setCell(2, DoubleCellValue(sizeGrams), align: HorizontalAlign.Center);
+        setCell(3, DoubleCellValue(totJual));
+        setCell(4, DoubleCellValue(stokAwal));
+        setCell(5, DoubleCellValue(sample));
+        setCell(6, DoubleCellValue(totKeluar));
+        setCell(7, DoubleCellValue(m1));
+        setCell(8, DoubleCellValue(m2));
+        setCell(9, DoubleCellValue(m3));
+        setCell(10, DoubleCellValue(m4));
+        setCell(11, DoubleCellValue(m5));
+        setCell(12, DoubleCellValue(totMasuk));
+        setCell(13, DoubleCellValue(stokAkhir));
 
-        // SAMPLE / BONUS
-        var cSample = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cSample.value = DoubleCellValue(stats['sampleBonus'] ?? 0.0);
-        cSample.cellStyle = rowStyle;
+        for (int c = 0; c < customerList.length; c++) {
+          final cust = customerList[c];
+          final custProducts = cust['products'] as Map<String, dynamic>? ?? {};
 
-        // TOTAL KELUAR
-        var cTotKeluar = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cTotKeluar.value = DoubleCellValue(stats['totalKeluar'] ?? 0.0);
-        cTotKeluar.cellStyle = rowStyle;
+          Map<String, dynamic>? prodData;
+          if (custProducts.containsKey(prod.id)) {
+            prodData = Map<String, dynamic>.from(custProducts[prod.id] as Map);
+          } else {
+            for (var entry in custProducts.entries) {
+              if (entry.key.toLowerCase().trim() == prod.id.toLowerCase().trim() ||
+                  entry.key.toLowerCase().trim() == prod.name.toLowerCase().trim()) {
+                prodData = Map<String, dynamic>.from(entry.value as Map);
+                break;
+              }
+            }
+          }
 
-        // INFLUX M1-M5
-        var cM1 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cM1.value = DoubleCellValue(stats['m1'] ?? 0.0);
-        cM1.cellStyle = rowStyle;
+          final double pcs = (prodData?['pcs'] ?? 0.0).toDouble();
+          double kg = (prodData?['kg'] ?? 0.0).toDouble();
+          if (kg == 0.0 && pcs > 0 && sizeGrams > 0) {
+            kg = (pcs * sizeGrams) / 1000.0;
+          }
 
-        var cM2 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cM2.value = DoubleCellValue(stats['m2'] ?? 0.0);
-        cM2.cellStyle = rowStyle;
+          custPcsSums[c] += pcs;
+          custKgSums[c] += kg;
 
-        var cM3 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cM3.value = DoubleCellValue(stats['m3'] ?? 0.0);
-        cM3.cellStyle = rowStyle;
+          final cStart = 14 + (c * 2);
+          setCell(cStart, DoubleCellValue(pcs));
+          setCell(cStart + 1, DoubleCellValue(double.parse(kg.toStringAsFixed(2))));
+        }
+      }
 
-        var cM4 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cM4.value = DoubleCellValue(stats['m4'] ?? 0.0);
-        cM4.cellStyle = rowStyle;
+      // 5. Summary Rows
+      final summaryRow = 3 + products.length;
 
-        var cM5 = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cM5.value = DoubleCellValue(stats['m5'] ?? 0.0);
-        cM5.cellStyle = rowStyle;
+      final summaryStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#334155'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+        horizontalAlign: HorizontalAlign.Right,
+        verticalAlign: VerticalAlign.Center,
+      );
 
-        // TOTAL MASUK
-        var cTotMasuk = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cTotMasuk.value = DoubleCellValue(stats['totalMasuk'] ?? 0.0);
-        cTotMasuk.cellStyle = rowStyle;
+      void setSummaryCell(int col, int row, CellValue val, {HorizontalAlign align = HorizontalAlign.Right, CellStyle? style}) {
+        var c = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
+        c.value = val;
+        c.cellStyle = style ?? summaryStyle;
+      }
 
-        // STOK AKHIR
-        var cStokAkhir = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cStokAkhir.value = DoubleCellValue(stats['stockAkhir'] ?? 0.0);
-        cStokAkhir.cellStyle = rowStyle;
+      // --- ROW TOTAL ---
+      sheet1.merge(
+        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: summaryRow),
+        CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: summaryRow),
+      );
+      setSummaryCell(0, summaryRow, TextCellValue('TOTAL'), align: HorizontalAlign.Center);
+      setSummaryCell(1, summaryRow, TextCellValue(''));
+      setSummaryCell(2, summaryRow, TextCellValue(''));
+      setSummaryCell(3, summaryRow, DoubleCellValue(grandSumPenjualan));
+      setSummaryCell(4, summaryRow, DoubleCellValue(grandSumStokAwal));
+      setSummaryCell(5, summaryRow, DoubleCellValue(grandSumSample));
+      setSummaryCell(6, summaryRow, DoubleCellValue(grandSumTotalKeluar));
+      setSummaryCell(7, summaryRow, DoubleCellValue(grandSumM1));
+      setSummaryCell(8, summaryRow, DoubleCellValue(grandSumM2));
+      setSummaryCell(9, summaryRow, DoubleCellValue(grandSumM3));
+      setSummaryCell(10, summaryRow, DoubleCellValue(grandSumM4));
+      setSummaryCell(11, summaryRow, DoubleCellValue(grandSumM5));
+      setSummaryCell(12, summaryRow, DoubleCellValue(grandSumTotalMasuk));
+      setSummaryCell(13, summaryRow, DoubleCellValue(grandSumStokAkhir));
 
-        // SATUAN
-        var cSatuan = sheet1.cell(CellIndex.indexByColumnRow(columnIndex: cIdx++, rowIndex: i + 2));
-        cSatuan.value = TextCellValue(_showPcs ? 'Pcs' : 'Kg');
-        cSatuan.cellStyle = rowStyle;
+      for (int c = 0; c < customerList.length; c++) {
+        final cStart = 14 + (c * 2);
+        setSummaryCell(cStart, summaryRow, DoubleCellValue(custPcsSums[c]));
+        setSummaryCell(cStart + 1, summaryRow, DoubleCellValue(double.parse(custKgSums[c].toStringAsFixed(2))));
+      }
+
+      // --- ROW TOTAL INCOME ---
+      final incomeRow = summaryRow + 2;
+      double grandTotalIncome = 0.0;
+      for (var cust in customerList) {
+        grandTotalIncome += (cust['totalIncome'] ?? 0.0).toDouble();
+      }
+
+      final incomeLabelStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
+        fontColorHex: ExcelColor.fromHexString('#F8FAFC'),
+        horizontalAlign: HorizontalAlign.Left,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final incomeValStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#0F172A'),
+        fontColorHex: ExcelColor.fromHexString('#4ADE80'),
+        horizontalAlign: HorizontalAlign.Right,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      sheet1.merge(
+        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: incomeRow),
+        CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: incomeRow),
+      );
+      setSummaryCell(0, incomeRow, TextCellValue('Total Income'), style: incomeLabelStyle);
+      setSummaryCell(1, incomeRow, TextCellValue(''), style: incomeLabelStyle);
+      setSummaryCell(2, incomeRow, TextCellValue(''), style: incomeLabelStyle);
+      setSummaryCell(3, incomeRow, TextCellValue(currencyFormatter.format(grandTotalIncome)), style: incomeValStyle);
+
+      for (int c = 0; c < customerList.length; c++) {
+        final cust = customerList[c];
+        final cStart = 14 + (c * 2);
+        final cIncome = (cust['totalIncome'] ?? 0.0).toDouble();
+        final cIncomeStr = cIncome > 0 ? currencyFormatter.format(cIncome) : ' - ';
+
+        sheet1.merge(
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: incomeRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: incomeRow),
+        );
+        setSummaryCell(cStart, incomeRow, TextCellValue(cIncomeStr), style: incomeValStyle);
+        setSummaryCell(cStart + 1, incomeRow, TextCellValue(''), style: incomeValStyle);
+      }
+
+      // --- ROW TOTAL BERAT (KG) ---
+      final kgRow = summaryRow + 4;
+      double grandTotalKg = custKgSums.fold(0.0, (s, kg) => s + kg);
+
+      final kgLabelStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
+        fontColorHex: ExcelColor.fromHexString('#F8FAFC'),
+        horizontalAlign: HorizontalAlign.Left,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final kgValStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#0F172A'),
+        fontColorHex: ExcelColor.fromHexString('#38BDF8'),
+        horizontalAlign: HorizontalAlign.Right,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      sheet1.merge(
+        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: kgRow),
+        CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: kgRow),
+      );
+      setSummaryCell(0, kgRow, TextCellValue('Total Berat (Kg)'), style: kgLabelStyle);
+      setSummaryCell(1, kgRow, TextCellValue(''), style: kgLabelStyle);
+      setSummaryCell(2, kgRow, TextCellValue(''), style: kgLabelStyle);
+      setSummaryCell(3, kgRow, DoubleCellValue(double.parse(grandTotalKg.toStringAsFixed(2))), style: kgValStyle);
+
+      for (int c = 0; c < customerList.length; c++) {
+        final cStart = 14 + (c * 2);
+        final cKg = custKgSums[c];
+
+        sheet1.merge(
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: kgRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: kgRow),
+        );
+        setSummaryCell(cStart, kgRow, DoubleCellValue(double.parse(cKg.toStringAsFixed(2))), style: kgValStyle);
+        setSummaryCell(cStart + 1, kgRow, TextCellValue(''), style: kgValStyle);
+      }
+
+      // Set Column Widths
+      sheet1.setColumnWidth(0, 6.0);
+      sheet1.setColumnWidth(1, 32.0);
+      sheet1.setColumnWidth(2, 8.0);
+      sheet1.setColumnWidth(3, 16.0);
+      sheet1.setColumnWidth(4, 18.0);
+      sheet1.setColumnWidth(5, 10.0);
+      sheet1.setColumnWidth(6, 18.0);
+      sheet1.setColumnWidth(7, 8.0);
+      sheet1.setColumnWidth(8, 8.0);
+      sheet1.setColumnWidth(9, 8.0);
+      sheet1.setColumnWidth(10, 8.0);
+      sheet1.setColumnWidth(11, 8.0);
+      sheet1.setColumnWidth(12, 18.0);
+      sheet1.setColumnWidth(13, 16.0);
+
+      for (int c = 0; c < customerList.length; c++) {
+        final cStart = 14 + (c * 2);
+        sheet1.setColumnWidth(cStart, 9.0);
+        sheet1.setColumnWidth(cStart + 1, 10.0);
       }
 
       // --- SHEET 2: Rincian Invoice ERP ---
