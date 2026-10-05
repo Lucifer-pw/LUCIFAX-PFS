@@ -1668,7 +1668,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        bool showPrePPN = false;
+        final Set<int> individualPrePPN = <int>{};
+        return StatefulBuilder(
+          builder: (context, setDetailState) {
+            return AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           contentPadding: EdgeInsets.all(isMobile ? 14 : 22),
@@ -1837,7 +1841,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FixedColumnWidth(190), // Nama Barang
                                           2: FixedColumnWidth(50), // Qty
                                           3: FixedColumnWidth(75), // Total Karton
-                                          4: FixedColumnWidth(90), // Harga Unit
+                                          4: FixedColumnWidth(115), // Harga Unit
                                           5: FixedColumnWidth(100), // Total
                                           6: FixedColumnWidth(60), // Disc (%)
                                           7: FixedColumnWidth(95), // Disc (Rp)
@@ -1848,7 +1852,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FlexColumnWidth(2.3), // Nama Barang (Spacious)
                                           2: FlexColumnWidth(0.65), // Qty
                                           3: FlexColumnWidth(0.85), // Total Karton
-                                          4: FlexColumnWidth(1.1), // Harga Unit
+                                          4: FlexColumnWidth(1.25), // Harga Unit
                                           5: FlexColumnWidth(1.2), // Total
                                           6: FlexColumnWidth(0.75), // Disc %
                                           7: FlexColumnWidth(1.1), // Disc Rp
@@ -1862,7 +1866,40 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
-                                        _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
+                                        // Tappable Harga Unit header — toggle pre-PPN display
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                          child: InkWell(
+                                            onTap: () {
+                                              setDetailState(() {
+                                                showPrePPN = !showPrePPN;
+                                                if (!showPrePPN) individualPrePPN.clear();
+                                              });
+                                            },
+                                            borderRadius: BorderRadius.circular(4),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  showPrePPN ? 'Harga Unit\n(Sblm PPN)' : 'Harga Unit',
+                                                  textAlign: TextAlign.right,
+                                                  style: TextStyle(
+                                                    color: showPrePPN ? Colors.amberAccent : const Color(0xFF94A3B8),
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 3),
+                                                Icon(
+                                                  showPrePPN ? Icons.toggle_on_rounded : Icons.toggle_off_outlined,
+                                                  color: showPrePPN ? Colors.amberAccent : const Color(0xFF64748B),
+                                                  size: 16,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                         _buildTableCell('Total', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
@@ -1895,7 +1932,57 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
-                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                          // Tappable Harga Unit cell (Per-row click or toggled by Header)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                            child: InkWell(
+                                              onTap: item.isBonus
+                                                  ? null
+                                                  : () {
+                                                      setDetailState(() {
+                                                        if (individualPrePPN.contains(index)) {
+                                                          individualPrePPN.remove(index);
+                                                        } else {
+                                                          individualPrePPN.add(index);
+                                                        }
+                                                      });
+                                                    },
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                                                decoration: (showPrePPN || individualPrePPN.contains(index))
+                                                    ? BoxDecoration(
+                                                        color: Colors.amberAccent.withOpacity(0.08),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: Colors.amberAccent.withOpacity(0.35), width: 0.5),
+                                                      )
+                                                    : null,
+                                                child: Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  children: [
+                                                    Text(
+                                                      item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price),
+                                                      textAlign: TextAlign.right,
+                                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                    ),
+                                                    if (!item.isBonus && (showPrePPN || individualPrePPN.contains(index))) ...[
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        'Sblm PPN: Rp ${NumberFormat('#,##0.##', 'id_ID').format(item.price / 1.11)}',
+                                                        textAlign: TextAlign.right,
+                                                        style: const TextStyle(
+                                                          color: Colors.amberAccent,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
                                           _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
@@ -1976,7 +2063,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FixedColumnWidth(190),
                                           2: FixedColumnWidth(50),
                                           3: FixedColumnWidth(75),
-                                          4: FixedColumnWidth(90),
+                                          4: FixedColumnWidth(115),
                                           5: FixedColumnWidth(100),
                                           6: FixedColumnWidth(60),
                                           7: FixedColumnWidth(95),
@@ -1987,7 +2074,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FlexColumnWidth(2.3),
                                           2: FlexColumnWidth(0.65),
                                           3: FlexColumnWidth(0.85),
-                                          4: FlexColumnWidth(1.1),
+                                          4: FlexColumnWidth(1.25),
                                           5: FlexColumnWidth(1.2),
                                           6: FlexColumnWidth(0.75),
                                           7: FlexColumnWidth(1.1),
@@ -2001,7 +2088,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         _buildTableCell('Nama Barang', isHeader: true),
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
-                                        _buildTableCell('Harga Unit', isHeader: true, align: TextAlign.right),
+                                        _buildTableCell(showPrePPN ? 'Harga Unit\n(Sblm PPN)' : 'Harga Unit', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Total', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
@@ -2034,7 +2121,33 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
-                                          _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price), align: TextAlign.right),
+                                          // Tappable Harga Unit cell
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  item.isBonus ? 'Rp 0' : _rupiahFormatter.format(item.price),
+                                                  textAlign: TextAlign.right,
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                ),
+                                                if (!item.isBonus && showPrePPN) ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    'Sblm PPN: Rp ${NumberFormat('#,##0.##', 'id_ID').format(item.price / 1.11)}',
+                                                    textAlign: TextAlign.right,
+                                                    style: const TextStyle(
+                                                      color: Colors.amberAccent,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
                                           _buildTableCell(item.isBonus ? 'Rp 0' : _rupiahFormatter.format(totalBeforeDisc), align: TextAlign.right),
                                           _buildTableCell(item.isBonus ? '-' : (item.discountPercent > 0 ? '${item.discountPercent.toStringAsFixed(1)}%' : '-'), align: TextAlign.center),
                                           _buildTableCell(item.isBonus ? '-' : (discRp > 0 ? _rupiahFormatter.format(discRp) : '-'), align: TextAlign.right),
@@ -2355,6 +2468,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               ),
             ],
           ],
+        );
+          },
         );
       },
     );
