@@ -232,16 +232,75 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
     );
   }
 
-  Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap, List<dynamic> allProducts) {
-    final String ownId = prod.id.toString().trim().toLowerCase();
-    final String ownName = prod.name.toString().trim().toLowerCase();
+  String _getProductGroupKey(dynamic prod) {
+    final String name = prod.name.toString().toUpperCase().trim();
+    final String pId = prod.id.toString().toUpperCase().trim();
+    final String kInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
+        ? prod.kodeInduk.toString().toUpperCase().trim()
+        : '';
 
-    final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
-    final initialStockVal = _initialStocks[prod.id] ?? 0.0;
-    final stockBefore = initialStockVal * factor;
+    // Known twin patterns for backward compatibility if kodeInduk not yet set
+    if (name.contains('KORNET AYAM LOYANG')) return 'GROUP_KORNET_AYAM_LOYANG_400';
+    if (name.contains('ROLLADE AYAM ROLL')) return 'GROUP_ROLLADE_AYAM_ROLL_400';
+    if (name.contains('ROLLADE SAPI ROLL')) return 'GROUP_ROLLADE_SAPI_ROLL_400';
+    if (name.contains('BRS COKLAT 13S')) return 'GROUP_BRS_COKLAT_13S_500';
+    if (name.contains('BRS COKLAT 24S')) return 'GROUP_BRS_COKLAT_24S_500';
+    if (name.contains('BRS COKLAT 7S')) return 'GROUP_BRS_COKLAT_7S_500';
+    if (name.contains('BRS MERAH 24') || name.contains('BRS MERAH 24S')) return 'GROUP_BRS_MERAH_24_500';
 
-    double ownTotalPenjualan = 0.0;
-    double ownSampleBonus = 0.0;
+    // Dynamic: use kodeInduk if present
+    if (kInduk.isNotEmpty) return kInduk;
+
+    return pId;
+  }
+
+  bool _isProductInduk(dynamic prod, List<dynamic> allProducts) {
+    final String name = prod.name.toString().toUpperCase().trim();
+    final String pId = prod.id.toString().toUpperCase().trim();
+    final String kInduk = (prod.kodeInduk != null && prod.kodeInduk.toString().trim().isNotEmpty)
+        ? prod.kodeInduk.toString().toUpperCase().trim()
+        : pId;
+
+    // 1. Known twin patterns
+    if (name.contains(' 2 ') || name.endsWith(' 2') || name.contains(' 2 400G') || name.contains(' 2 500G')) {
+      return false; // Child variant
+    }
+    if (name == 'BRS MERAH 24S 500G' || name == 'BRS MERAH 24S 500 G') {
+      return false; // Child variant
+    }
+
+    // 2. Dynamic check:
+    // If kInduk != pId, and another product in allProducts has its ID == kInduk,
+    // then that other product is Induk and this product is Anak
+    if (kInduk.isNotEmpty && kInduk != pId) {
+      final hasMasterInduk = allProducts.any((p) => p.id.toString().toUpperCase().trim() == kInduk);
+      if (hasMasterInduk) return false;
+    }
+
+    return true; // Default is Induk
+  }
+
+  Map<String, double> _calculateSingleProductSales(dynamic p) {
+    final String ownId = p.id.toString().trim().toLowerCase();
+    final String ownName = p.name.toString().trim().toLowerCase();
+
+    bool matches(String itemPId, String itemPName) {
+      if (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) return true;
+      if (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId)) return true;
+
+      String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+      final nItem = norm(itemPName);
+      final nOwn = norm(ownName);
+      if (nItem.isNotEmpty && nItem == nOwn) return true;
+
+      String norm2(String s) => norm(s).replaceAll(' g', 'g').replaceAll(' gr', 'g').replaceAll(' gram', 'g');
+      if (nItem.isNotEmpty && norm2(nItem) == norm2(nOwn)) return true;
+
+      return false;
+    }
+
+    double ownPenjualan = 0.0;
+    double ownSample = 0.0;
 
     for (var r in _erpRecords) {
       if (_selectedCustomer != null && r['customerId'] != _selectedCustomer!.id) {
@@ -261,20 +320,16 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
               final itemPId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final itemPName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-              // Strictly match this product by ID or Name
-              final isExactMatch = (itemPId.isNotEmpty && (itemPId == ownId || itemPId == ownName)) ||
-                                   (itemPName.isNotEmpty && (itemPName == ownName || itemPName == ownId));
-
-              if (isExactMatch) {
+              if (matches(itemPId, itemPName)) {
                 final qty = (itemMap['qty'] ?? 0.0).toDouble();
                 final weightKg = (itemMap['weightKg'] ?? 0.0).toDouble();
                 final isBonusItem = itemMap['isBonus'] == true;
                 final val = _showPcs ? qty : weightKg;
 
                 if (isSampleInvoice || isBonusItem) {
-                  ownSampleBonus += val;
+                  ownSample += val;
                 } else {
-                  ownTotalPenjualan += val;
+                  ownPenjualan += val;
                 }
               }
             }
@@ -283,12 +338,46 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
       } else {
         final prodSales = r['products'] as Map<String, dynamic>?;
         if (prodSales != null) {
-          ownTotalPenjualan += _getProductSoldQty(prodSales, prod.id, _showPcs, prod.sizeGrams);
+          ownPenjualan += _getProductSoldQty(prodSales, p.id, _showPcs, p.sizeGrams);
         }
       }
     }
 
-    final totalKeluar = ownTotalPenjualan + ownSampleBonus;
+    return {'penjualan': ownPenjualan, 'sample': ownSample};
+  }
+
+  Map<String, double> _calculateProductStats(dynamic prod, Map<int, double> wMap, List<dynamic> allProducts) {
+    final factor = _showPcs ? 1.0 : (prod.sizeGrams / 1000.0);
+    final initialStockVal = _initialStocks[prod.id] ?? 0.0;
+    final stockBefore = initialStockVal * factor;
+
+    final ownSales = _calculateSingleProductSales(prod);
+    final double ownTotalPenjualan = ownSales['penjualan'] ?? 0.0;
+    final double ownSampleBonus = ownSales['sample'] ?? 0.0;
+
+    final bool isInduk = _isProductInduk(prod, allProducts);
+    final String groupKey = _getProductGroupKey(prod);
+
+    double totalKeluar = 0.0;
+
+    if (!isInduk) {
+      // Barang Anak (Varian): Total Keluar = 0 karena dialihkan ke Induk
+      totalKeluar = 0.0;
+    } else {
+      // Barang Induk: Jumlahkan penjualan & sample dirinya sendiri + semua saudaranya (anak-anaknya)
+      double totalGroupPenjualan = ownTotalPenjualan;
+      double totalGroupSample = ownSampleBonus;
+
+      for (var otherProd in allProducts) {
+        if (otherProd.id != prod.id && _getProductGroupKey(otherProd) == groupKey) {
+          final otherSales = _calculateSingleProductSales(otherProd);
+          totalGroupPenjualan += otherSales['penjualan'] ?? 0.0;
+          totalGroupSample += otherSales['sample'] ?? 0.0;
+        }
+      }
+
+      totalKeluar = totalGroupPenjualan + totalGroupSample;
+    }
 
     final m1 = (wMap[1] ?? 0.0) * factor;
     final m2 = (wMap[2] ?? 0.0) * factor;
@@ -316,12 +405,34 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
 
   Map<int, double> _getGroupWeeklyMap(dynamic prod, Map weeklyMap, List<dynamic> allProducts) {
     final Map<int, double> pWMap = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0};
+
+    final bool isInduk = _isProductInduk(prod, allProducts);
+    final String groupKey = _getProductGroupKey(prod);
+
+    if (!isInduk) {
+      // Barang Anak: tidak menampung incoming stock (dialihkan ke Induk)
+      return pWMap;
+    }
+
+    // Untuk Barang Induk: ambil pasokan mingguannya + jika ada pasokan yang dicatat di barang saudaranya
     final prodWMap = weeklyMap[prod.id];
     if (prodWMap != null) {
       for (int w = 1; w <= 5; w++) {
-        pWMap[w] = (prodWMap[w] ?? 0.0).toDouble();
+        pWMap[w] = (pWMap[w] ?? 0.0) + (prodWMap[w] ?? 0.0).toDouble();
       }
     }
+
+    for (var otherProd in allProducts) {
+      if (otherProd.id != prod.id && _getProductGroupKey(otherProd) == groupKey) {
+        final otherWMap = weeklyMap[otherProd.id];
+        if (otherWMap != null) {
+          for (int w = 1; w <= 5; w++) {
+            pWMap[w] = (pWMap[w] ?? 0.0) + (otherWMap[w] ?? 0.0).toDouble();
+          }
+        }
+      }
+    }
+
     return pWMap;
   }
 
