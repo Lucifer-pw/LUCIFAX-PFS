@@ -693,18 +693,40 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         setSummaryCell(cStart + 1, summaryRow, DoubleCellValue(double.parse(custKgSums[c].toStringAsFixed(2))));
       }
 
-      // --- ROW TOTAL INCOME ---
-      final incomeRow = summaryRow + 2;
-      double grandTotalIncome = 0.0;
-      for (var cust in customerList) {
-        grandTotalIncome += (cust['totalIncome'] ?? 0.0).toDouble();
+      // --- HELPER FOR CUSTOMER INCOME ---
+      double getCustIncome(Map<String, dynamic> cMap) {
+        double inc = (cMap['totalIncome'] ?? 0.0).toDouble();
+        if (inc == 0.0) {
+          final invs = cMap['invoices'] as List<dynamic>?;
+          if (invs != null && invs.isNotEmpty) {
+            for (var inv in invs) {
+              if (inv is Map) {
+                inc += (inv['grandTotal'] ?? 0.0).toDouble();
+              }
+            }
+          }
+        }
+        return inc;
       }
 
-      final incomeLabelStyle = CellStyle(
+      double grandTotalIncome = 0.0;
+      for (var cust in customerList) {
+        grandTotalIncome += getCustIncome(cust);
+      }
+
+      final footerHeaderStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final footerLabelStyle = CellStyle(
         bold: true,
         backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
         fontColorHex: ExcelColor.fromHexString('#F8FAFC'),
-        horizontalAlign: HorizontalAlign.Left,
+        horizontalAlign: HorizontalAlign.Center,
         verticalAlign: VerticalAlign.Center,
       );
 
@@ -716,41 +738,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         verticalAlign: VerticalAlign.Center,
       );
 
-      sheet1.merge(
-        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: incomeRow),
-        CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: incomeRow),
-      );
-      setSummaryCell(0, incomeRow, TextCellValue('Total Income'), style: incomeLabelStyle);
-      setSummaryCell(1, incomeRow, TextCellValue(''), style: incomeLabelStyle);
-      setSummaryCell(2, incomeRow, TextCellValue(''), style: incomeLabelStyle);
-      setSummaryCell(3, incomeRow, TextCellValue(currencyFormatter.format(grandTotalIncome)), style: incomeValStyle);
-
-      for (int c = 0; c < customerList.length; c++) {
-        final cust = customerList[c];
-        final cStart = 14 + (c * 2);
-        final cIncome = (cust['totalIncome'] ?? 0.0).toDouble();
-        final cIncomeStr = cIncome > 0 ? currencyFormatter.format(cIncome) : ' - ';
-
-        sheet1.merge(
-          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: incomeRow),
-          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: incomeRow),
-        );
-        setSummaryCell(cStart, incomeRow, TextCellValue(cIncomeStr), style: incomeValStyle);
-        setSummaryCell(cStart + 1, incomeRow, TextCellValue(''), style: incomeValStyle);
-      }
-
-      // --- ROW TOTAL BERAT (KG) ---
-      final kgRow = summaryRow + 4;
-      double grandTotalKg = custKgSums.fold(0.0, (s, kg) => s + kg);
-
-      final kgLabelStyle = CellStyle(
-        bold: true,
-        backgroundColorHex: ExcelColor.fromHexString('#1E293B'),
-        fontColorHex: ExcelColor.fromHexString('#F8FAFC'),
-        horizontalAlign: HorizontalAlign.Left,
-        verticalAlign: VerticalAlign.Center,
-      );
-
       final kgValStyle = CellStyle(
         bold: true,
         backgroundColorHex: ExcelColor.fromHexString('#0F172A'),
@@ -759,32 +746,82 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         verticalAlign: VerticalAlign.Center,
       );
 
-      sheet1.merge(
-        CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: kgRow),
-        CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: kgRow),
-      );
-      setSummaryCell(0, kgRow, TextCellValue('Total Berat (Kg)'), style: kgLabelStyle);
-      setSummaryCell(1, kgRow, TextCellValue(''), style: kgLabelStyle);
-      setSummaryCell(2, kgRow, TextCellValue(''), style: kgLabelStyle);
-      setSummaryCell(3, kgRow, DoubleCellValue(double.parse(grandTotalKg.toStringAsFixed(2))), style: kgValStyle);
+      // --- SECTION TOTAL INCOME ---
+      // 1. Header Row (Col 3: "Total Income", Col 14+: Outlet Names)
+      final incomeHeaderRow = summaryRow + 2;
+      setSummaryCell(3, incomeHeaderRow, TextCellValue('Total Income'), style: footerLabelStyle);
+
+      for (int c = 0; c < customerList.length; c++) {
+        final cust = customerList[c];
+        final custAlias = (cust['aliasName'] ?? cust['customerName'] ?? 'Outlet').toString();
+        final cStart = 14 + (c * 2);
+
+        sheet1.merge(
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: incomeHeaderRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: incomeHeaderRow),
+        );
+        setSummaryCell(cStart, incomeHeaderRow, TextCellValue(custAlias.toUpperCase()), style: footerHeaderStyle);
+        setSummaryCell(cStart + 1, incomeHeaderRow, TextCellValue(''), style: footerHeaderStyle);
+      }
+
+      // 2. Value Row (Col 3: Grand Total Rp, Col 14+: Outlet Incomes)
+      final incomeValRow = summaryRow + 3;
+      setSummaryCell(3, incomeValRow, TextCellValue(currencyFormatter.format(grandTotalIncome)), style: incomeValStyle);
+
+      for (int c = 0; c < customerList.length; c++) {
+        final cust = customerList[c];
+        final cStart = 14 + (c * 2);
+        final cIncome = getCustIncome(cust);
+        final cIncomeStr = cIncome > 0 ? currencyFormatter.format(cIncome) : ' - ';
+
+        sheet1.merge(
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: incomeValRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: incomeValRow),
+        );
+        setSummaryCell(cStart, incomeValRow, TextCellValue(cIncomeStr), style: incomeValStyle);
+        setSummaryCell(cStart + 1, incomeValRow, TextCellValue(''), style: incomeValStyle);
+      }
+
+      // --- SECTION TOTAL BERAT (KG) ---
+      // 3. Header Row (Col 3: "Total Berat (Kg)", Col 14+: Outlet Names)
+      final kgHeaderRow = summaryRow + 5;
+      setSummaryCell(3, kgHeaderRow, TextCellValue('Total Berat (Kg)'), style: footerLabelStyle);
+
+      for (int c = 0; c < customerList.length; c++) {
+        final cust = customerList[c];
+        final custAlias = (cust['aliasName'] ?? cust['customerName'] ?? 'Outlet').toString();
+        final cStart = 14 + (c * 2);
+
+        sheet1.merge(
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: kgHeaderRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: kgHeaderRow),
+        );
+        setSummaryCell(cStart, kgHeaderRow, TextCellValue(custAlias.toUpperCase()), style: footerHeaderStyle);
+        setSummaryCell(cStart + 1, kgHeaderRow, TextCellValue(''), style: footerHeaderStyle);
+      }
+
+      // 4. Value Row (Col 3: Grand Total Kg, Col 14+: Outlet Kgs)
+      final kgValRow = summaryRow + 6;
+      double grandTotalKg = custKgSums.fold(0.0, (s, kg) => s + kg);
+      setSummaryCell(3, kgValRow, DoubleCellValue(double.parse(grandTotalKg.toStringAsFixed(2))), style: kgValStyle);
 
       for (int c = 0; c < customerList.length; c++) {
         final cStart = 14 + (c * 2);
         final cKg = custKgSums[c];
 
         sheet1.merge(
-          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: kgRow),
-          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: kgRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: kgValRow),
+          CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: kgValRow),
         );
-        setSummaryCell(cStart, kgRow, DoubleCellValue(double.parse(cKg.toStringAsFixed(2))), style: kgValStyle);
-        setSummaryCell(cStart + 1, kgRow, TextCellValue(''), style: kgValStyle);
+        setSummaryCell(cStart, kgValRow, DoubleCellValue(double.parse(cKg.toStringAsFixed(2))), style: kgValStyle);
+        setSummaryCell(cStart + 1, kgValRow, TextCellValue(''), style: kgValStyle);
       }
 
       // Set Column Widths
       sheet1.setColumnWidth(0, 6.0);
       sheet1.setColumnWidth(1, 32.0);
       sheet1.setColumnWidth(2, 8.0);
-      sheet1.setColumnWidth(3, 16.0);
+      sheet1.setColumnWidth(3, 20.0);
       sheet1.setColumnWidth(4, 18.0);
       sheet1.setColumnWidth(5, 10.0);
       sheet1.setColumnWidth(6, 18.0);
