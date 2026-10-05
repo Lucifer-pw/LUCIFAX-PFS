@@ -132,7 +132,16 @@ class _BillingReportViewState extends State<BillingReportView> {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     if (month >= 1 && month <= 12) return months[month - 1];
-    return 'August';
+    return 'October';
+  }
+
+  String _getShortMonthName(int month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return 'Okt';
   }
 
   // ======================================================
@@ -269,7 +278,7 @@ class _BillingReportViewState extends State<BillingReportView> {
             side: const BorderSide(color: gcpBorder),
           ),
           title: Text(
-            'Edit Biaya: Aug $day, $_selectedYear',
+            'Edit Biaya: ${_getShortMonthName(_selectedMonth)} $day, $_selectedYear',
             style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
           ),
           content: TextField(
@@ -380,11 +389,11 @@ class _BillingReportViewState extends State<BillingReportView> {
     final double totalCost = dailyCosts.values.fold(0.0, (sum, v) => sum + v);
 
     // Exact or calculated values matching Google Cloud screenshot
-    double forecastedCost = 86502.26;
-    double diffAmount = 40324.70;
-    double pctChange = 126.49;
-    double forecastDiffAmount = 40298.53;
-    double forecastPctChange = 126.42;
+    double forecastedCost = 0.0;
+    double diffAmount = 0.0;
+    double pctChange = 0.0;
+    double forecastDiffAmount = 0.0;
+    double forecastPctChange = 0.0;
 
     if (totalCost > 0) {
       if ((totalCost - 86528.45).abs() < 1.0) {
@@ -713,9 +722,23 @@ class _BillingReportViewState extends State<BillingReportView> {
       ),
       child: Row(
         children: [
-          const Text(
-            'Services – this month',
-            style: TextStyle(color: gcpTextPrimary, fontSize: 18, fontWeight: FontWeight.w400),
+          InkWell(
+            onTap: () => _showMonthPicker(),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Services – ${_getMonthName(_selectedMonth)} $_selectedYear',
+                    style: const TextStyle(color: gcpTextPrimary, fontSize: 18, fontWeight: FontWeight.w400),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.arrow_drop_down, color: gcpBlueLink, size: 22),
+                ],
+              ),
+            ),
           ),
           const SizedBox(width: 24),
           _buildLinkButton(Icons.list_alt, 'See all reports'),
@@ -724,9 +747,9 @@ class _BillingReportViewState extends State<BillingReportView> {
           const SizedBox(width: 16),
           _buildLinkButton(Icons.share, 'Share'),
           const Spacer(),
-          // Hidden Month Switcher on Learn double-click
+          // Month Switcher on Learn click
           GestureDetector(
-            onDoubleTap: () => _showMonthPicker(),
+            onTap: () => _showMonthPicker(),
             child: Row(
               children: const [
                 Icon(Icons.school_outlined, color: gcpBlueLink, size: 15),
@@ -801,7 +824,11 @@ class _BillingReportViewState extends State<BillingReportView> {
             runSpacing: 6,
             children: [
               _buildPill('Group by (Service)', true),
-              _buildPill('Time range by charge period (Current month)', true),
+              _buildPill(
+                'Time range by charge period (${_getMonthName(_selectedMonth)} $_selectedYear)',
+                true,
+                onTap: () => _showMonthPicker(),
+              ),
               _buildPill('Subaccounts (All 1)', false),
               _buildPill('Products (All 4)', false, icon: Icons.grid_view),
               _buildPill('Originating products (All 4)', false, icon: Icons.grid_view),
@@ -842,8 +869,8 @@ class _BillingReportViewState extends State<BillingReportView> {
     );
   }
 
-  Widget _buildPill(String label, bool isPrimary, {IconData? icon}) {
-    return Container(
+  Widget _buildPill(String label, bool isPrimary, {IconData? icon, VoidCallback? onTap}) {
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: isPrimary ? const Color(0xFF1E3A5F) : gcpCardBg,
@@ -872,6 +899,15 @@ class _BillingReportViewState extends State<BillingReportView> {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: pill,
+      );
+    }
+    return pill;
   }
 
   // ======================================================
@@ -887,6 +923,15 @@ class _BillingReportViewState extends State<BillingReportView> {
     required int maxDay,
     required int daysInMonth,
   }) {
+    int prevMonth = _selectedMonth - 1;
+    int prevYear = _selectedYear;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear = _selectedYear - 1;
+    }
+    final prevDaysInMonth = DateTime(prevYear, prevMonth + 1, 0).day;
+    final prevMonthName = _getMonthName(prevMonth);
+
     return GestureDetector(
       onDoubleTap: () => _showAddDialog(),
       child: Container(
@@ -960,7 +1005,7 @@ class _BillingReportViewState extends State<BillingReportView> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                '${_usCurrencyFormatter.format(diffAmount.abs()).replaceAll(' ', '')} over July 8 – 31, 2026',
+                                '${_usCurrencyFormatter.format(diffAmount.abs()).replaceAll(' ', '')} over $prevMonthName 1 – $prevDaysInMonth, $prevYear',
                                 style: const TextStyle(color: gcpTextSecondary, fontSize: 10.5),
                               ),
                             ],
@@ -1021,7 +1066,7 @@ class _BillingReportViewState extends State<BillingReportView> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                '${_usCurrencyFormatter.format(forecastDiffAmount.abs()).replaceAll(' ', '')} over July 1 – 31, 2026',
+                                '${_usCurrencyFormatter.format(forecastDiffAmount.abs()).replaceAll(' ', '')} over $prevMonthName 1 – $prevDaysInMonth, $prevYear',
                                 style: const TextStyle(color: gcpTextSecondary, fontSize: 10.5),
                               ),
                             ],
@@ -1167,8 +1212,9 @@ class _BillingReportViewState extends State<BillingReportView> {
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final day = group.x + 1;
               final amount = dailyCosts[day] ?? 0;
+              final shortMonth = _getShortMonthName(_selectedMonth);
               return BarTooltipItem(
-                'Aug $day\n${_rpCommaFormatter.format(amount)}',
+                '$shortMonth $day\n${_rpCommaFormatter.format(amount)}',
                 const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
               );
             },
@@ -1218,10 +1264,11 @@ class _BillingReportViewState extends State<BillingReportView> {
               reservedSize: 22,
               getTitlesWidget: (value, meta) {
                 final day = value.toInt() + 1;
+                final shortMonth = _getShortMonthName(_selectedMonth);
                 return Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    'Aug $day',
+                    '$shortMonth $day',
                     style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 8),
                   ),
                 );
@@ -1378,81 +1425,107 @@ class _BillingReportViewState extends State<BillingReportView> {
   // MONTH PICKER
   // ======================================================
   void _showMonthPicker() {
+    int tempYear = _selectedYear;
+    int tempMonth = _selectedMonth;
+    final now = DateTime.now();
+
+    const idMonths = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+
     showDialog(
       context: context,
       builder: (ctx) {
-        int tempYear = _selectedYear;
-        int tempMonth = _selectedMonth;
         return StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            backgroundColor: gcpCardBg,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: gcpBorder),
-            ),
-            title: const Text('Pilih Periode Laporan', style: TextStyle(color: Colors.white, fontSize: 14)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
+          builder: (ctx, setPickerState) => AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF38BDF8), size: 24),
+                  onPressed: () {
+                    setPickerState(() => tempYear--);
+                  },
+                ),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left, color: gcpBlueLink),
-                      onPressed: () => setDialogState(() => tempYear--),
-                    ),
-                    Text('$tempYear', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right, color: gcpBlueLink),
-                      onPressed: () => setDialogState(() => tempYear++),
+                    const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$tempYear',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: List.generate(12, (i) {
-                    final m = i + 1;
-                    final isSelected = m == tempMonth;
-                    return GestureDetector(
-                      onTap: () => setDialogState(() => tempMonth = m),
-                      child: Container(
-                        width: 58,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF1A73E8) : gcpBg,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: isSelected ? const Color(0xFF1A73E8) : gcpBorder),
-                        ),
-                        child: Center(
-                          child: Text(
-                            ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i],
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : gcpTextSecondary,
-                              fontSize: 11.5,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF38BDF8), size: 24),
+                  onPressed: () {
+                    setPickerState(() => tempYear++);
+                  },
                 ),
               ],
+            ),
+            content: SizedBox(
+              width: 320,
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: 2.2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, idx) {
+                  final mIndex = idx + 1;
+                  final isSelected = mIndex == tempMonth && tempYear == _selectedYear;
+                  final isCurrent = mIndex == now.month && tempYear == now.year;
+
+                  return InkWell(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _changeMonth(tempYear, mIndex);
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF0284C7)
+                            : (isCurrent ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A)),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF38BDF8)
+                              : (isCurrent ? const Color(0xFF38BDF8).withOpacity(0.6) : const Color(0xFF334155)),
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Text(
+                        idMonths[idx],
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : (isCurrent ? const Color(0xFF38BDF8) : Colors.white70),
+                          fontWeight: isSelected || isCurrent ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal', style: TextStyle(color: gcpTextSecondary)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A73E8)),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _changeMonth(tempYear, tempMonth);
-                },
-                child: const Text('Terapkan', style: TextStyle(color: Colors.white)),
+                child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
               ),
             ],
           ),
