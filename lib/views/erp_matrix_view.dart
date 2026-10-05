@@ -809,25 +809,24 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: incomeHeaderRow),
         );
         setSummaryCell(cStart, incomeHeaderRow, TextCellValue(custAlias.toUpperCase()), style: footerHeaderStyle);
-        setSummaryCell(cStart + 1, incomeHeaderRow, TextCellValue(''), style: footerHeaderStyle);
       }
 
       // 2. Value Row (Col 3: Grand Total Rp, Col 14+: Outlet Incomes)
       final incomeValRow = summaryRow + 3;
       setSummaryCell(3, incomeValRow, TextCellValue(currencyFormatter.format(grandTotalIncome)), style: incomeValStyle);
 
+      final thousandFormatter = NumberFormat('#,##0', 'id_ID');
       for (int c = 0; c < customerList.length; c++) {
         final cust = customerList[c];
         final cStart = 14 + (c * 2);
         final cIncome = getCustIncome(cust);
-        final cIncomeStr = cIncome > 0 ? currencyFormatter.format(cIncome) : ' - ';
+        final cIncomeStr = cIncome > 0 ? thousandFormatter.format(cIncome) : ' - ';
 
         sheet1.merge(
           CellIndex.indexByColumnRow(columnIndex: cStart, rowIndex: incomeValRow),
           CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: incomeValRow),
         );
         setSummaryCell(cStart, incomeValRow, TextCellValue(cIncomeStr), style: incomeValStyle);
-        setSummaryCell(cStart + 1, incomeValRow, TextCellValue(''), style: incomeValStyle);
       }
 
       // --- SECTION TOTAL BERAT (KG) ---
@@ -845,7 +844,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: kgHeaderRow),
         );
         setSummaryCell(cStart, kgHeaderRow, TextCellValue(custAlias.toUpperCase()), style: footerHeaderStyle);
-        setSummaryCell(cStart + 1, kgHeaderRow, TextCellValue(''), style: footerHeaderStyle);
       }
 
       // 4. Value Row (Col 3: Grand Total Kg, Col 14+: Outlet Kgs)
@@ -862,7 +860,6 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
           CellIndex.indexByColumnRow(columnIndex: cStart + 1, rowIndex: kgValRow),
         );
         setSummaryCell(cStart, kgValRow, DoubleCellValue(double.parse(cKg.toStringAsFixed(2))), style: kgValStyle);
-        setSummaryCell(cStart + 1, kgValRow, TextCellValue(''), style: kgValStyle);
       }
 
       // Set Column Widths
