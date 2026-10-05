@@ -1841,7 +1841,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FixedColumnWidth(190), // Nama Barang
                                           2: FixedColumnWidth(50), // Qty
                                           3: FixedColumnWidth(75), // Total Karton
-                                          4: FixedColumnWidth(115), // Harga Unit
+                                          4: FixedColumnWidth(140), // Harga Unit
                                           5: FixedColumnWidth(100), // Total
                                           6: FixedColumnWidth(60), // Disc (%)
                                           7: FixedColumnWidth(95), // Disc (Rp)
@@ -1849,14 +1849,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         }
                                       : const {
                                           0: FlexColumnWidth(0.35), // No
-                                          1: FlexColumnWidth(2.3), // Nama Barang (Spacious)
-                                          2: FlexColumnWidth(0.65), // Qty
-                                          3: FlexColumnWidth(0.85), // Total Karton
-                                          4: FlexColumnWidth(1.25), // Harga Unit
-                                          5: FlexColumnWidth(1.2), // Total
-                                          6: FlexColumnWidth(0.75), // Disc %
-                                          7: FlexColumnWidth(1.1), // Disc Rp
-                                          8: FlexColumnWidth(1.4), // Subtotal
+                                          1: FlexColumnWidth(2.1), // Nama Barang (Spacious)
+                                          2: FlexColumnWidth(0.6), // Qty
+                                          3: FlexColumnWidth(0.8), // Total Karton
+                                          4: FlexColumnWidth(1.55), // Harga Unit
+                                          5: FlexColumnWidth(1.15), // Total
+                                          6: FlexColumnWidth(0.7), // Disc %
+                                          7: FlexColumnWidth(1.05), // Disc Rp
+                                          8: FlexColumnWidth(1.35), // Subtotal
                                         },
                                   children: [
                                     TableRow(
@@ -1947,16 +1947,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         }
                                                       });
                                                     },
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                                                decoration: (showPrePPN || individualPrePPN.contains(index))
-                                                    ? BoxDecoration(
-                                                        color: Colors.amberAccent.withOpacity(0.08),
-                                                        borderRadius: BorderRadius.circular(4),
-                                                        border: Border.all(color: Colors.amberAccent.withOpacity(0.35), width: 0.5),
-                                                      )
-                                                    : null,
+                                              borderRadius: BorderRadius.circular(4),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                                 child: Column(
                                                   mainAxisAlignment: MainAxisAlignment.center,
                                                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1968,13 +1961,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                     ),
                                                     if (!item.isBonus && (showPrePPN || individualPrePPN.contains(index))) ...[
                                                       const SizedBox(height: 2),
-                                                      Text(
-                                                        'Sblm PPN: Rp ${NumberFormat('#,##0.##', 'id_ID').format(item.price / 1.11)}',
-                                                        textAlign: TextAlign.right,
-                                                        style: const TextStyle(
-                                                          color: Colors.amberAccent,
-                                                          fontSize: 10,
-                                                          fontWeight: FontWeight.bold,
+                                                      FittedBox(
+                                                        fit: BoxFit.scaleDown,
+                                                        alignment: Alignment.centerRight,
+                                                        child: Text(
+                                                          'Sblm: Rp ${NumberFormat('#,##0.##', 'id_ID').format(item.price / 1.11)}',
+                                                          textAlign: TextAlign.right,
+                                                          style: const TextStyle(
+                                                            color: Colors.amberAccent,
+                                                            fontSize: 10.5,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
                                                         ),
                                                       ),
                                                     ],
@@ -2063,7 +2060,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FixedColumnWidth(190),
                                           2: FixedColumnWidth(50),
                                           3: FixedColumnWidth(75),
-                                          4: FixedColumnWidth(115),
+                                          4: FixedColumnWidth(140),
                                           5: FixedColumnWidth(100),
                                           6: FixedColumnWidth(60),
                                           7: FixedColumnWidth(95),
@@ -2074,7 +2071,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                           1: FlexColumnWidth(2.3),
                                           2: FlexColumnWidth(0.65),
                                           3: FlexColumnWidth(0.85),
-                                          4: FlexColumnWidth(1.25),
+                                          4: FlexColumnWidth(1.55),
                                           5: FlexColumnWidth(1.2),
                                           6: FlexColumnWidth(0.75),
                                           7: FlexColumnWidth(1.1),
@@ -2135,13 +2132,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                 ),
                                                 if (!item.isBonus && showPrePPN) ...[
                                                   const SizedBox(height: 2),
-                                                  Text(
-                                                    'Sblm PPN: Rp ${NumberFormat('#,##0.##', 'id_ID').format(item.price / 1.11)}',
-                                                    textAlign: TextAlign.right,
-                                                    style: const TextStyle(
-                                                      color: Colors.amberAccent,
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment: Alignment.centerRight,
+                                                    child: Text(
+                                                      'Sblm: Rp ${NumberFormat('#,##0.##', 'id_ID').format(item.price / 1.11)}',
+                                                      textAlign: TextAlign.right,
+                                                      style: const TextStyle(
+                                                        color: Colors.amberAccent,
+                                                        fontSize: 10.5,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
