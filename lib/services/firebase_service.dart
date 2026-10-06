@@ -396,6 +396,12 @@ class FirebaseService {
     await _db.collection('customers').doc(customer.id).set(customer.toMap());
   }
 
+  Future<void> updateCustomerDeposit(String customerId, double newDeposit) async {
+    await _db.collection('customers').doc(customerId).update({
+      'depositBalance': newDeposit,
+    });
+  }
+
   Future<void> deleteCustomer(String id) async {
     await _db.collection('customers').doc(id).delete();
   }

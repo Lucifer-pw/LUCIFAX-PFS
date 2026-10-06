@@ -1,5 +1,58 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class PaymentRecord {
+  final String id;
+  final double amount;
+  final DateTime date;
+  final String note;
+  final String paymentMethod;
+  final DateTime? createdAt;
+
+  PaymentRecord({
+    required this.id,
+    required this.amount,
+    required this.date,
+    this.note = '',
+    this.paymentMethod = 'Transfer',
+    this.createdAt,
+  });
+
+  factory PaymentRecord.fromMap(Map<String, dynamic> map, [String? id]) {
+    DateTime parsedDate = DateTime.now();
+    if (map['date'] != null) {
+      if (map['date'] is Timestamp) {
+        parsedDate = (map['date'] as Timestamp).toDate();
+      } else if (map['date'] is String) {
+        parsedDate = DateTime.tryParse(map['date']) ?? DateTime.now();
+      }
+    }
+    DateTime? parsedCreatedAt;
+    if (map['createdAt'] != null && map['createdAt'] is Timestamp) {
+      parsedCreatedAt = (map['createdAt'] as Timestamp).toDate();
+    }
+
+    return PaymentRecord(
+      id: id ?? map['id'] ?? '',
+      amount: (map['amount'] is num) ? (map['amount'] as num).toDouble() : 0.0,
+      date: parsedDate,
+      note: map['note'] ?? '',
+      paymentMethod: map['paymentMethod'] ?? 'Transfer',
+      createdAt: parsedCreatedAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'amount': amount,
+      'date': Timestamp.fromDate(date),
+      'note': note,
+      'paymentMethod': paymentMethod,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+    };
+  }
+}
+
 class Receivable {
   final String id;
   final String toko;
@@ -13,6 +66,8 @@ class Receivable {
   final DateTime? erpSyncDate;
   final bool isLocked;
   final double returnAmount;
+  final double paidAmount;
+  final List<PaymentRecord> payments;
 
   Receivable({
     required this.id,
@@ -27,7 +82,17 @@ class Receivable {
     this.erpSyncDate,
     this.isLocked = false,
     this.returnAmount = 0.0,
+    this.paidAmount = 0.0,
+    this.payments = const [],
   });
+
+  double get effectiveNominal => (nominal - returnAmount).clamp(0.0, double.infinity);
+  double get effectivePaidAmount => isLunas && paidAmount <= 0 ? effectiveNominal : paidAmount;
+  double get remainingAmount {
+    if (isLunas) return 0.0;
+    return (effectiveNominal - effectivePaidAmount).clamp(0.0, double.infinity);
+  }
+  bool get isPartiallyPaid => !isLunas && effectivePaidAmount > 0 && remainingAmount > 0;
 
   factory Receivable.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -53,6 +118,21 @@ class Receivable {
       parsedErpSyncDate = DateTime.tryParse(data['erpSyncDate']);
     }
 
+    final rawPayments = data['payments'] as List<dynamic>? ?? [];
+    final paymentsList = rawPayments.map((p) {
+      if (p is Map<String, dynamic>) {
+        return PaymentRecord.fromMap(p);
+      } else if (p is Map) {
+        return PaymentRecord.fromMap(Map<String, dynamic>.from(p));
+      }
+      return null;
+    }).whereType<PaymentRecord>().toList();
+
+    double parsedPaidAmount = (data['paidAmount'] is num) ? (data['paidAmount'] as num).toDouble() : 0.0;
+    if (parsedPaidAmount <= 0 && paymentsList.isNotEmpty) {
+      parsedPaidAmount = paymentsList.fold(0.0, (acc, p) => acc + p.amount);
+    }
+
     return Receivable(
       id: doc.id,
       toko: data['toko'] ?? '',
@@ -66,6 +146,8 @@ class Receivable {
       erpSyncDate: parsedErpSyncDate,
       isLocked: data['isLocked'] ?? false,
       returnAmount: (data['returnAmount'] is num) ? (data['returnAmount'] as num).toDouble() : 0.0,
+      paidAmount: parsedPaidAmount,
+      payments: paymentsList,
     );
   }
 
@@ -82,6 +164,8 @@ class Receivable {
       'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate!) : null,
       'isLocked': isLocked,
       'returnAmount': returnAmount,
+      'paidAmount': paidAmount,
+      'payments': payments.map((p) => p.toMap()).toList(),
     };
   }
 
@@ -98,6 +182,8 @@ class Receivable {
     DateTime? erpSyncDate,
     bool? isLocked,
     double? returnAmount,
+    double? paidAmount,
+    List<PaymentRecord>? payments,
   }) {
     return Receivable(
       id: id ?? this.id,
@@ -112,6 +198,8 @@ class Receivable {
       erpSyncDate: erpSyncDate ?? this.erpSyncDate,
       isLocked: isLocked ?? this.isLocked,
       returnAmount: returnAmount ?? this.returnAmount,
+      paidAmount: paidAmount ?? this.paidAmount,
+      payments: payments ?? this.payments,
     );
   }
 }

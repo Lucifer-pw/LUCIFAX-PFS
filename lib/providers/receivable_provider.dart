@@ -23,13 +23,12 @@ class ReceivableProvider with ChangeNotifier {
   double get totalUnpaid {
     return _receivables
         .where((r) => !r.isLunas)
-        .fold(0.0, (acc, r) => acc + r.nominal);
+        .fold(0.0, (acc, r) => acc + r.remainingAmount);
   }
 
   double get totalPaid {
     return _receivables
-        .where((r) => r.isLunas)
-        .fold(0.0, (acc, r) => acc + r.nominal);
+        .fold(0.0, (acc, r) => acc + r.effectivePaidAmount);
   }
 
   ReceivableProvider() {
@@ -100,17 +99,173 @@ class ReceivableProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> recordPayment({
+    required String receivableId,
+    required String noInvoice,
+    required double paymentAmount,
+    required DateTime paymentDate,
+    String note = '',
+    String paymentMethod = 'Transfer',
+    double overpaymentToDeposit = 0.0,
+    String? customerId,
+  }) async {
+    try {
+      final index = _receivables.indexWhere((r) => r.id == receivableId);
+      if (index == -1) return false;
+      final current = _receivables[index];
+
+      final newPayment = PaymentRecord(
+        id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
+        amount: paymentAmount,
+        date: paymentDate,
+        note: note,
+        paymentMethod: paymentMethod,
+        createdAt: DateTime.now(),
+      );
+
+      final updatedPayments = List<PaymentRecord>.from(current.payments)..add(newPayment);
+      final newPaidAmount = current.effectivePaidAmount + paymentAmount;
+      final bool willBeLunas = newPaidAmount >= (current.effectiveNominal - 1.0);
+
+      // 1. Update receivables in Firestore
+      await _db.collection('receivables').doc(receivableId).update({
+        'paidAmount': newPaidAmount,
+        'isLunas': willBeLunas,
+        'payments': updatedPayments.map((p) => p.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. If overpayment to deposit, update customer's depositBalance
+      if (overpaymentToDeposit > 0 && customerId != null && customerId.isNotEmpty) {
+        await _db.collection('customers').doc(customerId).update({
+          'depositBalance': FieldValue.increment(overpaymentToDeposit),
+        });
+      }
+
+      // 3. Update local state
+      _receivables[index] = current.copyWith(
+        paidAmount: newPaidAmount,
+        isLunas: willBeLunas,
+        payments: updatedPayments,
+      );
+      notifyListeners();
+
+      // 4. Sync to transactions collection in Firestore
+      final invClean = noInvoice.replaceAll('#', '').trim();
+      final trStatus = willBeLunas ? 'PAID' : 'UNPAID';
+      final trDoc = await _db.collection('transactions').doc(invClean).get();
+      if (trDoc.exists) {
+        await trDoc.reference.update({
+          'statusTransfer': trStatus,
+          'transferDate': willBeLunas ? Timestamp.fromDate(paymentDate) : null,
+        });
+      } else {
+        final trSnap = await _db.collection('transactions').where('invoiceNo', isEqualTo: invClean).limit(1).get();
+        if (trSnap.docs.isNotEmpty) {
+          await trSnap.docs.first.reference.update({
+            'statusTransfer': trStatus,
+            'transferDate': willBeLunas ? Timestamp.fromDate(paymentDate) : null,
+          });
+        }
+      }
+
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      debugPrint("Error recordPayment: $e");
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deletePaymentRecord({
+    required String receivableId,
+    required String noInvoice,
+    required String paymentId,
+  }) async {
+    try {
+      final index = _receivables.indexWhere((r) => r.id == receivableId);
+      if (index == -1) return false;
+      final current = _receivables[index];
+
+      final updatedPayments = current.payments.where((p) => p.id != paymentId).toList();
+      final newPaidAmount = updatedPayments.fold(0.0, (acc, p) => acc + p.amount);
+      final bool willBeLunas = newPaidAmount >= (current.effectiveNominal - 1.0) && newPaidAmount > 0;
+
+      await _db.collection('receivables').doc(receivableId).update({
+        'paidAmount': newPaidAmount,
+        'isLunas': willBeLunas,
+        'payments': updatedPayments.map((p) => p.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      _receivables[index] = current.copyWith(
+        paidAmount: newPaidAmount,
+        isLunas: willBeLunas,
+        payments: updatedPayments,
+      );
+      notifyListeners();
+
+      final invClean = noInvoice.replaceAll('#', '').trim();
+      final trStatus = willBeLunas ? 'PAID' : 'UNPAID';
+      final trDoc = await _db.collection('transactions').doc(invClean).get();
+      if (trDoc.exists) {
+        await trDoc.reference.update({
+          'statusTransfer': trStatus,
+          'transferDate': willBeLunas ? Timestamp.fromDate(DateTime.now()) : null,
+        });
+      }
+
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      debugPrint("Error deletePaymentRecord: $e");
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> markLunasWithDate(String id, String noInvoice, bool isLunas, DateTime? transferDate) async {
     try {
+      final index = _receivables.indexWhere((r) => r.id == id);
+      double newPaid = 0.0;
+      List<PaymentRecord> newPayments = [];
+
+      if (index != -1) {
+        final current = _receivables[index];
+        if (isLunas) {
+          newPaid = current.effectiveNominal;
+          newPayments = List<PaymentRecord>.from(current.payments);
+          if (newPayments.isEmpty) {
+            newPayments.add(PaymentRecord(
+              id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
+              amount: newPaid,
+              date: transferDate ?? DateTime.now(),
+              note: 'Pelunasan Penuh',
+              paymentMethod: 'Transfer',
+              createdAt: DateTime.now(),
+            ));
+          }
+        } else {
+          newPaid = 0.0;
+          newPayments = [];
+        }
+      }
+
       // 1. Update receivables in Firestore
       await _db.collection('receivables').doc(id).update({
         'isLunas': isLunas,
+        'paidAmount': newPaid,
+        'payments': newPayments.map((p) => p.toMap()).toList(),
       });
 
       // 2. Update local state
-      final index = _receivables.indexWhere((r) => r.id == id);
       if (index != -1) {
-        _receivables[index] = _receivables[index].copyWith(isLunas: isLunas);
+        _receivables[index] = _receivables[index].copyWith(
+          isLunas: isLunas,
+          paidAmount: newPaid,
+          payments: newPayments,
+        );
         notifyListeners();
       }
 

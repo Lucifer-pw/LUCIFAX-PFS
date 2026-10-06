@@ -40,6 +40,15 @@ class CustomerProvider extends ChangeNotifier {
     await _dbService.saveCustomer(customer);
   }
 
+  Future<void> updateCustomerDeposit(String customerId, double newDeposit) async {
+    await _dbService.updateCustomerDeposit(customerId, newDeposit);
+    final idx = _customers.indexWhere((c) => c.id == customerId);
+    if (idx != -1) {
+      _customers[idx] = _customers[idx].copyWith(depositBalance: newDeposit);
+      notifyListeners();
+    }
+  }
+
   Future<void> deleteCustomer(String id) async {
     await _dbService.deleteCustomer(id);
   }

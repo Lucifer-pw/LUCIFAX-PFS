@@ -594,7 +594,8 @@ class PrintService {
 
     final logoBytes = base64Decode(fivaLogoBase64);
     final logoImage = pw.MemoryImage(logoBytes);
-    final double grandTotal = items.fold(0.0, (acc, r) => acc + r.nominal);
+    final double totalTagihan = items.fold(0.0, (acc, r) => acc + r.nominal);
+    final double grandTotal = items.fold(0.0, (acc, r) => acc + (r.isLunas ? 0.0 : r.remainingAmount));
     final dateStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
     pdf.addPage(
@@ -719,6 +720,38 @@ class PrintService {
                   // Data Rows
                   ...List.generate(items.length, (index) {
                     final rec = items[index];
+                    pw.Widget nominalCell;
+                    if (rec.isPartiallyPaid) {
+                      nominalCell = pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        alignment: pw.Alignment.centerRight,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.end,
+                          mainAxisSize: pw.MainAxisSize.min,
+                          children: [
+                            pw.Text(_rupiahFormatter.format(rec.nominal), style: const pw.TextStyle(fontSize: 8.5)),
+                            pw.Text('Terbayar: ${_rupiahFormatter.format(rec.effectivePaidAmount)}', style: pw.TextStyle(fontSize: 7, color: PdfColors.orange900)),
+                            pw.Text('Sisa: ${_rupiahFormatter.format(rec.remainingAmount)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                          ],
+                        ),
+                      );
+                    } else if (rec.isLunas) {
+                      nominalCell = pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        alignment: pw.Alignment.centerRight,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.end,
+                          mainAxisSize: pw.MainAxisSize.min,
+                          children: [
+                            pw.Text(_rupiahFormatter.format(rec.nominal), style: const pw.TextStyle(fontSize: 8.5)),
+                            pw.Text('LUNAS', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
+                          ],
+                        ),
+                      );
+                    } else {
+                      nominalCell = _buildCell(_rupiahFormatter.format(rec.nominal), align: pw.TextAlign.right);
+                    }
+
                     return pw.TableRow(
                       children: [
                         _buildCell('${index + 1}', align: pw.TextAlign.center),
@@ -726,7 +759,7 @@ class PrintService {
                         _buildCell(rec.toko),
                         _buildCell(rec.kota.isEmpty ? '-' : rec.kota, align: pw.TextAlign.center),
                         _buildCell(rec.tglKirim != null ? DateFormat('dd-MM-yyyy').format(rec.tglKirim!) : '-', align: pw.TextAlign.center),
-                        _buildCell(_rupiahFormatter.format(rec.nominal), align: pw.TextAlign.right),
+                        nominalCell,
                       ],
                     );
                   }),
@@ -751,7 +784,7 @@ class PrintService {
                           border: pw.Border(right: pw.BorderSide(color: PdfColors.black, width: 0.5)),
                         ),
                         child: pw.Text(
-                          'GRAND TOTAL',
+                          grandTotal < totalTagihan ? 'SISA PIUTANG' : 'GRAND TOTAL',
                           style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
                           textAlign: pw.TextAlign.center,
                         ),
