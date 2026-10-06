@@ -584,6 +584,32 @@ class PrintService {
     }
   }
 
+  // Dedicated helper for Kartu Piutang table cells with clean padding and styling
+  static pw.Widget _buildKartuPiutangCell(
+    String text, {
+    bool isHeader = false,
+    pw.TextAlign align = pw.TextAlign.left,
+    PdfColor? color,
+    bool isBold = false,
+    double fontSize = 8.5,
+  }) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      alignment: align == pw.TextAlign.left
+          ? pw.Alignment.centerLeft
+          : (align == pw.TextAlign.right ? pw.Alignment.centerRight : pw.Alignment.center),
+      child: pw.Text(
+        text,
+        textAlign: align,
+        style: pw.TextStyle(
+          fontSize: isHeader ? 8.5 : fontSize,
+          fontWeight: (isHeader || isBold) ? pw.FontWeight.bold : pw.FontWeight.normal,
+          color: color ?? PdfColors.black,
+        ),
+      ),
+    );
+  }
+
   static Future<pw.Document> buildKartuPiutangDocument({
     required String customerName,
     required String city,
@@ -683,7 +709,7 @@ class PrintService {
                 ),
               ),
 
-              // 3. TABLE GRID (Thick outer borders, thin inner lines)
+              // 3. TABLE GRID (Clean, balanced 8-column layout)
               pw.Table(
                 border: const pw.TableBorder(
                   top: pw.BorderSide(color: PdfColors.black, width: 2),
@@ -694,12 +720,14 @@ class PrintService {
                   verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
                 ),
                 columnWidths: const {
-                  0: pw.FixedColumnWidth(30),  // NO
-                  1: pw.FixedColumnWidth(110), // NO INVOICE
-                  2: pw.FixedColumnWidth(160), // CUSTOMER / TOKO
-                  3: pw.FixedColumnWidth(90),  // KOTA
-                  4: pw.FixedColumnWidth(80),  // TGL KIRIM
-                  5: pw.FixedColumnWidth(100), // NOMINAL
+                  0: pw.FixedColumnWidth(26),  // NO
+                  1: pw.FixedColumnWidth(66),  // NO INVOICE
+                  2: pw.FixedColumnWidth(115), // CUSTOMER / TOKO
+                  3: pw.FixedColumnWidth(65),  // KOTA
+                  4: pw.FixedColumnWidth(65),  // TGL KIRIM
+                  5: pw.FixedColumnWidth(75),  // TOTAL TAGIHAN
+                  6: pw.FixedColumnWidth(75),  // TERBAYAR
+                  7: pw.FixedColumnWidth(85),  // SISA PIUTANG
                 },
                 children: [
                   // Table Header Row
@@ -709,65 +737,70 @@ class PrintService {
                       border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black, width: 2)),
                     ),
                     children: [
-                      _buildCell('NO', isHeader: true, align: pw.TextAlign.center),
-                      _buildCell('NO INVOICE', isHeader: true, align: pw.TextAlign.center),
-                      _buildCell('CUSTOMER / TOKO', isHeader: true, align: pw.TextAlign.center),
-                      _buildCell('KOTA', isHeader: true, align: pw.TextAlign.center),
-                      _buildCell('TGL KIRIM', isHeader: true, align: pw.TextAlign.center),
-                      _buildCell('NOMINAL', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('NO', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('NO INVOICE', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('CUSTOMER / TOKO', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('KOTA', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('TGL KIRIM', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('TAGIHAN', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('TERBAYAR', isHeader: true, align: pw.TextAlign.center),
+                      _buildKartuPiutangCell('SISA PIUTANG', isHeader: true, align: pw.TextAlign.center),
                     ],
                   ),
                   // Data Rows
                   ...List.generate(items.length, (index) {
                     final rec = items[index];
-                    pw.Widget nominalCell;
-                    if (rec.isPartiallyPaid) {
-                      nominalCell = pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                        alignment: pw.Alignment.centerRight,
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.end,
-                          mainAxisSize: pw.MainAxisSize.min,
-                          children: [
-                            pw.Text(_rupiahFormatter.format(rec.nominal), style: const pw.TextStyle(fontSize: 8.5)),
-                            pw.Text('Terbayar: ${_rupiahFormatter.format(rec.effectivePaidAmount)}', style: pw.TextStyle(fontSize: 7, color: PdfColors.orange900)),
-                            pw.Text('Sisa: ${_rupiahFormatter.format(rec.remainingAmount)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                          ],
-                        ),
-                      );
-                    } else if (rec.isLunas) {
-                      nominalCell = pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                        alignment: pw.Alignment.centerRight,
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.end,
-                          mainAxisSize: pw.MainAxisSize.min,
-                          children: [
-                            pw.Text(_rupiahFormatter.format(rec.nominal), style: const pw.TextStyle(fontSize: 8.5)),
-                            pw.Text('LUNAS', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
-                          ],
-                        ),
+
+                    // Terbayar cell
+                    pw.Widget paidCell;
+                    if (rec.effectivePaidAmount > 0) {
+                      paidCell = _buildKartuPiutangCell(
+                        _rupiahFormatter.format(rec.effectivePaidAmount),
+                        align: pw.TextAlign.right,
+                        color: PdfColors.green900,
+                        isBold: true,
                       );
                     } else {
-                      nominalCell = _buildCell(_rupiahFormatter.format(rec.nominal), align: pw.TextAlign.right);
+                      paidCell = _buildKartuPiutangCell('-', align: pw.TextAlign.center, color: PdfColors.grey700);
+                    }
+
+                    // Sisa cell
+                    pw.Widget sisaCell;
+                    if (rec.isLunas) {
+                      sisaCell = _buildKartuPiutangCell('LUNAS', align: pw.TextAlign.center, color: PdfColors.green900, isBold: true);
+                    } else if (rec.isPartiallyPaid) {
+                      sisaCell = _buildKartuPiutangCell(
+                        _rupiahFormatter.format(rec.remainingAmount),
+                        align: pw.TextAlign.right,
+                        color: PdfColors.blue900,
+                        isBold: true,
+                      );
+                    } else {
+                      sisaCell = _buildKartuPiutangCell(
+                        _rupiahFormatter.format(rec.nominal),
+                        align: pw.TextAlign.right,
+                        isBold: true,
+                      );
                     }
 
                     return pw.TableRow(
                       children: [
-                        _buildCell('${index + 1}', align: pw.TextAlign.center),
-                        _buildCell(rec.noInvoice, align: pw.TextAlign.center),
-                        _buildCell(rec.toko),
-                        _buildCell(rec.kota.isEmpty ? '-' : rec.kota, align: pw.TextAlign.center),
-                        _buildCell(rec.tglKirim != null ? DateFormat('dd-MM-yyyy').format(rec.tglKirim!) : '-', align: pw.TextAlign.center),
-                        nominalCell,
+                        _buildKartuPiutangCell('${index + 1}', align: pw.TextAlign.center),
+                        _buildKartuPiutangCell(rec.noInvoice, align: pw.TextAlign.center, isBold: true),
+                        _buildKartuPiutangCell(rec.toko),
+                        _buildKartuPiutangCell(rec.kota.isEmpty ? '-' : rec.kota, align: pw.TextAlign.center),
+                        _buildKartuPiutangCell(rec.tglKirim != null ? DateFormat('dd-MM-yyyy').format(rec.tglKirim!) : '-', align: pw.TextAlign.center),
+                        _buildKartuPiutangCell(_rupiahFormatter.format(rec.nominal), align: pw.TextAlign.right),
+                        paidCell,
+                        sisaCell,
                       ],
                     );
                   }),
                 ],
               ),
-              pw.SizedBox(height: 12),
+              pw.SizedBox(height: 10),
 
-              // 4. BOTTOM SECTION: Grand Total Box (right-aligned)
+              // 4. BOTTOM SECTION: Summary Box (aligned with columns)
               pw.Align(
                 alignment: pw.Alignment.centerRight,
                 child: pw.Container(
@@ -778,23 +811,23 @@ class PrintService {
                     mainAxisSize: pw.MainAxisSize.min,
                     children: [
                       pw.Container(
-                        width: 110,
-                        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                        width: 120,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                         decoration: const pw.BoxDecoration(
                           border: pw.Border(right: pw.BorderSide(color: PdfColors.black, width: 0.5)),
                         ),
                         child: pw.Text(
                           grandTotal < totalTagihan ? 'SISA PIUTANG' : 'GRAND TOTAL',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
                           textAlign: pw.TextAlign.center,
                         ),
                       ),
                       pw.Container(
-                        width: 110,
-                        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                        width: 120,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                         child: pw.Text(
                           _rupiahFormatter.format(grandTotal),
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11, color: grandTotal > 0 ? PdfColors.blue900 : PdfColors.green900),
                           textAlign: pw.TextAlign.right,
                         ),
                       ),

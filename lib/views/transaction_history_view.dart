@@ -1,3 +1,6 @@
+import '../widgets/receivable_payment_dialog.dart';
+import '../providers/receivable_provider.dart';
+import '../models/receivable.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -1644,6 +1647,22 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final masterCustomers = Provider.of<CustomerProvider>(context, listen: false).customers;
     final customerInfo = _resolveCustomerDisplay(tr, masterCustomers);
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final recProv = Provider.of<ReceivableProvider>(context, listen: false);
+    final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+    Receivable? matchedRec;
+    try {
+      matchedRec = recProv.receivables.firstWhere((r) => r.noInvoice == invClean);
+    } catch (_) {}
+
+    final bool isDetailLunas = tr.statusTransfer == 'PAID' || (matchedRec != null && matchedRec.isLunas);
+    final bool isDetailCicil = !isDetailLunas && matchedRec != null && matchedRec.isPartiallyPaid;
+    final String statusBayarDisplay = (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
+        ? 'DIPINDAH'
+        : (isDetailLunas
+            ? 'PAID'
+            : (isDetailCicil
+                ? 'DICICIL (${((matchedRec.effectivePaidAmount / (matchedRec.effectiveNominal > 0 ? matchedRec.effectiveNominal : 1)) * 100).toStringAsFixed(0)}%)'
+                : 'UNPAID'));
 
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final prodMap = {for (var p in productProvider.products) p.name.toLowerCase().trim(): p};
@@ -1726,7 +1745,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         Row(
                           children: [
                             Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
-                            Expanded(child: _buildDetailRow('Status Bayar:', (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH')) ? 'DIPINDAH' : tr.statusTransfer, isBadge: true)),
+                            Expanded(child: _buildDetailRow('Status Bayar:', statusBayarDisplay, isBadge: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -1756,7 +1775,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           children: [
                             Expanded(child: _buildDetailRow('Status Kirim:', tr.status, isBadge: true)),
                             const SizedBox(width: 16),
-                            Expanded(child: _buildDetailRow('Status Bayar:', (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH')) ? 'DIPINDAH' : tr.statusTransfer, isBadge: true)),
+                            Expanded(child: _buildDetailRow('Status Bayar:', statusBayarDisplay, isBadge: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -2765,7 +2784,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   }
 
   // Update payment transfer status dialog
-  void _showUpdateStatusDialog(model_tr.Transaction tr) {
+  // Update payment transfer status dialog (Integrated with Receivable & Cicilan)
+  Future<void> _showUpdateStatusDialog(model_tr.Transaction tr) async {
     if (tr.isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2776,164 +2796,70 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       );
       return;
     }
-    String currentStatus = tr.statusTransfer;
-    DateTime? currentTransferDate = tr.transferDate ?? DateTime.now();
-    bool isSubmitting = false;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
-              title: Text('Update Pembayaran #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isSubmitting) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
-                      ),
-                      child: const Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircularProgressIndicator(color: Color(0xFF38BDF8)),
-                          SizedBox(height: 16),
-                          Text(
-                            'Menyimpan status pembayaran...',
-                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
-                    DropdownButton<String>(
-                      value: currentStatus,
-                      dropdownColor: const Color(0xFF0F172A),
-                      isExpanded: true,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      items: const [
-                        DropdownMenuItem(value: 'UNPAID', child: Text('UNPAID (Belum Bayar)')),
-                        DropdownMenuItem(value: 'PAID', child: Text('PAID (Sudah Bayar)')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() {
-                            currentStatus = val;
-                          });
-                        }
-                      },
-                    ),
-                    if (currentStatus == 'PAID') ...[
-                      const SizedBox(height: 16),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Tanggal Transfer / Dibayar:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                        subtitle: Text(
-                          DateFormat('dd MMMM yyyy HH:mm').format(currentTransferDate!),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        trailing: const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8)),
-                        onTap: () async {
-                          final pickedDate = await showDatePicker(
-                            context: context,
-                            initialDate: currentTransferDate ?? DateTime.now(),
-                            firstDate: DateTime(2025),
-                            lastDate: DateTime(2030),
-                          );
-                          if (pickedDate != null) {
-                            if (context.mounted) {
-                              final pickedTime = await showTimePicker(
-                                context: context,
-                                initialTime: TimeOfDay.fromDateTime(currentTransferDate!),
-                              );
-                              if (pickedTime != null) {
-                                setDialogState(() {
-                                  currentTransferDate = DateTime(
-                                    pickedDate.year,
-                                    pickedDate.month,
-                                    pickedDate.day,
-                                    pickedTime.hour,
-                                    pickedTime.minute,
-                                  );
-                                });
-                              }
-                            }
-                          }
-                        },
-                      ),
-                    ],
-                  ],
-                ],
-              ),
-              actions: [
-                if (!isSubmitting)
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isSubmitting ? Colors.grey[800] : const Color(0xFF0284C7),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  ),
-                  onPressed: isSubmitting
-                      ? null
-                      : () async {
-                          setDialogState(() {
-                            isSubmitting = true;
-                          });
-                          try {
-                            final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-                            final dateVal = currentStatus == 'PAID' ? currentTransferDate : null;
-                            
-                            await trProvider.updatePaymentStatus(tr.invoiceNo, currentStatus, dateVal);
-                            if (context.mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('✅ Status pembayaran berhasil diperbarui!'), backgroundColor: Colors.teal),
-                              );
-                            }
-                          } catch (e) {
-                            setDialogState(() {
-                              isSubmitting = false;
-                            });
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Gagal mengupdate status: $e'), backgroundColor: Colors.redAccent),
-                              );
-                            }
-                          }
-                        },
-                  icon: isSubmitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
-                  label: Text(
-                    isSubmitting ? 'Memproses...' : 'Simpan',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            );
-          },
+    final receivableProvider = Provider.of<ReceivableProvider>(context, listen: false);
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+
+    // 1. Find or sync receivable
+    Receivable? rec;
+    try {
+      rec = receivableProvider.receivables.firstWhere(
+        (r) => r.noInvoice == invClean,
+      );
+    } catch (_) {
+      rec = null;
+    }
+
+    if (rec == null) {
+      // Sync from transaction to receivables
+      await FirebaseService().syncReceivableFromTransaction(tr);
+      await receivableProvider.fetchReceivables();
+      try {
+        rec = receivableProvider.receivables.firstWhere(
+          (r) => r.noInvoice == invClean,
         );
-      },
+      } catch (_) {
+        rec = null;
+      }
+    }
+
+    // Fallback if still null
+    rec ??= Receivable(
+      id: invClean,
+      noInvoice: invClean,
+      tglKirim: tr.deliveryDate ?? tr.date,
+      toko: tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName,
+      kota: tr.city,
+      nominal: tr.grandTotal,
+      isLunas: tr.statusTransfer == 'PAID',
+      paidAmount: tr.statusTransfer == 'PAID' ? tr.grandTotal : 0.0,
     );
+
+    // 2. Find customer for deposit balance
+    Customer? matchedCust;
+    final q = (rec.toko.isNotEmpty ? rec.toko : tr.customerName).trim().toLowerCase();
+    for (var c in customerProvider.customers) {
+      if (c.aliasName.trim().toLowerCase() == q || c.customerName.trim().toLowerCase() == q) {
+        matchedCust = c;
+        break;
+      }
+    }
+
+    // 3. Open integrated payment dialog
+    if (mounted) {
+      await showReceivablePaymentDialog(
+        context,
+        item: rec,
+        customerId: matchedCust?.id,
+        depositBalance: matchedCust?.depositBalance ?? 0.0,
+      );
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 
-  // Update ERP sync date dialog
   void _showUpdateErpStatusDialog(model_tr.Transaction tr) {
     final String deliveryStatus = (tr.status ?? '').toUpperCase();
     final bool isSent = (deliveryStatus == 'DIKIRIM');
@@ -4657,8 +4583,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               tr.movedToInvoice.isNotEmpty ||
               tr.movedItems.isNotEmpty;
           if (!isMoved) return false;
-        } else if (_statusFilter == "UNPAID" || _statusFilter == "PAID") {
-          if (tr.statusTransfer != _statusFilter) return false;
+        } else if (_statusFilter == "DICICIL") {
+          final recProv = Provider.of<ReceivableProvider>(context, listen: false);
+          final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+          Receivable? r;
+          try {
+            r = recProv.receivables.firstWhere((item) => item.noInvoice == invClean);
+          } catch (_) {}
+          if (r == null || !r.isPartiallyPaid) return false;
+        } else if (_statusFilter == "UNPAID") {
+          final recProv = Provider.of<ReceivableProvider>(context, listen: false);
+          final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+          Receivable? r;
+          try {
+            r = recProv.receivables.firstWhere((item) => item.noInvoice == invClean);
+          } catch (_) {}
+          if (tr.statusTransfer == 'PAID' || (r != null && (r.isLunas || r.isPartiallyPaid))) return false;
+        } else if (_statusFilter == "PAID") {
+          if (tr.statusTransfer != 'PAID') return false;
         } else if (_statusFilter == "ERP_SYNC") {
           if (tr.erpSyncDate == null) return false;
         } else if (_statusFilter == "ERP_NOT_SYNC") {
@@ -4915,6 +4857,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 DropdownMenuItem(value: "PENDING", child: Text("KIRIM: PENDING", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "DIPINDAH", child: Text("STATUS: DIPINDAH", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "UNPAID", child: Text("BAYAR: UNPAID", overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: "DICICIL", child: Text("BAYAR: DICICIL", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "PAID", child: Text("BAYAR: PAID", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "ERP_SYNC", child: Text("ERP: SUDAH SYNC", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "ERP_NOT_SYNC", child: Text("ERP: BELUM SYNC", overflow: TextOverflow.ellipsis)),
@@ -5497,34 +5440,78 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   ),
                                                   DataCell(
                                                     Center(
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                        decoration: BoxDecoration(
-                                                          color: (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
-                                                              ? Colors.purpleAccent.withOpacity(0.15)
-                                                              : (tr.statusTransfer == 'PAID'
-                                                                  ? Colors.tealAccent.withOpacity(0.15)
-                                                                  : Colors.redAccent.withOpacity(0.15)),
-                                                          borderRadius: BorderRadius.circular(12),
-                                                          border: Border.all(
-                                                            color: (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
-                                                                ? Colors.purpleAccent
-                                                                : (tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent),
-                                                            width: 0.5,
-                                                          ),
-                                                        ),
-                                                        child: Text(
-                                                          (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
-                                                              ? 'DIPINDAH'
-                                                              : tr.statusTransfer,
-                                                          style: TextStyle(
-                                                            color: (tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH'))
-                                                                ? Colors.purpleAccent
-                                                                : (tr.statusTransfer == 'PAID' ? Colors.tealAccent : Colors.redAccent),
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.bold,
-                                                          ),
-                                                        ),
+                                                      child: Builder(
+                                                        builder: (context) {
+                                                          final recProv = Provider.of<ReceivableProvider>(context);
+                                                          final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+                                                          Receivable? matchedRec;
+                                                          try {
+                                                            matchedRec = recProv.receivables.firstWhere((r) => r.noInvoice == invClean);
+                                                          } catch (_) {
+                                                            matchedRec = null;
+                                                          }
+
+                                                          final bool isMoved = tr.status == 'DIPINDAH' || tr.note.startsWith('DIPINDAH');
+                                                          final bool isLunas = tr.statusTransfer == 'PAID' || (matchedRec != null && matchedRec.isLunas);
+                                                          final bool isCicil = !isLunas && matchedRec != null && matchedRec.isPartiallyPaid;
+
+                                                          String badgeLabel = tr.statusTransfer;
+                                                          Color badgeColor = Colors.redAccent;
+
+                                                          if (isMoved) {
+                                                            badgeLabel = 'DIPINDAH';
+                                                            badgeColor = Colors.purpleAccent;
+                                                          } else if (isLunas) {
+                                                            badgeLabel = 'PAID';
+                                                            badgeColor = Colors.tealAccent;
+                                                          } else if (isCicil) {
+                                                            final pct = ((matchedRec.effectivePaidAmount / (matchedRec.effectiveNominal > 0 ? matchedRec.effectiveNominal : 1)) * 100).toStringAsFixed(0);
+                                                            badgeLabel = 'DICICIL ($pct%)';
+                                                            badgeColor = Colors.orangeAccent;
+                                                          } else {
+                                                            badgeLabel = 'UNPAID';
+                                                            badgeColor = Colors.redAccent;
+                                                          }
+
+                                                          return Tooltip(
+                                                            message: isCicil && matchedRec != null
+                                                                ? 'Terbayar: ${matchedRec.effectivePaidAmount.toStringAsFixed(0)} • Sisa: ${matchedRec.remainingAmount.toStringAsFixed(0)} (Klik untuk update)'
+                                                                : 'Klik untuk update pembayaran',
+                                                            child: InkWell(
+                                                              onTap: () => _showUpdateStatusDialog(tr),
+                                                              borderRadius: BorderRadius.circular(12),
+                                                              child: Container(
+                                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                                decoration: BoxDecoration(
+                                                                  color: badgeColor.withOpacity(0.15),
+                                                                  borderRadius: BorderRadius.circular(12),
+                                                                  border: Border.all(color: badgeColor, width: 0.8),
+                                                                ),
+                                                                child: Row(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: [
+                                                                    Icon(
+                                                                      isLunas
+                                                                          ? Icons.check_circle_rounded
+                                                                          : (isCicil ? Icons.timelapse_rounded : Icons.pending_rounded),
+                                                                      color: badgeColor,
+                                                                      size: 11,
+                                                                    ),
+                                                                    const SizedBox(width: 4),
+                                                                    Text(
+                                                                      badgeLabel,
+                                                                      style: TextStyle(
+                                                                        color: badgeColor,
+                                                                        fontSize: 10,
+                                                                        fontWeight: FontWeight.bold,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
                                                       ),
                                                     ),
                                                   ),
@@ -6340,8 +6327,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     Color badgeColor = Colors.white;
     if (value == 'PAID' || value == 'DIKIRIM') {
       badgeColor = Colors.greenAccent;
-    } else if (value == 'PENDING') {
+    } else if (value == 'PENDING' || value.startsWith('DICICIL')) {
       badgeColor = Colors.orangeAccent;
+    } else if (value == 'DIPINDAH') {
+      badgeColor = Colors.purpleAccent;
     } else {
       badgeColor = Colors.redAccent;
     }
