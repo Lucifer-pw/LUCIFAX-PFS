@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'dart:html' as html;
+import '../services/download_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -1065,13 +1065,12 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         final bytes = Uint8List.fromList(fileBytes);
         final fileName = 'Laporan_ERP_Stok_$_selectedMonthYear.xlsx'.replaceAll(' ', '_');
 
-        // Download file langsung via browser (bukan Printing.sharePdf yang bikin 2 file)
-        final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
-        html.Url.revokeObjectUrl(url);
+        // Download file secara cross-platform (Web langsung browser download, Mobile via share/save)
+        await downloadFileBytes(
+          bytes: bytes,
+          fileName: fileName,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
