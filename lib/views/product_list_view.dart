@@ -1221,17 +1221,28 @@ class _ProductListViewState extends State<ProductListView> {
                                         DataCell(Text(p.kodeInduk, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                                         DataCell(Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
                                         DataCell(
-                                          Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                                              if (p.pricePoSo > 0)
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
                                                 Text(
-                                                  'PO/SO: ${_rupiahFormatter.format(p.pricePoSo)}',
-                                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w500),
+                                                  _rupiahFormatter.format(p.price),
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
                                                 ),
-                                            ],
+                                                if (p.pricePoSo > 0)
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(top: 2),
+                                                    child: Text(
+                                                      'PO/SO: ${_rupiahFormatter.format(p.pricePoSo)}',
+                                                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w500),
+                                                    ),
+                                                  )
+                                                else
+                                                  const SizedBox(height: 14),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                         DataCell(
