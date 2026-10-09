@@ -1994,6 +1994,22 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         ),
                                                       ),
                                                     ],
+                                                    if (product != null && product.pricePoSo > 0) ...[
+                                                      const SizedBox(height: 2),
+                                                      FittedBox(
+                                                        fit: BoxFit.scaleDown,
+                                                        alignment: Alignment.centerRight,
+                                                        child: Text(
+                                                          'PO/SO: ${_rupiahFormatter.format(product.pricePoSo)}',
+                                                          textAlign: TextAlign.right,
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF38BDF8),
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ],
                                                 ),
                                               ),
@@ -2149,6 +2165,22 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   textAlign: TextAlign.right,
                                                   style: const TextStyle(color: Colors.white, fontSize: 12),
                                                 ),
+                                                if (product != null && product.pricePoSo > 0) ...[
+                                                  const SizedBox(height: 2),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment: Alignment.centerRight,
+                                                    child: Text(
+                                                      'PO/SO: ${_rupiahFormatter.format(product.pricePoSo)}',
+                                                      textAlign: TextAlign.right,
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF38BDF8),
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                                 if (!item.isBonus && showPrePPN) ...[
                                                   const SizedBox(height: 2),
                                                   FittedBox(

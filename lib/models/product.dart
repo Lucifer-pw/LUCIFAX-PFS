@@ -3,6 +3,7 @@ class Product {
   final String kodeInduk; // parent group code (e.g. BRSM-500)
   final String name; // maps to NAMA_BARANG
   final double price;
+  final double pricePoSo; // Harga referensi PT PO / CV SO (PFS PO/SO) untuk ERP pusat
   final double stock;
   final int isiKarton;
   final double sizeGrams;
@@ -12,6 +13,7 @@ class Product {
     String? kodeInduk,
     required this.name,
     required this.price,
+    this.pricePoSo = 0.0,
     required this.stock,
     required this.isiKarton,
     required this.sizeGrams,
@@ -24,6 +26,7 @@ class Product {
       kodeInduk: (rawKodeInduk != null && rawKodeInduk.isNotEmpty) ? rawKodeInduk : docId,
       name: map['name'] ?? '',
       price: (map['price'] ?? 0.0).toDouble(),
+      pricePoSo: (map['pricePoSo'] ?? map['pricePfsPo'] ?? 0.0).toDouble(),
       stock: (map['stock'] ?? 0.0).toDouble(),
       isiKarton: map['isiKarton'] ?? 0,
       sizeGrams: (map['sizeGrams'] ?? 0.0).toDouble(),
@@ -35,6 +38,7 @@ class Product {
       'kodeInduk': kodeInduk,
       'name': name,
       'price': price,
+      'pricePoSo': pricePoSo,
       'stock': stock,
       'isiKarton': isiKarton,
       'sizeGrams': sizeGrams,
@@ -57,6 +61,7 @@ class Product {
     String? kodeInduk,
     String? name,
     double? price,
+    double? pricePoSo,
     double? stock,
     int? isiKarton,
     double? sizeGrams,
@@ -66,6 +71,7 @@ class Product {
       kodeInduk: kodeInduk ?? this.kodeInduk,
       name: name ?? this.name,
       price: price ?? this.price,
+      pricePoSo: pricePoSo ?? this.pricePoSo,
       stock: stock ?? this.stock,
       isiKarton: isiKarton ?? this.isiKarton,
       sizeGrams: sizeGrams ?? this.sizeGrams,

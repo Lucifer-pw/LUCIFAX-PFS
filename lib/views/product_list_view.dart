@@ -108,6 +108,11 @@ class _ProductListViewState extends State<ProductListView> {
     final kodeIndukController = TextEditingController(text: product?.kodeInduk ?? product?.id ?? '');
     final nameController = TextEditingController(text: product?.name ?? '');
     final priceController = TextEditingController(text: product != null ? product.price.toStringAsFixed(0) : '');
+    final pricePoSoController = TextEditingController(
+      text: product != null && product.pricePoSo > 0
+          ? (product.pricePoSo % 1 == 0 ? product.pricePoSo.toInt().toString() : product.pricePoSo.toString())
+          : '',
+    );
     final stockController = TextEditingController(text: product != null ? product.stock.toStringAsFixed(0) : '0');
     final cartonController = TextEditingController(text: product?.isiKarton.toString() ?? '');
     final sizeController = TextEditingController(text: product != null ? product.sizeGrams.toStringAsFixed(0) : '');
@@ -195,11 +200,35 @@ class _ProductListViewState extends State<ProductListView> {
                         decoration: _buildInputDecoration(hint: 'Nama Barang (e.g. BAKSO AYAM 250 G)'),
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: priceController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _buildInputDecoration(hint: 'Harga Unit (Rupiah)'),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: priceController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Harga Unit Jual (Rp)').copyWith(
+                                labelText: 'Harga Unit Jual',
+                                labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: pricePoSoController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _buildInputDecoration(hint: 'Harga PT PO / CV SO').copyWith(
+                                labelText: 'Harga PT PO / CV SO',
+                                labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                                helperText: 'Info ERP Pusat (Opsional)',
+                                helperStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
 
@@ -326,6 +355,7 @@ class _ProductListViewState extends State<ProductListView> {
                     final kodeInduk = kodeIndukRaw.isNotEmpty ? kodeIndukRaw : id;
                     final name = nameController.text.trim().toUpperCase();
                     final price = _parseCleanDouble(priceController.text);
+                    final pricePoSo = _parseCleanDouble(pricePoSoController.text);
                     final stock = _parseCleanDouble(stockController.text);
                     final carton = _parseCleanInt(cartonController.text);
                     final size = _parseCleanDouble(sizeController.text);
@@ -358,6 +388,7 @@ class _ProductListViewState extends State<ProductListView> {
                           kodeInduk: kodeInduk,
                           name: name,
                           price: price,
+                          pricePoSo: pricePoSo,
                           stock: stock,
                           isiKarton: carton,
                           sizeGrams: size,
@@ -374,6 +405,7 @@ class _ProductListViewState extends State<ProductListView> {
                           kodeInduk: kodeInduk,
                           name: name,
                           price: price,
+                          pricePoSo: pricePoSo,
                           stock: stock,
                           isiKarton: carton,
                           sizeGrams: size,
@@ -1188,7 +1220,20 @@ class _ProductListViewState extends State<ProductListView> {
                                       cells: [
                                         DataCell(Text(p.kodeInduk, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))),
                                         DataCell(Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
-                                        DataCell(Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white))),
+                                        DataCell(
+                                          Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(_rupiahFormatter.format(p.price), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                              if (p.pricePoSo > 0)
+                                                Text(
+                                                  'PO/SO: ${_rupiahFormatter.format(p.pricePoSo)}',
+                                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w500),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
                                         DataCell(
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
