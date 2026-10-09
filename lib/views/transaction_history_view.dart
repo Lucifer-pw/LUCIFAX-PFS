@@ -1688,6 +1688,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       context: context,
       builder: (context) {
         bool showPrePPN = false;
+        bool showPoSoPrice = false;
         final Set<int> individualPrePPN = <int>{};
         return StatefulBuilder(
           builder: (context, setDetailState) {
@@ -1886,39 +1887,40 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         _buildTableCell('Qty', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Total Karton', isHeader: true, align: TextAlign.center),
                                         // Tappable Harga Unit header — toggle pre-PPN display
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                                          child: InkWell(
-                                            onTap: () {
-                                              setDetailState(() {
-                                                showPrePPN = !showPrePPN;
-                                                if (!showPrePPN) individualPrePPN.clear();
-                                              });
-                                            },
-                                            borderRadius: BorderRadius.circular(4),
-                                            child: Row(
-                                              mainAxisAlignment: MainAxisAlignment.end,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  showPrePPN ? 'Harga Unit\n(Sblm PPN)' : 'Harga Unit',
-                                                  textAlign: TextAlign.right,
-                                                  style: TextStyle(
-                                                    color: showPrePPN ? Colors.amberAccent : const Color(0xFF94A3B8),
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 3),
-                                                Icon(
-                                                  showPrePPN ? Icons.toggle_on_rounded : Icons.toggle_off_outlined,
-                                                  color: showPrePPN ? Colors.amberAccent : const Color(0xFF64748B),
-                                                  size: 16,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
+                                         Padding(
+                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                                           child: InkWell(
+                                             onTap: () {
+                                               setDetailState(() {
+                                                 showPoSoPrice = !showPoSoPrice;
+                                                 showPrePPN = showPoSoPrice;
+                                                 if (!showPoSoPrice) individualPrePPN.clear();
+                                               });
+                                             },
+                                             borderRadius: BorderRadius.circular(4),
+                                             child: Row(
+                                               mainAxisAlignment: MainAxisAlignment.end,
+                                               mainAxisSize: MainAxisSize.min,
+                                               children: [
+                                                 Text(
+                                                   showPoSoPrice ? 'Harga Unit\n(PT PO/SO)' : 'Harga Unit',
+                                                   textAlign: TextAlign.right,
+                                                   style: TextStyle(
+                                                     color: showPoSoPrice ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                                     fontSize: 11,
+                                                     fontWeight: FontWeight.bold,
+                                                   ),
+                                                 ),
+                                                 const SizedBox(width: 3),
+                                                 Icon(
+                                                   showPoSoPrice ? Icons.toggle_on_rounded : Icons.toggle_off_outlined,
+                                                   color: showPoSoPrice ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                                   size: 18,
+                                                 ),
+                                               ],
+                                             ),
+                                           ),
+                                         ),
                                         _buildTableCell('Total', isHeader: true, align: TextAlign.right),
                                         _buildTableCell('Disc (%)', isHeader: true, align: TextAlign.center),
                                         _buildTableCell('Disc (Rp)', isHeader: true, align: TextAlign.right),
@@ -1994,7 +1996,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                         ),
                                                       ),
                                                     ],
-                                                    if (product != null && product.pricePoSo > 0) ...[
+                                                    if ((showPoSoPrice || individualPrePPN.contains(index)) && product != null && product.pricePoSo > 0) ...[
                                                       const SizedBox(height: 2),
                                                       FittedBox(
                                                         fit: BoxFit.scaleDown,
@@ -2165,7 +2167,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                                   textAlign: TextAlign.right,
                                                   style: const TextStyle(color: Colors.white, fontSize: 12),
                                                 ),
-                                                if (product != null && product.pricePoSo > 0) ...[
+                                                if (showPoSoPrice && product != null && product.pricePoSo > 0) ...[
                                                   const SizedBox(height: 2),
                                                   FittedBox(
                                                     fit: BoxFit.scaleDown,
