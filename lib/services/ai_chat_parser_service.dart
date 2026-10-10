@@ -537,8 +537,13 @@ class AiChatParserService {
         }
       }
 
-      // Check if threshold is met
-      if (totalKartonForProduct >= ruleMinQty && matchedItem != null) {
+      // Check if threshold is met and calculate multiples (kelipatan bonus)
+      if (ruleMinQty > 0 && totalKartonForProduct >= ruleMinQty && matchedItem != null) {
+        final multiplier = (totalKartonForProduct / ruleMinQty).floor();
+        if (multiplier <= 0) continue;
+
+        final calculatedBonusQty = bonusQty * multiplier;
+
         // Resolve bonus product from master
         Product? bonusProduct;
         for (var p in products) {
@@ -561,18 +566,18 @@ class AiChatParserService {
         );
 
         // Calculate bonus qty in pcs
-        double bonusQtyPcs = bonusQty;
+        double bonusQtyPcs = calculatedBonusQty;
         if (bonusUnit == 'karton') {
           final isiKarton = bonusProduct.isiKarton > 0 ? bonusProduct.isiKarton : 20;
-          bonusQtyPcs = bonusQty * isiKarton;
+          bonusQtyPcs = calculatedBonusQty * isiKarton;
         }
 
         bonusItemsToAdd.add(ChatOrderItemDraft(
           productId: bonusProduct.id,
           productName: '${bonusProduct.name} (BONUS)',
-          rawText: '[AUTO BONUS] ${rule.keyword}',
+          rawText: '[AUTO BONUS] ${rule.keyword} (Kelipatan x$multiplier)',
           qtyUnit: bonusUnit,
-          qtyInput: bonusQty,
+          qtyInput: calculatedBonusQty,
           qtyPcs: bonusQtyPcs,
           price: 0.0,
           discountPercent: 0.0,

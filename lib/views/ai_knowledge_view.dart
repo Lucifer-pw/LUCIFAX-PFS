@@ -305,7 +305,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Bonus otomatis diselipkan ke draft PO dengan harga Rp 0 jika syarat terpenuhi.',
+                                'Bonus otomatis berlaku KELIPATAN (misal beli 40 ktn dapat 1 ktn, 80 ktn dapat 2 ktn, 120 ktn dapat 3 ktn) dengan harga Rp 0.',
                                 style: TextStyle(color: Colors.pinkAccent, fontSize: 11),
                               ),
                             ),
