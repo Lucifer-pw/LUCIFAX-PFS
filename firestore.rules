@@ -269,6 +269,34 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 27. AI_KNOWLEDGE_RULES — Kamus & Aturan AI
+    // ═══════════════════════════════════════════════════
+    match /ai_knowledge_rules/{ruleId} {
+      allow read, write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 28. APP_SETTINGS — Pengaturan & Instruksi AI
+    // ═══════════════════════════════════════════════════
+    match /app_settings/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
+    // 29. WA_BOT_GATEWAY — Sesi QR Scan & Chat Masuk
+    // ═══════════════════════════════════════════════════
+    match /wa_bot_session/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /incoming_po_chats/{chatId} {
+      allow read, write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {

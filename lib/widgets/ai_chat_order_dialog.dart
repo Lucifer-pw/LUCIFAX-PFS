@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/customer.dart';
 import '../models/transaction.dart' as model_tr;
 import '../models/chat_order_draft.dart';
+import '../models/ai_knowledge_rule.dart';
 import '../providers/customer_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/firebase_service.dart';
@@ -61,9 +62,20 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
       final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
       final productProvider = Provider.of<ProductProvider>(context, listen: false);
 
-      // Fetch knowledge rules & instructions
-      final rulesSnap = await _firebaseService.streamAiKnowledgeRules().first;
-      final generalInstructions = await _firebaseService.getAiGeneralInstructions();
+      // Fetch knowledge rules & instructions (with resilient fallbacks)
+      List<AiKnowledgeRule> rulesSnap = [];
+      String generalInstructions = '';
+      try {
+        rulesSnap = await _firebaseService.streamAiKnowledgeRules().first.timeout(const Duration(seconds: 4));
+      } catch (_) {
+        rulesSnap = [];
+      }
+
+      try {
+        generalInstructions = await _firebaseService.getAiGeneralInstructions().timeout(const Duration(seconds: 4));
+      } catch (_) {
+        generalInstructions = '';
+      }
 
       final results = await _parserService.parseChatOrders(
         rawChat: text,
