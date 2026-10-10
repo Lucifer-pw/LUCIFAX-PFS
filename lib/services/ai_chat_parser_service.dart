@@ -2,6 +2,7 @@ import '../models/customer.dart';
 import '../models/product.dart';
 import '../models/ai_knowledge_rule.dart';
 import '../models/chat_order_draft.dart';
+import '../models/customer_product_history.dart';
 import 'firebase_service.dart';
 
 class AiChatParserService {
@@ -48,6 +49,13 @@ class AiChatParserService {
       final matchedCustomer = customerInfo.customer;
       final rawCustomerName = customerInfo.rawName;
 
+      // Load Customer's Purchase History (AI learns from customer habit!)
+      final customerHistory = await firebaseService.getCustomerProductHistory(
+        customerName: matchedCustomer?.customerName ?? rawCustomerName,
+        customerId: matchedCustomer?.id,
+        aliasName: matchedCustomer?.aliasName,
+      );
+
       // Extract Product Items from subsequent lines
       final draftItems = <ChatOrderItemDraft>[];
 
@@ -62,6 +70,7 @@ class AiChatParserService {
           products: products,
           productRules: productRules,
           unitRules: unitRules,
+          customerHistory: customerHistory,
           customerName: matchedCustomer?.customerName ?? rawCustomerName,
           customerId: matchedCustomer?.id,
         );
@@ -269,6 +278,7 @@ class AiChatParserService {
     required List<Product> products,
     required List<AiKnowledgeRule> productRules,
     required List<AiKnowledgeRule> unitRules,
+    required List<CustomerProductHistory> customerHistory,
     required String customerName,
     String? customerId,
   }) async {
@@ -289,25 +299,50 @@ class AiChatParserService {
       productText = productText.substring(5).trim();
     }
 
-    // 1. Resolve product against AI Knowledge Rules
     Product? matchedProduct;
-    for (var rule in productRules) {
-      if (productText.toLowerCase().contains(rule.keyword.toLowerCase()) ||
-          rule.keyword.toLowerCase().contains(productText.toLowerCase())) {
+    CustomerProductHistory? matchedHistory;
+
+    // 1. PRIORITAS UTAMA: Cek Riwayat Pembelian Pelanggan Ini (AI Belajar dari Kebiasaan Customer!)
+    // Jika pelanggan ini (misal MMM) pernah membeli barang yang cocok (misal "BRS MERAH 24 500G"),
+    // utamakan barang dari riwayat pelanggan tersebut!
+    if (customerHistory.isNotEmpty) {
+      matchedHistory = _matchProductFromCustomerHistory(productText, customerHistory);
+      if (matchedHistory != null) {
         matchedProduct = products.firstWhere(
-          (p) => (rule.targetId != null && p.id == rule.targetId) ||
-              p.name.toLowerCase() == rule.mappedValue.toLowerCase() ||
-              p.kodeInduk.toLowerCase() == rule.mappedValue.toLowerCase(),
-          orElse: () => products.firstWhere(
-            (p) => p.name.toLowerCase().contains(rule.mappedValue.toLowerCase()),
-            orElse: () => Product(id: '', name: rule.mappedValue, price: 0.0, stock: 0.0, isiKarton: 10, sizeGrams: 500.0),
+          (p) => (matchedHistory!.productId.isNotEmpty && p.id == matchedHistory.productId) ||
+              p.name.toLowerCase() == matchedHistory.productName.toLowerCase(),
+          orElse: () => Product(
+            id: matchedHistory!.productId,
+            name: matchedHistory.productName,
+            price: matchedHistory.price,
+            stock: 0.0,
+            isiKarton: 15,
+            sizeGrams: 500.0,
           ),
         );
-        break;
       }
     }
 
-    // 2. Fallback: Fuzzy / Keyword Match against Master Products
+    // 2. Jika tidak ada di riwayat pelanggan, cocokkan dengan Aturan Kamus (AI Knowledge Rules)
+    if (matchedProduct == null) {
+      for (var rule in productRules) {
+        if (productText.toLowerCase().contains(rule.keyword.toLowerCase()) ||
+            rule.keyword.toLowerCase().contains(productText.toLowerCase())) {
+          matchedProduct = products.firstWhere(
+            (p) => (rule.targetId != null && p.id == rule.targetId) ||
+                p.name.toLowerCase() == rule.mappedValue.toLowerCase() ||
+                p.kodeInduk.toLowerCase() == rule.mappedValue.toLowerCase(),
+            orElse: () => products.firstWhere(
+              (p) => p.name.toLowerCase().contains(rule.mappedValue.toLowerCase()),
+              orElse: () => Product(id: '', name: rule.mappedValue, price: 0.0, stock: 0.0, isiKarton: 10, sizeGrams: 500.0),
+            ),
+          );
+          break;
+        }
+      }
+    }
+
+    // 3. Fallback terakhir: Fuzzy / Keyword Match ke seluruh Master Barang
     if (matchedProduct == null || matchedProduct.id.isEmpty) {
       matchedProduct = _fuzzyMatchProduct(productText, products);
     }
@@ -321,24 +356,43 @@ class AiChatParserService {
       qtyPcs = qtyInfo.qty * isiKarton;
     }
 
-    // 3. Scan Last Customer Transaction for Historical Price & Discount
+    // 4. Historical Pricing: Tarik harga & diskon dari riwayat transaksi pelanggan
     double price = matchedProduct.price;
     double discountPercent = 0.0;
     double discountAmount = 0.0;
     bool isNewItemForCustomer = true;
 
-    final historyPricing = await firebaseService.getLastCustomerProductPricing(
-      customerName,
-      matchedProduct.id,
-      customerId: customerId,
-      productName: matchedProduct.name,
-    );
-
-    if (historyPricing != null) {
-      price = (historyPricing['price'] ?? matchedProduct.price).toDouble();
-      discountPercent = (historyPricing['discountPercent'] ?? 0.0).toDouble();
-      discountAmount = (historyPricing['discountAmount'] ?? 0.0).toDouble();
+    if (matchedHistory != null) {
+      price = matchedHistory.price;
+      discountPercent = matchedHistory.discountPercent;
+      discountAmount = matchedHistory.discountAmount;
       isNewItemForCustomer = false;
+    } else {
+      final hist = customerHistory.firstWhere(
+        (h) => (h.productId.isNotEmpty && h.productId == matchedProduct!.id) ||
+            h.productName.toLowerCase() == matchedProduct!.name.toLowerCase(),
+        orElse: () => CustomerProductHistory(productId: '', productName: '', price: 0, discountPercent: 0, discountAmount: 0, invoiceNo: ''),
+      );
+      if (hist.invoiceNo.isNotEmpty && hist.price > 0) {
+        price = hist.price;
+        discountPercent = hist.discountPercent;
+        discountAmount = hist.discountAmount;
+        isNewItemForCustomer = false;
+      } else {
+        // Fallback: Scan Firestore jika belum masuk di map
+        final historyPricing = await firebaseService.getLastCustomerProductPricing(
+          customerName,
+          matchedProduct.id,
+          customerId: customerId,
+          productName: matchedProduct.name,
+        );
+        if (historyPricing != null) {
+          price = (historyPricing['price'] ?? matchedProduct.price).toDouble();
+          discountPercent = (historyPricing['discountPercent'] ?? 0.0).toDouble();
+          discountAmount = (historyPricing['discountAmount'] ?? 0.0).toDouble();
+          isNewItemForCustomer = false;
+        }
+      }
     }
 
     return ChatOrderItemDraft(
@@ -410,6 +464,140 @@ class AiChatParserService {
     return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
   }
 
+  /// Matches product text against products that THIS customer has actually bought in their invoice history.
+  /// Allows the AI to learn customer-specific purchasing patterns, exact variants (e.g. 24 vs 24S), and historical prices.
+  CustomerProductHistory? _matchProductFromCustomerHistory(
+    String query,
+    List<CustomerProductHistory> historyList,
+  ) {
+    if (historyList.isEmpty) return null;
+
+    final cleanQ = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
+    if (cleanQ.isEmpty) return null;
+
+    // 1. Direct name match
+    for (var h in historyList) {
+      final hNameClean = h.productName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
+      if (hNameClean == cleanQ || h.productId.toLowerCase() == cleanQ) {
+        return h;
+      }
+    }
+
+    // 2. Tokenize with domain awareness
+    final qTokens = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    final bool queryHasRoll = qTokens.contains('roll') || qTokens.contains('rol');
+    final bool queryHasLoyang = qTokens.contains('loyang') || qTokens.contains('lyg');
+    final bool queryHas1000 = qTokens.contains('1000') || qTokens.contains('1kg');
+    final bool queryHasBeres = qTokens.contains('beres') || qTokens.contains('beras') || qTokens.contains('brs');
+    final bool queryHasMerah = qTokens.contains('merah');
+    final bool queryHasCoklat = qTokens.contains('coklat') || qTokens.contains('cklt');
+    final bool queryHas13 = qTokens.contains('13') || qTokens.contains('13s');
+    final bool queryHas24 = qTokens.contains('24') || qTokens.contains('24s');
+    final bool queryHas7 = qTokens.contains('7') || qTokens.contains('7s');
+    final bool queryHas215 = qTokens.contains('215') || qTokens.contains('215g') || qTokens.contains('215gr');
+
+    CustomerProductHistory? bestMatch;
+    int maxScore = 0;
+
+    for (var h in historyList) {
+      final hName = h.productName.toLowerCase();
+      final hTokens = hName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').split(RegExp(r'\s+')).toSet();
+      int score = 0;
+
+      for (var qw in qTokens) {
+        if (hTokens.contains(qw)) {
+          score += 10;
+        } else {
+          final normQ = qw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
+          bool normMatched = false;
+          for (var hw in hTokens) {
+            final normH = hw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
+            if (normQ == normH) {
+              score += 8;
+              normMatched = true;
+              break;
+            }
+          }
+          if (!normMatched && hName.contains(qw)) {
+            score += 2;
+          }
+        }
+      }
+
+      // Domain Bonuses:
+      // A. "Beres" / "Beras" matches "BRS"
+      if (queryHasBeres && (hTokens.contains('brs') || hName.contains('brs'))) {
+        score += 20;
+      }
+
+      // B. "Merah" vs "Coklat"
+      if (queryHasMerah) {
+        if (hTokens.contains('merah') || hName.contains('merah')) {
+          score += 25;
+        } else if (hTokens.contains('coklat') || hName.contains('coklat')) {
+          score -= 20;
+        }
+      }
+      if (queryHasCoklat) {
+        if (hTokens.contains('coklat') || hName.contains('coklat')) {
+          score += 25;
+        } else if (hTokens.contains('merah') || hName.contains('merah')) {
+          score -= 20;
+        }
+      }
+
+      // C. Specific Sizes & Counts (13, 24, 7, 215)
+      if (queryHas13 && (hName.contains('13') || hTokens.contains('13s') || hTokens.contains('13'))) {
+        score += 25;
+      }
+      if (queryHas24 && (hName.contains('24') || hTokens.contains('24s') || hTokens.contains('24'))) {
+        score += 25;
+      }
+      if (queryHas7 && (hName.contains('7') || hTokens.contains('7s') || hTokens.contains('7'))) {
+        score += 25;
+      }
+      if (queryHas215 && (hName.contains('215') || hTokens.contains('215g') || hTokens.contains('215gr'))) {
+        score += 30;
+      }
+
+      // D. "ROLL" variant
+      if (queryHasRoll) {
+        if (hTokens.contains('roll') || hTokens.contains('rol') || hName.contains('roll')) {
+          score += 25;
+        } else if (hName.contains('1000')) {
+          score -= 15;
+        }
+      }
+
+      // E. "LOYANG" variant
+      if (queryHasLoyang) {
+        if (hTokens.contains('loyang') || hTokens.contains('lyg') || hName.contains('loyang')) {
+          score += 25;
+        }
+      }
+
+      // F. 1000g vs smaller
+      if (queryHas1000 && hName.contains('1000')) {
+        score += 20;
+      }
+
+      // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat
+      if (queryHas24 && !cleanQ.contains('24s') && hName.contains('24s')) {
+        score -= 10;
+      }
+
+      // G. Preference for higher order frequency
+      score += (h.purchaseCount.clamp(1, 5) * 2);
+
+      if (score > maxScore) {
+        maxScore = score;
+        bestMatch = h;
+      }
+    }
+
+    return maxScore >= 12 ? bestMatch : null;
+  }
+
   Product? _fuzzyMatchProduct(String query, List<Product> products) {
     if (products.isEmpty) return null;
     final cleanQ = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
@@ -427,6 +615,13 @@ class AiChatParserService {
     final bool queryHasRoll = qWords.contains('roll') || qWords.contains('rol');
     final bool queryHasLoyang = qWords.contains('loyang') || qWords.contains('lyg');
     final bool queryHas1000 = qWords.contains('1000') || qWords.contains('1kg');
+    final bool queryHasBeres = qWords.contains('beres') || qWords.contains('beras') || qWords.contains('brs');
+    final bool queryHasMerah = qWords.contains('merah');
+    final bool queryHasCoklat = qWords.contains('coklat') || qWords.contains('cklt');
+    final bool queryHas13 = qWords.contains('13') || qWords.contains('13s');
+    final bool queryHas24 = qWords.contains('24') || qWords.contains('24s');
+    final bool queryHas7 = qWords.contains('7') || qWords.contains('7s');
+    final bool queryHas215 = qWords.contains('215') || qWords.contains('215g') || qWords.contains('215gr');
 
     Product? bestProduct;
     int maxScore = 0;
@@ -441,11 +636,11 @@ class AiChatParserService {
         if (pWords.contains(qw)) {
           score += 10;
         } else {
-          // Normalize spelling (e.g. rolade == rollade)
-          final normQ = qw.replaceAll('ll', 'l');
+          // Normalize spelling (e.g. rolade == rollade, bratwust == bratwurst)
+          final normQ = qw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
           bool normMatched = false;
           for (var pw in pWords) {
-            final normP = pw.replaceAll('ll', 'l');
+            final normP = pw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
             if (normQ == normP) {
               score += 8;
               normMatched = true;
@@ -460,25 +655,65 @@ class AiChatParserService {
       }
 
       // Keyword differentiators:
-      // A. "ROLL" variant
+      // A. "Beres" / "Beras" matches "BRS"
+      if (queryHasBeres && (pWords.contains('brs') || pName.contains('brs'))) {
+        score += 20;
+      }
+
+      // B. "Merah" vs "Coklat"
+      if (queryHasMerah) {
+        if (pWords.contains('merah') || pName.contains('merah')) {
+          score += 25;
+        } else if (pWords.contains('coklat') || pName.contains('coklat')) {
+          score -= 20;
+        }
+      }
+      if (queryHasCoklat) {
+        if (pWords.contains('coklat') || pName.contains('coklat')) {
+          score += 25;
+        } else if (pWords.contains('merah') || pName.contains('merah')) {
+          score -= 20;
+        }
+      }
+
+      // C. Specific Sizes & Counts (13, 24, 7, 215)
+      if (queryHas13 && (pName.contains('13') || pWords.contains('13s') || pWords.contains('13'))) {
+        score += 25;
+      }
+      if (queryHas24 && (pName.contains('24') || pWords.contains('24s') || pWords.contains('24'))) {
+        score += 25;
+      }
+      if (queryHas7 && (pName.contains('7') || pWords.contains('7s') || pWords.contains('7'))) {
+        score += 25;
+      }
+      if (queryHas215 && (pName.contains('215') || pWords.contains('215g') || pWords.contains('215gr'))) {
+        score += 30;
+      }
+
+      // D. "ROLL" variant
       if (queryHasRoll) {
-        if (pWords.contains('roll') || pWords.contains('rol')) {
+        if (pWords.contains('roll') || pWords.contains('rol') || pName.contains('roll')) {
           score += 25; // Massive bonus for true ROLL variant
         } else if (pName.contains('1000')) {
           score -= 15; // Penalty for picking 1000g when ROLL is requested
         }
       }
 
-      // B. "LOYANG" variant
+      // E. "LOYANG" variant
       if (queryHasLoyang) {
-        if (pWords.contains('loyang') || pWords.contains('lyg')) {
+        if (pWords.contains('loyang') || pWords.contains('lyg') || pName.contains('loyang')) {
           score += 25;
         }
       }
 
-      // C. 1000g vs 400g/500g
+      // F. 1000g vs 400g/500g
       if (queryHas1000 && pName.contains('1000')) {
         score += 20;
+      }
+
+      // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat
+      if (queryHas24 && !cleanQ.contains('24s') && pName.contains('24s')) {
+        score -= 10;
       }
 
       if (score > maxScore) {

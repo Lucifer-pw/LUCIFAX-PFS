@@ -78,7 +78,11 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'Pak Nardi', mappedValue: 'NARDI FF (NARDI)', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'ROLADE SAPI ROLL', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'KORNET AYAM LOYANG', mappedValue: 'KORNET AYAM LOYANG 400 G', createdAt: DateTime.now()),
-      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sosis merah', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sapi 13', mappedValue: 'BRS COKLAT 13S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sapi 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
       // Bonus / Promo Rules
@@ -92,7 +96,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('🌱 Berhasil memuat 23 aturan kamus standar ke database!'),
+          content: Text('🌱 Berhasil memuat 27 aturan kamus standar ke database!'),
           backgroundColor: Colors.teal,
         ),
       );

@@ -1,4 +1,5 @@
 import '../models/ai_knowledge_rule.dart';
+import '../models/customer_product_history.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
@@ -2635,7 +2636,13 @@ class FirebaseService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => AiKnowledgeRule.fromFirestore(doc))
+            .map((doc) {
+              final r = AiKnowledgeRule.fromFirestore(doc);
+              if (r.keyword.toLowerCase().contains('beres merah') && r.mappedValue.contains('24S')) {
+                return r.copyWith(mappedValue: r.mappedValue.replaceAll('24S', '24'));
+              }
+              return r;
+            })
             .toList());
   }
 
@@ -2746,6 +2753,90 @@ class FirebaseService {
       debugPrint('Error scanning last customer product pricing: $e');
     }
     return null;
+  }
+
+  /// Retrieves all distinct products previously purchased by a specific customer,
+  /// ordered by recency, with their latest price, discount, and frequency.
+  Future<List<CustomerProductHistory>> getCustomerProductHistory({
+    required String customerName,
+    String? customerId,
+    String? aliasName,
+  }) async {
+    final results = <String, CustomerProductHistory>{};
+    try {
+      final cleanCustId = (customerId ?? '').trim();
+      final cleanCust = customerName.trim().toLowerCase();
+      final cleanAlias = (aliasName ?? '').trim().toLowerCase();
+
+      final snap = await _db
+          .collection('transactions')
+          .orderBy('createdAt', descending: true)
+          .limit(350)
+          .get();
+
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final docCustId = (data['customerId'] ?? '').toString().trim();
+        final cName = (data['customerName'] ?? '').toString().trim().toLowerCase();
+        final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
+
+        bool matchCust = false;
+        if (cleanCustId.isNotEmpty && docCustId.isNotEmpty && docCustId == cleanCustId) {
+          matchCust = true;
+        } else if (cName == cleanCust || cAlias == cleanCust) {
+          matchCust = true;
+        } else if (cleanAlias.isNotEmpty && (cName == cleanAlias || cAlias == cleanAlias)) {
+          matchCust = true;
+        } else if (cleanCust.isNotEmpty && (cName.contains(cleanCust) || cleanCust.contains(cName))) {
+          matchCust = true;
+        }
+
+        if (matchCust) {
+          final itemsRaw = data['items'] as List<dynamic>? ?? [];
+          for (var itemMap in itemsRaw) {
+            if (itemMap is Map<String, dynamic>) {
+              final pId = (itemMap['productId'] ?? '').toString().trim();
+              final pName = (itemMap['productName'] ?? '').toString().trim();
+              final itemPrice = (itemMap['price'] ?? 0.0).toDouble();
+              final isBonus = itemMap['isBonus'] == true || pName.toLowerCase().contains('(bonus)');
+
+              if (itemPrice <= 0 || isBonus || pName.isEmpty) continue;
+
+              final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+              if (!results.containsKey(key)) {
+                results[key] = CustomerProductHistory(
+                  productId: pId,
+                  productName: pName,
+                  price: itemPrice,
+                  discountPercent: (itemMap['discountPercent'] ?? 0.0).toDouble(),
+                  discountAmount: (itemMap['discountAmount'] ?? 0.0).toDouble(),
+                  invoiceNo: (data['invoiceNo'] ?? '').toString(),
+                  date: data['date'] != null && data['date'] is Timestamp
+                      ? (data['date'] as Timestamp).toDate()
+                      : null,
+                  purchaseCount: 1,
+                );
+              } else {
+                final existing = results[key]!;
+                results[key] = CustomerProductHistory(
+                  productId: existing.productId,
+                  productName: existing.productName,
+                  price: existing.price,
+                  discountPercent: existing.discountPercent,
+                  discountAmount: existing.discountAmount,
+                  invoiceNo: existing.invoiceNo,
+                  date: existing.date,
+                  purchaseCount: existing.purchaseCount + 1,
+                );
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting customer product history: $e');
+    }
+    return results.values.toList();
   }
 
 
