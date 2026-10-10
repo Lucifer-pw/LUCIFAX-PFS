@@ -89,14 +89,12 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
       AiKnowledgeRule(id: '', type: 'bonus_rule', keyword: 'LG FF|KORNET AYAM LOYANG 400 G|40', mappedValue: 'KORNET AYAM LOYANG 400 G|1|karton', createdAt: DateTime.now()),
     ];
 
-    for (var r in defaultRules) {
-      await _firebaseService.saveAiKnowledgeRule(r);
-    }
+    final total = await _firebaseService.seedAiKnowledgeRules(defaultRules);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🌱 Berhasil memuat 27 aturan kamus standar ke database!'),
+        SnackBar(
+          content: Text('🌱 Berhasil memuat & merapikan $total aturan kamus (bebas duplikat)!'),
           backgroundColor: Colors.teal,
         ),
       );

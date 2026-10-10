@@ -2635,23 +2635,69 @@ class FirebaseService {
         .collection('ai_knowledge_rules')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) {
-              final r = AiKnowledgeRule.fromFirestore(doc);
-              if (r.keyword.toLowerCase().contains('beres merah') && r.mappedValue.contains('24S')) {
-                return r.copyWith(mappedValue: r.mappedValue.replaceAll('24S', '24'));
-              }
-              // Auto-migrate MMM rule to official master customer ID 0002 (MAJU MARKET MANDIRI)
-              if (r.keyword.trim().toUpperCase() == 'MMM' && (r.mappedValue.contains('MAKMUR') || r.targetId == null || r.targetId!.isEmpty)) {
-                doc.reference.update({
-                  'mappedValue': 'MAJU MARKET MANDIRI',
-                  'targetId': '0002',
-                }).catchError((_) {});
-                return r.copyWith(mappedValue: 'MAJU MARKET MANDIRI', targetId: '0002');
-              }
-              return r;
-            })
-            .toList());
+        .map((snapshot) {
+          final seenKeys = <String>{};
+          final list = <AiKnowledgeRule>[];
+
+          for (var doc in snapshot.docs) {
+            var r = AiKnowledgeRule.fromFirestore(doc);
+            if (r.keyword.toLowerCase().contains('beres merah') && r.mappedValue.contains('24S')) {
+              r = r.copyWith(mappedValue: r.mappedValue.replaceAll('24S', '24'));
+            }
+            // Auto-migrate MMM rule to official master customer ID 0002 (MAJU MARKET MANDIRI)
+            if (r.keyword.trim().toUpperCase() == 'MMM' && (r.mappedValue.contains('MAKMUR') || r.targetId == null || r.targetId!.isEmpty)) {
+              doc.reference.update({
+                'mappedValue': 'MAJU MARKET MANDIRI',
+                'targetId': '0002',
+              }).catchError((_) {});
+              r = r.copyWith(mappedValue: 'MAJU MARKET MANDIRI', targetId: '0002');
+            }
+
+            final key = '${r.type.toLowerCase().trim()}|${r.keyword.toLowerCase().trim()}';
+            if (!seenKeys.contains(key)) {
+              seenKeys.add(key);
+              list.add(r);
+            } else {
+              // Automatically delete existing duplicate document from Firestore in the background
+              doc.reference.delete().catchError((_) {});
+            }
+          }
+          return list;
+        });
+  }
+
+  /// Seeds default AI knowledge rules with smart deduplication & auto-cleanup of existing duplicates
+  Future<int> seedAiKnowledgeRules(List<AiKnowledgeRule> defaultRules) async {
+    final col = _db.collection('ai_knowledge_rules');
+    final snap = await col.get();
+
+    final existingMap = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final type = (data['type'] ?? '').toString().toLowerCase().trim();
+      final keyword = (data['keyword'] ?? '').toString().toLowerCase().trim();
+      final key = '$type|$keyword';
+      existingMap.putIfAbsent(key, () => []).add(doc);
+    }
+
+    int count = 0;
+    for (var r in defaultRules) {
+      final key = '${r.type.toLowerCase().trim()}|${r.keyword.toLowerCase().trim()}';
+      if (existingMap.containsKey(key)) {
+        final docs = existingMap[key]!;
+        await docs.first.reference.set(
+          r.copyWith(id: docs.first.id).toMap(),
+          SetOptions(merge: true),
+        );
+        for (int i = 1; i < docs.length; i++) {
+          await docs[i].reference.delete().catchError((_) {});
+        }
+      } else {
+        await col.add(r.toMap());
+      }
+      count++;
+    }
+    return count;
   }
 
   Future<void> saveAiKnowledgeRule(AiKnowledgeRule rule) async {
