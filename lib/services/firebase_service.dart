@@ -2674,8 +2674,14 @@ class FirebaseService {
   }
 
   /// Scans the latest transaction for a specific customer and product to retrieve historical price & discount
-  Future<Map<String, dynamic>?> getLastCustomerProductPricing(String customerName, String productId, {String? productName}) async {
+  Future<Map<String, dynamic>?> getLastCustomerProductPricing(
+    String customerName,
+    String productId, {
+    String? customerId,
+    String? productName,
+  }) async {
     try {
+      final cleanCustId = (customerId ?? '').trim();
       final cleanCust = customerName.trim().toLowerCase();
       final cleanProdId = productId.trim().toLowerCase();
       final cleanProdName = (productName ?? '').trim().toLowerCase();
@@ -2689,20 +2695,43 @@ class FirebaseService {
 
       for (var doc in snap.docs) {
         final data = doc.data();
+        final docCustId = (data['customerId'] ?? '').toString().trim();
         final cName = (data['customerName'] ?? '').toString().trim().toLowerCase();
         final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
 
-        if (cName == cleanCust || cAlias == cleanCust || cName.contains(cleanCust) || cleanCust.contains(cName)) {
+        bool matchCust = false;
+        if (cleanCustId.isNotEmpty && docCustId.isNotEmpty && docCustId == cleanCustId) {
+          matchCust = true;
+        } else if (cName == cleanCust || cAlias == cleanCust) {
+          matchCust = true;
+        } else if (cleanCust.isNotEmpty && (cName.contains(cleanCust) || cleanCust.contains(cName))) {
+          matchCust = true;
+        }
+
+        if (matchCust) {
           final itemsRaw = data['items'] as List<dynamic>? ?? [];
           for (var itemMap in itemsRaw) {
             if (itemMap is Map<String, dynamic>) {
               final pId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
               final pName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
 
-              if ((cleanProdId.isNotEmpty && pId == cleanProdId) ||
-                  (cleanProdName.isNotEmpty && (pName == cleanProdName || pName.contains(cleanProdName) || cleanProdName.contains(pName)))) {
+              // Skip bonus items (price == 0 or name contains bonus) when retrieving pricing
+              final itemPrice = (itemMap['price'] ?? 0.0).toDouble();
+              final isBonus = itemMap['isBonus'] == true || pName.contains('(bonus)');
+              if (itemPrice <= 0 || isBonus) continue;
+
+              bool matchProd = false;
+              if (cleanProdId.isNotEmpty && pId == cleanProdId) {
+                matchProd = true;
+              } else if (cleanProdName.isNotEmpty) {
+                if (pName == cleanProdName || pName.startsWith(cleanProdName) || cleanProdName.startsWith(pName)) {
+                  matchProd = true;
+                }
+              }
+
+              if (matchProd) {
                 return {
-                  'price': (itemMap['price'] ?? 0.0).toDouble(),
+                  'price': itemPrice,
                   'discountPercent': (itemMap['discountPercent'] ?? 0.0).toDouble(),
                   'discountAmount': (itemMap['discountAmount'] ?? 0.0).toDouble(),
                   'invoiceNo': data['invoiceNo'] ?? '',

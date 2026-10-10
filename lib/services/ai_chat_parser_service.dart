@@ -62,6 +62,7 @@ class AiChatParserService {
           productRules: productRules,
           unitRules: unitRules,
           customerName: matchedCustomer?.customerName ?? rawCustomerName,
+          customerId: matchedCustomer?.id,
         );
 
         if (itemDraft != null) {
@@ -76,7 +77,9 @@ class AiChatParserService {
           customerId: matchedCustomer?.id ?? '',
           customerName: matchedCustomer?.customerName ?? rawCustomerName,
           aliasName: matchedCustomer?.aliasName ?? '',
-          city: matchedCustomer?.city ?? 'SEMARANG',
+          city: (matchedCustomer != null && matchedCustomer.city.isNotEmpty)
+              ? matchedCustomer.city
+              : _detectCityFromText(block),
           province: matchedCustomer?.province ?? 'JAWA TENGAH',
           items: draftItems,
           rawChatBlock: block,
@@ -200,23 +203,52 @@ class AiChatParserService {
       }
     }
 
-    // 2. Direct Matching against Master Customer
+    // 2. Direct Intelligent Matching against Master Customer
     Customer? bestMatch;
+    int maxScore = 0;
+    final target = cleanName.toLowerCase();
+    final targetWords = target.split(RegExp(r'[\s\-_,.]+')).where((w) => w.length >= 2).toList();
+
     for (var c in customers) {
       final cName = c.customerName.toLowerCase();
       final cAlias = c.aliasName.toLowerCase();
-      final target = cleanName.toLowerCase();
+      final cCity = c.city.toLowerCase();
+      int score = 0;
 
+      // Exact matches
       if (target == cName || target == cAlias) {
         bestMatch = c;
+        maxScore = 200;
         break;
-      } else if (target.isNotEmpty && (cName.contains(target) || cAlias.contains(target) || target.contains(cName))) {
+      }
+
+      // Store name contained directly
+      if (cName.isNotEmpty && target.contains(cName)) {
+        score += 60;
+      }
+      if (cAlias.isNotEmpty && target.contains(cAlias)) {
+        score += 50;
+      }
+
+      // City match bonus (e.g. chat says 'LG FF WONOSOBO' and customer's city is 'WONOSOBO')
+      if (cCity.isNotEmpty && targetWords.contains(cCity)) {
+        score += 35;
+      }
+
+      // Individual word overlaps
+      for (var word in targetWords) {
+        if (cName.split(RegExp(r'\s+')).contains(word)) score += 15;
+        if (cAlias.split(RegExp(r'\s+')).contains(word)) score += 10;
+      }
+
+      if (score > maxScore) {
+        maxScore = score;
         bestMatch = c;
       }
     }
 
     return _CustomerResolution(
-      customer: bestMatch,
+      customer: (maxScore >= 25) ? bestMatch : null,
       rawName: bestMatch?.customerName ?? cleanName,
       headerLineCount: headerCount,
     );
@@ -229,6 +261,7 @@ class AiChatParserService {
     required List<AiKnowledgeRule> productRules,
     required List<AiKnowledgeRule> unitRules,
     required String customerName,
+    String? customerId,
   }) async {
     String cleanLine = rawLine.trim();
 
@@ -288,6 +321,7 @@ class AiChatParserService {
     final historyPricing = await firebaseService.getLastCustomerProductPricing(
       customerName,
       matchedProduct.id,
+      customerId: customerId,
       productName: matchedProduct.name,
     );
 
@@ -369,28 +403,73 @@ class AiChatParserService {
 
   Product? _fuzzyMatchProduct(String query, List<Product> products) {
     if (products.isEmpty) return null;
-    final cleanQ = query.toLowerCase().trim();
+    final cleanQ = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
 
     // 1. Direct name or code match
     for (var p in products) {
-      if (p.name.toLowerCase() == cleanQ || p.id.toLowerCase() == cleanQ) {
+      final pNameClean = p.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
+      if (pNameClean == cleanQ || p.id.toLowerCase() == cleanQ || p.kodeInduk.toLowerCase() == cleanQ) {
         return p;
       }
     }
 
-    // 2. Score based on word overlap
-    final qWords = cleanQ.split(RegExp(r'[\s\-_]+')).where((w) => w.length >= 2).toList();
+    // 2. Score based on whole-word matching and type bonuses
+    final qWords = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    final bool queryHasRoll = qWords.contains('roll') || qWords.contains('rol');
+    final bool queryHasLoyang = qWords.contains('loyang') || qWords.contains('lyg');
+    final bool queryHas1000 = qWords.contains('1000') || qWords.contains('1kg');
+
     Product? bestProduct;
     int maxScore = 0;
 
     for (var p in products) {
       final pName = p.name.toLowerCase();
-      final pCode = p.kodeInduk.toLowerCase();
+      final pWords = pName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').split(RegExp(r'\s+')).toSet();
       int score = 0;
 
-      for (var word in qWords) {
-        if (pName.contains(word)) score += 2;
-        if (pCode.contains(word)) score += 3;
+      for (var qw in qWords) {
+        // Whole-word match
+        if (pWords.contains(qw)) {
+          score += 10;
+        } else {
+          // Normalize spelling (e.g. rolade == rollade)
+          final normQ = qw.replaceAll('ll', 'l');
+          bool normMatched = false;
+          for (var pw in pWords) {
+            final normP = pw.replaceAll('ll', 'l');
+            if (normQ == normP) {
+              score += 8;
+              normMatched = true;
+              break;
+            }
+          }
+          // Substring match only if no whole word matched
+          if (!normMatched && pName.contains(qw)) {
+            score += 2;
+          }
+        }
+      }
+
+      // Keyword differentiators:
+      // A. "ROLL" variant
+      if (queryHasRoll) {
+        if (pWords.contains('roll') || pWords.contains('rol')) {
+          score += 25; // Massive bonus for true ROLL variant
+        } else if (pName.contains('1000')) {
+          score -= 15; // Penalty for picking 1000g when ROLL is requested
+        }
+      }
+
+      // B. "LOYANG" variant
+      if (queryHasLoyang) {
+        if (pWords.contains('loyang') || pWords.contains('lyg')) {
+          score += 25;
+        }
+      }
+
+      // C. 1000g vs 400g/500g
+      if (queryHas1000 && pName.contains('1000')) {
+        score += 20;
       }
 
       if (score > maxScore) {
@@ -399,7 +478,7 @@ class AiChatParserService {
       }
     }
 
-    return maxScore >= 2 ? bestProduct : null;
+    return maxScore >= 4 ? bestProduct : null;
   }
 
   bool _isIgnoredLine(String line) {
@@ -414,6 +493,22 @@ class AiChatParserService {
         lower.startsWith('selasa') ||
         lower.startsWith('kamis') ||
         RegExp(r'^\d{1,2}[\.:]\d{2}$').hasMatch(lower); // timestamp e.g. 17.04
+  }
+
+  String _detectCityFromText(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('wonosobo')) return 'WONOSOBO';
+    if (lower.contains('kendal')) return 'KENDAL';
+    if (lower.contains('purwodadi')) return 'PURWODADI';
+    if (lower.contains('kudus')) return 'KUDUS';
+    if (lower.contains('pati')) return 'PATI';
+    if (lower.contains('demak')) return 'DEMAK';
+    if (lower.contains('solo') || lower.contains('surakarta')) return 'SURAKARTA';
+    if (lower.contains('jogja') || lower.contains('yogyakarta')) return 'YOGYAKARTA';
+    if (lower.contains('magelang')) return 'MAGELANG';
+    if (lower.contains('temanggung')) return 'TEMANGGUNG';
+    if (lower.contains('semarang')) return 'SEMARANG';
+    return 'SEMARANG';
   }
 }
 

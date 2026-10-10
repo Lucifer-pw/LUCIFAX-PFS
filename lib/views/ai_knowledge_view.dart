@@ -57,6 +57,46 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     }
   }
 
+  Future<void> _seedDefaultRules() async {
+    final defaultRules = [
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'k', mappedValue: '1 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'ktn', mappedValue: '1 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'dus', mappedValue: '1 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'box', mappedValue: '1 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: ': 1', mappedValue: '1 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: ': 2', mappedValue: '2 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'roll', mappedValue: '1 Pack', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'pack', mappedValue: '1 Pack', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'unit', keyword: 'pcs', mappedValue: '1 Pack', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'LG FF', mappedValue: 'LG FF (WIMBO WIEK KUSTANTO)', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'LG FF WONOSOBO', mappedValue: 'LG FF (WIMBO WIEK KUSTANTO)', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'KK FF', mappedValue: 'KK FF WONOSOBO', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'KK FF WONOSOBO', mappedValue: 'KK FF WONOSOBO', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'MMM', mappedValue: 'TOKO MAJU MAKMUR MANDIRI', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'ANIZA FF', mappedValue: 'ANIZA FF KENDAL', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'ANIZA FF KENDAL', mappedValue: 'ANIZA FF KENDAL', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'Pak Nardi', mappedValue: 'NARDI FF (NARDI)', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'ROLADE SAPI ROLL', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'KORNET AYAM LOYANG', mappedValue: 'KORNET AYAM LOYANG 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+    ];
+
+    for (var r in defaultRules) {
+      await _firebaseService.saveAiKnowledgeRule(r);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🌱 Berhasil memuat 22 aturan kamus standar ke database!'),
+          backgroundColor: Colors.teal,
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -368,15 +408,31 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () => _showAddEditRuleDialog(),
-                  icon: const Icon(Icons.add_rounded, color: Colors.white),
-                  label: const Text('Tambah Ilmu Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.tealAccent,
+                        side: const BorderSide(color: Colors.teal),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _seedDefaultRules,
+                      icon: const Icon(Icons.grass_rounded, size: 16),
+                      label: const Text('Muat Kamus Standar', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => _showAddEditRuleDialog(),
+                      icon: const Icon(Icons.add_rounded, color: Colors.white),
+                      label: const Text('Tambah Ilmu Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -458,7 +514,18 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                                   const SizedBox(height: 10),
                                   const Text('Belum ada aturan kamus yang sesuai.', style: TextStyle(color: Color(0xFF94A3B8))),
                                   const SizedBox(height: 6),
-                                  const Text('Klik tombol "Tambah Ilmu Baru" untuk mengajari AI singkatan chat.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                  const Text('Klik tombol "Tambah Ilmu Baru" atau muat kamus standar di bawah.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                  const SizedBox(height: 14),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.teal,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: _seedDefaultRules,
+                                    icon: const Icon(Icons.grass_rounded, color: Colors.white, size: 16),
+                                    label: const Text('🌱 Muat Kamus Standar Sekarang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                  ),
                                 ],
                               ),
                             );
