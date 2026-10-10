@@ -72,7 +72,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'LG FF WONOSOBO', mappedValue: 'LG FF (WIMBO WIEK KUSTANTO)', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'KK FF', mappedValue: 'KK FF WONOSOBO', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'KK FF WONOSOBO', mappedValue: 'KK FF WONOSOBO', createdAt: DateTime.now()),
-      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'MMM', mappedValue: 'TOKO MAJU MAKMUR MANDIRI', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'MMM', mappedValue: 'MAJU MARKET MANDIRI', targetId: '0002', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'ANIZA FF', mappedValue: 'ANIZA FF KENDAL', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'ANIZA FF KENDAL', mappedValue: 'ANIZA FF KENDAL', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'Pak Nardi', mappedValue: 'NARDI FF (NARDI)', createdAt: DateTime.now()),

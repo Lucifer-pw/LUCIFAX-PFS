@@ -188,7 +188,7 @@ class AiChatParserService {
     if (lines.length > 1 && (lines[0].toLowerCase().startsWith('waalaikumsalam') || lines[0].toLowerCase().startsWith('pak..'))) {
       if (lines[0].toLowerCase().contains('order dari')) {
         headerText = lines[0];
-      } else if (lines[1].toLowerCase().startsWith('po ') || lines[1].toLowerCase().contains(' ff')) {
+      } else if (lines[1].toLowerCase().startsWith('po ') || lines[1].toLowerCase().contains(' ff') || lines[1].toLowerCase().contains('mmm')) {
         headerText = lines[1];
         headerCount = 2;
       }
@@ -202,61 +202,168 @@ class AiChatParserService {
     cleanName = cleanName.replaceAll(RegExp(r'^order\s+', caseSensitive: false), '');
     cleanName = cleanName.trim();
 
+    final targetLower = cleanName.toLowerCase();
+
     // 1. Check AI Knowledge Rules (Customer Alias)
     for (var rule in customerRules) {
-      if (cleanName.toLowerCase().contains(rule.keyword.toLowerCase()) ||
-          rule.keyword.toLowerCase().contains(cleanName.toLowerCase())) {
-        // Find in master by mappedValue or targetId
+      final rKeyword = rule.keyword.trim().toLowerCase();
+      if (rKeyword.isEmpty) continue;
+
+      if (targetLower == rKeyword ||
+          targetLower.contains(rKeyword) ||
+          rKeyword.contains(targetLower)) {
+        // Priority A: If targetId is specified and exists in customers
+        if (rule.targetId != null && rule.targetId!.isNotEmpty) {
+          final targetCust = customers.firstWhere(
+            (c) => c.id == rule.targetId,
+            orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
+          );
+          if (targetCust.id.isNotEmpty) {
+            return _CustomerResolution(
+              customer: targetCust,
+              rawName: targetCust.customerName,
+              headerLineCount: headerCount,
+            );
+          }
+        }
+
+        // Priority B: Match rule.mappedValue directly in Master Customers
+        final mappedLower = rule.mappedValue.trim().toLowerCase();
         final match = customers.firstWhere(
-          (c) => (rule.targetId != null && c.id == rule.targetId) ||
-              c.customerName.toLowerCase() == rule.mappedValue.toLowerCase() ||
-              c.aliasName.toLowerCase() == rule.mappedValue.toLowerCase(),
-          orElse: () => Customer(id: '', customerName: rule.mappedValue, aliasName: '', address: '', city: 'SEMARANG', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+          (c) => c.customerName.toLowerCase() == mappedLower ||
+              c.aliasName.toLowerCase() == mappedLower ||
+              c.id.toLowerCase() == mappedLower,
+          orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
         );
-        return _CustomerResolution(
-          customer: match.id.isNotEmpty ? match : null,
-          rawName: rule.mappedValue.isNotEmpty ? rule.mappedValue : cleanName,
-          headerLineCount: headerCount,
-        );
+        if (match.id.isNotEmpty) {
+          return _CustomerResolution(
+            customer: match,
+            rawName: match.customerName,
+            headerLineCount: headerCount,
+          );
+        }
+
+        // Priority C: Fuzzy search rule.mappedValue in Master Customers (e.g. "MAJU MAKMUR MANDIRI" -> "MAJU MARKET MANDIRI")
+        final fuzzyRuleMatch = _findNearestMasterCustomer(rule.mappedValue, customers);
+        if (fuzzyRuleMatch != null) {
+          return _CustomerResolution(
+            customer: fuzzyRuleMatch,
+            rawName: fuzzyRuleMatch.customerName,
+            headerLineCount: headerCount,
+          );
+        }
       }
     }
 
-    // 2. Direct Intelligent Matching against Master Customer
+    // 2. Direct Intelligent Acronym & Fuzzy Matching against Master Customers
+    final directMatch = _findNearestMasterCustomer(cleanName, customers);
+    if (directMatch != null) {
+      return _CustomerResolution(
+        customer: directMatch,
+        rawName: directMatch.customerName,
+        headerLineCount: headerCount,
+      );
+    }
+
+    return _CustomerResolution(
+      customer: null,
+      rawName: cleanName,
+      headerLineCount: headerCount,
+    );
+  }
+
+  /// Searches and matches Master Customers using Acronyms (e.g. MMM -> Maju Market Mandiri), Stopwords, and Token Overlap
+  Customer? _findNearestMasterCustomer(String text, List<Customer> customers) {
+    if (customers.isEmpty) return null;
+
+    final clean = text.toLowerCase().trim();
+    if (clean.isEmpty) return null;
+
+    // Filter out generic stopwords
+    String stripStopwords(String s) {
+      return s
+          .replaceAll(RegExp(r'\b(toko|tk|ff|frozen|food)\b', caseSensitive: false), ' ')
+          .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+    }
+
+    final queryCleaned = stripStopwords(clean);
+    final queryTokens = queryCleaned.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    final queryAlphaNumOnly = clean.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
     Customer? bestMatch;
     int maxScore = 0;
-    final target = cleanName.toLowerCase();
-    final targetWords = target.split(RegExp(r'[\s\-_,.]+')).where((w) => w.length >= 2).toList();
 
     for (var c in customers) {
-      final cName = c.customerName.toLowerCase();
-      final cAlias = c.aliasName.toLowerCase();
-      final cCity = c.city.toLowerCase();
+      final cNameRaw = c.customerName.toLowerCase().trim();
+      final cAliasRaw = c.aliasName.toLowerCase().trim();
+      final cCity = c.city.toLowerCase().trim();
+
+      final cNameClean = stripStopwords(cNameRaw);
+      final cAliasClean = stripStopwords(cAliasRaw);
+
       int score = 0;
 
-      // Exact matches
-      if (target == cName || target == cAlias) {
-        bestMatch = c;
-        maxScore = 200;
-        break;
+      // 1. Exact match (case insensitive)
+      if (clean == cNameRaw || clean == cAliasRaw || queryCleaned == cNameClean) {
+        return c; // 100% exact match
       }
 
-      // Store name contained directly
-      if (cName.isNotEmpty && target.contains(cName)) {
+      // 2. Acronym / Initials Match (e.g. "MMM" -> M-aju M-arket M-andiri)
+      final cTokens = cNameClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+      if (cTokens.length >= 2) {
+        final initials = cTokens.map((w) => w[0]).join(); // e.g. "mmm"
+        if (queryAlphaNumOnly == initials || queryAlphaNumOnly.startsWith(initials)) {
+          score += 150; // Huge bonus for exact acronym match!
+        }
+      }
+
+      final cAliasTokens = cAliasClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+      if (cAliasTokens.length >= 2) {
+        final aliasInitials = cAliasTokens.map((w) => w[0]).join();
+        if (queryAlphaNumOnly == aliasInitials || queryAlphaNumOnly.startsWith(aliasInitials)) {
+          score += 140;
+        }
+      }
+
+      // 3. Direct Substring Containment
+      if (cNameClean.isNotEmpty && queryCleaned.contains(cNameClean)) {
+        score += 80;
+      }
+      if (cAliasClean.isNotEmpty && queryCleaned.contains(cAliasClean)) {
+        score += 70;
+      }
+      if (cNameClean.isNotEmpty && cNameClean.contains(queryCleaned)) {
         score += 60;
       }
-      if (cAlias.isNotEmpty && target.contains(cAlias)) {
-        score += 50;
+
+      // 4. Token Overlap
+      int matchedTokens = 0;
+      for (var token in queryTokens) {
+        if (cTokens.contains(token)) {
+          score += 30;
+          matchedTokens++;
+        } else if (cAliasTokens.contains(token)) {
+          score += 25;
+          matchedTokens++;
+        } else {
+          for (var ct in cTokens) {
+            if (ct.contains(token) || token.contains(ct)) {
+              score += 15;
+              break;
+            }
+          }
+        }
       }
 
-      // City match bonus (e.g. chat says 'LG FF WONOSOBO' and customer's city is 'WONOSOBO')
-      if (cCity.isNotEmpty && targetWords.contains(cCity)) {
-        score += 35;
+      if (matchedTokens >= 2) {
+        score += 40;
       }
 
-      // Individual word overlaps
-      for (var word in targetWords) {
-        if (cName.split(RegExp(r'\s+')).contains(word)) score += 15;
-        if (cAlias.split(RegExp(r'\s+')).contains(word)) score += 10;
+      // 5. City Match Bonus
+      if (cCity.isNotEmpty && clean.contains(cCity)) {
+        score += 45;
       }
 
       if (score > maxScore) {
@@ -265,11 +372,7 @@ class AiChatParserService {
       }
     }
 
-    return _CustomerResolution(
-      customer: (maxScore >= 25) ? bestMatch : null,
-      rawName: bestMatch?.customerName ?? cleanName,
-      headerLineCount: headerCount,
-    );
+    return maxScore >= 40 ? bestMatch : null;
   }
 
   /// Parses a single item line into ChatOrderItemDraft

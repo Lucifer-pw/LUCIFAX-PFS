@@ -479,42 +479,65 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                             ),
                             isExpanded: true,
                             dropdownColor: const Color(0xFF1E293B),
-                            items: customerProvider.customers.map((c) {
-                              return DropdownMenuItem<String>(
-                                value: c.id,
-                                child: Text(
-                                  c.aliasName.isNotEmpty ? '${c.customerName} (${c.aliasName})' : c.customerName,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (newId) {
-                              if (newId != null) {
-                                final selected = customerProvider.customers.firstWhere((item) => item.id == newId);
-                                setState(() {
-                                  draft.customerId = selected.id;
-                                  draft.customerName = selected.customerName;
-                                  draft.aliasName = selected.aliasName;
-                                  draft.city = selected.city;
-                                  draft.province = selected.province;
-                                });
-                              }
-                            },
+                              items: customerProvider.customers.map((c) {
+                                return DropdownMenuItem<String>(
+                                  value: c.id,
+                                  child: Text(
+                                    '${c.customerName}${c.aliasName.isNotEmpty ? " (${c.aliasName})" : ""}${c.city.isNotEmpty ? " - ${c.city}" : ""} [${c.id}]',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (newId) {
+                                if (newId != null) {
+                                  final selected = customerProvider.customers.firstWhere((item) => item.id == newId);
+                                  setState(() {
+                                    draft.customerId = selected.id;
+                                    draft.customerName = selected.customerName;
+                                    draft.aliasName = selected.aliasName;
+                                    draft.city = selected.city;
+                                    draft.province = selected.province;
+                                  });
+                                }
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                      if (draft.city.isNotEmpty) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(4)),
-                          child: Text(draft.city, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                        ),
+                        if (draft.customerId.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF38BDF8)),
+                            ),
+                            child: Text('ID: ${draft.customerId}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                        ] else ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amberAccent.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.amberAccent),
+                            ),
+                            child: const Text('⚠️ Belum Terdaftar', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                        if (draft.city.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(4)),
+                            child: Text(draft.city, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
                 const SizedBox(width: 12),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(

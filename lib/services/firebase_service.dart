@@ -2641,6 +2641,14 @@ class FirebaseService {
               if (r.keyword.toLowerCase().contains('beres merah') && r.mappedValue.contains('24S')) {
                 return r.copyWith(mappedValue: r.mappedValue.replaceAll('24S', '24'));
               }
+              // Auto-migrate MMM rule to official master customer ID 0002 (MAJU MARKET MANDIRI)
+              if (r.keyword.trim().toUpperCase() == 'MMM' && (r.mappedValue.contains('MAKMUR') || r.targetId == null || r.targetId!.isEmpty)) {
+                doc.reference.update({
+                  'mappedValue': 'MAJU MARKET MANDIRI',
+                  'targetId': '0002',
+                }).catchError((_) {});
+                return r.copyWith(mappedValue: 'MAJU MARKET MANDIRI', targetId: '0002');
+              }
               return r;
             })
             .toList());
