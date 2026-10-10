@@ -31,6 +31,7 @@ import 'kmeans_analysis_view.dart';
 import 'operational_invoice_view.dart';
 import 'monthly_operational_expenses_view.dart';
 import 'billing_report_view.dart';
+import 'ai_knowledge_view.dart';
 import 'package:flutter/services.dart';
 import '../services/walkie_talkie_service.dart';
 import '../services/auth_service.dart';
@@ -766,6 +767,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Billing Report',
         'icon': Icons.analytics_outlined,
         'widget': const BillingReportView(),
+      });
+      items.add({
+        'title': 'Kamus & Otak AI',
+        'icon': Icons.psychology_rounded,
+        'widget': const AiKnowledgeView(),
       });
     }
 

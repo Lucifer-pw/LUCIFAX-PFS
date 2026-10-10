@@ -11,6 +11,7 @@ import '../providers/customer_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../services/print_service.dart';
+import '../widgets/ai_chat_order_dialog.dart';
 
 class TransactionEntryView extends StatefulWidget {
   const TransactionEntryView({super.key});
@@ -371,6 +372,18 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
         _buildFormSection(
           title: 'Data Pelanggan',
           icon: Icons.person_search_rounded,
+          action: (isDeveloper || user.role == 'admin')
+              ? ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => showAiChatOrderDialog(context),
+                  icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 14),
+                  label: const Text('Scan Chat PO', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                )
+              : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1223,7 +1236,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
   }
 
   // Builder for form input cards
-  Widget _buildFormSection({required String title, required IconData icon, required Widget child}) {
+  Widget _buildFormSection({required String title, required IconData icon, required Widget child, Widget? action}) {
     final isMobile = MediaQuery.of(context).size.width < 768;
     return Container(
       padding: EdgeInsets.all(isMobile ? 14.0 : 20.0),
@@ -1236,13 +1249,19 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: const Color(0xFF38BDF8), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              Row(
+                children: [
+                  Icon(icon, color: const Color(0xFF38BDF8), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ],
               ),
+              if (action != null) action,
             ],
           ),
           const SizedBox(height: 16),

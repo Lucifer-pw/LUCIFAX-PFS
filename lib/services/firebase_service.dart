@@ -1,3 +1,4 @@
+import '../models/ai_knowledge_rule.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
@@ -2624,6 +2625,101 @@ class FirebaseService {
       'updatedBy': updatedBy,
     }, SetOptions(merge: true));
   }
+
+  // ==========================================
+  // AI KNOWLEDGE BASE & CHAT SCANNER
+  // ==========================================
+  Stream<List<AiKnowledgeRule>> streamAiKnowledgeRules() {
+    return _db
+        .collection('ai_knowledge_rules')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => AiKnowledgeRule.fromFirestore(doc))
+            .toList());
+  }
+
+  Future<void> saveAiKnowledgeRule(AiKnowledgeRule rule) async {
+    final col = _db.collection('ai_knowledge_rules');
+    if (rule.id.isEmpty) {
+      await col.add(rule.toMap());
+    } else {
+      await col.doc(rule.id).set(rule.toMap(), SetOptions(merge: true));
+    }
+  }
+
+  Future<void> deleteAiKnowledgeRule(String ruleId) async {
+    if (ruleId.isNotEmpty) {
+      await _db.collection('ai_knowledge_rules').doc(ruleId).delete();
+    }
+  }
+
+  Future<String> getAiGeneralInstructions() async {
+    try {
+      final doc = await _db.collection('app_settings').doc('ai_instructions').get();
+      if (doc.exists) {
+        return (doc.data()?['instructions'] ?? '').toString();
+      }
+    } catch (e) {
+      debugPrint('Error getting AI general instructions: $e');
+    }
+    return '';
+  }
+
+  Future<void> saveAiGeneralInstructions(String instructions) async {
+    await _db.collection('app_settings').doc('ai_instructions').set({
+      'instructions': instructions,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Scans the latest transaction for a specific customer and product to retrieve historical price & discount
+  Future<Map<String, dynamic>?> getLastCustomerProductPricing(String customerName, String productId, {String? productName}) async {
+    try {
+      final cleanCust = customerName.trim().toLowerCase();
+      final cleanProdId = productId.trim().toLowerCase();
+      final cleanProdName = (productName ?? '').trim().toLowerCase();
+
+      // Query recent transactions
+      final snap = await _db
+          .collection('transactions')
+          .orderBy('date', descending: true)
+          .limit(350)
+          .get();
+
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final cName = (data['customerName'] ?? '').toString().trim().toLowerCase();
+        final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
+
+        if (cName == cleanCust || cAlias == cleanCust || cName.contains(cleanCust) || cleanCust.contains(cName)) {
+          final itemsRaw = data['items'] as List<dynamic>? ?? [];
+          for (var itemMap in itemsRaw) {
+            if (itemMap is Map<String, dynamic>) {
+              final pId = (itemMap['productId'] ?? '').toString().trim().toLowerCase();
+              final pName = (itemMap['productName'] ?? '').toString().trim().toLowerCase();
+
+              if ((cleanProdId.isNotEmpty && pId == cleanProdId) ||
+                  (cleanProdName.isNotEmpty && (pName == cleanProdName || pName.contains(cleanProdName) || cleanProdName.contains(pName)))) {
+                return {
+                  'price': (itemMap['price'] ?? 0.0).toDouble(),
+                  'discountPercent': (itemMap['discountPercent'] ?? 0.0).toDouble(),
+                  'discountAmount': (itemMap['discountAmount'] ?? 0.0).toDouble(),
+                  'invoiceNo': data['invoiceNo'] ?? '',
+                  'date': data['date'] != null && data['date'] is Timestamp ? (data['date'] as Timestamp).toDate() : null,
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error scanning last customer product pricing: $e');
+    }
+    return null;
+  }
+
+
 }
 
 class _KodeIndukResolver {

@@ -1,4 +1,5 @@
 import '../widgets/receivable_payment_dialog.dart';
+import '../widgets/ai_chat_order_dialog.dart';
 import '../providers/receivable_provider.dart';
 import '../models/receivable.dart';
 import 'dart:async';
@@ -5028,6 +5029,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               label: const Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF25D366),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+        if (!isKacab) ...[
+          const SizedBox(width: 12),
+          // Scan Chat WA PO Button (Admin & Developer)
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () => showAiChatOrderDialog(context),
+              icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
+              label: const Text('Scan Chat PO', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
