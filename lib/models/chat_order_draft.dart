@@ -10,6 +10,7 @@ class ChatOrderItemDraft {
   double discountAmount;
   double sizeGrams;
   bool isNewItemForCustomer; // true if customer never bought this before
+  bool isBonus; // true if this is an auto-generated bonus item (price = 0)
 
   ChatOrderItemDraft({
     required this.productId,
@@ -23,6 +24,7 @@ class ChatOrderItemDraft {
     this.discountAmount = 0.0,
     this.sizeGrams = 500.0,
     this.isNewItemForCustomer = false,
+    this.isBonus = false,
   });
 
   double get subtotal {

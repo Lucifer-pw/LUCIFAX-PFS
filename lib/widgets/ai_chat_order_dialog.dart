@@ -166,6 +166,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
           discountPercent: it.discountPercent,
           subtotal: it.subtotal,
           sizeGrams: it.sizeGrams,
+          isBonus: it.isBonus,
         );
       }).toList();
 
@@ -562,7 +563,14 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                            if (item.isNewItemForCustomer)
+                            if (item.isBonus)
+                              Container(
+                                margin: const EdgeInsets.only(top: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(color: Colors.pinkAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                child: const Text('🎁 BONUS OTOMATIS (Rp 0)', style: TextStyle(color: Colors.pinkAccent, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                              )
+                            else if (item.isNewItemForCustomer)
                               Container(
                                 margin: const EdgeInsets.only(top: 2),
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),

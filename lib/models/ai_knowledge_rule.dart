@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AiKnowledgeRule {
   final String id;
-  /// Types: 'unit', 'customer_alias', 'product_alias', 'general_instruction'
+  /// Types: 'unit', 'customer_alias', 'product_alias', 'general_instruction', 'bonus_rule'
   final String type;
   /// Keyword or abbreviation in chat (e.g. 'k', 'MMM', 'Beres merah 24', 'roll')
   final String keyword;

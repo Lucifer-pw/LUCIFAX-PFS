@@ -2689,7 +2689,7 @@ class FirebaseService {
       // Query recent transactions
       final snap = await _db
           .collection('transactions')
-          .orderBy('date', descending: true)
+          .orderBy('createdAt', descending: true)
           .limit(350)
           .get();
 

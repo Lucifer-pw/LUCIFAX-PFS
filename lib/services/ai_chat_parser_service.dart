@@ -24,6 +24,7 @@ class AiChatParserService {
     final customerRules = rules.where((r) => r.type == 'customer_alias').toList();
     final productRules = rules.where((r) => r.type == 'product_alias').toList();
     final unitRules = rules.where((r) => r.type == 'unit').toList();
+    final bonusRules = rules.where((r) => r.type == 'bonus_rule').toList();
 
     // 2. Multi-PO Splitting: Split chat into separate blocks per store/order
     final blocks = _splitChatIntoStoreBlocks(rawChat);
@@ -69,6 +70,14 @@ class AiChatParserService {
           draftItems.add(itemDraft);
         }
       }
+
+      // Apply Bonus/Promo Rules (auto-append bonus items based on thresholds)
+      _applyBonusRules(
+        draftItems: draftItems,
+        bonusRules: bonusRules,
+        customerName: matchedCustomer?.customerName ?? rawCustomerName,
+        products: products,
+      );
 
       // If at least one item or valid customer found, add draft
       if (draftItems.isNotEmpty || matchedCustomer != null) {
@@ -479,6 +488,103 @@ class AiChatParserService {
     }
 
     return maxScore >= 4 ? bestProduct : null;
+  }
+
+  /// Apply Bonus/Promo rules: auto-append bonus items based on customer & qty thresholds
+  /// Rule keyword format: "CUSTOMER_NAME|PRODUCT_NAME|MIN_QTY_KARTON" (pipe-separated)
+  /// Rule mappedValue format: "BONUS_PRODUCT_NAME|BONUS_QTY|BONUS_UNIT" (pipe-separated)
+  void _applyBonusRules({
+    required List<ChatOrderItemDraft> draftItems,
+    required List<AiKnowledgeRule> bonusRules,
+    required String customerName,
+    required List<Product> products,
+  }) {
+    if (bonusRules.isEmpty || draftItems.isEmpty) return;
+
+    final cleanCust = customerName.trim().toLowerCase();
+    final bonusItemsToAdd = <ChatOrderItemDraft>[];
+
+    for (var rule in bonusRules) {
+      // Parse rule keyword: "CUSTOMER|PRODUCT|MIN_QTY"
+      final keyParts = rule.keyword.split('|');
+      if (keyParts.length < 3) continue;
+
+      final ruleCust = keyParts[0].trim().toLowerCase();
+      final ruleProd = keyParts[1].trim().toLowerCase();
+      final ruleMinQty = double.tryParse(keyParts[2].trim()) ?? 0;
+
+      // Check if customer matches
+      if (!cleanCust.contains(ruleCust) && !ruleCust.contains(cleanCust)) continue;
+
+      // Parse rule mappedValue: "BONUS_PRODUCT|BONUS_QTY|BONUS_UNIT"
+      final valParts = rule.mappedValue.split('|');
+      if (valParts.length < 3) continue;
+
+      final bonusProdName = valParts[0].trim();
+      final bonusQty = double.tryParse(valParts[1].trim()) ?? 1;
+      final bonusUnit = valParts[2].trim().toLowerCase();
+
+      // Sum karton qty for the matching product in draftItems
+      double totalKartonForProduct = 0;
+      ChatOrderItemDraft? matchedItem;
+      for (var item in draftItems) {
+        if (item.productName.toLowerCase().contains(ruleProd) ||
+            ruleProd.contains(item.productName.toLowerCase())) {
+          if (item.qtyUnit.toLowerCase() == 'karton') {
+            totalKartonForProduct += item.qtyInput;
+          }
+          matchedItem = item;
+        }
+      }
+
+      // Check if threshold is met
+      if (totalKartonForProduct >= ruleMinQty && matchedItem != null) {
+        // Resolve bonus product from master
+        Product? bonusProduct;
+        for (var p in products) {
+          if (p.name.toLowerCase() == bonusProdName.toLowerCase()) {
+            bonusProduct = p;
+            break;
+          }
+        }
+        // Fallback: use matched item's product info
+        bonusProduct ??= products.firstWhere(
+          (p) => p.name.toLowerCase().contains(bonusProdName.toLowerCase()),
+          orElse: () => Product(
+            id: matchedItem!.productId,
+            name: bonusProdName,
+            price: 0.0,
+            stock: 0.0,
+            isiKarton: 20,
+            sizeGrams: matchedItem.sizeGrams,
+          ),
+        );
+
+        // Calculate bonus qty in pcs
+        double bonusQtyPcs = bonusQty;
+        if (bonusUnit == 'karton') {
+          final isiKarton = bonusProduct.isiKarton > 0 ? bonusProduct.isiKarton : 20;
+          bonusQtyPcs = bonusQty * isiKarton;
+        }
+
+        bonusItemsToAdd.add(ChatOrderItemDraft(
+          productId: bonusProduct.id,
+          productName: '${bonusProduct.name} (BONUS)',
+          rawText: '[AUTO BONUS] ${rule.keyword}',
+          qtyUnit: bonusUnit,
+          qtyInput: bonusQty,
+          qtyPcs: bonusQtyPcs,
+          price: 0.0,
+          discountPercent: 0.0,
+          discountAmount: 0.0,
+          sizeGrams: bonusProduct.sizeGrams,
+          isNewItemForCustomer: false,
+          isBonus: true,
+        ));
+      }
+    }
+
+    draftItems.addAll(bonusItemsToAdd);
   }
 
   bool _isIgnoredLine(String line) {

@@ -18,7 +18,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _generalInstructionsController = TextEditingController();
 
-  String _selectedFilter = 'all'; // 'all', 'customer_alias', 'product_alias', 'unit'
+  String _selectedFilter = 'all'; // 'all', 'customer_alias', 'product_alias', 'unit', 'bonus_rule'
   bool _isLoadingInstructions = true;
   bool _isSavingInstructions = false;
 
@@ -81,6 +81,8 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+      // Bonus / Promo Rules
+      AiKnowledgeRule(id: '', type: 'bonus_rule', keyword: 'LG FF|KORNET AYAM LOYANG 400 G|40', mappedValue: 'KORNET AYAM LOYANG 400 G|1|karton', createdAt: DateTime.now()),
     ];
 
     for (var r in defaultRules) {
@@ -90,7 +92,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('🌱 Berhasil memuat 22 aturan kamus standar ke database!'),
+          content: Text('🌱 Berhasil memuat 23 aturan kamus standar ke database!'),
           backgroundColor: Colors.teal,
         ),
       );
@@ -159,6 +161,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                             DropdownMenuItem(value: 'product_alias', child: Text('Panggilan / Singkatan Barang', style: TextStyle(color: Colors.white))),
                             DropdownMenuItem(value: 'customer_alias', child: Text('Panggilan / Singkatan Toko', style: TextStyle(color: Colors.white))),
                             DropdownMenuItem(value: 'unit', child: Text('Aturan Satuan Kuantiti (Karton/Pack/Roll)', style: TextStyle(color: Colors.white))),
+                            DropdownMenuItem(value: 'bonus_rule', child: Text('Aturan Bonus / Promo Otomatis', style: TextStyle(color: Colors.white))),
                           ],
                           onChanged: (val) {
                             if (val != null) {
@@ -176,9 +179,11 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
 
                     // Keyword field
                     Text(
-                      ruleType == 'unit'
-                          ? 'Istilah Satuan di Chat (e.g. "k", "roll", ": 1"):'
-                          : 'Kata / Singkatan di Chat Pak BC:',
+                      ruleType == 'bonus_rule'
+                          ? 'Syarat Bonus (Format: Toko|Nama Barang|Min Karton):'
+                          : ruleType == 'unit'
+                              ? 'Istilah Satuan di Chat (e.g. "k", "roll", ": 1"):'
+                              : 'Kata / Singkatan di Chat Pak BC:',
                       style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                     ),
                     const SizedBox(height: 6),
@@ -188,11 +193,13 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFF0F172A),
-                        hintText: ruleType == 'customer_alias'
-                            ? 'Contoh: MMM, LG FF'
-                            : ruleType == 'product_alias'
-                                ? 'Contoh: Beres merah 24, Rolade polos 1 kg'
-                                : 'Contoh: k, ktn, roll, : 1',
+                        hintText: ruleType == 'bonus_rule'
+                            ? 'Contoh: LG FF|KORNET AYAM LOYANG 400 G|40'
+                            : ruleType == 'customer_alias'
+                                ? 'Contoh: MMM, LG FF'
+                                : ruleType == 'product_alias'
+                                    ? 'Contoh: Beres merah 24, Rolade polos 1 kg'
+                                    : 'Contoh: k, ktn, roll, : 1',
                         hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
@@ -267,6 +274,42 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                               }
                             },
                           ),
+                        ),
+                      ),
+                    ] else if (ruleType == 'bonus_rule') ...[
+                      const Text('Hadiah Bonus (Format: Barang Bonus|Jumlah|Satuan):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: mappedValueController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          hintText: 'Contoh: KORNET AYAM LOYANG 400 G|1|karton',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.pinkAccent.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.pinkAccent.withOpacity(0.2)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: Colors.pinkAccent, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Bonus otomatis diselipkan ke draft PO dengan harga Rp 0 jika syarat terpenuhi.',
+                                style: TextStyle(color: Colors.pinkAccent, fontSize: 11),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ] else ...[
@@ -448,6 +491,8 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                 _buildFilterChip('product_alias', 'Singkatan Barang'),
                 const SizedBox(width: 8),
                 _buildFilterChip('unit', 'Satuan Kuantiti'),
+                const SizedBox(width: 8),
+                _buildFilterChip('bonus_rule', 'Bonus / Promo'),
                 const Spacer(),
                 SizedBox(
                   width: 280,
@@ -715,6 +760,11 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
         bg = Colors.amberAccent.withOpacity(0.15);
         fg = Colors.amberAccent;
         text = 'Satuan';
+        break;
+      case 'bonus_rule':
+        bg = Colors.pinkAccent.withOpacity(0.15);
+        fg = Colors.pinkAccent;
+        text = 'Bonus / Promo';
         break;
       default:
         bg = Colors.purpleAccent.withOpacity(0.15);
