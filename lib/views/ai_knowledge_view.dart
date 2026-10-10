@@ -83,6 +83,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sosis merah', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sapi 13', mappedValue: 'BRS COKLAT 13S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sapi 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres sapi 7', mappedValue: 'BRS COKLAT 7S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
       // Bonus / Promo Rules

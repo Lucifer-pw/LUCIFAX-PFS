@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
 import '../models/ai_knowledge_rule.dart';
@@ -6,9 +7,9 @@ import '../models/customer_product_history.dart';
 import 'firebase_service.dart';
 
 class AiChatParserService {
-  final FirebaseService firebaseService;
+  final FirebaseService? firebaseService;
 
-  AiChatParserService(this.firebaseService);
+  AiChatParserService([this.firebaseService]);
 
   /// Main entry point to parse a raw WhatsApp chat text into a list of ChatOrderDraft
   Future<List<ChatOrderDraft>> parseChatOrders({
@@ -50,11 +51,13 @@ class AiChatParserService {
       final rawCustomerName = customerInfo.rawName;
 
       // Load Customer's Purchase History (AI learns from customer habit!)
-      final customerHistory = await firebaseService.getCustomerProductHistory(
-        customerName: matchedCustomer?.customerName ?? rawCustomerName,
-        customerId: matchedCustomer?.id,
-        aliasName: matchedCustomer?.aliasName,
-      );
+      final customerHistory = firebaseService != null
+          ? await firebaseService!.getCustomerProductHistory(
+              customerName: matchedCustomer?.customerName ?? rawCustomerName,
+              customerId: matchedCustomer?.id,
+              aliasName: matchedCustomer?.aliasName,
+            )
+          : <CustomerProductHistory>[];
 
       // Extract Product Items from subsequent lines
       final draftItems = <ChatOrderItemDraft>[];
@@ -428,9 +431,21 @@ class AiChatParserService {
 
     // 2. Jika tidak ada di riwayat pelanggan, cocokkan dengan Aturan Kamus (AI Knowledge Rules)
     if (matchedProduct == null) {
-      for (var rule in productRules) {
-        if (productText.toLowerCase().contains(rule.keyword.toLowerCase()) ||
-            rule.keyword.toLowerCase().contains(productText.toLowerCase())) {
+      final sortedRules = List<AiKnowledgeRule>.from(productRules)
+        ..sort((a, b) => b.keyword.length.compareTo(a.keyword.length));
+
+      for (var rule in sortedRules) {
+        final rKw = rule.keyword.trim().toLowerCase();
+        if (rKw.isEmpty) continue;
+        final pTextLower = productText.toLowerCase();
+        bool isMatch = pTextLower.contains(rKw) || rKw.contains(pTextLower);
+        if (!isMatch) {
+          final rTokens = rKw.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+          if (rTokens.length >= 2) {
+            isMatch = rTokens.every((t) => pTextLower.contains(t));
+          }
+        }
+        if (isMatch) {
           matchedProduct = products.firstWhere(
             (p) => (rule.targetId != null && p.id == rule.targetId) ||
                 p.name.toLowerCase() == rule.mappedValue.toLowerCase() ||
@@ -483,12 +498,14 @@ class AiChatParserService {
         isNewItemForCustomer = false;
       } else {
         // Fallback: Scan Firestore jika belum masuk di map
-        final historyPricing = await firebaseService.getLastCustomerProductPricing(
-          customerName,
-          matchedProduct.id,
-          customerId: customerId,
-          productName: matchedProduct.name,
-        );
+        final historyPricing = firebaseService != null
+            ? await firebaseService!.getLastCustomerProductPricing(
+                customerName,
+                matchedProduct.id,
+                customerId: customerId,
+                productName: matchedProduct.name,
+              )
+            : null;
         if (historyPricing != null) {
           price = (historyPricing['price'] ?? matchedProduct.price).toDouble();
           discountPercent = (historyPricing['discountPercent'] ?? 0.0).toDouble();
@@ -567,6 +584,10 @@ class AiChatParserService {
     return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
   }
 
+  @visibleForTesting
+  CustomerProductHistory? testMatchCustomerHistory(String query, List<CustomerProductHistory> historyList) =>
+      _matchProductFromCustomerHistory(query, historyList);
+
   /// Matches product text against products that THIS customer has actually bought in their invoice history.
   /// Allows the AI to learn customer-specific purchasing patterns, exact variants (e.g. 24 vs 24S), and historical prices.
   CustomerProductHistory? _matchProductFromCustomerHistory(
@@ -594,6 +615,7 @@ class AiChatParserService {
     final bool queryHasBeres = qTokens.contains('beres') || qTokens.contains('beras') || qTokens.contains('brs');
     final bool queryHasMerah = qTokens.contains('merah');
     final bool queryHasCoklat = qTokens.contains('coklat') || qTokens.contains('cklt');
+    final bool queryHasSapi = qTokens.contains('sapi');
     final bool queryHas13 = qTokens.contains('13') || qTokens.contains('13s');
     final bool queryHas24 = qTokens.contains('24') || qTokens.contains('24s');
     final bool queryHas7 = qTokens.contains('7') || qTokens.contains('7s');
@@ -621,6 +643,17 @@ class AiChatParserService {
               break;
             }
           }
+          if (!normMatched) {
+            if ((qw == '24' && hTokens.contains('24s')) ||
+                (qw == '13' && hTokens.contains('13s')) ||
+                (qw == '7' && hTokens.contains('7s')) ||
+                (qw == '24s' && hTokens.contains('24')) ||
+                (qw == '13s' && hTokens.contains('13')) ||
+                (qw == '7s' && hTokens.contains('7'))) {
+              score += 10;
+              normMatched = true;
+            }
+          }
           if (!normMatched && hName.contains(qw)) {
             score += 2;
           }
@@ -633,18 +666,32 @@ class AiChatParserService {
         score += 20;
       }
 
-      // B. "Merah" vs "Coklat"
+      // B. "Merah" vs "Coklat" vs "Sapi"
       if (queryHasMerah) {
         if (hTokens.contains('merah') || hName.contains('merah')) {
           score += 25;
         } else if (hTokens.contains('coklat') || hName.contains('coklat')) {
-          score -= 20;
+          score -= 25;
         }
       }
       if (queryHasCoklat) {
         if (hTokens.contains('coklat') || hName.contains('coklat')) {
           score += 25;
         } else if (hTokens.contains('merah') || hName.contains('merah')) {
+          score -= 25;
+        }
+      }
+      if (queryHasSapi) {
+        if (hTokens.contains('sapi') || hName.contains('sapi')) {
+          score += 25;
+        } else if (hTokens.contains('coklat') || hName.contains('coklat')) {
+          // In Fiva Beres, "sapi" is "BRS COKLAT"
+          score += 40;
+        } else if (hTokens.contains('merah') || hName.contains('merah')) {
+          // "sapi" must never match BRS MERAH
+          score -= 40;
+        }
+        if (hTokens.contains('ayam') || hName.contains('ayam')) {
           score -= 20;
         }
       }
@@ -684,8 +731,9 @@ class AiChatParserService {
         score += 20;
       }
 
-      // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat
-      if (queryHas24 && !cleanQ.contains('24s') && hName.contains('24s')) {
+      // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat (only for variants like BRS MERAH that have both)
+      // Never penalize BRS COKLAT 24S because 24S is its only 24 variant!
+      if (queryHas24 && !cleanQ.contains('24s') && hName.contains('24s') && !hName.contains('coklat')) {
         score -= 10;
       }
 
@@ -721,6 +769,7 @@ class AiChatParserService {
     final bool queryHasBeres = qWords.contains('beres') || qWords.contains('beras') || qWords.contains('brs');
     final bool queryHasMerah = qWords.contains('merah');
     final bool queryHasCoklat = qWords.contains('coklat') || qWords.contains('cklt');
+    final bool queryHasSapi = qWords.contains('sapi');
     final bool queryHas13 = qWords.contains('13') || qWords.contains('13s');
     final bool queryHas24 = qWords.contains('24') || qWords.contains('24s');
     final bool queryHas7 = qWords.contains('7') || qWords.contains('7s');
@@ -750,6 +799,17 @@ class AiChatParserService {
               break;
             }
           }
+          if (!normMatched) {
+            if ((qw == '24' && pWords.contains('24s')) ||
+                (qw == '13' && pWords.contains('13s')) ||
+                (qw == '7' && pWords.contains('7s')) ||
+                (qw == '24s' && pWords.contains('24')) ||
+                (qw == '13s' && pWords.contains('13')) ||
+                (qw == '7s' && pWords.contains('7'))) {
+              score += 10;
+              normMatched = true;
+            }
+          }
           // Substring match only if no whole word matched
           if (!normMatched && pName.contains(qw)) {
             score += 2;
@@ -763,18 +823,32 @@ class AiChatParserService {
         score += 20;
       }
 
-      // B. "Merah" vs "Coklat"
+      // B. "Merah" vs "Coklat" vs "Sapi"
       if (queryHasMerah) {
         if (pWords.contains('merah') || pName.contains('merah')) {
           score += 25;
         } else if (pWords.contains('coklat') || pName.contains('coklat')) {
-          score -= 20;
+          score -= 25;
         }
       }
       if (queryHasCoklat) {
         if (pWords.contains('coklat') || pName.contains('coklat')) {
           score += 25;
         } else if (pWords.contains('merah') || pName.contains('merah')) {
+          score -= 25;
+        }
+      }
+      if (queryHasSapi) {
+        if (pWords.contains('sapi') || pName.contains('sapi')) {
+          score += 25;
+        } else if (pWords.contains('coklat') || pName.contains('coklat')) {
+          // In Fiva Beres, "sapi" is "BRS COKLAT"
+          score += 40;
+        } else if (pWords.contains('merah') || pName.contains('merah')) {
+          // "sapi" must never match BRS MERAH
+          score -= 40;
+        }
+        if (pWords.contains('ayam') || pName.contains('ayam')) {
           score -= 20;
         }
       }
@@ -814,8 +888,9 @@ class AiChatParserService {
         score += 20;
       }
 
-      // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat
-      if (queryHas24 && !cleanQ.contains('24s') && pName.contains('24s')) {
+      // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat (only for variants like BRS MERAH that have both)
+      // Never penalize BRS COKLAT 24S because 24S is its only 24 variant!
+      if (queryHas24 && !cleanQ.contains('24s') && pName.contains('24s') && !pName.contains('coklat')) {
         score -= 10;
       }
 
