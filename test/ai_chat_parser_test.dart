@@ -267,5 +267,64 @@ KRM BSK HR KAMIS
     // Note
     expect(draft.note, 'NOTE : BONUS 1 KARTON KORNET AYAM @400 G');
   });
+
+  test('Unregistered new store LUCIFAX FF Surakarta parses correctly with city Surakarta and empty customerId', () async {
+    final parser = AiChatParserService();
+
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P02', name: 'BRS COKLAT 24S 500 G', price: 37000, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'ROLADE SAPI 1000 G', price: 42000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P04', name: 'ROLADE AYAM ROLL 325 G', price: 14000, stock: 100, isiKarton: 25, sizeGrams: 325),
+      Product(id: 'P05', name: 'ROLADE SAPI ROLL 325 G', price: 15000, stock: 100, isiKarton: 25, sizeGrams: 325),
+    ];
+
+    final customers = <Customer>[];
+    final rules = <AiKnowledgeRule>[];
+
+    final chatText = '''
+LUCIFAX FF Surakarta
+Fiva beres merah isi 24 = 30 karton
+Fiva rolade 1 kg =35 karton
+Fiva beres coklat isi 24 = 5 karton
+Fiva rolade roll ayam = 2 ball....50 ROLL
+Fiva rolade roll sapi = 2 ball....50 ROLL
+Krm bsk pg
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, '');
+    expect(draft.customerName, 'LUCIFAX FF Surakarta');
+    expect(draft.city, 'SURAKARTA');
+    expect(draft.items.length, 5);
+
+    expect(draft.items[0].productName, 'BRS MERAH 24 500G');
+    expect(draft.items[0].qtyInput, 30.0);
+    expect(draft.items[0].qtyUnit, 'karton');
+
+    expect(draft.items[1].productName, 'ROLADE SAPI 1000 G');
+    expect(draft.items[1].qtyInput, 35.0);
+    expect(draft.items[1].qtyUnit, 'karton');
+
+    expect(draft.items[2].productName, 'BRS COKLAT 24S 500 G');
+    expect(draft.items[2].qtyInput, 5.0);
+    expect(draft.items[2].qtyUnit, 'karton');
+
+    expect(draft.items[3].productName, 'ROLADE AYAM ROLL 325 G');
+    expect(draft.items[3].qtyInput, 50.0);
+    expect(draft.items[3].qtyUnit, 'roll');
+
+    expect(draft.items[4].productName, 'ROLADE SAPI ROLL 325 G');
+    expect(draft.items[4].qtyInput, 50.0);
+    expect(draft.items[4].qtyUnit, 'roll');
+  });
 }
 

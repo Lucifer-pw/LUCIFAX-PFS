@@ -145,8 +145,401 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
     }
   }
 
+  Future<Customer?> _showAutoRegisterCustomerDialog(ChatOrderDraft draft) async {
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+
+    // List of supported cities in Central Java & DIY
+    final List<String> supportedCities = [
+      'SURAKARTA',
+      'SOLO',
+      'SEMARANG',
+      'WONOSOBO',
+      'MAGELANG',
+      'KUDUS',
+      'JEPARA',
+      'PATI',
+      'PEKALONGAN',
+      'TEGAL',
+      'BREBES',
+      'BATANG',
+      'PEMALANG',
+      'DEMAK',
+      'GROBOGAN',
+      'PURWODADI',
+      'SALATIGA',
+      'KENDAL',
+      'PURWOREJO',
+      'TEMANGGUNG',
+      'KEBUMEN',
+      'BANJARNEGARA',
+      'PURBALINGGA',
+      'BANYUMAS',
+      'CILACAP',
+      'REMBANG',
+      'BLORA',
+      'SRAGEN',
+      'KARANGANYAR',
+      'KLATEN',
+      'BOYOLALI',
+      'COLOMADU',
+      'BANJARSARI',
+      'GUBUG',
+      'YOGYAKARTA',
+      'SLEMAN',
+      'BANTUL',
+      'KULONPROGO',
+      'GUNUNGKIDUL',
+      'WATES',
+    ];
+
+    // Determine initial city
+    String detectedCity = draft.city.trim().toUpperCase();
+    if (!supportedCities.contains(detectedCity)) {
+      final rawUpper = '${draft.rawChatBlock} ${draft.customerRawName}'.toUpperCase();
+      for (var c in supportedCities) {
+        if (rawUpper.contains(c)) {
+          detectedCity = c;
+          break;
+        }
+      }
+      if (!supportedCities.contains(detectedCity)) {
+        detectedCity = 'SURAKARTA';
+      }
+    }
+
+    String initialStoreName = draft.aliasName.isNotEmpty ? draft.aliasName : draft.customerName;
+    if (initialStoreName.isEmpty) initialStoreName = draft.customerRawName;
+
+    final storeNameController = TextEditingController(text: initialStoreName);
+    final ownerNameController = TextEditingController(text: initialStoreName);
+    final phoneController = TextEditingController();
+
+    String currentCity = detectedCity;
+    String generatedId = '';
+    bool isLoadingId = true;
+    bool isSaving = false;
+
+    return await showDialog<Customer>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            void fetchId(String city) async {
+              setDialogState(() => isLoadingId = true);
+              try {
+                final id = await _firebaseService.generateCustomerID(city);
+                setDialogState(() {
+                  generatedId = id;
+                  isLoadingId = false;
+                });
+              } catch (e) {
+                setDialogState(() {
+                  generatedId = 'ERROR';
+                  isLoadingId = false;
+                });
+              }
+            }
+
+            if (generatedId.isEmpty && isLoadingId) {
+              fetchId(currentCity);
+            }
+
+            String platKode = _firebaseService.getPlatKode(currentCity);
+            String platAreaName = '';
+            switch (platKode) {
+              case 'AD':
+                platAreaName = 'Solo Raya / Surakarta';
+                break;
+              case 'AA':
+                platAreaName = 'Kedu (Wonosobo, Magelang, dll)';
+                break;
+              case 'H':
+                platAreaName = 'Semarang Raya';
+                break;
+              case 'G':
+                platAreaName = 'Pekalongan / Pantura Barat';
+                break;
+              case 'K':
+                platAreaName = 'Muria / Pati / Kudus';
+                break;
+              case 'R':
+                platAreaName = 'Banyumas Raya';
+                break;
+              case 'AB':
+                platAreaName = 'D.I. Yogyakarta';
+                break;
+              default:
+                platAreaName = 'Jawa Tengah';
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amberAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.amberAccent, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Toko Belum Terdaftar di Master',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Daftarkan otomatis agar riwayat & ID resmi tersimpan',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 460,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Generated ID Card (Highlight)
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ID PELANGGAN RESMI (AUTO PLAT):',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    if (isLoadingId)
+                                      const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                                    else
+                                      Text(
+                                        generatedId,
+                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                                      ),
+                                    const SizedBox(width: 10),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF38BDF8).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Plat $platKode ($platAreaName)',
+                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 30),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Nama Toko / Alias
+                      const Text('Nama Toko / Panggilan (Alias):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: storeNameController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          hintText: 'Contoh: LUCIFAX FF',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Nama Pemilik (Opsional)
+                      const Text('Nama Lengkap Pemilik (Opsional):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: ownerNameController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          hintText: 'Contoh: SUSILO HARYAWAN',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Kota Dropdown (Updates ID automatically)
+                      const Text('Kota / Wilayah Toko:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: currentCity,
+                            isExpanded: true,
+                            dropdownColor: const Color(0xFF1E293B),
+                            items: supportedCities.map((c) {
+                              final pKode = _firebaseService.getPlatKode(c);
+                              return DropdownMenuItem<String>(
+                                value: c,
+                                child: Text(
+                                  '$c (Plat $pKode)',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (newCity) {
+                              if (newCity != null && newCity != currentCity) {
+                                currentCity = newCity;
+                                fetchId(newCity);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Nomor Telepon (Opsional)
+                      const Text('Nomor Telepon / WhatsApp (Opsional):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          hintText: 'Contoh: 08123456789',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(dialogCtx, null),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: (isSaving || isLoadingId || generatedId.isEmpty || generatedId == 'ERROR')
+                      ? null
+                      : () async {
+                          final sName = storeNameController.text.trim();
+                          final oName = ownerNameController.text.trim();
+                          final phone = phoneController.text.trim();
+
+                          if (sName.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Nama Toko wajib diisi!'), backgroundColor: Colors.orange),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => isSaving = true);
+
+                          try {
+                            final finalCustomer = Customer(
+                              id: generatedId,
+                              customerName: oName.isNotEmpty ? oName : sName,
+                              aliasName: sName,
+                              address: '',
+                              city: currentCity,
+                              province: 'JAWA TENGAH',
+                              country: 'INDONESIA',
+                              phone: phone,
+                              ktpNumber: '',
+                            );
+
+                            // 1. Save customer to master
+                            await customerProvider.saveCustomer(finalCustomer);
+
+                            // 2. Automatically register alias to AI Knowledge Rules
+                            final aliasRule = AiKnowledgeRule(
+                              id: '',
+                              type: 'customer_alias',
+                              keyword: sName,
+                              mappedValue: finalCustomer.customerName,
+                              targetId: finalCustomer.id,
+                              createdAt: DateTime.now(),
+                              updatedBy: 'AI Auto Register',
+                            );
+                            await _firebaseService.saveAiKnowledgeRule(aliasRule);
+
+                            if (mounted) {
+                              Navigator.pop(dialogCtx, finalCustomer);
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal mendaftarkan toko: $e'), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                          }
+                        },
+                  icon: isSaving
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                  label: Text(
+                    isSaving ? 'Mendaftarkan...' : 'Ya, Daftarkan & Buat PO',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _createTransactionFromDraft(ChatOrderDraft draft, int draftIndex) async {
-        final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
 
     // Validate customer
     Customer? targetCustomer;
@@ -166,9 +559,10 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
         ),
       );
     } else {
-      // Find by name
+      // Find by name or alias
       targetCustomer = customerProvider.customers.firstWhere(
-        (c) => c.customerName.toLowerCase() == draft.customerName.toLowerCase(),
+        (c) => c.customerName.toLowerCase() == draft.customerName.toLowerCase() ||
+            (c.aliasName.isNotEmpty && c.aliasName.toLowerCase() == draft.customerName.toLowerCase()),
         orElse: () => Customer(
           id: '',
           customerName: draft.customerName,
@@ -181,6 +575,23 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
           ktpNumber: '',
         ),
       );
+    }
+
+    // Auto-Register Confirmation if customer is not yet in Master
+    if (targetCustomer.id.isEmpty) {
+      final registeredCustomer = await _showAutoRegisterCustomerDialog(draft);
+      if (registeredCustomer == null) {
+        // User cancelled dialog
+        return;
+      }
+      targetCustomer = registeredCustomer;
+      setState(() {
+        draft.customerId = registeredCustomer.id;
+        draft.customerName = registeredCustomer.customerName;
+        draft.aliasName = registeredCustomer.aliasName;
+        draft.city = registeredCustomer.city;
+        draft.province = registeredCustomer.province;
+      });
     }
 
     if (draft.items.isEmpty) {
@@ -246,6 +657,20 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
 
   Future<void> _createAllTransactions() async {
     if (_parsedDrafts.isEmpty) return;
+
+    // Check if any draft has unregistered customer
+    final unregIndex = _parsedDrafts.indexWhere((d) => d.customerId.isEmpty);
+    if (unregIndex != -1) {
+      final unreg = _parsedDrafts[unregIndex];
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Toko "${unreg.customerName}" belum terdaftar. Silakan buat PO satu per satu untuk mendaftarkannya terlebih dahulu!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSavingAll = true);
 
     int successCount = 0;
@@ -605,14 +1030,36 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                           ),
                         ] else ...[
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.amberAccent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.amberAccent),
+                          InkWell(
+                            onTap: () async {
+                              final registered = await _showAutoRegisterCustomerDialog(draft);
+                              if (registered != null) {
+                                setState(() {
+                                  draft.customerId = registered.id;
+                                  draft.customerName = registered.customerName;
+                                  draft.aliasName = registered.aliasName;
+                                  draft.city = registered.city;
+                                  draft.province = registered.province;
+                                });
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amberAccent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.amberAccent),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('⚠️ Belum Terdaftar', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  SizedBox(width: 4),
+                                  Text('(Daftarkan)', style: TextStyle(color: Colors.white70, fontSize: 9.5)),
+                                ],
+                              ),
                             ),
-                            child: const Text('⚠️ Belum Terdaftar', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                           ),
                         ],
                         if (draft.city.isNotEmpty) ...[
