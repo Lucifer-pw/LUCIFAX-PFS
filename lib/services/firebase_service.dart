@@ -2813,10 +2813,15 @@ class FirebaseService {
   /// for each customer into the dedicated 'customer_product_memory' collection.
   Future<Map<String, dynamic>> syncCustomerProductMemory() async {
     try {
-      // 1. Fetch master customers
+      // 1. Fetch master customers & master products
       final custSnap = await _db.collection('customers').get();
       final masterCustomers = custSnap.docs
           .map((d) => Customer.fromMap(d.data(), d.id))
+          .toList();
+
+      final prodSnap = await _db.collection('products').get();
+      final masterProducts = prodSnap.docs
+          .map((d) => Product.fromMap(d.data(), d.id))
           .toList();
 
       // 2. Fetch all transactions
@@ -2831,13 +2836,25 @@ class FirebaseService {
           try {
             return DateFormat('dd-MM-yyyy').parse(data['date'] as String);
           } catch (_) {}
+          try {
+            return DateTime.parse(data['date'] as String);
+          } catch (_) {}
         }
         return DateTime(2000);
       }
 
-      // Sort transactions descending by effective date
+      // Sort transactions descending by effective date and numeric invoiceNo
       final sortedDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(docs)
-        ..sort((a, b) => extractDate(b.data()).compareTo(extractDate(a.data())));
+        ..sort((a, b) {
+          final dateA = extractDate(a.data());
+          final dateB = extractDate(b.data());
+          final dateComp = dateB.compareTo(dateA);
+          if (dateComp != 0) return dateComp;
+
+          final invA = int.tryParse((a.data()['invoiceNo'] ?? '').toString()) ?? 0;
+          final invB = int.tryParse((b.data()['invoiceNo'] ?? '').toString()) ?? 0;
+          return invB.compareTo(invA);
+        });
 
       // Customer memory map: customerId/cleanKey -> Map of productKey -> CustomerProductHistory
       final Map<String, Map<String, CustomerProductHistory>> memoryMap = {};
@@ -2914,11 +2931,35 @@ class FirebaseService {
 
             if (itemPrice <= 0 || isBonus || pName.isEmpty) continue;
 
-            final pKey = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+            // Resolve to Canonical Master Product (unifying legacy names and master codes)
+            Product? matchedProd;
+            if (pId.isNotEmpty) {
+              matchedProd = masterProducts.firstWhere(
+                (p) => p.id.toLowerCase() == pId.toLowerCase() ||
+                    p.kodeInduk.toLowerCase() == pId.toLowerCase() ||
+                    p.name.toLowerCase() == pId.toLowerCase(),
+                orElse: () => Product(id: '', name: '', price: 0, stock: 0, isiKarton: 1, sizeGrams: 0),
+              );
+              if (matchedProd.id.isEmpty) matchedProd = null;
+            }
+
+            if (matchedProd == null && pName.isNotEmpty) {
+              matchedProd = masterProducts.firstWhere(
+                (p) => p.name.toLowerCase() == pName.toLowerCase() ||
+                    p.id.toLowerCase() == pName.toLowerCase(),
+                orElse: () => Product(id: '', name: '', price: 0, stock: 0, isiKarton: 1, sizeGrams: 0),
+              );
+              if (matchedProd.id.isEmpty) matchedProd = null;
+            }
+
+            final canonicalId = matchedProd != null && matchedProd.id.isNotEmpty ? matchedProd.id : pId;
+            final canonicalName = matchedProd != null && matchedProd.name.isNotEmpty ? matchedProd.name : pName;
+            final pKey = canonicalId.isNotEmpty ? canonicalId.toLowerCase() : canonicalName.toLowerCase();
+
             if (!custProducts.containsKey(pKey)) {
               custProducts[pKey] = CustomerProductHistory(
-                productId: pId,
-                productName: pName,
+                productId: canonicalId,
+                productName: canonicalName,
                 price: itemPrice,
                 discountPercent: (itemMap['discountPercent'] ?? 0.0).toDouble(),
                 discountAmount: (itemMap['discountAmount'] ?? 0.0).toDouble(),
@@ -3081,6 +3122,10 @@ class FirebaseService {
 
       // 2. Fallback: Live Scan from transactions with tolerant customer matching
       final snap = await _db.collection('transactions').get();
+      final prodSnap = await _db.collection('products').get();
+      final masterProducts = prodSnap.docs
+          .map((d) => Product.fromMap(d.data(), d.id))
+          .toList();
 
       DateTime extractDate(Map<String, dynamic> data) {
         if (data['date'] is Timestamp) return (data['date'] as Timestamp).toDate();
@@ -3089,12 +3134,24 @@ class FirebaseService {
           try {
             return DateFormat('dd-MM-yyyy').parse(data['date'] as String);
           } catch (_) {}
+          try {
+            return DateTime.parse(data['date'] as String);
+          } catch (_) {}
         }
         return DateTime(2000);
       }
 
       final sortedDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(snap.docs)
-        ..sort((a, b) => extractDate(b.data()).compareTo(extractDate(a.data())));
+        ..sort((a, b) {
+          final dateA = extractDate(a.data());
+          final dateB = extractDate(b.data());
+          final dateComp = dateB.compareTo(dateA);
+          if (dateComp != 0) return dateComp;
+
+          final invA = int.tryParse((a.data()['invoiceNo'] ?? '').toString()) ?? 0;
+          final invB = int.tryParse((b.data()['invoiceNo'] ?? '').toString()) ?? 0;
+          return invB.compareTo(invA);
+        });
 
       for (var doc in sortedDocs) {
         final data = doc.data();
@@ -3124,11 +3181,34 @@ class FirebaseService {
 
               if (itemPrice <= 0 || isBonus || pName.isEmpty) continue;
 
-              final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+              Product? matchedProd;
+              if (pId.isNotEmpty) {
+                matchedProd = masterProducts.firstWhere(
+                  (p) => p.id.toLowerCase() == pId.toLowerCase() ||
+                      p.kodeInduk.toLowerCase() == pId.toLowerCase() ||
+                      p.name.toLowerCase() == pId.toLowerCase(),
+                  orElse: () => Product(id: '', name: '', price: 0, stock: 0, isiKarton: 1, sizeGrams: 0),
+                );
+                if (matchedProd.id.isEmpty) matchedProd = null;
+              }
+
+              if (matchedProd == null && pName.isNotEmpty) {
+                matchedProd = masterProducts.firstWhere(
+                  (p) => p.name.toLowerCase() == pName.toLowerCase() ||
+                      p.id.toLowerCase() == pName.toLowerCase(),
+                  orElse: () => Product(id: '', name: '', price: 0, stock: 0, isiKarton: 1, sizeGrams: 0),
+                );
+                if (matchedProd.id.isEmpty) matchedProd = null;
+              }
+
+              final canonicalId = matchedProd != null && matchedProd.id.isNotEmpty ? matchedProd.id : pId;
+              final canonicalName = matchedProd != null && matchedProd.name.isNotEmpty ? matchedProd.name : pName;
+              final key = canonicalId.isNotEmpty ? canonicalId.toLowerCase() : canonicalName.toLowerCase();
+
               if (!results.containsKey(key)) {
                 results[key] = CustomerProductHistory(
-                  productId: pId,
-                  productName: pName,
+                  productId: canonicalId,
+                  productName: canonicalName,
                   price: itemPrice,
                   discountPercent: (itemMap['discountPercent'] ?? 0.0).toDouble(),
                   discountAmount: (itemMap['discountAmount'] ?? 0.0).toDouble(),

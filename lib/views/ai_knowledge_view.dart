@@ -467,14 +467,25 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                       onPressed: _isSyncingMemory ? null : () async {
                         setState(() => _isSyncingMemory = true);
                         try {
-                          final count = await _firebaseService.syncCustomerProductMemory();
+                          final res = await _firebaseService.syncCustomerProductMemory();
+                          final customersCount = res['customersCount'] ?? 0;
+                          final productsCount = res['productsCount'] ?? 0;
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('🧠 Memori pelanggan berhasil disinkronkan untuk $count toko!'),
-                                backgroundColor: Colors.teal,
-                              ),
-                            );
+                            if (res['success'] == true) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('🧠 Memori pelanggan berhasil disinkronkan ($customersCount toko, $productsCount barang)!'),
+                                  backgroundColor: Colors.teal,
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Gagal sinkronkan memori: ${res['error']}'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
                           }
                         } catch (e) {
                           if (mounted) {

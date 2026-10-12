@@ -834,12 +834,27 @@ class AiChatParserService {
         score -= 10;
       }
 
-      // G. Preference for higher order frequency
+      // G. Preference for order frequency
       score += (h.purchaseCount.clamp(1, 5) * 2);
+
+      // H. Recency preference: reward more recent invoices
+      if (h.date != null) {
+        final daysAgo = DateTime.now().difference(h.date!).inDays;
+        if (daysAgo <= 30) {
+          score += 6;
+        } else if (daysAgo <= 90) {
+          score += 3;
+        }
+      }
 
       if (score > maxScore) {
         maxScore = score;
         bestMatch = h;
+      } else if (score == maxScore && bestMatch != null && h.date != null) {
+        // Tie-breaker: prefer the more recent invoice
+        if (bestMatch.date == null || h.date!.isAfter(bestMatch.date!)) {
+          bestMatch = h;
+        }
       }
     }
 

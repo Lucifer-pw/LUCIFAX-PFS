@@ -103,4 +103,40 @@ MMM
     final matchSapi = parser.testMatchCustomerHistory('beres sapi 500gr isi 24', history);
     expect(matchSapi?.productName, 'BRS COKLAT 24S 500 G');
   });
+
+  test('Customer history prefers most recent invoice (#673 with 15%) over older high-frequency invoice (#516 with 12.5%)', () {
+    final parser = AiChatParserService();
+    final now = DateTime.now();
+
+    final history = <CustomerProductHistory>[
+      // Newer invoice (#673) with 15% discount, but lower purchase count (3)
+      CustomerProductHistory(
+        productId: 'KAL-400',
+        productName: 'KORNET AYAM LOYANG 400 G',
+        price: 19363,
+        discountPercent: 15.0,
+        discountAmount: 0.0,
+        purchaseCount: 3,
+        invoiceNo: '673',
+        date: now.subtract(const Duration(days: 6)),
+      ),
+      // Older invoice (#516) with 12.5% discount, but high historical purchase count (21)
+      CustomerProductHistory(
+        productId: 'KORNET AYAM LOYANG 400 G',
+        productName: 'KORNET AYAM LOYANG 400 G',
+        price: 19363,
+        discountPercent: 12.5,
+        discountAmount: 0.0,
+        purchaseCount: 21,
+        invoiceNo: '516',
+        date: now.subtract(const Duration(days: 120)),
+      ),
+    ];
+
+    final matched = parser.testMatchCustomerHistory('Kornet ayam loyang', history);
+    expect(matched, isNotNull);
+    expect(matched!.invoiceNo, '673');
+    expect(matched.discountPercent, 15.0);
+  });
 }
+
