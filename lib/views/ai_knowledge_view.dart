@@ -21,6 +21,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
   String _selectedFilter = 'all'; // 'all', 'customer_alias', 'product_alias', 'unit', 'bonus_rule'
   bool _isLoadingInstructions = true;
   bool _isSavingInstructions = false;
+  bool _isSyncingMemory = false;
 
   @override
   void initState() {
@@ -456,6 +457,41 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                 ),
                 Row(
                   children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF38BDF8),
+                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _isSyncingMemory ? null : () async {
+                        setState(() => _isSyncingMemory = true);
+                        try {
+                          final count = await _firebaseService.syncCustomerProductMemory();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('🧠 Memori pelanggan berhasil disinkronkan untuk $count toko!'),
+                                backgroundColor: Colors.teal,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Gagal sinkronkan memori: $e'), backgroundColor: Colors.redAccent),
+                            );
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isSyncingMemory = false);
+                        }
+                      },
+                      icon: _isSyncingMemory
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                          : const Icon(Icons.psychology_alt_rounded, size: 16),
+                      label: Text(_isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 10),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.tealAccent,

@@ -11,6 +11,7 @@ class ChatOrderItemDraft {
   double sizeGrams;
   bool isNewItemForCustomer; // true if customer never bought this before
   bool isBonus; // true if this is an auto-generated bonus item (price = 0)
+  String invoiceNo; // Reference invoice number from customer history (e.g. '673')
 
   ChatOrderItemDraft({
     required this.productId,
@@ -25,6 +26,7 @@ class ChatOrderItemDraft {
     this.sizeGrams = 500.0,
     this.isNewItemForCustomer = false,
     this.isBonus = false,
+    this.invoiceNo = '',
   });
 
   double get subtotal {

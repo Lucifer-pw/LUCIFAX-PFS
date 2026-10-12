@@ -84,7 +84,7 @@ class AiChatParserService {
       }
 
       // Apply Bonus/Promo Rules (auto-append bonus items based on thresholds)
-      _applyBonusRules(
+      final bonusNote = _applyBonusRules(
         draftItems: draftItems,
         bonusRules: bonusRules,
         customerName: matchedCustomer?.customerName ?? rawCustomerName,
@@ -104,7 +104,7 @@ class AiChatParserService {
           province: matchedCustomer?.province ?? 'JAWA TENGAH',
           items: draftItems,
           rawChatBlock: block,
-          note: 'PO via Chat Scanner',
+          note: bonusNote ?? '',
         ));
       }
     }
@@ -187,22 +187,75 @@ class AiChatParserService {
     String headerText = lines.first;
     int headerCount = 1;
 
-    // Check first 2 lines for customer title
-    if (lines.length > 1 && (lines[0].toLowerCase().startsWith('waalaikumsalam') || lines[0].toLowerCase().startsWith('pak..'))) {
-      if (lines[0].toLowerCase().contains('order dari')) {
+    // Helper: test if a candidate string matches customer rules or master customers
+    Customer? testMatch(String txt) {
+      String c = txt
+          .replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '')
+          .replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '')
+          .replaceAll(RegExp(r'^(orderan?|pesanan?|po)\s+', caseSensitive: false), '')
+          .trim();
+      final target = c.toLowerCase();
+      if (target.isEmpty) return null;
+
+      for (var rule in customerRules) {
+        final rKw = rule.keyword.trim().toLowerCase();
+        if (rKw.isNotEmpty && (target == rKw || target.contains(rKw) || rKw.contains(target))) {
+          if (rule.targetId != null && rule.targetId!.isNotEmpty) {
+            final cust = customers.firstWhere((item) => item.id == rule.targetId, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
+            if (cust.id.isNotEmpty) return cust;
+          }
+          final mapped = rule.mappedValue.trim().toLowerCase();
+          final cust = customers.firstWhere((item) => item.customerName.toLowerCase() == mapped || item.aliasName.toLowerCase() == mapped || item.id.toLowerCase() == mapped, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
+          if (cust.id.isNotEmpty) return cust;
+          final fuzzy = _findNearestMasterCustomer(rule.mappedValue, customers);
+          if (fuzzy != null) return fuzzy;
+        }
+      }
+      return _findNearestMasterCustomer(c, customers);
+    }
+
+    // Helper: test if a line is just a title/date/greeting without specific customer name
+    bool isTitleOrGreetingOnly(String s) {
+      final l = s.toLowerCase().trim();
+      return l.startsWith('orderan') ||
+          l.startsWith('pesanan') ||
+          l.startsWith('jadwal') ||
+          l.startsWith('po ') ||
+          l.startsWith('assalamualaikum') ||
+          l.startsWith('waalaikumsalam') ||
+          l.startsWith('pak..') ||
+          l.contains('2026') ||
+          l.contains('2025') ||
+          l.contains('juni') ||
+          l.contains('juli') ||
+          l.contains('agustus') ||
+          l.contains('september') ||
+          l.contains('oktober') ||
+          l.contains('november') ||
+          l.contains('desember');
+    }
+
+    if (lines.length > 1) {
+      final matchLine0 = testMatch(lines[0]);
+      final matchLine1 = testMatch(lines[1]);
+
+      if (matchLine1 != null && (matchLine0 == null || isTitleOrGreetingOnly(lines[0]))) {
+        headerText = lines[1];
+        headerCount = 2;
+      } else if (matchLine0 != null) {
         headerText = lines[0];
-      } else if (lines[1].toLowerCase().startsWith('po ') || lines[1].toLowerCase().contains(' ff') || lines[1].toLowerCase().contains('mmm')) {
+        headerCount = 1;
+      } else if (isTitleOrGreetingOnly(lines[0])) {
         headerText = lines[1];
         headerCount = 2;
       }
     }
 
-    // Clean prefix like "Pak.. mau order dari ", "Po ", "order dari "
+    // Clean prefix like "Pak.. mau order dari ", "Po ", "order dari ", "Orderan "
     String cleanName = headerText;
     cleanName = cleanName.replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '');
-    cleanName = cleanName.replaceAll(RegExp(r'^(pak[.,\s]+)?mau\s+order\s+dari\s+', caseSensitive: false), '');
-    cleanName = cleanName.replaceAll(RegExp(r'^po\s+', caseSensitive: false), '');
-    cleanName = cleanName.replaceAll(RegExp(r'^order\s+', caseSensitive: false), '');
+    cleanName = cleanName.replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '');
+    cleanName = cleanName.replaceAll(RegExp(r'^(orderan?|pesanan?|po)\s+', caseSensitive: false), '');
     cleanName = cleanName.trim();
 
     final targetLower = cleanName.toLowerCase();
@@ -478,12 +531,14 @@ class AiChatParserService {
     double price = matchedProduct.price;
     double discountPercent = 0.0;
     double discountAmount = 0.0;
+    String invoiceNo = '';
     bool isNewItemForCustomer = true;
 
     if (matchedHistory != null) {
       price = matchedHistory.price;
       discountPercent = matchedHistory.discountPercent;
       discountAmount = matchedHistory.discountAmount;
+      invoiceNo = matchedHistory.invoiceNo;
       isNewItemForCustomer = false;
     } else {
       final hist = customerHistory.firstWhere(
@@ -495,6 +550,7 @@ class AiChatParserService {
         price = hist.price;
         discountPercent = hist.discountPercent;
         discountAmount = hist.discountAmount;
+        invoiceNo = hist.invoiceNo;
         isNewItemForCustomer = false;
       } else {
         // Fallback: Scan Firestore jika belum masuk di map
@@ -510,6 +566,7 @@ class AiChatParserService {
           price = (historyPricing['price'] ?? matchedProduct.price).toDouble();
           discountPercent = (historyPricing['discountPercent'] ?? 0.0).toDouble();
           discountAmount = (historyPricing['discountAmount'] ?? 0.0).toDouble();
+          invoiceNo = (historyPricing['invoiceNo'] ?? '').toString();
           isNewItemForCustomer = false;
         }
       }
@@ -527,6 +584,7 @@ class AiChatParserService {
       discountAmount: discountAmount,
       sizeGrams: matchedProduct.sizeGrams,
       isNewItemForCustomer: isNewItemForCustomer,
+      invoiceNo: invoiceNo,
     );
   }
 
@@ -536,12 +594,34 @@ class AiChatParserService {
     String unit = 'pack';
     String cleaned = line;
 
-    // Pattern 1: Ratio format like "Beres merah 24 : 1" or ": 2" (means Karton)
-    final ratioMatch = RegExp(r':\s*(\d+(\.\d+)?)').firstMatch(line);
-    if (ratioMatch != null) {
-      qty = double.tryParse(ratioMatch.group(1) ?? '1') ?? 1.0;
-      unit = 'karton';
-      cleaned = line.replaceAll(ratioMatch.group(0)!, '').trim();
+    // Pattern 1: Colon format with optional explicit unit:
+    // e.g. ": 35 karton", ": 200 pc", ": 200 pcs", ": 10 roll", or ratio ": 1", ": 2"
+    final colonMatch = RegExp(
+      r':\s*(\d+(\.\d+)?)\s*(karton|ktn|k\b|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji)?',
+      caseSensitive: false,
+    ).firstMatch(line);
+
+    if (colonMatch != null) {
+      qty = double.tryParse(colonMatch.group(1) ?? '1') ?? 1.0;
+      final matchedUnitStr = (colonMatch.group(3) ?? '').toLowerCase();
+
+      if (matchedUnitStr.contains('roll') || matchedUnitStr.contains('rol')) {
+        unit = 'roll';
+      } else if (matchedUnitStr.contains('pack') ||
+          matchedUnitStr.contains('pak') ||
+          matchedUnitStr.contains('pcs') ||
+          matchedUnitStr == 'pc' ||
+          matchedUnitStr.contains('bks') ||
+          matchedUnitStr.contains('biji')) {
+        unit = 'pack';
+      } else {
+        // Defaults to karton if unit is karton/ktn/k/dus/box OR no unit was specified (ratio : 1, : 2)
+        unit = 'karton';
+      }
+
+      cleaned = line.replaceAll(colonMatch.group(0)!, '').trim();
+      // Strip any residual unit words if left over at the end
+      cleaned = cleaned.replaceAll(RegExp(r'\b(karton|ktn|k|pack|pak|pcs|pc|roll|rol)\b', caseSensitive: false), '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
     }
 
@@ -563,8 +643,8 @@ class AiChatParserService {
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
     }
 
-    // Pattern 4: "121 pack" / "45 pack" / "10 pcs" / "10 bks"
-    final packMatch = RegExp(r'(\d+(\.\d+)?)\s*(pack|pak|pcs|bks|biji)', caseSensitive: false).firstMatch(line);
+    // Pattern 4: "121 pack" / "45 pack" / "10 pcs" / "200 pc" / "10 bks"
+    final packMatch = RegExp(r'(\d+(\.\d+)?)\s*(pack|pak|pcs|pc\b|bks|biji)', caseSensitive: false).firstMatch(line);
     if (packMatch != null) {
       qty = double.tryParse(packMatch.group(1) ?? '1') ?? 1.0;
       unit = 'pack';
@@ -615,7 +695,8 @@ class AiChatParserService {
     final bool queryHasBeres = qTokens.contains('beres') || qTokens.contains('beras') || qTokens.contains('brs');
     final bool queryHasMerah = qTokens.contains('merah');
     final bool queryHasCoklat = qTokens.contains('coklat') || qTokens.contains('cklt');
-    final bool queryHasSapi = qTokens.contains('sapi');
+    final bool queryHasSapi = qTokens.contains('sapi') || qTokens.contains('sp');
+    final bool queryHasAyam = qTokens.contains('ayam') || qTokens.contains('ay');
     final bool queryHas13 = qTokens.contains('13') || qTokens.contains('13s');
     final bool queryHas24 = qTokens.contains('24') || qTokens.contains('24s');
     final bool queryHas7 = qTokens.contains('7') || qTokens.contains('7s');
@@ -633,10 +714,18 @@ class AiChatParserService {
         if (hTokens.contains(qw)) {
           score += 10;
         } else {
-          final normQ = qw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
+          final normQ = qw
+              .replaceAll('ll', 'l')
+              .replaceAll('bratwust', 'bratwurst')
+              .replaceAll('coctail', 'cocktail')
+              .replaceAll('koktail', 'cocktail');
           bool normMatched = false;
           for (var hw in hTokens) {
-            final normH = hw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
+            final normH = hw
+                .replaceAll('ll', 'l')
+                .replaceAll('bratwust', 'bratwurst')
+                .replaceAll('coctail', 'cocktail')
+                .replaceAll('koktail', 'cocktail');
             if (normQ == normH) {
               score += 8;
               normMatched = true;
@@ -666,7 +755,7 @@ class AiChatParserService {
         score += 20;
       }
 
-      // B. "Merah" vs "Coklat" vs "Sapi"
+      // B. "Merah" vs "Coklat" vs "Sapi" vs "Ayam"
       if (queryHasMerah) {
         if (hTokens.contains('merah') || hName.contains('merah')) {
           score += 25;
@@ -683,7 +772,7 @@ class AiChatParserService {
       }
       if (queryHasSapi) {
         if (hTokens.contains('sapi') || hName.contains('sapi')) {
-          score += 25;
+          score += 35;
         } else if (hTokens.contains('coklat') || hName.contains('coklat')) {
           // In Fiva Beres, "sapi" is "BRS COKLAT"
           score += 40;
@@ -692,7 +781,15 @@ class AiChatParserService {
           score -= 40;
         }
         if (hTokens.contains('ayam') || hName.contains('ayam')) {
-          score -= 20;
+          score -= 30;
+        }
+      }
+      if (queryHasAyam) {
+        if (hTokens.contains('ayam') || hName.contains('ayam')) {
+          score += 35;
+        }
+        if (hTokens.contains('sapi') || hName.contains('sapi')) {
+          score -= 30;
         }
       }
 
@@ -769,7 +866,8 @@ class AiChatParserService {
     final bool queryHasBeres = qWords.contains('beres') || qWords.contains('beras') || qWords.contains('brs');
     final bool queryHasMerah = qWords.contains('merah');
     final bool queryHasCoklat = qWords.contains('coklat') || qWords.contains('cklt');
-    final bool queryHasSapi = qWords.contains('sapi');
+    final bool queryHasSapi = qWords.contains('sapi') || qWords.contains('sp');
+    final bool queryHasAyam = qWords.contains('ayam') || qWords.contains('ay');
     final bool queryHas13 = qWords.contains('13') || qWords.contains('13s');
     final bool queryHas24 = qWords.contains('24') || qWords.contains('24s');
     final bool queryHas7 = qWords.contains('7') || qWords.contains('7s');
@@ -788,11 +886,19 @@ class AiChatParserService {
         if (pWords.contains(qw)) {
           score += 10;
         } else {
-          // Normalize spelling (e.g. rolade == rollade, bratwust == bratwurst)
-          final normQ = qw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
+          // Normalize spelling (e.g. rolade == rollade, bratwust == bratwurst, coctail == cocktail)
+          final normQ = qw
+              .replaceAll('ll', 'l')
+              .replaceAll('bratwust', 'bratwurst')
+              .replaceAll('coctail', 'cocktail')
+              .replaceAll('koktail', 'cocktail');
           bool normMatched = false;
           for (var pw in pWords) {
-            final normP = pw.replaceAll('ll', 'l').replaceAll('bratwust', 'bratwurst');
+            final normP = pw
+                .replaceAll('ll', 'l')
+                .replaceAll('bratwust', 'bratwurst')
+                .replaceAll('coctail', 'cocktail')
+                .replaceAll('koktail', 'cocktail');
             if (normQ == normP) {
               score += 8;
               normMatched = true;
@@ -823,7 +929,7 @@ class AiChatParserService {
         score += 20;
       }
 
-      // B. "Merah" vs "Coklat" vs "Sapi"
+      // B. "Merah" vs "Coklat" vs "Sapi" vs "Ayam"
       if (queryHasMerah) {
         if (pWords.contains('merah') || pName.contains('merah')) {
           score += 25;
@@ -840,7 +946,7 @@ class AiChatParserService {
       }
       if (queryHasSapi) {
         if (pWords.contains('sapi') || pName.contains('sapi')) {
-          score += 25;
+          score += 35;
         } else if (pWords.contains('coklat') || pName.contains('coklat')) {
           // In Fiva Beres, "sapi" is "BRS COKLAT"
           score += 40;
@@ -849,7 +955,15 @@ class AiChatParserService {
           score -= 40;
         }
         if (pWords.contains('ayam') || pName.contains('ayam')) {
-          score -= 20;
+          score -= 30;
+        }
+      }
+      if (queryHasAyam) {
+        if (pWords.contains('ayam') || pName.contains('ayam')) {
+          score += 35;
+        }
+        if (pWords.contains('sapi') || pName.contains('sapi')) {
+          score -= 30;
         }
       }
 
@@ -906,16 +1020,17 @@ class AiChatParserService {
   /// Apply Bonus/Promo rules: auto-append bonus items based on customer & qty thresholds
   /// Rule keyword format: "CUSTOMER_NAME|PRODUCT_NAME|MIN_QTY_KARTON" (pipe-separated)
   /// Rule mappedValue format: "BONUS_PRODUCT_NAME|BONUS_QTY|BONUS_UNIT" (pipe-separated)
-  void _applyBonusRules({
+  String? _applyBonusRules({
     required List<ChatOrderItemDraft> draftItems,
     required List<AiKnowledgeRule> bonusRules,
     required String customerName,
     required List<Product> products,
   }) {
-    if (bonusRules.isEmpty || draftItems.isEmpty) return;
+    if (bonusRules.isEmpty || draftItems.isEmpty) return null;
 
     final cleanCust = customerName.trim().toLowerCase();
     final bonusItemsToAdd = <ChatOrderItemDraft>[];
+    String? bonusNote;
 
     for (var rule in bonusRules) {
       // Parse rule keyword: "CUSTOMER|PRODUCT|MIN_QTY"
@@ -999,10 +1114,17 @@ class AiChatParserService {
           isNewItemForCustomer: false,
           isBonus: true,
         ));
+
+        // Format specific note if LG FF
+        if (cleanCust.contains('lg ff') || cleanCust.contains('wimbo')) {
+          final qtyKtnStr = calculatedBonusQty % 1 == 0 ? calculatedBonusQty.toInt().toString() : calculatedBonusQty.toString();
+          bonusNote = 'NOTE : BONUS $qtyKtnStr KARTON KORNET AYAM @400 G';
+        }
       }
     }
 
     draftItems.addAll(bonusItemsToAdd);
+    return bonusNote;
   }
 
   bool _isIgnoredLine(String line) {

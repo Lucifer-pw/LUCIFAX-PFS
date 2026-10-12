@@ -32,6 +32,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
 
   bool _isAnalyzing = false;
   bool _isSavingAll = false;
+  bool _isSyncingMemory = false;
   List<ChatOrderDraft> _parsedDrafts = [];
   final NumberFormat _rupiahFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -39,6 +40,29 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
   void initState() {
     super.initState();
     _parserService = AiChatParserService(_firebaseService);
+  }
+
+  Future<void> _syncMemory() async {
+    setState(() => _isSyncingMemory = true);
+    try {
+      final count = await _firebaseService.syncCustomerProductMemory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🧠 Memori pelanggan berhasil diperbarui untuk $count toko!'),
+            backgroundColor: Colors.teal,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal sinkronkan memori: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingMemory = false);
+    }
   }
 
   @override
@@ -183,7 +207,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
         country: 'INDONESIA',
         items: trItems,
         grandTotal: grandTotal,
-        note: 'PO Otomatis dari Chat: ${draft.customerRawName}',
+        note: draft.note,
         createdBy: 'AI Chat Scanner',
       );
       final createdInvoiceNo = createdTr.invoiceNo;
@@ -342,8 +366,18 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                   ),
                   const SizedBox(height: 8),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      TextButton.icon(
+                        onPressed: _isSyncingMemory ? null : _syncMemory,
+                        icon: _isSyncingMemory
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                            : const Icon(Icons.psychology_alt_rounded, color: Color(0xFF38BDF8), size: 16),
+                        label: Text(
+                          _isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori Pelanggan',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0284C7),
@@ -406,32 +440,75 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
 
             // Drafts List
             Expanded(
-              child: _parsedDrafts.isEmpty
+              child: _isAnalyzing
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.inventory_2_outlined, color: const Color(0xFF64748B).withOpacity(0.5), size: 48),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Belum ada draft PO.',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Tempelkan teks pesanan Pak BC pada kotak di atas, lalu klik "Analisa".',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                              boxShadow: [
+                                BoxShadow(color: const Color(0xFF38BDF8).withOpacity(0.08), blurRadius: 24, spreadRadius: 2),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 56,
+                                  height: 56,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    valueColor: AlwaysStoppedAnimation<Color>(const Color(0xFF38BDF8).withOpacity(0.85)),
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                const Text(
+                                  '🔍 Menganalisa Chat...',
+                                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Mengenali toko, barang, kuantiti, dan menarik harga dari histori nota...',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: _parsedDrafts.length,
-                      itemBuilder: (context, index) {
-                        final draft = _parsedDrafts[index];
-                        return _buildDraftCard(draft, index);
-                      },
-                    ),
+                  : _parsedDrafts.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.inventory_2_outlined, color: const Color(0xFF64748B).withOpacity(0.5), size: 48),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Belum ada draft PO.',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Tempelkan teks pesanan Pak BC pada kotak di atas, lalu klik "Analisa".',
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _parsedDrafts.length,
+                          itemBuilder: (context, index) {
+                            final draft = _parsedDrafts[index];
+                            return _buildDraftCard(draft, index);
+                          },
+                        ),
             ),
           ],
         ),
@@ -629,6 +706,8 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                               Text('Disc ${item.discountPercent}%', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
                             if (item.discountAmount > 0)
                               Text('Pot. ${_rupiahFormatter.format(item.discountAmount)}', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                            if (item.invoiceNo.isNotEmpty)
+                              Text('[Ref: #${item.invoiceNo}]', style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.7), fontSize: 9)),
                           ],
                         ),
                       ),

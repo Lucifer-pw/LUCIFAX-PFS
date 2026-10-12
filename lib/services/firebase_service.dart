@@ -2809,6 +2809,195 @@ class FirebaseService {
     return null;
   }
 
+  /// Scans all transactions and compiles the latest product preferences, prices, and discounts
+  /// for each customer into the dedicated 'customer_product_memory' collection.
+  Future<Map<String, dynamic>> syncCustomerProductMemory() async {
+    try {
+      // 1. Fetch master customers
+      final custSnap = await _db.collection('customers').get();
+      final masterCustomers = custSnap.docs
+          .map((d) => Customer.fromMap(d.data(), d.id))
+          .toList();
+
+      // 2. Fetch all transactions
+      final trSnap = await _db.collection('transactions').get();
+      final docs = trSnap.docs;
+
+      // Helper function to extract reliable date
+      DateTime extractDate(Map<String, dynamic> data) {
+        if (data['date'] is Timestamp) return (data['date'] as Timestamp).toDate();
+        if (data['createdAt'] is Timestamp) return (data['createdAt'] as Timestamp).toDate();
+        if (data['date'] is String) {
+          try {
+            return DateFormat('dd-MM-yyyy').parse(data['date'] as String);
+          } catch (_) {}
+        }
+        return DateTime(2000);
+      }
+
+      // Sort transactions descending by effective date
+      final sortedDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(docs)
+        ..sort((a, b) => extractDate(b.data()).compareTo(extractDate(a.data())));
+
+      // Customer memory map: customerId/cleanKey -> Map of productKey -> CustomerProductHistory
+      final Map<String, Map<String, CustomerProductHistory>> memoryMap = {};
+      final Map<String, Map<String, String>> customerMetadata = {};
+
+      for (var doc in sortedDocs) {
+        final data = doc.data();
+        final docCustId = (data['customerId'] ?? '').toString().trim();
+        final cName = (data['customerName'] ?? '').toString().trim().toLowerCase();
+        final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
+        final invNo = (data['invoiceNo'] ?? '').toString();
+        final docDate = extractDate(data);
+
+        // Find matching master customer
+        Customer? matchedCust;
+        if (docCustId.isNotEmpty) {
+          final cleanDocCustId = docCustId.toLowerCase().replaceAll('g', '');
+          matchedCust = masterCustomers.firstWhere(
+            (c) => c.id.toLowerCase() == docCustId.toLowerCase() ||
+                c.id.toLowerCase().replaceAll('g', '') == cleanDocCustId,
+            orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
+          );
+          if (matchedCust.id.isEmpty) matchedCust = null;
+        }
+
+        if (matchedCust == null && cAlias.isNotEmpty) {
+          matchedCust = masterCustomers.firstWhere(
+            (c) => c.aliasName.trim().toLowerCase() == cAlias ||
+                c.aliasName.trim().toLowerCase().contains(cAlias) ||
+                cAlias.contains(c.aliasName.trim().toLowerCase()),
+            orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
+          );
+          if (matchedCust.id.isEmpty) matchedCust = null;
+        }
+
+        if (matchedCust == null && cName.isNotEmpty) {
+          matchedCust = masterCustomers.firstWhere(
+            (c) {
+              final mName = c.customerName.trim().toLowerCase();
+              final mAlias = c.aliasName.trim().toLowerCase();
+              return mName == cName ||
+                  (mAlias.isNotEmpty && cName.contains(mAlias)) ||
+                  (mName.isNotEmpty && cName.contains(mName)) ||
+                  (mName.isNotEmpty && mName.contains(cName));
+            },
+            orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
+          );
+          if (matchedCust.id.isEmpty) matchedCust = null;
+        }
+
+        // Determine key
+        final custKey = matchedCust != null && matchedCust.id.isNotEmpty
+            ? matchedCust.id
+            : (docCustId.isNotEmpty ? docCustId : (cAlias.isNotEmpty ? cAlias : cName));
+
+        if (custKey.isEmpty) continue;
+
+        customerMetadata.putIfAbsent(custKey, () => {
+          'customerId': matchedCust?.id ?? docCustId,
+          'customerName': matchedCust?.customerName ?? (data['customerName'] ?? '').toString(),
+          'aliasName': matchedCust?.aliasName ?? (data['aliasName'] ?? '').toString(),
+          'city': matchedCust?.city ?? (data['city'] ?? '').toString(),
+        });
+
+        final custProducts = memoryMap.putIfAbsent(custKey, () => <String, CustomerProductHistory>{});
+
+        final itemsRaw = data['items'] as List<dynamic>? ?? [];
+        for (var itemMap in itemsRaw) {
+          if (itemMap is Map<String, dynamic>) {
+            final pId = (itemMap['productId'] ?? '').toString().trim();
+            final pName = (itemMap['productName'] ?? '').toString().trim();
+            final itemPrice = (itemMap['price'] ?? 0.0).toDouble();
+            final isBonus = itemMap['isBonus'] == true || pName.toLowerCase().contains('(bonus)');
+
+            if (itemPrice <= 0 || isBonus || pName.isEmpty) continue;
+
+            final pKey = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+            if (!custProducts.containsKey(pKey)) {
+              custProducts[pKey] = CustomerProductHistory(
+                productId: pId,
+                productName: pName,
+                price: itemPrice,
+                discountPercent: (itemMap['discountPercent'] ?? 0.0).toDouble(),
+                discountAmount: (itemMap['discountAmount'] ?? 0.0).toDouble(),
+                invoiceNo: invNo,
+                date: docDate,
+                purchaseCount: 1,
+              );
+            } else {
+              final existing = custProducts[pKey]!;
+              custProducts[pKey] = CustomerProductHistory(
+                productId: existing.productId,
+                productName: existing.productName,
+                price: existing.price,
+                discountPercent: existing.discountPercent,
+                discountAmount: existing.discountAmount,
+                invoiceNo: existing.invoiceNo,
+                date: existing.date,
+                purchaseCount: existing.purchaseCount + 1,
+              );
+            }
+          }
+        }
+      }
+
+      // 3. Save to Firestore 'customer_product_memory'
+      final batch = _db.batch();
+      int batchCount = 0;
+      int totalProductsLearned = 0;
+
+      for (var entry in memoryMap.entries) {
+        final custKey = entry.key;
+        final meta = customerMetadata[custKey] ?? {};
+        final prods = entry.value.values.toList();
+        totalProductsLearned += prods.length;
+
+        final docRef = _db.collection('customer_product_memory').doc(custKey);
+        batch.set(docRef, {
+          'customerId': meta['customerId'] ?? '',
+          'customerName': meta['customerName'] ?? '',
+          'aliasName': meta['aliasName'] ?? '',
+          'city': meta['city'] ?? '',
+          'updatedAt': FieldValue.serverTimestamp(),
+          'products': prods.map((p) => {
+            'productId': p.productId,
+            'productName': p.productName,
+            'price': p.price,
+            'discountPercent': p.discountPercent,
+            'discountAmount': p.discountAmount,
+            'invoiceNo': p.invoiceNo,
+            'date': p.date != null ? Timestamp.fromDate(p.date!) : null,
+            'purchaseCount': p.purchaseCount,
+          }).toList(),
+        });
+        batchCount++;
+
+        if (batchCount >= 450) {
+          await batch.commit();
+          batchCount = 0;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      return {
+        'success': true,
+        'customersCount': memoryMap.length,
+        'productsCount': totalProductsLearned,
+      };
+    } catch (e) {
+      debugPrint('Error syncing customer product memory: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
   /// Retrieves all distinct products previously purchased by a specific customer,
   /// ordered by recency, with their latest price, discount, and frequency.
   Future<List<CustomerProductHistory>> getCustomerProductHistory({
@@ -2822,24 +3011,103 @@ class FirebaseService {
       final cleanCust = customerName.trim().toLowerCase();
       final cleanAlias = (aliasName ?? '').trim().toLowerCase();
 
-      final snap = await _db
-          .collection('transactions')
-          .orderBy('createdAt', descending: true)
-          .limit(350)
-          .get();
+      // 1. Check pre-compiled 'customer_product_memory' collection
+      if (cleanCustId.isNotEmpty) {
+        final memDoc = await _db.collection('customer_product_memory').doc(cleanCustId).get();
+        if (memDoc.exists && memDoc.data()?['products'] != null) {
+          final prodsRaw = memDoc.data()!['products'] as List<dynamic>;
+          for (var item in prodsRaw) {
+            if (item is Map<String, dynamic>) {
+              final pId = (item['productId'] ?? '').toString();
+              final pName = (item['productName'] ?? '').toString();
+              final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+              results[key] = CustomerProductHistory(
+                productId: pId,
+                productName: pName,
+                price: (item['price'] ?? 0.0).toDouble(),
+                discountPercent: (item['discountPercent'] ?? 0.0).toDouble(),
+                discountAmount: (item['discountAmount'] ?? 0.0).toDouble(),
+                invoiceNo: (item['invoiceNo'] ?? '').toString(),
+                date: item['date'] != null && item['date'] is Timestamp ? (item['date'] as Timestamp).toDate() : null,
+                purchaseCount: (item['purchaseCount'] ?? 1) as int,
+              );
+            }
+          }
+          if (results.isNotEmpty) return results.values.toList();
+        }
+      }
 
-      for (var doc in snap.docs) {
+      // Check customer_product_memory by alias or name query if ID didn't hit directly
+      if (cleanAlias.isNotEmpty || cleanCust.isNotEmpty) {
+        final memSnap = await _db.collection('customer_product_memory').get();
+        for (var d in memSnap.docs) {
+          final mData = d.data();
+          final mCustId = (mData['customerId'] ?? '').toString().toLowerCase();
+          final mName = (mData['customerName'] ?? '').toString().toLowerCase();
+          final mAlias = (mData['aliasName'] ?? '').toString().toLowerCase();
+
+          bool isMatch = false;
+          if (cleanCustId.isNotEmpty && (mCustId == cleanCustId.toLowerCase() || mCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', ''))) {
+            isMatch = true;
+          } else if (cleanAlias.isNotEmpty && (mAlias == cleanAlias || mName.contains(cleanAlias) || cleanAlias.contains(mAlias))) {
+            isMatch = true;
+          } else if (cleanCust.isNotEmpty && (mName == cleanCust || mName.contains(cleanCust) || cleanCust.contains(mName))) {
+            isMatch = true;
+          }
+
+          if (isMatch && mData['products'] != null) {
+            final prodsRaw = mData['products'] as List<dynamic>;
+            for (var item in prodsRaw) {
+              if (item is Map<String, dynamic>) {
+                final pId = (item['productId'] ?? '').toString();
+                final pName = (item['productName'] ?? '').toString();
+                final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+                results[key] = CustomerProductHistory(
+                  productId: pId,
+                  productName: pName,
+                  price: (item['price'] ?? 0.0).toDouble(),
+                  discountPercent: (item['discountPercent'] ?? 0.0).toDouble(),
+                  discountAmount: (item['discountAmount'] ?? 0.0).toDouble(),
+                  invoiceNo: (item['invoiceNo'] ?? '').toString(),
+                  date: item['date'] != null && item['date'] is Timestamp ? (item['date'] as Timestamp).toDate() : null,
+                  purchaseCount: (item['purchaseCount'] ?? 1) as int,
+                );
+              }
+            }
+            if (results.isNotEmpty) return results.values.toList();
+          }
+        }
+      }
+
+      // 2. Fallback: Live Scan from transactions with tolerant customer matching
+      final snap = await _db.collection('transactions').get();
+
+      DateTime extractDate(Map<String, dynamic> data) {
+        if (data['date'] is Timestamp) return (data['date'] as Timestamp).toDate();
+        if (data['createdAt'] is Timestamp) return (data['createdAt'] as Timestamp).toDate();
+        if (data['date'] is String) {
+          try {
+            return DateFormat('dd-MM-yyyy').parse(data['date'] as String);
+          } catch (_) {}
+        }
+        return DateTime(2000);
+      }
+
+      final sortedDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(snap.docs)
+        ..sort((a, b) => extractDate(b.data()).compareTo(extractDate(a.data())));
+
+      for (var doc in sortedDocs) {
         final data = doc.data();
-        final docCustId = (data['customerId'] ?? '').toString().trim();
+        final docCustId = (data['customerId'] ?? '').toString().trim().toLowerCase();
         final cName = (data['customerName'] ?? '').toString().trim().toLowerCase();
         final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
 
         bool matchCust = false;
-        if (cleanCustId.isNotEmpty && docCustId.isNotEmpty && docCustId == cleanCustId) {
+        if (cleanCustId.isNotEmpty && docCustId.isNotEmpty && (docCustId == cleanCustId.toLowerCase() || docCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', ''))) {
           matchCust = true;
         } else if (cName == cleanCust || cAlias == cleanCust) {
           matchCust = true;
-        } else if (cleanAlias.isNotEmpty && (cName == cleanAlias || cAlias == cleanAlias)) {
+        } else if (cleanAlias.isNotEmpty && (cName == cleanAlias || cAlias == cleanAlias || cName.contains(cleanAlias) || cAlias.contains(cleanAlias))) {
           matchCust = true;
         } else if (cleanCust.isNotEmpty && (cName.contains(cleanCust) || cleanCust.contains(cName))) {
           matchCust = true;
@@ -2865,9 +3133,7 @@ class FirebaseService {
                   discountPercent: (itemMap['discountPercent'] ?? 0.0).toDouble(),
                   discountAmount: (itemMap['discountAmount'] ?? 0.0).toDouble(),
                   invoiceNo: (data['invoiceNo'] ?? '').toString(),
-                  date: data['date'] != null && data['date'] is Timestamp
-                      ? (data['date'] as Timestamp).toDate()
-                      : null,
+                  date: extractDate(data),
                   purchaseCount: 1,
                 );
               } else {
