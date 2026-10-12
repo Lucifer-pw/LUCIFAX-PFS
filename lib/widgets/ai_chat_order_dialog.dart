@@ -210,11 +210,13 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
     String initialStoreName = draft.aliasName.isNotEmpty ? draft.aliasName : draft.customerName;
     if (initialStoreName.isEmpty) initialStoreName = draft.customerRawName;
 
+    String currentCity = detectedCity;
     final storeNameController = TextEditingController(text: initialStoreName);
     final ownerNameController = TextEditingController(text: initialStoreName);
     final phoneController = TextEditingController();
+    final cityController = TextEditingController(text: currentCity);
+    final cityFocusNode = FocusNode();
 
-    String currentCity = detectedCity;
     String generatedId = '';
     bool isLoadingId = true;
     bool isSaving = false;
@@ -398,39 +400,105 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Kota Dropdown (Updates ID automatically)
-                      const Text('Kota / Wilayah Toko:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      // Kota Searchable Input (Can type or pick from suggestions, updates ID live)
+                      const Text('Kota / Wilayah Toko (Bisa Diketik):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: currentCity,
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF1E293B),
-                            items: supportedCities.map((c) {
-                              final pKode = _firebaseService.getPlatKode(c);
-                              return DropdownMenuItem<String>(
-                                value: c,
-                                child: Text(
-                                  '$c (Plat $pKode)',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12.5),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (newCity) {
-                              if (newCity != null && newCity != currentCity) {
-                                currentCity = newCity;
-                                fetchId(newCity);
+                      RawAutocomplete<String>(
+                        textEditingController: cityController,
+                        focusNode: cityFocusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return supportedCities;
+                          }
+                          final q = textEditingValue.text.toLowerCase().trim();
+                          return supportedCities.where((c) {
+                            final pKode = _firebaseService.getPlatKode(c).toLowerCase();
+                            return c.toLowerCase().contains(q) || pKode.contains(q);
+                          });
+                        },
+                        displayStringForOption: (String option) => option,
+                        onSelected: (String selection) {
+                          setDialogState(() {
+                            currentCity = selection;
+                            cityController.text = selection;
+                            fetchId(selection);
+                          });
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              hintText: 'Ketik kota (e.g. Solo, Semarang, Kudus)...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.location_city_rounded, color: Color(0xFF38BDF8), size: 18),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF94A3B8)),
+                                onPressed: () {
+                                  if (focusNode.hasFocus) {
+                                    focusNode.unfocus();
+                                  } else {
+                                    focusNode.requestFocus();
+                                  }
+                                },
+                              ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onChanged: (val) {
+                              final upper = val.trim().toUpperCase();
+                              if (supportedCities.contains(upper) && upper != currentCity) {
+                                setDialogState(() {
+                                  currentCity = upper;
+                                  fetchId(upper);
+                                });
                               }
                             },
-                          ),
-                        ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 8,
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(10),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 460, maxHeight: 200),
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155), height: 1),
+                                  itemBuilder: (context, index) {
+                                    final c = options.elementAt(index);
+                                    final pKode = _firebaseService.getPlatKode(c);
+                                    final isSelected = c == currentCity;
+                                    return ListTile(
+                                      dense: true,
+                                      selected: isSelected,
+                                      selectedTileColor: const Color(0xFF0284C7).withOpacity(0.2),
+                                      title: Text(
+                                        '$c (Plat $pKode)',
+                                        style: TextStyle(
+                                          color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                        ),
+                                      ),
+                                      trailing: Text('Plat $pKode', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                      onTap: () => onSelected(c),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
 

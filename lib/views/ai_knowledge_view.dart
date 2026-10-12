@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/ai_knowledge_rule.dart';
+import '../models/customer.dart';
+import '../models/product.dart';
 import '../providers/product_provider.dart';
 import '../providers/customer_provider.dart';
 import '../services/firebase_service.dart';
@@ -120,6 +122,16 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     final mappedValueController = TextEditingController(text: existingRule?.mappedValue ?? '');
     String? selectedTargetId = existingRule?.targetId;
 
+    final productSearchController = TextEditingController(
+      text: (existingRule != null && existingRule.type == 'product_alias') ? existingRule.mappedValue : '',
+    );
+    final productFocusNode = FocusNode();
+
+    final customerSearchController = TextEditingController(
+      text: (existingRule != null && existingRule.type == 'customer_alias') ? existingRule.mappedValue : '',
+    );
+    final customerFocusNode = FocusNode();
+
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
@@ -173,6 +185,8 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                                 ruleType = val;
                                 selectedTargetId = null;
                                 mappedValueController.clear();
+                                productSearchController.clear();
+                                customerSearchController.clear();
                               });
                             }
                           },
@@ -211,74 +225,215 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Mapped Target Selection
+                    // Mapped Target Selection (Searchable & Typable Autocomplete)
                     if (ruleType == 'product_alias') ...[
-                      const Text('Pilih Barang Asli di Master Barang:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      const Text('Pilih Barang Asli di Master Barang (Bisa Diketik):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedTargetId,
-                            hint: const Text('Pilih Produk...', style: TextStyle(color: Color(0xFF64748B))),
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF0F172A),
-                            items: productProvider.products.map((p) {
-                              return DropdownMenuItem<String>(
-                                value: p.id,
-                                child: Text('${p.name} (${p.kodeInduk})', style: const TextStyle(color: Colors.white, fontSize: 12), overflow: TextOverflow.ellipsis),
-                              );
-                            }).toList(),
-                            onChanged: (pId) {
-                              if (pId != null) {
-                                final p = productProvider.products.firstWhere((item) => item.id == pId);
-                                setDialogState(() {
-                                  selectedTargetId = pId;
-                                  mappedValueController.text = p.name;
-                                });
-                              }
-                            },
-                          ),
-                        ),
+                      RawAutocomplete<Product>(
+                        textEditingController: productSearchController,
+                        focusNode: productFocusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return productProvider.products.take(15);
+                          }
+                          final q = textEditingValue.text.toLowerCase().trim();
+                          return productProvider.products.where((p) =>
+                              p.name.toLowerCase().contains(q) ||
+                              p.kodeInduk.toLowerCase().contains(q) ||
+                              p.id.toLowerCase().contains(q));
+                        },
+                        displayStringForOption: (Product p) => p.name,
+                        onSelected: (Product p) {
+                          setDialogState(() {
+                            selectedTargetId = p.id;
+                            mappedValueController.text = p.name;
+                            productSearchController.text = p.name;
+                          });
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              hintText: 'Ketik nama atau kode barang asli...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                              suffixIcon: controller.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 16),
+                                      onPressed: () {
+                                        controller.clear();
+                                        setDialogState(() {
+                                          selectedTargetId = null;
+                                          mappedValueController.clear();
+                                        });
+                                      },
+                                    )
+                                  : IconButton(
+                                      icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF94A3B8)),
+                                      onPressed: () {
+                                        if (focusNode.hasFocus) {
+                                          focusNode.unfocus();
+                                        } else {
+                                          focusNode.requestFocus();
+                                        }
+                                      },
+                                    ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 8,
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(10),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 460, maxHeight: 200),
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155), height: 1),
+                                  itemBuilder: (context, index) {
+                                    final p = options.elementAt(index);
+                                    final isSelected = p.id == selectedTargetId;
+                                    return ListTile(
+                                      dense: true,
+                                      selected: isSelected,
+                                      selectedTileColor: const Color(0xFF0284C7).withOpacity(0.2),
+                                      title: Text(
+                                        p.name,
+                                        style: TextStyle(
+                                          color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        'Kode: ${p.kodeInduk.isNotEmpty ? p.kodeInduk : p.id} • Isi: ${p.isiKarton} pcs',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                      ),
+                                      onTap: () => onSelected(p),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ] else if (ruleType == 'customer_alias') ...[
-                      const Text('Pilih Toko Asli di Master Pelanggan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      const Text('Pilih Toko Asli di Master Pelanggan (Bisa Diketik):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedTargetId,
-                            hint: const Text('Pilih Pelanggan...', style: TextStyle(color: Color(0xFF64748B))),
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF0F172A),
-                            items: customerProvider.customers.map((c) {
-                              return DropdownMenuItem<String>(
-                                value: c.id,
-                                child: Text(c.aliasName.isNotEmpty ? '${c.customerName} (${c.aliasName})' : c.customerName, style: const TextStyle(color: Colors.white, fontSize: 12), overflow: TextOverflow.ellipsis),
-                              );
-                            }).toList(),
-                            onChanged: (cId) {
-                              if (cId != null) {
-                                final c = customerProvider.customers.firstWhere((item) => item.id == cId);
-                                setDialogState(() {
-                                  selectedTargetId = cId;
-                                  mappedValueController.text = c.customerName;
-                                });
-                              }
-                            },
-                          ),
-                        ),
+                      RawAutocomplete<Customer>(
+                        textEditingController: customerSearchController,
+                        focusNode: customerFocusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return customerProvider.customers.take(15);
+                          }
+                          final q = textEditingValue.text.toLowerCase().trim();
+                          return customerProvider.customers.where((c) =>
+                              c.customerName.toLowerCase().contains(q) ||
+                              c.aliasName.toLowerCase().contains(q) ||
+                              c.city.toLowerCase().contains(q) ||
+                              c.id.toLowerCase().contains(q));
+                        },
+                        displayStringForOption: (Customer c) => c.customerName,
+                        onSelected: (Customer c) {
+                          setDialogState(() {
+                            selectedTargetId = c.id;
+                            mappedValueController.text = c.customerName;
+                            customerSearchController.text = c.customerName;
+                          });
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              hintText: 'Ketik nama toko / panggilan / kota...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                              suffixIcon: controller.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, color: Color(0xFF94A3B8), size: 16),
+                                      onPressed: () {
+                                        controller.clear();
+                                        setDialogState(() {
+                                          selectedTargetId = null;
+                                          mappedValueController.clear();
+                                        });
+                                      },
+                                    )
+                                  : IconButton(
+                                      icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF94A3B8)),
+                                      onPressed: () {
+                                        if (focusNode.hasFocus) {
+                                          focusNode.unfocus();
+                                        } else {
+                                          focusNode.requestFocus();
+                                        }
+                                      },
+                                    ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 8,
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(10),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 460, maxHeight: 200),
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155), height: 1),
+                                  itemBuilder: (context, index) {
+                                    final c = options.elementAt(index);
+                                    final isSelected = c.id == selectedTargetId;
+                                    return ListTile(
+                                      dense: true,
+                                      selected: isSelected,
+                                      selectedTileColor: const Color(0xFF0284C7).withOpacity(0.2),
+                                      title: Text(
+                                        c.aliasName.isNotEmpty ? '${c.customerName} (${c.aliasName})' : c.customerName,
+                                        style: TextStyle(
+                                          color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        'ID: ${c.id} • ${c.city}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                      ),
+                                      onTap: () => onSelected(c),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ] else if (ruleType == 'bonus_rule') ...[
                       const Text('Hadiah Bonus (Format: Barang Bonus|Jumlah|Satuan):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
@@ -347,6 +502,39 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                 ),
                 onPressed: () async {
                   final keyword = keywordController.text.trim();
+
+                  // Auto-resolve if user typed directly into productSearchController
+                  if (ruleType == 'product_alias' && (selectedTargetId == null || mappedValueController.text.isEmpty) && productSearchController.text.isNotEmpty) {
+                    final pText = productSearchController.text.trim().toLowerCase();
+                    final match = productProvider.products.firstWhere(
+                      (p) => p.name.toLowerCase() == pText || p.kodeInduk.toLowerCase() == pText,
+                      orElse: () => productProvider.products.firstWhere(
+                        (p) => p.name.toLowerCase().contains(pText),
+                        orElse: () => Product(id: '', name: productSearchController.text.trim(), price: 0, stock: 0, isiKarton: 1, sizeGrams: 0),
+                      ),
+                    );
+                    if (match.name.isNotEmpty) {
+                      selectedTargetId = match.id.isNotEmpty ? match.id : null;
+                      mappedValueController.text = match.name;
+                    }
+                  }
+
+                  // Auto-resolve if user typed directly into customerSearchController
+                  if (ruleType == 'customer_alias' && (selectedTargetId == null || mappedValueController.text.isEmpty) && customerSearchController.text.isNotEmpty) {
+                    final cText = customerSearchController.text.trim().toLowerCase();
+                    final match = customerProvider.customers.firstWhere(
+                      (c) => c.customerName.toLowerCase() == cText || (c.aliasName.isNotEmpty && c.aliasName.toLowerCase() == cText),
+                      orElse: () => customerProvider.customers.firstWhere(
+                        (c) => c.customerName.toLowerCase().contains(cText) || (c.aliasName.isNotEmpty && c.aliasName.toLowerCase().contains(cText)),
+                        orElse: () => Customer(id: '', customerName: customerSearchController.text.trim(), aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
+                      ),
+                    );
+                    if (match.customerName.isNotEmpty) {
+                      selectedTargetId = match.id.isNotEmpty ? match.id : null;
+                      mappedValueController.text = match.customerName;
+                    }
+                  }
+
                   final mappedVal = mappedValueController.text.trim();
 
                   if (keyword.isEmpty) {
