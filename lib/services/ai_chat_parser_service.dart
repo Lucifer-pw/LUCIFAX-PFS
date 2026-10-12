@@ -353,7 +353,18 @@ class AiChatParserService {
     final clean = text.toLowerCase().trim();
     if (clean.isEmpty) return null;
 
-    // Filter out generic stopwords
+    // Known city names to strip from query (prevents city-as-name false matches)
+    final knownCities = {
+      'pekalongan', 'tegal', 'brebes', 'batang', 'pemalang',
+      'semarang', 'demak', 'grobogan', 'salatiga', 'gubug', 'purwodadi', 'kendal',
+      'wonosobo', 'magelang', 'purworejo', 'temanggung', 'kebumen',
+      'banjarnegara', 'purbalingga', 'banyumas', 'cilacap',
+      'kudus', 'jepara', 'pati', 'rembang', 'blora',
+      'solo', 'surakarta', 'sragen', 'karanganyar', 'klaten', 'boyolali', 'colomadu', 'banjarsari',
+      'yogyakarta', 'sleman', 'bantul', 'kulonprogo', 'gunungkidul', 'wates',
+    };
+
+    // Filter out generic stopwords AND city names
     String stripStopwords(String s) {
       return s
           .replaceAll(RegExp(r'\b(toko|tk|ff|frozen|food)\b', caseSensitive: false), ' ')
@@ -363,7 +374,10 @@ class AiChatParserService {
     }
 
     final queryCleaned = stripStopwords(clean);
-    final queryTokens = queryCleaned.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    // Remove city names from query tokens so they don't falsely match customer names
+    final queryTokens = queryCleaned.split(RegExp(r'\s+'))
+        .where((w) => w.length >= 2 && !knownCities.contains(w))
+        .toList();
     final queryAlphaNumOnly = clean.replaceAll(RegExp(r'[^a-z0-9]'), '');
 
     Customer? bestMatch;
@@ -416,7 +430,7 @@ class AiChatParserService {
         score += 60;
       }
 
-      // 4. Token Overlap
+      // 4. Token Overlap (city names already stripped from queryTokens)
       int matchedTokens = 0;
       for (var token in queryTokens) {
         if (cTokens.contains(token)) {
@@ -439,9 +453,10 @@ class AiChatParserService {
         score += 40;
       }
 
-      // 5. City Match Bonus
-      if (cCity.isNotEmpty && clean.contains(cCity)) {
-        score += 45;
+      // 5. City Match Bonus — ONLY a tie-breaker, never sufficient alone
+      // City bonus only applies when there's already some name-based score
+      if (score > 0 && cCity.isNotEmpty && clean.contains(cCity)) {
+        score += 25;
       }
 
       if (score > maxScore) {
