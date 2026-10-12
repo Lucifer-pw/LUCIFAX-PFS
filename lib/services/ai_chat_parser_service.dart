@@ -1205,18 +1205,61 @@ class AiChatParserService {
 
   String _detectCityFromText(String text) {
     final lower = text.toLowerCase();
-    if (lower.contains('wonosobo')) return 'WONOSOBO';
-    if (lower.contains('kendal')) return 'KENDAL';
-    if (lower.contains('purwodadi')) return 'PURWODADI';
+
+    // Plat K (Kudus, Jepara, Pati, Rembang, Blora)
+    if (lower.contains('blora')) return 'BLORA';
+    if (lower.contains('rembang')) return 'REMBANG';
+    if (lower.contains('jepara')) return 'JEPARA';
     if (lower.contains('kudus')) return 'KUDUS';
     if (lower.contains('pati')) return 'PATI';
+
+    // Plat AD (Solo / Surakarta, Sragen, Karanganyar, Klaten, Boyolali, Colomadu, Banjarsari)
+    if (lower.contains('surakarta') || lower.contains('solo')) return 'SURAKARTA';
+    if (lower.contains('sragen')) return 'SRAGEN';
+    if (lower.contains('karanganyar')) return 'KARANGANYAR';
+    if (lower.contains('klaten')) return 'KLATEN';
+    if (lower.contains('boyolali')) return 'BOYOLALI';
+    if (lower.contains('colomadu')) return 'COLOMADU';
+    if (lower.contains('banjarsari')) return 'BANJARSARI';
+
+    // Plat H (Semarang, Demak, Kendal, Salatiga, Grobogan, Purwodadi, Gubug)
+    if (lower.contains('purwodadi')) return 'PURWODADI';
+    if (lower.contains('grobogan')) return 'GROBOGAN';
+    if (lower.contains('gubug')) return 'GUBUG';
+    if (lower.contains('salatiga')) return 'SALATIGA';
+    if (lower.contains('kendal')) return 'KENDAL';
     if (lower.contains('demak')) return 'DEMAK';
-    if (lower.contains('solo') || lower.contains('surakarta')) return 'SURAKARTA';
-    if (lower.contains('jogja') || lower.contains('yogyakarta')) return 'YOGYAKARTA';
-    if (lower.contains('magelang')) return 'MAGELANG';
-    if (lower.contains('temanggung')) return 'TEMANGGUNG';
     if (lower.contains('semarang')) return 'SEMARANG';
-    return 'SEMARANG';
+
+    // Plat AA (Wonosobo, Magelang, Temanggung, Purworejo, Kebumen)
+    if (lower.contains('wonosobo')) return 'WONOSOBO';
+    if (lower.contains('temanggung')) return 'TEMANGGUNG';
+    if (lower.contains('purworejo')) return 'PURWOREJO';
+    if (lower.contains('kebumen')) return 'KEBUMEN';
+    if (lower.contains('magelang')) return 'MAGELANG';
+
+    // Plat G (Pekalongan, Batang, Pemalang, Tegal, Brebes)
+    if (lower.contains('pekalongan')) return 'PEKALONGAN';
+    if (lower.contains('batang')) return 'BATANG';
+    if (lower.contains('pemalang')) return 'PEMALANG';
+    if (lower.contains('tegal')) return 'TEGAL';
+    if (lower.contains('brebes')) return 'BREBES';
+
+    // Plat R (Banyumas, Purwokerto, Purbalingga, Banjarnegara, Cilacap)
+    if (lower.contains('purwokerto') || lower.contains('banyumas')) return 'BANYUMAS';
+    if (lower.contains('purbalingga')) return 'PURBALINGGA';
+    if (lower.contains('banjarnegara')) return 'BANJARNEGARA';
+    if (lower.contains('cilacap')) return 'CILACAP';
+
+    // Plat AB (Yogyakarta, Sleman, Bantul, Kulonprogo, Gunungkidul, Wates)
+    if (lower.contains('yogyakarta') || lower.contains('jogja')) return 'YOGYAKARTA';
+    if (lower.contains('sleman')) return 'SLEMAN';
+    if (lower.contains('bantul')) return 'BANTUL';
+    if (lower.contains('kulonprogo') || lower.contains('kulon progo')) return 'KULONPROGO';
+    if (lower.contains('gunungkidul') || lower.contains('gunung kidul')) return 'GUNUNGKIDUL';
+    if (lower.contains('wates')) return 'WATES';
+
+    return '';
   }
 }
 

@@ -334,5 +334,28 @@ Krm bsk pg
       expect(item.isNewItemForCustomer, true);
     }
   });
+
+  test('New store LUCIFAX FF BLORA accurately detects city BLORA', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+    ];
+
+    final chatText = '''
+LUCIFAX FF BLORA
+Fiva beres merah isi 24 = 30 karton
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: [],
+      rules: [],
+    );
+
+    expect(drafts.length, 1);
+    expect(drafts.first.customerRawName, 'LUCIFAX FF BLORA');
+    expect(drafts.first.city, 'BLORA');
+  });
 }
 
