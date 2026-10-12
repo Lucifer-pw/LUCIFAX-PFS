@@ -325,6 +325,14 @@ Krm bsk pg
     expect(draft.items[4].productName, 'ROLADE SAPI ROLL 325 G');
     expect(draft.items[4].qtyInput, 50.0);
     expect(draft.items[4].qtyUnit, 'roll');
+
+    // Unregistered new store must have 0% discount, 0 discountAmount, and empty invoiceNo
+    for (var item in draft.items) {
+      expect(item.discountPercent, 0.0);
+      expect(item.discountAmount, 0.0);
+      expect(item.invoiceNo, '');
+      expect(item.isNewItemForCustomer, true);
+    }
   });
 }
 

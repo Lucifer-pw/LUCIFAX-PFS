@@ -2756,17 +2756,26 @@ class FirebaseService {
 
       for (var doc in snap.docs) {
         final data = doc.data();
-        final docCustId = (data['customerId'] ?? '').toString().trim();
+        final docCustId = (data['customerId'] ?? '').toString().trim().toLowerCase();
         final cName = (data['customerName'] ?? '').toString().trim().toLowerCase();
         final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
 
         bool matchCust = false;
-        if (cleanCustId.isNotEmpty && docCustId.isNotEmpty && docCustId == cleanCustId) {
-          matchCust = true;
-        } else if (cName == cleanCust || cAlias == cleanCust) {
-          matchCust = true;
-        } else if (cleanCust.isNotEmpty && (cName.contains(cleanCust) || cleanCust.contains(cName))) {
-          matchCust = true;
+        if (cleanCustId.isNotEmpty) {
+          // STRICT ID MATCHING: If customer has an ID, ONLY match transactions with this exact ID!
+          // Or if transaction has no ID recorded, allow EXACT full name match (min 4 chars)
+          if (docCustId.isNotEmpty) {
+            matchCust = (docCustId == cleanCustId.toLowerCase() || docCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', ''));
+          } else if (cleanCust.length >= 4 && cName.isNotEmpty && (cName == cleanCust || cAlias == cleanCust)) {
+            matchCust = true;
+          }
+        } else {
+          // Unregistered customer: require EXACT match on name or alias (min 3 chars, NEVER substring contains)
+          if (cleanCust.length >= 3 && cName.isNotEmpty && cName == cleanCust) {
+            matchCust = true;
+          } else if (cleanCust.length >= 3 && cAlias.isNotEmpty && cAlias == cleanCust) {
+            matchCust = true;
+          }
         }
 
         if (matchCust) {
@@ -3076,51 +3085,79 @@ class FirebaseService {
           }
           if (results.isNotEmpty) return results.values.toList();
         }
-      }
 
-      // Check customer_product_memory by alias or name query if ID didn't hit directly
-      if (cleanAlias.isNotEmpty || cleanCust.isNotEmpty) {
+        // Also check memory documents where customerId field matches (if doc.id was different)
         final memSnap = await _db.collection('customer_product_memory').get();
         for (var d in memSnap.docs) {
           final mData = d.data();
-          final mCustId = (mData['customerId'] ?? '').toString().toLowerCase();
-          final mName = (mData['customerName'] ?? '').toString().toLowerCase();
-          final mAlias = (mData['aliasName'] ?? '').toString().toLowerCase();
-
-          bool isMatch = false;
-          if (cleanCustId.isNotEmpty && (mCustId == cleanCustId.toLowerCase() || mCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', ''))) {
-            isMatch = true;
-          } else if (cleanAlias.isNotEmpty && (mAlias == cleanAlias || mName.contains(cleanAlias) || cleanAlias.contains(mAlias))) {
-            isMatch = true;
-          } else if (cleanCust.isNotEmpty && (mName == cleanCust || mName.contains(cleanCust) || cleanCust.contains(mName))) {
-            isMatch = true;
-          }
-
-          if (isMatch && mData['products'] != null) {
-            final prodsRaw = mData['products'] as List<dynamic>;
-            for (var item in prodsRaw) {
-              if (item is Map<String, dynamic>) {
-                final pId = (item['productId'] ?? '').toString();
-                final pName = (item['productName'] ?? '').toString();
-                final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
-                results[key] = CustomerProductHistory(
-                  productId: pId,
-                  productName: pName,
-                  price: (item['price'] ?? 0.0).toDouble(),
-                  discountPercent: (item['discountPercent'] ?? 0.0).toDouble(),
-                  discountAmount: (item['discountAmount'] ?? 0.0).toDouble(),
-                  invoiceNo: (item['invoiceNo'] ?? '').toString(),
-                  date: item['date'] != null && item['date'] is Timestamp ? (item['date'] as Timestamp).toDate() : null,
-                  purchaseCount: (item['purchaseCount'] ?? 1) as int,
-                );
+          final mCustId = (mData['customerId'] ?? '').toString().toLowerCase().trim();
+          if (mCustId == cleanCustId.toLowerCase() || mCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', '')) {
+            if (mData['products'] != null) {
+              final prodsRaw = mData['products'] as List<dynamic>;
+              for (var item in prodsRaw) {
+                if (item is Map<String, dynamic>) {
+                  final pId = (item['productId'] ?? '').toString();
+                  final pName = (item['productName'] ?? '').toString();
+                  final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+                  results[key] = CustomerProductHistory(
+                    productId: pId,
+                    productName: pName,
+                    price: (item['price'] ?? 0.0).toDouble(),
+                    discountPercent: (item['discountPercent'] ?? 0.0).toDouble(),
+                    discountAmount: (item['discountAmount'] ?? 0.0).toDouble(),
+                    invoiceNo: (item['invoiceNo'] ?? '').toString(),
+                    date: item['date'] != null && item['date'] is Timestamp ? (item['date'] as Timestamp).toDate() : null,
+                    purchaseCount: (item['purchaseCount'] ?? 1) as int,
+                  );
+                }
               }
+              if (results.isNotEmpty) return results.values.toList();
             }
-            if (results.isNotEmpty) return results.values.toList();
+          }
+        }
+      } else {
+        // Customer has NO ID yet (unregistered / raw chat name).
+        // Require EXACT match on name or alias (minimum 3 characters, NEVER substring contains on empty strings!)
+        if (cleanAlias.length >= 3 || cleanCust.length >= 3) {
+          final memSnap = await _db.collection('customer_product_memory').get();
+          for (var d in memSnap.docs) {
+            final mData = d.data();
+            final mName = (mData['customerName'] ?? '').toString().trim().toLowerCase();
+            final mAlias = (mData['aliasName'] ?? '').toString().trim().toLowerCase();
+
+            bool isMatch = false;
+            if (cleanAlias.length >= 3 && mAlias.isNotEmpty && cleanAlias == mAlias) {
+              isMatch = true;
+            } else if (cleanCust.length >= 3 && mName.isNotEmpty && cleanCust == mName) {
+              isMatch = true;
+            }
+
+            if (isMatch && mData['products'] != null) {
+              final prodsRaw = mData['products'] as List<dynamic>;
+              for (var item in prodsRaw) {
+                if (item is Map<String, dynamic>) {
+                  final pId = (item['productId'] ?? '').toString();
+                  final pName = (item['productName'] ?? '').toString();
+                  final key = pId.isNotEmpty ? pId.toLowerCase() : pName.toLowerCase();
+                  results[key] = CustomerProductHistory(
+                    productId: pId,
+                    productName: pName,
+                    price: (item['price'] ?? 0.0).toDouble(),
+                    discountPercent: (item['discountPercent'] ?? 0.0).toDouble(),
+                    discountAmount: (item['discountAmount'] ?? 0.0).toDouble(),
+                    invoiceNo: (item['invoiceNo'] ?? '').toString(),
+                    date: item['date'] != null && item['date'] is Timestamp ? (item['date'] as Timestamp).toDate() : null,
+                    purchaseCount: (item['purchaseCount'] ?? 1) as int,
+                  );
+                }
+              }
+              if (results.isNotEmpty) return results.values.toList();
+            }
           }
         }
       }
 
-      // 2. Fallback: Live Scan from transactions with tolerant customer matching
+      // 2. Fallback: Live Scan from transactions with strict customer matching
       final snap = await _db.collection('transactions').get();
       final prodSnap = await _db.collection('products').get();
       final masterProducts = prodSnap.docs
@@ -3160,14 +3197,21 @@ class FirebaseService {
         final cAlias = (data['aliasName'] ?? '').toString().trim().toLowerCase();
 
         bool matchCust = false;
-        if (cleanCustId.isNotEmpty && docCustId.isNotEmpty && (docCustId == cleanCustId.toLowerCase() || docCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', ''))) {
-          matchCust = true;
-        } else if (cName == cleanCust || cAlias == cleanCust) {
-          matchCust = true;
-        } else if (cleanAlias.isNotEmpty && (cName == cleanAlias || cAlias == cleanAlias || cName.contains(cleanAlias) || cAlias.contains(cleanAlias))) {
-          matchCust = true;
-        } else if (cleanCust.isNotEmpty && (cName.contains(cleanCust) || cleanCust.contains(cName))) {
-          matchCust = true;
+        if (cleanCustId.isNotEmpty) {
+          // If customer has an ID, ONLY match transactions with this exact ID!
+          // Or if transaction has no ID recorded, allow EXACT full name match (min 4 chars)
+          if (docCustId.isNotEmpty) {
+            matchCust = (docCustId == cleanCustId.toLowerCase() || docCustId.replaceAll('g', '') == cleanCustId.toLowerCase().replaceAll('g', ''));
+          } else if (cleanCust.length >= 4 && cName.isNotEmpty && (cName == cleanCust || cAlias == cleanCust)) {
+            matchCust = true;
+          }
+        } else {
+          // Unregistered customer: require EXACT match on name or alias (min 3 chars, NEVER substring contains)
+          if (cleanCust.length >= 3 && cName.isNotEmpty && cName == cleanCust) {
+            matchCust = true;
+          } else if (cleanAlias.length >= 3 && cAlias.isNotEmpty && cAlias == cleanAlias) {
+            matchCust = true;
+          }
         }
 
         if (matchCust) {
