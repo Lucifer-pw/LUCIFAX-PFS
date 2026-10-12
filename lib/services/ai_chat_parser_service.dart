@@ -88,6 +88,8 @@ class AiChatParserService {
         draftItems: draftItems,
         bonusRules: bonusRules,
         customerName: matchedCustomer?.customerName ?? rawCustomerName,
+        aliasName: matchedCustomer?.aliasName ?? '',
+        rawCustomerName: rawCustomerName,
         products: products,
       );
 
@@ -1059,11 +1061,16 @@ class AiChatParserService {
     required List<ChatOrderItemDraft> draftItems,
     required List<AiKnowledgeRule> bonusRules,
     required String customerName,
+    String aliasName = '',
+    String rawCustomerName = '',
     required List<Product> products,
   }) {
     if (bonusRules.isEmpty || draftItems.isEmpty) return null;
 
     final cleanCust = customerName.trim().toLowerCase();
+    final cleanAlias = aliasName.trim().toLowerCase();
+    final cleanRaw = rawCustomerName.trim().toLowerCase();
+    final combinedCust = '$cleanCust $cleanAlias $cleanRaw'.trim();
     final bonusItemsToAdd = <ChatOrderItemDraft>[];
     String? bonusNote;
 
@@ -1076,8 +1083,13 @@ class AiChatParserService {
       final ruleProd = keyParts[1].trim().toLowerCase();
       final ruleMinQty = double.tryParse(keyParts[2].trim()) ?? 0;
 
-      // Check if customer matches
-      if (!cleanCust.contains(ruleCust) && !ruleCust.contains(cleanCust)) continue;
+      // Check if customer matches (either via customerName, aliasName, or rawCustomerName)
+      final bool custMatches = combinedCust.contains(ruleCust) ||
+          (cleanCust.isNotEmpty && ruleCust.contains(cleanCust)) ||
+          (cleanAlias.isNotEmpty && ruleCust.contains(cleanAlias)) ||
+          (cleanRaw.isNotEmpty && ruleCust.contains(cleanRaw));
+
+      if (!custMatches) continue;
 
       // Parse rule mappedValue: "BONUS_PRODUCT|BONUS_QTY|BONUS_UNIT"
       final valParts = rule.mappedValue.split('|');
@@ -1151,7 +1163,7 @@ class AiChatParserService {
         ));
 
         // Format specific note if LG FF
-        if (cleanCust.contains('lg ff') || cleanCust.contains('wimbo')) {
+        if (combinedCust.contains('lg ff') || combinedCust.contains('wimbo')) {
           final qtyKtnStr = calculatedBonusQty % 1 == 0 ? calculatedBonusQty.toInt().toString() : calculatedBonusQty.toString();
           bonusNote = 'NOTE : BONUS $qtyKtnStr KARTON KORNET AYAM @400 G';
         }

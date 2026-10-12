@@ -187,5 +187,85 @@ KRM HR KAMIS
     expect(draft.items[1].productName, 'BRS COKLAT 24S 500 G');
     expect(draft.items[1].qtyInput, 2.0);
   });
+
+  test('LG FF bonus rule auto-appends 1 karton Kornet Ayam Loyang 400 G when ordering 40 karton', () async {
+    final parser = AiChatParserService();
+
+    final products = [
+      Product(id: 'P10', name: 'KORNET AYAM LOYANG 400 G', price: 19363, stock: 100, isiKarton: 20, sizeGrams: 400),
+      Product(id: 'P11', name: 'ROLADE SAPI ROLL 325 G', price: 15000, stock: 100, isiKarton: 20, sizeGrams: 325),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'AA002',
+        customerName: 'WIMBO WIEK KUSTANTO',
+        aliasName: 'LG FF',
+        address: 'Wonosobo',
+        city: 'WONOSOBO',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08123456789',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(
+        id: 'c1',
+        type: 'customer_alias',
+        keyword: 'LG FF',
+        mappedValue: 'LG FF (WIMBO WIEK KUSTANTO)',
+        targetId: 'AA002',
+        createdAt: DateTime.now(),
+      ),
+      AiKnowledgeRule(
+        id: 'b1',
+        type: 'bonus_rule',
+        keyword: 'LG FF|KORNET AYAM LOYANG 400 G|40',
+        mappedValue: 'KORNET AYAM LOYANG 400 G|1|karton',
+        createdAt: DateTime.now(),
+      ),
+    ];
+
+    final chatText = '''
+LG FF WONOSOBO
+KORNET AYAM LOYANG 40 K....
+ROLADE SAPI ROLL 325 ROLL...
+KRM BSK HR KAMIS
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'AA002');
+    expect(draft.customerName, 'WIMBO WIEK KUSTANTO');
+    expect(draft.aliasName, 'LG FF');
+
+    // Should have 3 items: Kornet 40k, Rolade, and the Auto Bonus
+    expect(draft.items.length, 3);
+
+    // Regular item
+    expect(draft.items[0].productName, 'KORNET AYAM LOYANG 400 G');
+    expect(draft.items[0].qtyInput, 40.0);
+    expect(draft.items[0].qtyUnit, 'karton');
+    expect(draft.items[0].isBonus, isFalse);
+
+    // Bonus item
+    final bonusItem = draft.items.firstWhere((it) => it.isBonus);
+    expect(bonusItem.productName, contains('KORNET AYAM LOYANG 400 G'));
+    expect(bonusItem.qtyInput, 1.0);
+    expect(bonusItem.qtyUnit, 'karton');
+    expect(bonusItem.price, 0.0);
+
+    // Note
+    expect(draft.note, 'NOTE : BONUS 1 KARTON KORNET AYAM @400 G');
+  });
 }
 
