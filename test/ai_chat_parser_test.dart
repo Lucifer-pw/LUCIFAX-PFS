@@ -138,5 +138,54 @@ MMM
     expect(matched!.invoiceNo, '673');
     expect(matched.discountPercent, 15.0);
   });
+
+  test('Debug user chat with ANIZA FF KENDAL', () async {
+    final parser = AiChatParserService();
+
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P02', name: 'BRS MERAH 24S 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'BRS COKLAT 24S 500 G', price: 37000, stock: 100, isiKarton: 24, sizeGrams: 500),
+    ];
+
+    final customers = [
+      Customer(id: 'AA001', customerName: 'BAMBANG EKO RATIYATNO', aliasName: 'KK FF', address: '', city: 'WONOSOBO', province: '', country: '', phone: '', ktpNumber: ''),
+      Customer(id: 'AA002', customerName: 'WIMBO WIEK KUSTANTO', aliasName: 'LG FF', address: '', city: 'WONOSOBO', province: '', country: '', phone: '', ktpNumber: ''),
+      Customer(id: 'H003', customerName: 'ANNISA UL HAKIM', aliasName: 'NIZA', address: '', city: 'KENDAL', province: '', country: '', phone: '', ktpNumber: ''),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'LG FF', mappedValue: 'LG FF (WIMBO WIEK KUSTANTO)', targetId: 'AA002', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'customer_alias', keyword: 'KK FF', mappedValue: 'KK FF WONOSOBO', targetId: 'AA001', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'customer_alias', keyword: 'ANIZA FF KENDAL', mappedValue: 'ANNISA UL HAKIM', targetId: 'H003', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r4', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24 500G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r5', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Waalaikumsalam
+Po ANIZA FF KENDAL
+Beres merah 24 : 1
+Beres coklat 24 : 2
+KRM HR KAMIS
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'H003');
+    expect(draft.customerName, 'ANNISA UL HAKIM');
+    expect(draft.items.length, 2);
+    expect(draft.items[0].productName, 'BRS MERAH 24 500G');
+    expect(draft.items[0].qtyInput, 1.0);
+    expect(draft.items[1].productName, 'BRS COKLAT 24S 500 G');
+    expect(draft.items[1].qtyInput, 2.0);
+  });
 }
 

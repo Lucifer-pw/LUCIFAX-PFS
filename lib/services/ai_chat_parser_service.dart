@@ -91,8 +91,9 @@ class AiChatParserService {
         products: products,
       );
 
-      // If at least one item or valid customer found, add draft
-      if (draftItems.isNotEmpty || matchedCustomer != null) {
+      // Only add draft if items exist or if a valid customer had non-ignored order lines
+      final bool hasOrderLines = lines.skip(customerInfo.headerLineCount).any((l) => _looksLikeOrderLine(l) || !_isIgnoredLine(l));
+      if (draftItems.isNotEmpty || (matchedCustomer != null && hasOrderLines && rawCustomerName.length >= 2)) {
         drafts.add(ChatOrderDraft(
           customerRawName: rawCustomerName,
           customerId: matchedCustomer?.id ?? '',
@@ -128,23 +129,22 @@ class AiChatParserService {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
 
-      // Check if this line looks like a greeting with new PO, or a capitalized store title
+      // Check if this line looks like a new PO / store boundary
       bool isNewStore = false;
       if (newStoreRegex.hasMatch(trimmed)) {
         isNewStore = true;
-      } else if (trimmed.startsWith('Waalaikumsalam') && currentBlock.isNotEmpty) {
+      } else if (_isStoreHeaderLine(trimmed)) {
         isNewStore = true;
-      } else if (_isStoreHeaderLine(trimmed) && currentBlock.isNotEmpty) {
-        // If previous block already has items, start a new block
-        bool prevHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
-        if (prevHasItems) {
-          isNewStore = true;
-        }
       }
 
+      // Only split into a new block if the current block ALREADY has items!
+      // Otherwise, previous lines were just greetings/dates for this store!
       if (isNewStore && currentBlock.isNotEmpty) {
-        blocks.add(List.from(currentBlock));
-        currentBlock.clear();
+        final bool prevHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
+        if (prevHasItems) {
+          blocks.add(List.from(currentBlock));
+          currentBlock.clear();
+        }
       }
 
       currentBlock.add(line);
@@ -189,17 +189,18 @@ class AiChatParserService {
 
     // Helper: test if a candidate string matches customer rules or master customers
     Customer? testMatch(String txt) {
+      if (_looksLikeOrderLine(txt)) return null; // CRITICAL: NEVER match order item line as customer!
       String c = txt
           .replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '')
           .replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '')
           .replaceAll(RegExp(r'^(orderan?|pesanan?|po)\s+', caseSensitive: false), '')
           .trim();
       final target = c.toLowerCase();
-      if (target.isEmpty) return null;
+      if (target.isEmpty || target.length < 2) return null;
 
       for (var rule in customerRules) {
         final rKw = rule.keyword.trim().toLowerCase();
-        if (rKw.isNotEmpty && (target == rKw || target.contains(rKw) || rKw.contains(target))) {
+        if (rKw.isNotEmpty && (target == rKw || target.contains(rKw) || (rKw.contains(target) && target.length >= 3))) {
           if (rule.targetId != null && rule.targetId!.isNotEmpty) {
             final cust = customers.firstWhere((item) => item.id == rule.targetId, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
             if (cust.id.isNotEmpty) return cust;
@@ -217,10 +218,10 @@ class AiChatParserService {
     // Helper: test if a line is just a title/date/greeting without specific customer name
     bool isTitleOrGreetingOnly(String s) {
       final l = s.toLowerCase().trim();
-      return l.startsWith('orderan') ||
-          l.startsWith('pesanan') ||
-          l.startsWith('jadwal') ||
-          l.startsWith('po ') ||
+      if (l == 'po' || l == 'po:' || l == 'po.' || l == 'po pesanan' || l == 'po orderan' || l == 'orderan' || l == 'pesanan') return true;
+      return l.startsWith('orderan ') ||
+          l.startsWith('pesanan ') ||
+          l.startsWith('jadwal ') ||
           l.startsWith('assalamualaikum') ||
           l.startsWith('waalaikumsalam') ||
           l.startsWith('pak..') ||
@@ -239,15 +240,22 @@ class AiChatParserService {
       final matchLine0 = testMatch(lines[0]);
       final matchLine1 = testMatch(lines[1]);
 
-      if (matchLine1 != null && (matchLine0 == null || isTitleOrGreetingOnly(lines[0]))) {
-        headerText = lines[1];
-        headerCount = 2;
-      } else if (matchLine0 != null) {
+      if (matchLine0 != null) {
+        // Line 0 is already a recognized customer!
         headerText = lines[0];
         headerCount = 1;
       } else if (isTitleOrGreetingOnly(lines[0])) {
-        headerText = lines[1];
-        headerCount = 2;
+        // Line 0 is purely greeting or date, check if Line 1 has the customer
+        if (matchLine1 != null) {
+          headerText = lines[1];
+          headerCount = 2;
+        } else if (!_looksLikeOrderLine(lines[1])) {
+          headerText = lines[1];
+          headerCount = 2;
+        } else {
+          headerText = lines[0];
+          headerCount = 1;
+        }
       }
     }
 
@@ -259,6 +267,13 @@ class AiChatParserService {
     cleanName = cleanName.trim();
 
     final targetLower = cleanName.toLowerCase();
+    if (targetLower.isEmpty || targetLower.length < 2) {
+      return _CustomerResolution(
+        customer: null,
+        rawName: cleanName,
+        headerLineCount: headerCount,
+      );
+    }
 
     // 1. Check AI Knowledge Rules (Customer Alias)
     for (var rule in customerRules) {
@@ -267,7 +282,7 @@ class AiChatParserService {
 
       if (targetLower == rKeyword ||
           targetLower.contains(rKeyword) ||
-          rKeyword.contains(targetLower)) {
+          (rKeyword.contains(targetLower) && targetLower.length >= 3)) {
         // Priority A: If targetId is specified and exists in customers
         if (rule.targetId != null && rule.targetId!.isNotEmpty) {
           final targetCust = customers.firstWhere(
@@ -331,6 +346,7 @@ class AiChatParserService {
   /// Searches and matches Master Customers using Acronyms (e.g. MMM -> Maju Market Mandiri), Stopwords, and Token Overlap
   Customer? _findNearestMasterCustomer(String text, List<Customer> customers) {
     if (customers.isEmpty) return null;
+    if (_looksLikeOrderLine(text)) return null; // CRITICAL: NEVER match order item line as customer!
 
     final clean = text.toLowerCase().trim();
     if (clean.isEmpty) return null;
@@ -366,20 +382,24 @@ class AiChatParserService {
         return c; // 100% exact match
       }
 
-      // 2. Acronym / Initials Match (e.g. "MMM" -> M-aju M-arket M-andiri)
       final cTokens = cNameClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
-      if (cTokens.length >= 2) {
-        final initials = cTokens.map((w) => w[0]).join(); // e.g. "mmm"
-        if (queryAlphaNumOnly == initials || queryAlphaNumOnly.startsWith(initials)) {
-          score += 150; // Huge bonus for exact acronym match!
-        }
-      }
-
       final cAliasTokens = cAliasClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
-      if (cAliasTokens.length >= 2) {
-        final aliasInitials = cAliasTokens.map((w) => w[0]).join();
-        if (queryAlphaNumOnly == aliasInitials || queryAlphaNumOnly.startsWith(aliasInitials)) {
-          score += 140;
+
+      // 2. Acronym / Initials Match (e.g. "MMM" -> M-aju M-arket M-andiri)
+      // Only for short acronym queries (length 2-5) and EXACT match (== initials)
+      if (queryAlphaNumOnly.length >= 2 && queryAlphaNumOnly.length <= 5) {
+        if (cTokens.length >= 2) {
+          final initials = cTokens.map((w) => w[0]).join(); // e.g. "mmm"
+          if (queryAlphaNumOnly == initials) {
+            score += 150; // Exact acronym match only!
+          }
+        }
+
+        if (cAliasTokens.length >= 2) {
+          final aliasInitials = cAliasTokens.map((w) => w[0]).join();
+          if (queryAlphaNumOnly == aliasInitials) {
+            score += 140;
+          }
         }
       }
 
