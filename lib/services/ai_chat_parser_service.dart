@@ -18,6 +18,8 @@ class AiChatParserService {
     required List<Product> products,
     required List<AiKnowledgeRule> rules,
     String generalInstructions = '',
+    String? senderPhone,
+    Map<String, List<CustomerProductHistory>>? mockCustomerHistory,
   }) async {
     final drafts = <ChatOrderDraft>[];
     if (rawChat.trim().isEmpty) return drafts;
@@ -29,7 +31,11 @@ class AiChatParserService {
     final bonusRules = rules.where((r) => r.type == 'bonus_rule').toList();
 
     // 2. Multi-PO Splitting: Split chat into separate blocks per store/order
-    final blocks = _splitChatIntoStoreBlocks(rawChat);
+    final blocks = _splitChatIntoStoreBlocks(
+      rawChat,
+      customers: customers,
+      customerRules: customerRules,
+    );
 
     for (var block in blocks) {
       final lines = block
@@ -40,32 +46,55 @@ class AiChatParserService {
 
       if (lines.isEmpty) continue;
 
-      // Extract Customer from the header lines
+      // Extract Customer from header lines, bottom lines, or senderPhone
       final customerInfo = _resolveCustomer(
         lines: lines,
         customers: customers,
         customerRules: customerRules,
+        senderPhone: senderPhone,
       );
 
       final matchedCustomer = customerInfo.customer;
       final rawCustomerName = customerInfo.rawName;
 
       // Load Customer's Purchase History (AI learns from customer habit!)
-      final customerHistory = firebaseService != null
-          ? await firebaseService!.getCustomerProductHistory(
-              customerName: matchedCustomer?.customerName ?? rawCustomerName,
-              customerId: matchedCustomer?.id,
-              aliasName: matchedCustomer?.aliasName,
-            )
-          : <CustomerProductHistory>[];
+      List<CustomerProductHistory> customerHistory = [];
+      if (mockCustomerHistory != null) {
+        customerHistory = mockCustomerHistory[matchedCustomer?.id] ??
+            mockCustomerHistory[matchedCustomer?.aliasName] ??
+            mockCustomerHistory[matchedCustomer?.customerName] ??
+            mockCustomerHistory[rawCustomerName] ??
+            [];
+      } else if (firebaseService != null) {
+        customerHistory = await firebaseService!.getCustomerProductHistory(
+          customerName: matchedCustomer?.customerName ?? rawCustomerName,
+          customerId: matchedCustomer?.id,
+          aliasName: matchedCustomer?.aliasName,
+        );
+      }
 
-      // Extract Product Items from subsequent lines
+      // Extract Product Items and Chat Instructions/Notes from lines
       final draftItems = <ChatOrderItemDraft>[];
+      final chatInstructionNotes = <String>[];
 
-      for (int i = customerInfo.headerLineCount; i < lines.length; i++) {
+      for (int i = 0; i < lines.length; i++) {
         final line = lines[i];
 
-        // Skip non-item lines (greetings, delivery instructions, chat timestamps)
+        // Capture instructions / schedule notes from ANY line in the block (top, middle, bottom)
+        if (_isInstructionOrScheduleLine(line)) {
+          final trimmed = line.trim();
+          if (!chatInstructionNotes.contains(trimmed)) {
+            chatInstructionNotes.add(trimmed);
+          }
+          continue;
+        }
+
+        // Skip header lines if customer was at top
+        if (i < customerInfo.headerLineCount) continue;
+        // Skip customer line if customer was at bottom/middle
+        if (customerInfo.customerLineIndex != null && i == customerInfo.customerLineIndex) continue;
+
+        // Skip non-item lines (greetings, timestamps)
         if (_isIgnoredLine(line)) continue;
 
         final itemDraft = await _parseItemLine(
@@ -93,9 +122,18 @@ class AiChatParserService {
         products: products,
       );
 
-      // Only add draft if items exist or if a valid customer had non-ignored order lines
-      final bool hasOrderLines = lines.skip(customerInfo.headerLineCount).any((l) => _looksLikeOrderLine(l) || !_isIgnoredLine(l));
-      if (draftItems.isNotEmpty || (matchedCustomer != null && hasOrderLines && rawCustomerName.length >= 2)) {
+      // Build combined note from chat instructions and bonus rules
+      final List<String> combinedNotes = [];
+      if (chatInstructionNotes.isNotEmpty) {
+        combinedNotes.add(chatInstructionNotes.join(' | '));
+      }
+      if (bonusNote != null && bonusNote.isNotEmpty) {
+        combinedNotes.add(bonusNote);
+      }
+      final finalNote = combinedNotes.join(' - ');
+
+      // Only add draft if items exist (do NOT create phantom POs for non-order/admin messages!)
+      if (draftItems.isNotEmpty) {
         drafts.add(ChatOrderDraft(
           customerRawName: rawCustomerName,
           customerId: matchedCustomer?.id ?? '',
@@ -107,7 +145,7 @@ class AiChatParserService {
           province: matchedCustomer?.province ?? 'JAWA TENGAH',
           items: draftItems,
           rawChatBlock: block,
-          note: bonusNote ?? '',
+          note: finalNote,
         ));
       }
     }
@@ -115,33 +153,47 @@ class AiChatParserService {
     return drafts;
   }
 
-  /// Splits multi-order chats into individual store blocks
-  List<String> _splitChatIntoStoreBlocks(String rawChat) {
+  /// Splits multi-order chats into individual store blocks.
+  /// Supports both store at TOP (header) and store at BOTTOM (footer / boundary between orders).
+  List<String> _splitChatIntoStoreBlocks(
+    String rawChat, {
+    List<Customer> customers = const [],
+    List<AiKnowledgeRule> customerRules = const [],
+  }) {
     final rawLines = rawChat.split('\n');
     final blocks = <List<String>>[];
     List<String> currentBlock = [];
 
-    // Regex to detect new store boundaries
+    // Regex to detect new store boundaries at header
     final newStoreRegex = RegExp(
       r'^(pak[.,\s]+mau\s+order\s+dari|po\s+|order\s+|toko\s+|[A-Z0-9\s]{3,30}\s+(ff|frozen|kendal|wonosobo|purwodadi|semarang|kudus|pati|demak))',
       caseSensitive: false,
     );
 
-    for (var line in rawLines) {
+    // Helper: peek ahead to see if the next non-empty line is an order line
+    bool isNextLineOrder(int fromIndex) {
+      for (int j = fromIndex + 1; j < rawLines.length; j++) {
+        final nextTrimmed = rawLines[j].trim();
+        if (nextTrimmed.isEmpty) continue;
+        return _looksLikeOrderLine(nextTrimmed);
+      }
+      return false;
+    }
+
+    for (int i = 0; i < rawLines.length; i++) {
+      final line = rawLines[i];
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
 
-      // Check if this line looks like a new PO / store boundary
-      bool isNewStore = false;
-      if (newStoreRegex.hasMatch(trimmed)) {
-        isNewStore = true;
-      } else if (_isStoreHeaderLine(trimmed)) {
-        isNewStore = true;
+      // 1. Check if this line is a STORE HEADER (Store at TOP)
+      bool isHeaderStore = false;
+      if (newStoreRegex.hasMatch(trimmed) || _isStoreHeaderLine(trimmed)) {
+        isHeaderStore = true;
       }
 
-      // Only split into a new block if the current block ALREADY has items!
-      // Otherwise, previous lines were just greetings/dates for this store!
-      if (isNewStore && currentBlock.isNotEmpty) {
+      // If this is a header for a NEW store and currentBlock ALREADY has order items:
+      // Split BEFORE this line!
+      if (isHeaderStore && currentBlock.isNotEmpty) {
         final bool prevHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
         if (prevHasItems) {
           blocks.add(List.from(currentBlock));
@@ -149,7 +201,27 @@ class AiChatParserService {
         }
       }
 
+      // Add line to current block
       currentBlock.add(line);
+
+      // 2. Check if this line is a STORE FOOTER (Store at BOTTOM / CLOSING)
+      // Conditions:
+      // - currentBlock ALREADY has order items
+      // - this line is a candidate customer line
+      // - the NEXT non-empty line starts a new set of order items!
+      final bool blockHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
+      final bool isCust = _isCandidateCustomerLine(
+        trimmed,
+        customers: customers,
+        customerRules: customerRules,
+      );
+
+      if (blockHasItems && isCust && isNextLineOrder(i)) {
+        // This store line was the FOOTER for the current order!
+        // Finish currentBlock and start a fresh block for the next order.
+        blocks.add(List.from(currentBlock));
+        currentBlock.clear();
+      }
     }
 
     if (currentBlock.isNotEmpty) {
@@ -157,6 +229,50 @@ class AiChatParserService {
     }
 
     return blocks.map((b) => b.join('\n').trim()).where((b) => b.isNotEmpty).toList();
+  }
+
+  bool _isCandidateCustomerLine(
+    String line, {
+    List<Customer> customers = const [],
+    List<AiKnowledgeRule> customerRules = const [],
+  }) {
+    final lower = line.toLowerCase().trim();
+    if (lower.isEmpty) return false;
+    if (_looksLikeOrderLine(line)) return false;
+    if (_isInstructionOrScheduleLine(line)) return false;
+    if (_isIgnoredLine(line)) return false;
+
+    // Direct check against known customers
+    for (var cust in customers) {
+      final cName = cust.customerName.toLowerCase().trim();
+      final cAlias = cust.aliasName.toLowerCase().trim();
+      if (cName.isNotEmpty && (lower == cName || lower.contains(cName))) return true;
+      if (cAlias.isNotEmpty && (lower == cAlias || lower.contains(cAlias))) return true;
+    }
+
+    // Direct check against customer rules
+    for (var rule in customerRules) {
+      final rKw = rule.keyword.toLowerCase().trim();
+      if (rKw.isNotEmpty && (lower == rKw || lower.contains(rKw))) return true;
+    }
+
+    // Common store prefixes/suffixes
+    if (lower.contains('order dari') ||
+        lower.startsWith('po ') ||
+        lower.contains(' ff ') ||
+        lower.endsWith(' ff') ||
+        lower.contains(' frozen') ||
+        lower.startsWith('toko ') ||
+        RegExp(r'^(sjj|mmm|lg ff|kk ff|aniza ff|mister sosis)$', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+
+    // Any short non-order line without digits between two order lists is a store name!
+    if (!RegExp(r'\d').hasMatch(lower) && lower.length >= 2 && lower.length <= 40) {
+      return true;
+    }
+
+    return false;
   }
 
   bool _isStoreHeaderLine(String line) {
@@ -169,29 +285,69 @@ class AiChatParserService {
   }
 
   bool _looksLikeOrderLine(String line) {
-    final lower = line.toLowerCase();
-    return lower.contains('rolade') ||
-        lower.contains('beres') ||
-        lower.contains('kornet') ||
-        lower.contains('sosis') ||
-        lower.contains('bakso') ||
-        lower.contains('roll') ||
-        lower.contains('pack') ||
-        RegExp(r'\d+\s*(k|ktn|roll|pack|:)', caseSensitive: false).hasMatch(line);
+    final lower = line.toLowerCase().trim();
+    if (lower.isEmpty) return false;
+
+    // Instructions or schedule notes are NOT order lines
+    if (_isInstructionOrScheduleLine(lower)) return false;
+
+    // Clean leading list bullet/numbers like "1. ", "2) ", "- "
+    final contentOnly = lower
+        .replaceAll(RegExp(r'^\d+[\.\)]\s*'), '')
+        .replaceAll(RegExp(r'^[-\*\•]\s*'), '')
+        .trim();
+    if (contentOnly.isEmpty) return false;
+
+    final hasDigits = RegExp(r'\d').hasMatch(contentOnly);
+    final hasQtyPattern = RegExp(
+      r'(\d+\s*(k|ktn|karton|roll|pack|dus|box|bal|ball|pc|pcs|sak|kg|ons|bks|bungkus|biji))|([:=]\s*\d+)|(\.{2,}\s*\d+)',
+      caseSensitive: false,
+    ).hasMatch(contentOnly);
+
+    if (!hasDigits && !hasQtyPattern) return false;
+
+    final hasProductKeyword = contentOnly.contains('rolade') ||
+        contentOnly.contains('beres') ||
+        contentOnly.contains('kornet') ||
+        contentOnly.contains('sosis') ||
+        contentOnly.contains('bakso') ||
+        contentOnly.contains('nugget') ||
+        contentOnly.contains('siomay') ||
+        contentOnly.contains('dimsum') ||
+        contentOnly.contains('otak') ||
+        contentOnly.contains('tempura');
+
+    return hasProductKeyword || hasQtyPattern;
   }
 
-  /// Resolve Customer by checking Rules, Master Customers, or raw string
+  /// Normalizes phone number digits and checks if two phone numbers match
+  bool _phonesMatch(String a, String b) {
+    final da = a.replaceAll(RegExp(r'\D'), '');
+    final db = b.replaceAll(RegExp(r'\D'), '');
+    if (da.isEmpty || db.isEmpty) return false;
+    if (da == db) return true;
+    final normA = da.startsWith('62') ? da.substring(2) : (da.startsWith('0') ? da.substring(1) : da);
+    final normB = db.startsWith('62') ? db.substring(2) : (db.startsWith('0') ? db.substring(1) : db);
+    if (normA == normB) return true;
+    if (normA.length >= 8 && normB.length >= 8) {
+      return normA.endsWith(normB) || normB.endsWith(normA);
+    }
+    return false;
+  }
+
+  /// Resolve Customer by checking Rules, Master Customers, Sender Phone, or raw string
   _CustomerResolution _resolveCustomer({
     required List<String> lines,
     required List<Customer> customers,
     required List<AiKnowledgeRule> customerRules,
+    String? senderPhone,
   }) {
-    String headerText = lines.first;
-    int headerCount = 1;
+    if (lines.isEmpty) {
+      return _CustomerResolution(customer: null, rawName: '', headerLineCount: 0);
+    }
 
     // Helper: test if a candidate string matches customer rules or master customers
     Customer? testMatch(String txt) {
-      if (_looksLikeOrderLine(txt)) return null; // CRITICAL: NEVER match order item line as customer!
       String c = txt
           .replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '')
           .replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '')
@@ -199,6 +355,16 @@ class AiChatParserService {
           .trim();
       final target = c.toLowerCase();
       if (target.isEmpty || target.length < 2) return null;
+
+      // 1. Direct exact match on master customers FIRST (before checking order lines)
+      for (var cust in customers) {
+        if (cust.customerName.toLowerCase().trim() == target ||
+            cust.aliasName.toLowerCase().trim() == target) {
+          return cust;
+        }
+      }
+
+      if (_looksLikeOrderLine(txt)) return null; // Never match order item line as customer!
 
       for (var rule in customerRules) {
         final rKw = rule.keyword.trim().toLowerCase();
@@ -238,120 +404,104 @@ class AiChatParserService {
           l.contains('desember');
     }
 
-    if (lines.length > 1) {
+    // A. Check TOP lines (Line 0 or Line 1)
+    if (lines.isNotEmpty) {
       final matchLine0 = testMatch(lines[0]);
-      final matchLine1 = testMatch(lines[1]);
-
       if (matchLine0 != null) {
-        // Line 0 is already a recognized customer!
-        headerText = lines[0];
-        headerCount = 1;
-      } else if (isTitleOrGreetingOnly(lines[0])) {
-        // Line 0 is purely greeting or date, check if Line 1 has the customer
+        return _CustomerResolution(
+          customer: matchLine0,
+          rawName: lines[0],
+          headerLineCount: 1,
+          customerLineIndex: 0,
+        );
+      }
+
+      if (lines.length > 1 && isTitleOrGreetingOnly(lines[0])) {
+        final matchLine1 = testMatch(lines[1]);
         if (matchLine1 != null) {
-          headerText = lines[1];
-          headerCount = 2;
+          return _CustomerResolution(
+            customer: matchLine1,
+            rawName: lines[1],
+            headerLineCount: 2,
+            customerLineIndex: 1,
+          );
         } else if (!_looksLikeOrderLine(lines[1])) {
-          headerText = lines[1];
-          headerCount = 2;
-        } else {
-          headerText = lines[0];
-          headerCount = 1;
+          return _CustomerResolution(
+            customer: null,
+            rawName: lines[1],
+            headerLineCount: 2,
+            customerLineIndex: 1,
+          );
         }
       }
     }
 
-    // Clean prefix like "Pak.. mau order dari ", "Po ", "order dari ", "Orderan "
-    String cleanName = headerText;
-    cleanName = cleanName.replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '');
-    cleanName = cleanName.replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '');
-    cleanName = cleanName.replaceAll(RegExp(r'^(orderan?|pesanan?|po)\s+', caseSensitive: false), '');
-    cleanName = cleanName.trim();
+    // B. Check BOTTOM lines (scan non-order lines from bottom upwards, e.g. "Mister sosis", "Po aw")
+    for (int i = lines.length - 1; i >= 0; i--) {
+      final line = lines[i];
+      if (_looksLikeOrderLine(line) || _isIgnoredLine(line)) continue;
 
-    final targetLower = cleanName.toLowerCase();
-    if (targetLower.isEmpty || targetLower.length < 2) {
+      final matchBottom = testMatch(line);
+      if (matchBottom != null) {
+        return _CustomerResolution(
+          customer: matchBottom,
+          rawName: line,
+          headerLineCount: 0,
+          customerLineIndex: i,
+        );
+      }
+    }
+
+    // C. Check Sender Phone (Tahap 2: match sender phone against customer database)
+    if (senderPhone != null && senderPhone.trim().isNotEmpty) {
+      for (var cust in customers) {
+        if (cust.phone.isNotEmpty && _phonesMatch(cust.phone, senderPhone)) {
+          return _CustomerResolution(
+            customer: cust,
+            rawName: cust.displayName,
+            headerLineCount: 0,
+            customerLineIndex: null,
+          );
+        }
+      }
+    }
+
+    // D. If line 0 does not look like an order line, treat it as raw customer name
+    if (lines.isNotEmpty && !_looksLikeOrderLine(lines[0]) && !_isIgnoredLine(lines[0])) {
       return _CustomerResolution(
         customer: null,
-        rawName: cleanName,
-        headerLineCount: headerCount,
+        rawName: lines[0],
+        headerLineCount: 1,
+        customerLineIndex: 0,
       );
     }
 
-    // 1. Check AI Knowledge Rules (Customer Alias)
-    for (var rule in customerRules) {
-      final rKeyword = rule.keyword.trim().toLowerCase();
-      if (rKeyword.isEmpty) continue;
-
-      if (targetLower == rKeyword ||
-          targetLower.contains(rKeyword) ||
-          (rKeyword.contains(targetLower) && targetLower.length >= 3)) {
-        // Priority A: If targetId is specified and exists in customers
-        if (rule.targetId != null && rule.targetId!.isNotEmpty) {
-          final targetCust = customers.firstWhere(
-            (c) => c.id == rule.targetId,
-            orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
-          );
-          if (targetCust.id.isNotEmpty) {
-            return _CustomerResolution(
-              customer: targetCust,
-              rawName: targetCust.customerName,
-              headerLineCount: headerCount,
-            );
-          }
-        }
-
-        // Priority B: Match rule.mappedValue directly in Master Customers
-        final mappedLower = rule.mappedValue.trim().toLowerCase();
-        final match = customers.firstWhere(
-          (c) => c.customerName.toLowerCase() == mappedLower ||
-              c.aliasName.toLowerCase() == mappedLower ||
-              c.id.toLowerCase() == mappedLower,
-          orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''),
-        );
-        if (match.id.isNotEmpty) {
-          return _CustomerResolution(
-            customer: match,
-            rawName: match.customerName,
-            headerLineCount: headerCount,
-          );
-        }
-
-        // Priority C: Fuzzy search rule.mappedValue in Master Customers (e.g. "MAJU MAKMUR MANDIRI" -> "MAJU MARKET MANDIRI")
-        final fuzzyRuleMatch = _findNearestMasterCustomer(rule.mappedValue, customers);
-        if (fuzzyRuleMatch != null) {
-          return _CustomerResolution(
-            customer: fuzzyRuleMatch,
-            rawName: fuzzyRuleMatch.customerName,
-            headerLineCount: headerCount,
-          );
-        }
-      }
-    }
-
-    // 2. Direct Intelligent Acronym & Fuzzy Matching against Master Customers
-    final directMatch = _findNearestMasterCustomer(cleanName, customers);
-    if (directMatch != null) {
-      return _CustomerResolution(
-        customer: directMatch,
-        rawName: directMatch.customerName,
-        headerLineCount: headerCount,
-      );
-    }
-
+    // E. Line 0 is an order item line and no customer identified anywhere
     return _CustomerResolution(
       customer: null,
-      rawName: cleanName,
-      headerLineCount: headerCount,
+      rawName: 'Pelanggan WhatsApp',
+      headerLineCount: 0,
+      customerLineIndex: null,
     );
   }
 
   /// Searches and matches Master Customers using Acronyms (e.g. MMM -> Maju Market Mandiri), Stopwords, and Token Overlap
   Customer? _findNearestMasterCustomer(String text, List<Customer> customers) {
     if (customers.isEmpty) return null;
-    if (_looksLikeOrderLine(text)) return null; // CRITICAL: NEVER match order item line as customer!
 
     final clean = text.toLowerCase().trim();
     if (clean.isEmpty) return null;
+
+    // 1. Direct exact match check on master customers (customerName or aliasName) FIRST!
+    for (var c in customers) {
+      final cNameRaw = c.customerName.toLowerCase().trim();
+      final cAliasRaw = c.aliasName.toLowerCase().trim();
+      if (clean == cNameRaw || clean == cAliasRaw) {
+        return c; // 100% exact match found!
+      }
+    }
+
+    if (_looksLikeOrderLine(text)) return null; // Never match order item line as customer!
 
     // Known city names to strip from query (prevents city-as-name false matches)
     final knownCities = {
@@ -393,8 +543,8 @@ class AiChatParserService {
 
       int score = 0;
 
-      // 1. Exact match (case insensitive)
-      if (clean == cNameRaw || clean == cAliasRaw || queryCleaned == cNameClean) {
+      // Exact match after cleaning stopwords
+      if (queryCleaned == cNameClean || (cAliasClean.isNotEmpty && queryCleaned == cAliasClean)) {
         return c; // 100% exact match
       }
 
@@ -427,6 +577,9 @@ class AiChatParserService {
         score += 70;
       }
       if (cNameClean.isNotEmpty && cNameClean.contains(queryCleaned)) {
+        score += 60;
+      }
+      if (cAliasClean.isNotEmpty && cAliasClean.contains(queryCleaned)) {
         score += 60;
       }
 
@@ -490,6 +643,13 @@ class AiChatParserService {
     // Remove the extracted quantity part to get pure product name
     String productText = qtyInfo.cleanedText;
 
+    // Clean trailing dots, colons, dashes
+    productText = productText.replaceAll(RegExp(r'[\.\:\=\,\-]+$'), '').trim();
+
+    // Clean intermediate packaging notes like "= 2 ball", ": 2 bal", "= 2 dus"
+    productText = productText.replaceAll(RegExp(r'[:=\-]\s*\d+[\s\.\-]*(bal|ball|dus|box|pack|pak|ktn|karton)\b', caseSensitive: false), '').trim();
+    productText = productText.replaceAll(RegExp(r'[\.\:\=\,\-]+$'), '').trim();
+
     // Remove brand "fiva " if present at the start
     if (productText.toLowerCase().startsWith('fiva ')) {
       productText = productText.substring(5).trim();
@@ -498,28 +658,32 @@ class AiChatParserService {
     Product? matchedProduct;
     CustomerProductHistory? matchedHistory;
 
-    // 1. PRIORITAS UTAMA: Cek Riwayat Pembelian Pelanggan Ini (AI Belajar dari Kebiasaan Customer!)
-    // Jika pelanggan ini (misal MMM) pernah membeli barang yang cocok (misal "BRS MERAH 24 500G"),
-    // utamakan barang dari riwayat pelanggan tersebut!
-    if (customerHistory.isNotEmpty) {
+    // 1. PRIORITAS UTAMA: Cek Riwayat Pembelian Pelanggan Ini (AI Belajar dari Kebiasaan Customer)
+    // Setiap toko punya kebiasaan varian dan tier harga tersendiri (misal 24 vs 24S, Tier 1 vs Tier 2).
+    // Jika pelanggan ini pernah membeli barang yang cocok di invoice sebelumnya, utamakan riwayat toko tersebut!
+    if (customerHistory.isNotEmpty && qtyInfo.hadExplicitQty) {
       matchedHistory = _matchProductFromCustomerHistory(productText, customerHistory);
       if (matchedHistory != null) {
         matchedProduct = products.firstWhere(
           (p) => (matchedHistory!.productId.isNotEmpty && p.id == matchedHistory.productId) ||
               p.name.toLowerCase() == matchedHistory.productName.toLowerCase(),
-          orElse: () => Product(
-            id: matchedHistory!.productId,
-            name: matchedHistory.productName,
-            price: matchedHistory.price,
-            stock: 0.0,
-            isiKarton: 15,
-            sizeGrams: 500.0,
+          orElse: () => products.firstWhere(
+            (p) => p.name.toLowerCase().contains(matchedHistory!.productName.toLowerCase()),
+            orElse: () => Product(
+              id: matchedHistory!.productId,
+              name: matchedHistory.productName,
+              price: matchedHistory.price,
+              stock: 0.0,
+              isiKarton: 15,
+              sizeGrams: 500.0,
+            ),
           ),
         );
       }
     }
 
-    // 2. Jika tidak ada di riwayat pelanggan, cocokkan dengan Aturan Kamus (AI Knowledge Rules)
+    // 2. PRIORITAS KEDUA: Aturan Kamus (AI Knowledge Rules - Singkatan Barang)
+    // Jika belum ada di riwayat toko, gunakan aturan kamus singkatan barang
     if (matchedProduct == null) {
       final sortedRules = List<AiKnowledgeRule>.from(productRules)
         ..sort((a, b) => b.keyword.length.compareTo(a.keyword.length));
@@ -528,7 +692,7 @@ class AiChatParserService {
         final rKw = rule.keyword.trim().toLowerCase();
         if (rKw.isEmpty) continue;
         final pTextLower = productText.toLowerCase();
-        bool isMatch = pTextLower.contains(rKw) || rKw.contains(pTextLower);
+        bool isMatch = pTextLower == rKw || pTextLower.contains(rKw) || rKw.contains(pTextLower);
         if (!isMatch) {
           final rTokens = rKw.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
           if (rTokens.length >= 2) {
@@ -550,19 +714,26 @@ class AiChatParserService {
       }
     }
 
-    // 3. Fallback terakhir: Fuzzy / Keyword Match ke seluruh Master Barang
+    // Only accept if it matched an explicit AI Knowledge product rule OR exact master product name!
+    // Never allow fuzzy or customer history matching without explicit quantity (avoids phantom items from store names or notes)
+    if (!qtyInfo.hadExplicitQty) {
+      if (matchedProduct == null) {
+        for (var p in products) {
+          if (p.name.toLowerCase().trim() == productText.toLowerCase().trim()) {
+            matchedProduct = p;
+            break;
+          }
+        }
+      }
+      if (matchedProduct == null) return null;
+    }
+
+    // 3. PRIORITAS KETIGA: Fallback Fuzzy / Keyword Match ke seluruh Master Barang
     if (matchedProduct == null || matchedProduct.id.isEmpty) {
       matchedProduct = _fuzzyMatchProduct(productText, products);
     }
 
     if (matchedProduct == null) return null;
-
-    // Calculate qtyPcs (converting karton to pcs based on isiKarton)
-    double qtyPcs = qtyInfo.qty;
-    if (qtyInfo.unit == 'karton') {
-      final isiKarton = matchedProduct.isiKarton > 0 ? matchedProduct.isiKarton : 10;
-      qtyPcs = qtyInfo.qty * isiKarton;
-    }
 
     // 4. Historical Pricing: Tarik harga & diskon dari riwayat transaksi pelanggan
     double price = matchedProduct.price;
@@ -578,11 +749,36 @@ class AiChatParserService {
       invoiceNo = matchedHistory.invoiceNo;
       isNewItemForCustomer = false;
     } else {
-      final hist = customerHistory.firstWhere(
+      CustomerProductHistory? hist = customerHistory.firstWhere(
         (h) => (h.productId.isNotEmpty && h.productId == matchedProduct!.id) ||
             h.productName.toLowerCase() == matchedProduct!.name.toLowerCase(),
         orElse: () => CustomerProductHistory(productId: '', productName: '', price: 0, discountPercent: 0, discountAmount: 0, invoiceNo: ''),
       );
+
+      // Pencocokan Varian Serumpun Cerdas (misal: "24" vs "24S", "Tier 2", dsb)
+      if (hist.invoiceNo.isEmpty || hist.price <= 0) {
+        final familyMatch = _findFamilyVariantInHistory(matchedProduct, customerHistory);
+        if (familyMatch != null) {
+          hist = familyMatch;
+          final variantProd = products.firstWhere(
+            (p) => (hist!.productId.isNotEmpty && p.id == hist.productId) ||
+                p.name.toLowerCase() == hist.productName.toLowerCase(),
+            orElse: () => products.firstWhere(
+              (p) => p.name.toLowerCase().contains(hist!.productName.toLowerCase()),
+              orElse: () => Product(
+                id: hist!.productId,
+                name: hist.productName,
+                price: hist.price,
+                stock: 0.0,
+                isiKarton: matchedProduct!.isiKarton,
+                sizeGrams: matchedProduct!.sizeGrams,
+              ),
+            ),
+          );
+          matchedProduct = variantProd;
+        }
+      }
+
       if (hist.invoiceNo.isNotEmpty && hist.price > 0) {
         price = hist.price;
         discountPercent = hist.discountPercent;
@@ -605,8 +801,24 @@ class AiChatParserService {
           discountAmount = (historyPricing['discountAmount'] ?? 0.0).toDouble();
           invoiceNo = (historyPricing['invoiceNo'] ?? '').toString();
           isNewItemForCustomer = false;
+
+          final histPName = (historyPricing['productName'] ?? '').toString().trim();
+          if (histPName.isNotEmpty && histPName.toLowerCase() != matchedProduct.name.toLowerCase()) {
+            final variantProd = products.firstWhere(
+              (p) => p.name.toLowerCase() == histPName.toLowerCase(),
+              orElse: () => matchedProduct!,
+            );
+            matchedProduct = variantProd;
+          }
         }
       }
+    }
+
+    // Calculate qtyPcs (converting karton to pcs based on final matchedProduct's isiKarton)
+    double qtyPcs = qtyInfo.qty;
+    if (qtyInfo.unit == 'karton') {
+      final isiKarton = matchedProduct.isiKarton > 0 ? matchedProduct.isiKarton : 10;
+      qtyPcs = qtyInfo.qty * isiKarton;
     }
 
     return ChatOrderItemDraft(
@@ -659,7 +871,7 @@ class AiChatParserService {
       cleaned = line.replaceAll(colonMatch.group(0)!, '').trim();
       // Strip any residual unit words if left over at the end
       cleaned = cleaned.replaceAll(RegExp(r'\b(karton|ktn|k|pack|pak|pcs|pc|roll|rol)\b', caseSensitive: false), '').trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
+      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
     // Pattern 2: "35 k" / "40 K..." / "40 ktn" / "10 karton" / "5 dus"
@@ -668,7 +880,7 @@ class AiChatParserService {
       qty = double.tryParse(kartonMatch.group(1) ?? '1') ?? 1.0;
       unit = 'karton';
       cleaned = line.replaceAll(kartonMatch.group(0)!, '').trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
+      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
     // Pattern 3: "11 ROLL" / "325 roll"
@@ -677,7 +889,7 @@ class AiChatParserService {
       qty = double.tryParse(rollMatch.group(1) ?? '1') ?? 1.0;
       unit = 'roll';
       cleaned = line.replaceAll(rollMatch.group(0)!, '').trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
+      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
     // Pattern 4: "121 pack" / "45 pack" / "10 pcs" / "200 pc" / "10 bks"
@@ -686,7 +898,7 @@ class AiChatParserService {
       qty = double.tryParse(packMatch.group(1) ?? '1') ?? 1.0;
       unit = 'pack';
       cleaned = line.replaceAll(packMatch.group(0)!, '').trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
+      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
     // Pattern 5: Number at the end of line like "Rolade sapi 1000g 35"
@@ -695,10 +907,10 @@ class AiChatParserService {
       qty = double.tryParse(endNumberMatch.group(1) ?? '1') ?? 1.0;
       unit = 'karton'; // Default to karton for whole bulk numbers in warehouse
       cleaned = line.substring(0, endNumberMatch.start).trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
+      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
-    return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned);
+    return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: false);
   }
 
   @visibleForTesting
@@ -728,7 +940,8 @@ class AiChatParserService {
     final qTokens = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     final bool queryHasRoll = qTokens.contains('roll') || qTokens.contains('rol');
     final bool queryHasLoyang = qTokens.contains('loyang') || qTokens.contains('lyg');
-    final bool queryHas1000 = qTokens.contains('1000') || qTokens.contains('1kg');
+    final bool queryHas1000 = qTokens.contains('1000') || qTokens.contains('1kg') || cleanQ.contains('1 kg') || cleanQ.contains('1000g') || cleanQ.contains('1000 g');
+    final bool queryHasPolos = qTokens.contains('polos');
     final bool queryHasBeres = qTokens.contains('beres') || qTokens.contains('beras') || qTokens.contains('brs');
     final bool queryHasMerah = qTokens.contains('merah');
     final bool queryHasCoklat = qTokens.contains('coklat') || qTokens.contains('cklt');
@@ -781,7 +994,10 @@ class AiChatParserService {
             }
           }
           if (!normMatched && hName.contains(qw)) {
-            score += 2;
+            // Do not give substring bonus if qw is 'roll'/'rol' inside 'rollade'/'rolade'
+            if (!((qw == 'roll' || qw == 'rol') && (hName.contains('rollade') || hName.contains('rolade')) && !hTokens.contains(qw))) {
+              score += 2;
+            }
           }
         }
       }
@@ -844,25 +1060,50 @@ class AiChatParserService {
         score += 30;
       }
 
-      // D. "ROLL" variant
+      // D. "ROLL" variant vs 1000g / Non-Roll
+      // Crucial: check isolated word tokens / boundaries, NEVER hName.contains('roll') because "rollade" contains "roll"!
+      final bool hIsRoll = hTokens.contains('roll') ||
+          hTokens.contains('rol') ||
+          RegExp(r'\b(roll|rol)s?\b', caseSensitive: false).hasMatch(hName);
+      final bool hIs1000 = hName.contains('1000') || hName.contains('1kg') || hTokens.contains('1000') || hTokens.contains('1kg');
+
       if (queryHasRoll) {
-        if (hTokens.contains('roll') || hTokens.contains('rol') || hName.contains('roll')) {
-          score += 25;
-        } else if (hName.contains('1000')) {
-          score -= 15;
+        if (hIsRoll) {
+          score += 50; // Decisive bonus for true ROLL variant
+        } else {
+          score -= 50; // Severe penalty for non-roll when ROLL was requested
+        }
+        if (hIs1000) {
+          score -= 80; // Heavy penalty for picking 1000g block when ROLL was requested
+        }
+      } else {
+        // Query did NOT specify roll: penalize roll variants
+        if (hIsRoll) {
+          score -= 50;
         }
       }
 
-      // E. "LOYANG" variant
+      // E. "POLOS" variant (polos is NEVER roll)
+      if (queryHasPolos) {
+        if (hIsRoll) {
+          score -= 60;
+        }
+      }
+
+      // F. "LOYANG" variant
       if (queryHasLoyang) {
         if (hTokens.contains('loyang') || hTokens.contains('lyg') || hName.contains('loyang')) {
           score += 25;
         }
       }
 
-      // F. 1000g vs smaller
-      if (queryHas1000 && hName.contains('1000')) {
-        score += 20;
+      // G. 1000g vs smaller (400g, 500g, roll)
+      if (queryHas1000) {
+        if (hIs1000) {
+          score += 40;
+        } else if (hName.contains('400') || hName.contains('500') || hIsRoll) {
+          score -= 60; // Strongly avoid matching 400g/500g/roll when customer explicitly asked for 1 kg / 1000g
+        }
       }
 
       // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat (only for variants like BRS MERAH that have both)
@@ -871,16 +1112,19 @@ class AiChatParserService {
         score -= 10;
       }
 
-      // G. Preference for order frequency
-      score += (h.purchaseCount.clamp(1, 5) * 2);
+      // G. Preference for order frequency & H. Recency preference:
+      // ONLY reward frequency and recency IF there was an actual positive text match!
+      // If there is zero text match (score <= 0), this product is unrelated to the query.
+      if (score > 0) {
+        score += (h.purchaseCount.clamp(1, 5) * 2);
 
-      // H. Recency preference: reward more recent invoices
-      if (h.date != null) {
-        final daysAgo = DateTime.now().difference(h.date!).inDays;
-        if (daysAgo <= 30) {
-          score += 6;
-        } else if (daysAgo <= 90) {
-          score += 3;
+        if (h.date != null) {
+          final daysAgo = DateTime.now().difference(h.date!).inDays;
+          if (daysAgo <= 30) {
+            score += 6;
+          } else if (daysAgo <= 90) {
+            score += 3;
+          }
         }
       }
 
@@ -896,6 +1140,99 @@ class AiChatParserService {
     }
 
     return maxScore >= 12 ? bestMatch : null;
+  }
+
+  /// Finds a product variant in customer history that belongs to the same product family
+  /// (e.g. "BRS MERAH 24 500G" <-> "BRS MERAH 24S 500G", or "BRS COKLAT 24S 500 G" <-> "BRS COKLAT 24S 2 500G")
+  CustomerProductHistory? _findFamilyVariantInHistory(
+    Product targetProd,
+    List<CustomerProductHistory> historyList,
+  ) {
+    if (historyList.isEmpty) return null;
+
+    final targetName = targetProd.name.toLowerCase();
+    final targetClean = targetName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
+    final targetWords = targetClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+
+    final bool isBeres = targetWords.contains('brs') || targetWords.contains('beres');
+    final bool isMerah = targetWords.contains('merah');
+    final bool isCoklat = targetWords.contains('coklat');
+    final bool isSapi = targetWords.contains('sapi') || targetWords.contains('sp');
+    final bool isAyam = targetWords.contains('ayam') || targetWords.contains('ay');
+    final bool isRoll = targetWords.contains('roll') || targetWords.contains('rol');
+    final bool is1000 = targetWords.contains('1000') || targetWords.contains('1kg');
+
+    CustomerProductHistory? bestMatch;
+    int maxScore = 0;
+
+    for (var h in historyList) {
+      final hName = h.productName.toLowerCase();
+      final hClean = hName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
+      final hWords = hClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+
+      // Guard 1: Beres must match Beres
+      final bool hIsBeres = hWords.contains('brs') || hWords.contains('beres');
+      if (isBeres != hIsBeres) continue;
+
+      // Guard 2: Merah vs Coklat must never mix
+      final bool hIsMerah = hWords.contains('merah');
+      final bool hIsCoklat = hWords.contains('coklat');
+      if (isMerah && !hIsMerah) continue;
+      if (isCoklat && !hIsCoklat) continue;
+
+      // Guard 3: Sapi vs Ayam must never mix
+      final bool hIsSapi = hWords.contains('sapi') || hWords.contains('sp');
+      final bool hIsAyam = hWords.contains('ayam') || hWords.contains('ay');
+      if (isSapi && !hIsSapi) continue;
+      if (isAyam && !hIsAyam) continue;
+
+      // Guard 4: Roll vs 1000g must never mix
+      final bool hIsRoll = hWords.contains('roll') || hWords.contains('rol');
+      final bool hIs1000 = hWords.contains('1000') || hWords.contains('1kg');
+      if (isRoll != hIsRoll) continue;
+      if (is1000 != hIs1000) continue;
+
+      // Guard 5: Count/pack sizes (24/24s, 13/13s, 7/7s)
+      final bool targetHas24 = targetWords.contains('24') || targetWords.contains('24s');
+      final bool hHas24 = hWords.contains('24') || hWords.contains('24s');
+      if (targetHas24 != hHas24) continue;
+
+      final bool targetHas13 = targetWords.contains('13') || targetWords.contains('13s');
+      final bool hHas13 = hWords.contains('13') || hWords.contains('13s');
+      if (targetHas13 != hHas13) continue;
+
+      final bool targetHas7 = targetWords.contains('7') || targetWords.contains('7s');
+      final bool hHas7 = hWords.contains('7') || hWords.contains('7s');
+      if (targetHas7 != hHas7) continue;
+
+      // Calculate similarity score
+      int score = 0;
+      for (var tw in targetWords) {
+        if (hWords.contains(tw)) {
+          score += 10;
+        } else if ((tw == '24' && hWords.contains('24s')) ||
+            (tw == '24s' && hWords.contains('24')) ||
+            (tw == '13' && hWords.contains('13s')) ||
+            (tw == '13s' && hWords.contains('13')) ||
+            (tw == '7' && hWords.contains('7s')) ||
+            (tw == '7s' && hWords.contains('7'))) {
+          score += 15;
+        }
+      }
+
+      // Bonus for recent invoice
+      if (h.date != null) {
+        final days = DateTime.now().difference(h.date!).inDays;
+        if (days <= 30) score += 5;
+      }
+
+      if (score > maxScore) {
+        maxScore = score;
+        bestMatch = h;
+      }
+    }
+
+    return maxScore >= 20 ? bestMatch : null;
   }
 
   Product? _fuzzyMatchProduct(String query, List<Product> products) {
@@ -970,7 +1307,10 @@ class AiChatParserService {
           }
           // Substring match only if no whole word matched
           if (!normMatched && pName.contains(qw)) {
-            score += 2;
+            // Do not give substring bonus if qw is 'roll'/'rol' inside 'rollade'/'rolade'
+            if (!((qw == 'roll' || qw == 'rol') && (pName.contains('rollade') || pName.contains('rolade')) && !pWords.contains(qw))) {
+              score += 2;
+            }
           }
         }
       }
@@ -1033,12 +1373,25 @@ class AiChatParserService {
         score += 30;
       }
 
-      // D. "ROLL" variant
+      // D. "ROLL" variant vs 1000g / Non-Roll
+      // Crucial: check isolated word tokens / boundaries, NEVER pName.contains('roll') because "rollade" contains "roll"!
+      final bool pIsRoll = pWords.contains('roll') ||
+          pWords.contains('rol') ||
+          RegExp(r'\b(roll|rol)s?\b', caseSensitive: false).hasMatch(pName);
+      final bool pIs1000 = pName.contains('1000') || pName.contains('1kg') || pWords.contains('1000') || pWords.contains('1kg');
+
       if (queryHasRoll) {
-        if (pWords.contains('roll') || pWords.contains('rol') || pName.contains('roll')) {
-          score += 25; // Massive bonus for true ROLL variant
-        } else if (pName.contains('1000')) {
-          score -= 15; // Penalty for picking 1000g when ROLL is requested
+        if (pIsRoll) {
+          score += 50; // Decisive bonus for true ROLL variant
+        } else {
+          score -= 50; // Penalty for non-roll when ROLL was requested
+        }
+        if (pIs1000) {
+          score -= 80; // Heavy penalty for picking 1000g when ROLL is requested
+        }
+      } else {
+        if (pIsRoll) {
+          score -= 50; // Penalty for roll variant when ROLL was not requested
         }
       }
 
@@ -1050,8 +1403,12 @@ class AiChatParserService {
       }
 
       // F. 1000g vs 400g/500g
-      if (queryHas1000 && pName.contains('1000')) {
-        score += 20;
+      if (queryHas1000) {
+        if (pIs1000) {
+          score += 40;
+        } else if (pName.contains('400') || pName.contains('500') || pIsRoll) {
+          score -= 60;
+        }
       }
 
       // Prefer Induk 24 over 24S when 's' was not explicitly typed in chat (only for variants like BRS MERAH that have both)
@@ -1189,18 +1546,48 @@ class AiChatParserService {
     return bonusNote;
   }
 
-  bool _isIgnoredLine(String line) {
-    final lower = line.toLowerCase();
-    return lower.startsWith('krm ') ||
+  bool _isInstructionOrScheduleLine(String line) {
+    final lower = line.toLowerCase().trim();
+    if (lower.isEmpty) return false;
+
+    return lower.startsWith('masuk erp') ||
+        lower.startsWith('erp ') ||
+        lower.contains('masuk erp') ||
+        lower.startsWith('krm ') ||
         lower.startsWith('kirim ') ||
-        lower.startsWith('waalaikumsalam') ||
+        lower.startsWith('kirimkan ') ||
+        lower.startsWith('pengiriman ') ||
+        lower.startsWith('jadwal ') ||
+        lower.startsWith('catatan') ||
+        lower.startsWith('nb:') ||
+        lower.startsWith('note') ||
+        lower.startsWith('ket:') ||
+        lower.startsWith('keterangan') ||
+        lower.contains('bsk pagi') ||
+        lower.contains('besok pagi') ||
+        lower.contains('bsk pg') ||
+        lower.startsWith('titip ') ||
+        lower.startsWith('faktur ') ||
+        lower.startsWith('nota ');
+  }
+
+  bool _isIgnoredLine(String line) {
+    final lower = line.toLowerCase().trim();
+    if (_isInstructionOrScheduleLine(line)) return true;
+    return lower.startsWith('waalaikumsalam') ||
         lower.startsWith('assalamualaikum') ||
         lower.startsWith('pagi ') ||
         lower.startsWith('siang ') ||
         lower.startsWith('sore ') ||
+        lower.startsWith('senin') ||
         lower.startsWith('selasa') ||
+        lower.startsWith('rabu') ||
         lower.startsWith('kamis') ||
-        RegExp(r'^\d{1,2}[\.:]\d{2}$').hasMatch(lower); // timestamp e.g. 17.04
+        lower.startsWith('jumat') ||
+        lower.startsWith('sabtu') ||
+        lower.startsWith('minggu') ||
+        lower.startsWith('diteruskan') ||
+        RegExp(r'^\[?\d{1,2}[\.:]\d{2}\]?$').hasMatch(lower); // timestamp e.g. 17.04 or 07.30
   }
 
   String _detectCityFromText(String text) {
@@ -1267,11 +1654,13 @@ class _CustomerResolution {
   final Customer? customer;
   final String rawName;
   final int headerLineCount;
+  final int? customerLineIndex;
 
   _CustomerResolution({
     required this.customer,
     required this.rawName,
     required this.headerLineCount,
+    this.customerLineIndex,
   });
 }
 
@@ -1279,10 +1668,12 @@ class _QtyUnitResolution {
   final double qty;
   final String unit;
   final String cleanedText;
+  final bool hadExplicitQty;
 
   _QtyUnitResolution({
     required this.qty,
     required this.unit,
     required this.cleanedText,
+    this.hadExplicitQty = false,
   });
 }

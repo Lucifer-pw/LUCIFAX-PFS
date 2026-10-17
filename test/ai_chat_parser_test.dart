@@ -265,7 +265,8 @@ KRM BSK HR KAMIS
     expect(bonusItem.price, 0.0);
 
     // Note
-    expect(draft.note, 'NOTE : BONUS 1 KARTON KORNET AYAM @400 G');
+    expect(draft.note, contains('NOTE : BONUS 1 KARTON KORNET AYAM @400 G'));
+    expect(draft.note, contains('KRM BSK HR KAMIS'));
   });
 
   test('Unregistered new store LUCIFAX FF Surakarta parses correctly with city Surakarta and empty customerId', () async {
@@ -357,5 +358,576 @@ Fiva beres merah isi 24 = 30 karton
     expect(drafts.first.customerRawName, 'LUCIFAX FF BLORA');
     expect(drafts.first.city, 'BLORA');
   });
+
+  test('Customer MISTER SOSIS with alias matches SUSILO HARYAWAN [K001] and respects Kamus AI rules over ROLL 400 G', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 45000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P02', name: 'ROLLADE SAPI 1000 G ( MBG )', price: 46000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P03', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'K001',
+        customerName: 'SUSILO HARYAWAN',
+        aliasName: 'MISTER SOSIS',
+        address: 'Blora',
+        city: 'BLORA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'product_alias', keyword: 'ROLADE SAPI ROLL', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'product_alias', keyword: 'Rolade polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'product_alias', keyword: 'Rolade sapi polos 1 kg', mappedValue: 'ROLLADE SAPI 1000 G ( MBG )', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r4', type: 'product_alias', keyword: 'Rolade Ayam polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+MISTER SOSIS
+Rolade ayam polos 1 kg...25 k
+Rolade sapi polos 1 kg....15 k
+Krm hr kamis
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'K001');
+    expect(draft.customerName, 'SUSILO HARYAWAN');
+    expect(draft.aliasName, 'MISTER SOSIS');
+    expect(draft.city, 'BLORA');
+    expect(draft.items.length, 2);
+    expect(draft.items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draft.items[0].qtyInput, 25.0);
+    expect(draft.items[1].productName, 'ROLLADE SAPI 1000 G ( MBG )');
+    expect(draft.items[1].qtyInput, 15.0);
+  });
+
+  test('Customer history matches Fiva rolade roll ayam to ROLLADE AYAM ROLL 400 G, NOT ROLLADE AYAM 1000 G (even with 22x purchase history)', () {
+    final parser = AiChatParserService();
+    final history = <CustomerProductHistory>[
+      CustomerProductHistory(
+        productId: 'RA-1000',
+        productName: 'ROLLADE AYAM 1000 G ( MBG )',
+        price: 47000,
+        discountPercent: 0.0,
+        discountAmount: 0.0,
+        purchaseCount: 22,
+        invoiceNo: '670',
+        date: DateTime.now().subtract(const Duration(days: 5)),
+      ),
+      CustomerProductHistory(
+        productId: 'RAR-400',
+        productName: 'ROLLADE AYAM ROLL 400 G',
+        price: 24797,
+        discountPercent: 0.0,
+        discountAmount: 0.0,
+        purchaseCount: 1,
+        invoiceNo: '650',
+        date: DateTime.now().subtract(const Duration(days: 40)),
+      ),
+    ];
+
+    final matched = parser.testMatchCustomerHistory('Fiva rolade roll ayam', history);
+    expect(matched?.productName, 'ROLLADE AYAM ROLL 400 G');
+  });
+
+  test('Full SJJ WhatsApp Chat parses all 5 items correctly with true ROLL variants', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500 G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P02', name: 'BRS COKLAT 24S 500 G', price: 37000, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P04', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P05', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'AD008',
+        customerName: 'SURYANTO WIBISONO WIBOWO',
+        aliasName: 'SUMBER JADI JAYA',
+        address: 'Solo',
+        city: 'SURAKARTA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SUMBER JADI JAYA', targetId: 'AD008', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'product_alias', keyword: 'ROLADE SAPI ROLL', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r4', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r5', type: 'product_alias', keyword: 'Rolade 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Pak order SJJ
+Fiva beres merah isi 24 = 30 karton
+Fiva rolade 1 kg =35 karton
+Fiva beres coklat isi 24 = 5 karton
+Fiva rolade roll ayam = 2 ball....50 ROLL
+Fiva rolade roll sapi = 2 ball....50 ROLL
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'AD008');
+    expect(draft.customerName, 'SURYANTO WIBISONO WIBOWO');
+    expect(draft.items.length, 5);
+
+    expect(draft.items[0].productName, 'BRS MERAH 24 500 G');
+    expect(draft.items[0].qtyInput, 30.0);
+    expect(draft.items[0].qtyUnit, 'karton');
+
+    expect(draft.items[1].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draft.items[1].qtyInput, 35.0);
+    expect(draft.items[1].qtyUnit, 'karton');
+
+    expect(draft.items[2].productName, 'BRS COKLAT 24S 500 G');
+    expect(draft.items[2].qtyInput, 5.0);
+    expect(draft.items[2].qtyUnit, 'karton');
+
+    // Item 4 MUST be ROLLADE AYAM ROLL 400 G with 50 roll, NOT 1000g!
+    expect(draft.items[3].productName, 'ROLLADE AYAM ROLL 400 G');
+    expect(draft.items[3].qtyInput, 50.0);
+    expect(draft.items[3].qtyUnit, 'roll');
+
+    // Item 5 MUST be ROLLADE SAPI ROLL 400 G with 50 roll
+    expect(draft.items[4].productName, 'ROLLADE SAPI ROLL 400 G');
+    expect(draft.items[4].qtyInput, 50.0);
+    expect(draft.items[4].qtyUnit, 'roll');
+  });
+
+  test('Tahap 1: Chat with store name at BOTTOM (Mister sosis) parses customer and all items correctly', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 45000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P02', name: 'ROLLADE SAPI 1000 G ( MBG )', price: 46000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'K001',
+        customerName: 'SUSILO HARYAWAN',
+        aliasName: 'MISTER SOSIS',
+        address: 'Blora',
+        city: 'BLORA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '081234567890',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'MISTER SOSIS', mappedValue: 'SUSILO HARYAWAN', targetId: 'K001', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'product_alias', keyword: 'Rolade polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'product_alias', keyword: 'Rolade sapi polos 1 kg', mappedValue: 'ROLLADE SAPI 1000 G ( MBG )', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r4', type: 'product_alias', keyword: 'Rolade Ayam polos 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Rolade ayam polos 1 kg...25 k
+Rolade sapi polos 1 kg....15 k
+Krm hr kamis
+Mister sosis
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'K001');
+    expect(draft.customerName, 'SUSILO HARYAWAN');
+    expect(draft.items.length, 2);
+    expect(draft.items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draft.items[0].qtyInput, 25.0);
+    expect(draft.items[1].productName, 'ROLLADE SAPI 1000 G ( MBG )');
+    expect(draft.items[1].qtyInput, 15.0);
+  });
+
+  test('Tahap 2: Chat without any store name in text resolves customer via senderPhone', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 45000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P02', name: 'ROLLADE SAPI 1000 G ( MBG )', price: 46000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'K001',
+        customerName: 'SUSILO HARYAWAN',
+        aliasName: 'MISTER SOSIS',
+        address: 'Blora',
+        city: 'BLORA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '081234567890',
+        ktpNumber: '',
+      ),
+    ];
+
+    final chatText = '''
+Rolade ayam polos 1 kg...25 k
+Rolade sapi polos 1 kg....15 k
+Krm hr kamis
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: [],
+      senderPhone: '6281234567890',
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'K001');
+    expect(draft.customerName, 'SUSILO HARYAWAN');
+    expect(draft.items.length, 2);
+    expect(draft.items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draft.items[0].qtyInput, 25.0);
+  });
+
+  test('Bug fix: Administrative chat "Masuk erp bsk pagi 1. Sjj 2. Berkah tempura" produces 0 drafts (no PO created)', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P02', name: 'TEMPURA AYAM 500 G', price: 25000, stock: 100, isiKarton: 20, sizeGrams: 500),
+    ];
+    final customers = [
+      Customer(id: 'AD008', customerName: 'SURYANTO WIBISONO WIBOWO', aliasName: 'SJJ', address: '', city: 'SURAKARTA', province: '', country: '', phone: '', ktpNumber: ''),
+      Customer(id: 'BT001', customerName: 'BERKAH TEMPURA', aliasName: 'BERKAH TEMPURA', address: '', city: 'SEMARANG', province: '', country: '', phone: '', ktpNumber: ''),
+    ];
+
+    final chatText = '''
+Masuk erp bsk pagi
+1. Sjj
+2. Berkah tempura
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: [],
+    );
+
+    expect(drafts.isEmpty, isTrue);
+  });
+
+  test('Order chat with items and "Masuk erp bsk pagi" captures note in draft.note', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+    ];
+    final customers = [
+      Customer(id: 'AD008', customerName: 'SURYANTO WIBISONO WIBOWO', aliasName: 'SJJ', address: '', city: 'SURAKARTA', province: '', country: '', phone: '', ktpNumber: ''),
+    ];
+
+    final chatText = '''
+Masuk erp bsk pagi
+SJJ
+Rolade ayam 1000g 10k
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: [],
+    );
+
+    expect(drafts.length, 1);
+    expect(drafts.first.items.length, 1);
+    expect(drafts.first.note, contains('Masuk erp bsk pagi'));
+  });
+
+  test('Pak BC Multi-store chat splits into 2 separate drafts: SJJ and Mister Sosis', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500 G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P02', name: 'BRS COKLAT 24S 500 G', price: 37000, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P04', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P05', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'AD008',
+        customerName: 'SURYANTO WIBISONO WIBOWO',
+        aliasName: 'SJJ',
+        address: 'Solo',
+        city: 'SURAKARTA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08122589564',
+        ktpNumber: '',
+      ),
+      Customer(
+        id: 'K001',
+        customerName: 'SUSILO HARYAWAN',
+        aliasName: 'MISTER SOSIS',
+        address: 'Blora',
+        city: 'BLORA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SJJ', targetId: 'AD008', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'customer_alias', keyword: 'Mister sosis', mappedValue: 'SUSILO HARYAWAN', targetId: 'K001', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'product_alias', keyword: 'Rolade 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r4', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r5', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r6', type: 'product_alias', keyword: 'Rolade roll ayam', mappedValue: 'ROLLADE AYAM ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r7', type: 'product_alias', keyword: 'Rolade roll sapi', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Fiva beres merah isi 24 = 30 karton
+Fiva rolade 1 kg =35 karton
+Fiva beres coklat isi 24 = 5 karton
+Fiva rolade roll ayam = 2 ball....50 ROLL
+Fiva rolade roll sapi = 2 ball....50 ROLL
+Krm bsk pg
+SJJ
+Fiva beres merah isi 24 = 30 karton
+Fiva rolade 1 kg =35 karton
+Fiva beres coklat isi 24 = 5 karton
+Fiva rolade roll ayam = 2 ball....50 ROLL
+Fiva rolade roll sapi = 2 ball....50 ROLL
+Krm bsk pg
+Mister sosis
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 2);
+
+    // Draft 1: SJJ
+    final draft1 = drafts[0];
+    expect(draft1.customerId, 'AD008');
+    expect(draft1.items.length, 5);
+    expect(draft1.note, contains('Krm bsk pg'));
+
+    // Draft 2: Mister sosis
+    final draft2 = drafts[1];
+    expect(draft2.customerId, 'K001');
+    expect(draft2.customerName, 'SUSILO HARYAWAN');
+    expect(draft2.items.length, 5);
+    expect(draft2.note, contains('Krm bsk pg'));
+  });
+
+  test('Chat with store at top (Griya ff Pekalongan) parses correctly', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500 G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+    ];
+    final customers = [
+      Customer(id: 'G01', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'Griya ff', mappedValue: 'GRIYA FROZEN FOOD', targetId: 'G01', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'product_alias', keyword: 'Beres merah', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Griya ff Pekalongan
+Beres merah 20 k
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    expect(drafts.first.customerId, 'G01');
+    expect(drafts.first.items.length, 1);
+    expect(drafts.first.items.first.qtyInput, 20.0);
+    expect(drafts.first.items.first.qtyUnit, 'karton');
+  });
+
+  test('MISTER SOSIS adapts to historical variants (BRS MERAH 24S 500G @ 34549, BRS COKLAT 24S 2 500G @ 28234) and discounts (17.5%)', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500 G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P02', name: 'BRS MERAH 24S 500G', price: 34549, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'BRS COKLAT 24S 500 G', price: 30688, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P04', name: 'BRS COKLAT 24S 2 500G', price: 28234, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P05', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P06', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P07', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'K001',
+        customerName: 'SUSILO HARYAWAN',
+        aliasName: 'MISTER SOSIS',
+        address: 'Blora',
+        city: 'BLORA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '081234567890',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'MISTER SOSIS', mappedValue: 'SUSILO HARYAWAN', targetId: 'K001', createdAt: DateTime.now()),
+      // Global product rules (map to standard/master)
+      AiKnowledgeRule(id: 'r2', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'product_alias', keyword: 'Beres coklat 24', mappedValue: 'BRS COKLAT 24S 500 G', createdAt: DateTime.now()),
+    ];
+
+    // Historical purchases of Mister Sosis (from Invoice #632 and earlier)
+    final misterSosisHistory = [
+      CustomerProductHistory(
+        productId: 'P02',
+        productName: 'BRS MERAH 24S 500G',
+        price: 34549,
+        discountPercent: 0.0,
+        discountAmount: 0.0,
+        invoiceNo: '632',
+        purchaseCount: 5,
+        date: DateTime.now().subtract(const Duration(days: 60)),
+      ),
+      CustomerProductHistory(
+        productId: 'P04',
+        productName: 'BRS COKLAT 24S 2 500G',
+        price: 28234,
+        discountPercent: 0.0,
+        discountAmount: 0.0,
+        invoiceNo: '632',
+        purchaseCount: 8,
+        date: DateTime.now().subtract(const Duration(days: 60)),
+      ),
+      CustomerProductHistory(
+        productId: 'P05',
+        productName: 'ROLLADE AYAM 1000 G ( MBG )',
+        price: 45000,
+        discountPercent: 0.0,
+        discountAmount: 0.0,
+        invoiceNo: '632',
+        purchaseCount: 15,
+        date: DateTime.now().subtract(const Duration(days: 60)),
+      ),
+      CustomerProductHistory(
+        productId: 'P06',
+        productName: 'ROLLADE AYAM ROLL 400 G',
+        price: 24797,
+        discountPercent: 17.5,
+        discountAmount: 0.0,
+        invoiceNo: '620',
+        purchaseCount: 3,
+        date: DateTime.now().subtract(const Duration(days: 90)),
+      ),
+      CustomerProductHistory(
+        productId: 'P07',
+        productName: 'ROLLADE SAPI ROLL 400 G',
+        price: 26194,
+        discountPercent: 17.5,
+        discountAmount: 0.0,
+        invoiceNo: '620',
+        purchaseCount: 3,
+        date: DateTime.now().subtract(const Duration(days: 90)),
+      ),
+    ];
+
+    final chatText = '''
+Fiva beres merah isi 24 = 30 karton
+Fiva rolade 1 kg =35 karton
+Fiva beres coklat isi 24 = 5 karton
+Fiva rolade roll ayam = 2 ball....50 ROLL
+Fiva rolade roll sapi = 2 ball....50 ROLL
+Krm bsk pg
+Mister sosis
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+      mockCustomerHistory: {'K001': misterSosisHistory},
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'K001');
+    expect(draft.customerName, 'SUSILO HARYAWAN');
+    expect(draft.aliasName, 'MISTER SOSIS');
+    expect(draft.items.length, 5);
+
+    // Item 1: BRS MERAH 24S 500G @ 34.549 (adapted to customer's historical variant, NOT master 36.691!)
+    expect(draft.items[0].productName, 'BRS MERAH 24S 500G');
+    expect(draft.items[0].qtyInput, 30.0);
+    expect(draft.items[0].price, 34549.0);
+
+    // Item 2: ROLLADE AYAM 1000 G ( MBG ) @ 45.000 (from customer history, NOT standard 47.000!)
+    expect(draft.items[1].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draft.items[1].qtyInput, 35.0);
+    expect(draft.items[1].price, 45000.0);
+
+    // Item 3: BRS COKLAT 24S 2 500G @ 28.234 (adapted to customer's historical Tier 2 variant, NOT master 30.688!)
+    expect(draft.items[2].productName, 'BRS COKLAT 24S 2 500G');
+    expect(draft.items[2].qtyInput, 5.0);
+    expect(draft.items[2].price, 28234.0);
+
+    // Item 4: ROLLADE AYAM ROLL 400 G with 17.5% discount
+    expect(draft.items[3].productName, 'ROLLADE AYAM ROLL 400 G');
+    expect(draft.items[3].qtyInput, 50.0);
+    expect(draft.items[3].qtyUnit, 'roll');
+    expect(draft.items[3].discountPercent, 17.5);
+
+    // Item 5: ROLLADE SAPI ROLL 400 G with 17.5% discount
+    expect(draft.items[4].productName, 'ROLLADE SAPI ROLL 400 G');
+    expect(draft.items[4].qtyInput, 50.0);
+    expect(draft.items[4].qtyUnit, 'roll');
+    expect(draft.items[4].discountPercent, 17.5);
+  });
 }
+
 

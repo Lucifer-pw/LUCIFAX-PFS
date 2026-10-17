@@ -1,5 +1,8 @@
 import '../models/ai_knowledge_rule.dart';
 import '../models/customer_product_history.dart';
+import '../models/incoming_po_chat.dart';
+import '../models/wa_gateway_session.dart';
+import '../models/wa_auto_po_settings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
@@ -2796,6 +2799,13 @@ class FirebaseService {
               } else if (cleanProdName.isNotEmpty) {
                 if (pName == cleanProdName || pName.startsWith(cleanProdName) || cleanProdName.startsWith(pName)) {
                   matchProd = true;
+                } else {
+                  // Variant family normalization (e.g. "24" vs "24S", "Tier 2", dsb)
+                  final pNorm = pName.replaceAll(RegExp(r'[^a-z0-9]'), '').replaceAll('24s', '24').replaceAll('13s', '13').replaceAll('7s', '7').replaceAll('2500g', '500g');
+                  final targetNorm = cleanProdName.replaceAll(RegExp(r'[^a-z0-9]'), '').replaceAll('24s', '24').replaceAll('13s', '13').replaceAll('7s', '7').replaceAll('2500g', '500g');
+                  if (pNorm.isNotEmpty && pNorm == targetNorm) {
+                    matchProd = true;
+                  }
                 }
               }
 
@@ -2806,6 +2816,7 @@ class FirebaseService {
                   'discountAmount': (itemMap['discountAmount'] ?? 0.0).toDouble(),
                   'invoiceNo': data['invoiceNo'] ?? '',
                   'date': data['date'] != null && data['date'] is Timestamp ? (data['date'] as Timestamp).toDate() : null,
+                  'productName': itemMap['productName'] ?? '',
                 };
               }
             }
@@ -3283,8 +3294,76 @@ class FirebaseService {
     return results.values.toList();
   }
 
+  // ==========================================
+  // WHATSAPP GATEWAY & INCOMING PO CHATS (DEV ONLY)
+  // ==========================================
+
+  /// Stream status of WhatsApp Multi-Device Gateway
+  Stream<WaGatewaySession> streamWaGatewaySession() {
+    return _db.collection('wa_bot_session').doc('gateway').snapshots().map((snap) {
+      if (!snap.exists) return WaGatewaySession(status: 'DISCONNECTED');
+      return WaGatewaySession.fromMap(snap.data());
+    });
+  }
+
+  /// Send command to WhatsApp Gateway microservice (e.g. 'RESTART', 'LOGOUT')
+  Future<void> sendWaGatewayCommand(String command) async {
+    await _db.collection('wa_bot_session').doc('gateway_command').set({
+      'command': command,
+      'timestamp': FieldValue.serverTimestamp(),
+      'executed': false,
+    });
+  }
+
+  /// Stream incoming WhatsApp chats
+  Stream<List<IncomingPoChat>> streamIncomingPoChats({int limit = 50}) {
+    return _db
+        .collection('incoming_po_chats')
+        .orderBy('receivedAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => IncomingPoChat.fromMap(d.data(), d.id)).toList());
+  }
+
+  /// Update status of incoming chat ('pending', 'processed', 'dismissed')
+  Future<void> updateIncomingPoChatStatus(String id, String status) async {
+    await _db.collection('incoming_po_chats').doc(id).update({
+      'status': status,
+      'processedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Delete an incoming chat document
+  Future<void> deleteIncomingPoChat(String id) async {
+    await _db.collection('incoming_po_chats').doc(id).delete();
+  }
+
+  /// Add incoming chat (for simulation or gateway injection)
+  Future<String> addIncomingPoChat(IncomingPoChat chat) async {
+    final docRef = await _db.collection('incoming_po_chats').add(chat.toMap());
+    await _db.collection('incoming_wa_orders').doc(docRef.id).set(chat.toMap());
+    return docRef.id;
+  }
+
+  /// Stream Auto-PO & Whitelist settings
+  Stream<WaAutoPoSettings> streamWaAutoPoSettings() {
+    return _db.collection('app_settings').doc('wa_auto_po_settings').snapshots().map((snap) {
+      if (!snap.exists) return WaAutoPoSettings(strictWhitelistOnly: true, autoPoEnabled: false);
+      return WaAutoPoSettings.fromMap(snap.data());
+    });
+  }
+
+  /// Save Auto-PO & Whitelist settings
+  Future<void> saveWaAutoPoSettings(WaAutoPoSettings settings) async {
+    final map = settings.toMap();
+    await _db.collection('app_settings').doc('wa_auto_po_settings').set(map, SetOptions(merge: true));
+    await _db.collection('wa_bot_session').doc('settings').set(map, SetOptions(merge: true));
+  }
 
 }
+
+
+
 
 class _KodeIndukResolver {
   final Map<String, List<DocumentReference<Map<String, dynamic>>>> kodeIndukToRefs = {};
