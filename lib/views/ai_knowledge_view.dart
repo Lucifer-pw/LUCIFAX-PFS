@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../providers/product_provider.dart';
 import '../providers/customer_provider.dart';
 import '../services/firebase_service.dart';
+import 'wa_gateway_view.dart';
 
 class AiKnowledgeView extends StatefulWidget {
   const AiKnowledgeView({super.key});
@@ -79,7 +80,13 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'ANIZA FF', mappedValue: 'ANIZA FF KENDAL', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'ANIZA FF KENDAL', mappedValue: 'ANIZA FF KENDAL', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'Pak Nardi', mappedValue: 'NARDI FF (NARDI)', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SUMBER JADI JAYA', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'customer_alias', keyword: 'HANA MAKMUR', mappedValue: 'HANA MAKMUR', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'ROLADE SAPI ROLL', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'ROLADE AYAM ROLL', mappedValue: 'ROLLADE AYAM ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade roll ayam', mappedValue: 'ROLLADE AYAM ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade roll sapi', mappedValue: 'ROLLADE SAPI ROLL 400 G', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Rolade 1 kg', mappedValue: 'ROLLADE AYAM 1000 G ( MBG )', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'KORNET AYAM LOYANG', mappedValue: 'KORNET AYAM LOYANG 400 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah 24', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
       AiKnowledgeRule(id: '', type: 'product_alias', keyword: 'Beres merah', mappedValue: 'BRS MERAH 24 500 G', createdAt: DateTime.now()),
@@ -645,6 +652,23 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                 ),
                 Row(
                   children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const WaGatewayView()),
+                        );
+                      },
+                      icon: const Icon(Icons.mark_chat_unread_rounded, size: 16),
+                      label: const Text('📱 WA Gateway', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 10),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF38BDF8),

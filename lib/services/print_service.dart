@@ -169,9 +169,7 @@ class PrintService {
 
                   // Data Rows
                   ...transaction.items.map((item) {
-                    final displayName = item.isBonus 
-                        ? '${item.productName} (BONUS)' 
-                        : item.productName;
+                    final displayName = item.displayNameWithBonus;
                     return pw.TableRow(
                       children: [
                         _buildCell(displayName),
@@ -497,9 +495,7 @@ class PrintService {
     buffer.writeln("-" * 80);
 
     for (var item in transaction.items) {
-      final rawName = item.isBonus 
-          ? '${item.productName} (BONUS)' 
-          : item.productName;
+      final rawName = item.displayNameWithBonus;
       final name = rawName.length > 33 
           ? rawName.substring(0, 33) 
           : rawName;

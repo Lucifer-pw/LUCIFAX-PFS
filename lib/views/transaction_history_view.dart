@@ -1134,7 +1134,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       children: [
                         InkWell(
                           onTap: () => selectItemForEditing(index),
-                          child: _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                          child: _buildTableCell('${item.displayNameWithBonus}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                         ),
                         InkWell(
                           onTap: () => selectItemForEditing(index),
@@ -1951,7 +1951,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         ),
                                         children: [
                                           _buildTableCell('${index + 1}', align: TextAlign.center),
-                                          _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                          _buildTableCell('${item.displayNameWithBonus}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
                                           // Tappable Harga Unit cell (Per-row click or toggled by Header)
@@ -2153,7 +2153,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                         ),
                                         children: [
                                           _buildTableCell('${index + 1}', align: TextAlign.center),
-                                          _buildTableCell('${item.productName}${item.isBonus ? " (BONUS)" : ""}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
+                                          _buildTableCell('${item.displayNameWithBonus}\n(${item.weightKg.toStringAsFixed(2)} kg)'),
                                           _buildTableCell(item.qty.toStringAsFixed(0), align: TextAlign.center),
                                           _buildTableCell(totalKartonStr, align: TextAlign.center, isBold: totalKarton > 0),
                                           // Tappable Harga Unit cell

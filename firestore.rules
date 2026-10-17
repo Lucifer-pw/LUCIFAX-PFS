@@ -295,6 +295,15 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    match /wa_gateway_session/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /incoming_wa_orders/{orderId} {
+      allow read, write: if isAuthenticated();
+    }
+
+
 
     // ═══════════════════════════════════════════════════
     // 30. CUSTOMER_PRODUCT_MEMORY — Memori Harga & Diskon per Pelanggan

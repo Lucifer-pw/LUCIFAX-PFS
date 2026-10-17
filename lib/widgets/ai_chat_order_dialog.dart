@@ -10,16 +10,17 @@ import '../providers/product_provider.dart';
 import '../services/firebase_service.dart';
 import '../services/ai_chat_parser_service.dart';
 
-void showAiChatOrderDialog(BuildContext context) {
+void showAiChatOrderDialog(BuildContext context, {String? initialChatText}) {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => const _AiChatOrderDialogContent(),
+    builder: (ctx) => _AiChatOrderDialogContent(initialChatText: initialChatText),
   );
 }
 
 class _AiChatOrderDialogContent extends StatefulWidget {
-  const _AiChatOrderDialogContent();
+  final String? initialChatText;
+  const _AiChatOrderDialogContent({this.initialChatText});
 
   @override
   State<_AiChatOrderDialogContent> createState() => _AiChatOrderDialogContentState();
@@ -40,6 +41,12 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
   void initState() {
     super.initState();
     _parserService = AiChatParserService(_firebaseService);
+    if (widget.initialChatText != null && widget.initialChatText!.trim().isNotEmpty) {
+      _chatInputController.text = widget.initialChatText!.trim();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _analyzeChat();
+      });
+    }
   }
 
   Future<void> _syncMemory() async {

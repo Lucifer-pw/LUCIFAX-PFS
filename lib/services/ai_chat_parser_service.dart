@@ -228,7 +228,134 @@ class AiChatParserService {
       blocks.add(currentBlock);
     }
 
-    return blocks.map((b) => b.join('\n').trim()).where((b) => b.isNotEmpty).toList();
+    // Post-process: Split blocks that contain BOTH a header store and a footer store
+    final refinedBlocks = _splitMixedHeaderFooterBlocks(
+      blocks,
+      customers: customers,
+      customerRules: customerRules,
+    );
+
+    return refinedBlocks.map((b) => b.join('\n').trim()).where((b) => b.isNotEmpty).toList();
+  }
+
+  /// If an order block contains both a header customer (at top) and a different footer customer (at bottom),
+  /// split it into two separate blocks so each customer gets their own PO!
+  List<List<String>> _splitMixedHeaderFooterBlocks(
+    List<List<String>> inputBlocks, {
+    List<Customer> customers = const [],
+    List<AiKnowledgeRule> customerRules = const [],
+  }) {
+    final result = <List<String>>[];
+
+    for (var block in inputBlocks) {
+      final lines = block.map((l) => l.trim()).toList();
+      if (lines.length < 4) {
+        result.add(block);
+        continue;
+      }
+
+      // Check order line indices
+      final orderIndices = <int>[];
+      for (int i = 0; i < lines.length; i++) {
+        if (_looksLikeOrderLine(lines[i])) {
+          orderIndices.add(i);
+        }
+      }
+
+      // Need at least 2 order lines to split between two stores
+      if (orderIndices.length < 2) {
+        result.add(block);
+        continue;
+      }
+
+      final firstOrderIdx = orderIndices.first;
+      final lastOrderIdx = orderIndices.last;
+
+      // 1. Detect Top Customer (lines before the first order line)
+      Customer? topCust;
+      int topCustIdx = -1;
+      for (int i = 0; i < firstOrderIdx; i++) {
+        if (_isInstructionOrScheduleLine(lines[i]) || _isIgnoredLine(lines[i])) continue;
+        final cust = _testMatchCustomer(lines[i], customers: customers, customerRules: customerRules);
+        if (cust != null) {
+          topCust = cust;
+          topCustIdx = i;
+        }
+      }
+
+      // 2. Detect Bottom Customer (lines after the last order line)
+      Customer? bottomCust;
+      int bottomCustIdx = -1;
+      for (int i = lines.length - 1; i > lastOrderIdx; i--) {
+        if (_isInstructionOrScheduleLine(lines[i]) || _isIgnoredLine(lines[i])) continue;
+        final cust = _testMatchCustomer(lines[i], customers: customers, customerRules: customerRules);
+        if (cust != null) {
+          bottomCust = cust;
+          bottomCustIdx = i;
+          break;
+        }
+      }
+
+      // If we have a Top Customer AND a DIFFERENT Bottom Customer:
+      // We must split this block into two!
+      if (topCust != null &&
+          bottomCust != null &&
+          topCust.id != bottomCust.id &&
+          topCust.customerName.toLowerCase() != bottomCust.customerName.toLowerCase()) {
+        int splitIdx = -1;
+
+        // Strategy A: Check for empty lines between firstOrderIdx and lastOrderIdx
+        for (int i = firstOrderIdx + 1; i <= lastOrderIdx; i++) {
+          if (block[i].trim().isEmpty) {
+            splitIdx = i + 1;
+            break;
+          }
+        }
+
+        // Strategy B: Check for an instruction/schedule line between order items
+        if (splitIdx == -1) {
+          for (int i = firstOrderIdx + 1; i < lastOrderIdx; i++) {
+            if (_isInstructionOrScheduleLine(lines[i])) {
+              splitIdx = i;
+              break;
+            }
+          }
+        }
+
+        // Strategy C: Check for prefix change across order items (e.g. lines starting with "Fv " vs without "Fv ")
+        if (splitIdx == -1) {
+          for (int i = firstOrderIdx + 1; i <= lastOrderIdx; i++) {
+            final linePrev = lines[i - 1].toLowerCase();
+            final lineCurr = lines[i].toLowerCase();
+
+            final prevHasFv = linePrev.startsWith('fv ') || linePrev.startsWith('fiva ');
+            final currHasFv = lineCurr.startsWith('fv ') || lineCurr.startsWith('fiva ');
+
+            if (prevHasFv != currHasFv) {
+              splitIdx = i;
+              break;
+            }
+          }
+        }
+
+        // Strategy D: Fallback - split at the second order item if first was separate
+        if (splitIdx == -1) {
+          splitIdx = orderIndices[1];
+        }
+
+        if (splitIdx > 0 && splitIdx < lines.length) {
+          final block1 = block.sublist(0, splitIdx);
+          final block2 = block.sublist(splitIdx);
+          result.add(block1);
+          result.add(block2);
+          continue;
+        }
+      }
+
+      result.add(block);
+    }
+
+    return result;
   }
 
   bool _isCandidateCustomerLine(
@@ -335,6 +462,59 @@ class AiChatParserService {
     return false;
   }
 
+  @visibleForTesting
+  Customer? testMatchCustomerForDebug(
+    String txt, {
+    List<Customer> customers = const [],
+    List<AiKnowledgeRule> customerRules = const [],
+  }) => _testMatchCustomer(txt, customers: customers, customerRules: customerRules);
+
+  /// Tests if a line matches a known master customer or customer alias rule
+  Customer? _testMatchCustomer(
+    String txt, {
+    List<Customer> customers = const [],
+    List<AiKnowledgeRule> customerRules = const [],
+  }) {
+    // Never match instructions, schedule lines, or ignored greetings as customers!
+    if (_isInstructionOrScheduleLine(txt) || _isIgnoredLine(txt)) return null;
+
+    String c = txt
+        .replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^(orderan?|pesanan?|po)\s+', caseSensitive: false), '')
+        .trim();
+    // Strip leading list numbers like "1. ", "2. "
+    c = c.replaceAll(RegExp(r'^\d+[\.\)]\s*'), '').trim();
+    final target = c.toLowerCase();
+    if (target.isEmpty || target.length < 2) return null;
+
+    // 1. Direct exact match on master customers FIRST (before checking order lines)
+    for (var cust in customers) {
+      if (cust.customerName.toLowerCase().trim() == target ||
+          cust.aliasName.toLowerCase().trim() == target) {
+        return cust;
+      }
+    }
+
+    if (_looksLikeOrderLine(txt)) return null; // Never match order item line as customer!
+
+    for (var rule in customerRules) {
+      final rKw = rule.keyword.trim().toLowerCase();
+      if (rKw.isNotEmpty && (target == rKw || target.contains(rKw) || (rKw.contains(target) && target.length >= 3))) {
+        if (rule.targetId != null && rule.targetId!.isNotEmpty) {
+          final cust = customers.firstWhere((item) => item.id == rule.targetId, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
+          if (cust.id.isNotEmpty) return cust;
+        }
+        final mapped = rule.mappedValue.trim().toLowerCase();
+        final cust = customers.firstWhere((item) => item.customerName.toLowerCase() == mapped || item.aliasName.toLowerCase() == mapped || item.id.toLowerCase() == mapped, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
+        if (cust.id.isNotEmpty) return cust;
+        final fuzzy = _findNearestMasterCustomer(rule.mappedValue, customers);
+        if (fuzzy != null) return fuzzy;
+      }
+    }
+    return _findNearestMasterCustomer(c, customers);
+  }
+
   /// Resolve Customer by checking Rules, Master Customers, Sender Phone, or raw string
   _CustomerResolution _resolveCustomer({
     required List<String> lines,
@@ -344,43 +524,6 @@ class AiChatParserService {
   }) {
     if (lines.isEmpty) {
       return _CustomerResolution(customer: null, rawName: '', headerLineCount: 0);
-    }
-
-    // Helper: test if a candidate string matches customer rules or master customers
-    Customer? testMatch(String txt) {
-      String c = txt
-          .replaceAll(RegExp(r'^(waalaikumsalam|assalamualaikum)[.,\s]*', caseSensitive: false), '')
-          .replaceAll(RegExp(r'^(pak[.,\s]+)?(mau\s+)?(orderan?|pesanan?|po)\s+(dari\s+)?', caseSensitive: false), '')
-          .replaceAll(RegExp(r'^(orderan?|pesanan?|po)\s+', caseSensitive: false), '')
-          .trim();
-      final target = c.toLowerCase();
-      if (target.isEmpty || target.length < 2) return null;
-
-      // 1. Direct exact match on master customers FIRST (before checking order lines)
-      for (var cust in customers) {
-        if (cust.customerName.toLowerCase().trim() == target ||
-            cust.aliasName.toLowerCase().trim() == target) {
-          return cust;
-        }
-      }
-
-      if (_looksLikeOrderLine(txt)) return null; // Never match order item line as customer!
-
-      for (var rule in customerRules) {
-        final rKw = rule.keyword.trim().toLowerCase();
-        if (rKw.isNotEmpty && (target == rKw || target.contains(rKw) || (rKw.contains(target) && target.length >= 3))) {
-          if (rule.targetId != null && rule.targetId!.isNotEmpty) {
-            final cust = customers.firstWhere((item) => item.id == rule.targetId, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
-            if (cust.id.isNotEmpty) return cust;
-          }
-          final mapped = rule.mappedValue.trim().toLowerCase();
-          final cust = customers.firstWhere((item) => item.customerName.toLowerCase() == mapped || item.aliasName.toLowerCase() == mapped || item.id.toLowerCase() == mapped, orElse: () => Customer(id: '', customerName: '', aliasName: '', address: '', city: '', province: '', country: '', phone: '', ktpNumber: ''));
-          if (cust.id.isNotEmpty) return cust;
-          final fuzzy = _findNearestMasterCustomer(rule.mappedValue, customers);
-          if (fuzzy != null) return fuzzy;
-        }
-      }
-      return _findNearestMasterCustomer(c, customers);
     }
 
     // Helper: test if a line is just a title/date/greeting without specific customer name
@@ -393,6 +536,9 @@ class AiChatParserService {
           l.startsWith('assalamualaikum') ||
           l.startsWith('waalaikumsalam') ||
           l.startsWith('pak..') ||
+          l.startsWith('msk erp') ||
+          l.startsWith('masuk erp') ||
+          l.startsWith('list erp') ||
           l.contains('2026') ||
           l.contains('2025') ||
           l.contains('juni') ||
@@ -404,26 +550,34 @@ class AiChatParserService {
           l.contains('desember');
     }
 
-    // A. Check TOP lines (Line 0 or Line 1)
+    // A. Check TOP lines (Line 0, Line 1, or Line 2)
     if (lines.isNotEmpty) {
-      final matchLine0 = testMatch(lines[0]);
-      if (matchLine0 != null) {
-        return _CustomerResolution(
-          customer: matchLine0,
-          rawName: lines[0],
-          headerLineCount: 1,
-          customerLineIndex: 0,
-        );
-      }
-
       if (lines.length > 1 && isTitleOrGreetingOnly(lines[0])) {
-        final matchLine1 = testMatch(lines[1]);
-        if (matchLine1 != null) {
+        // Line 0 is a greeting/title like "Msk erp hari ini...."
+        // Scan header lines (1, 2, 3) before order lines start.
+        // If multiple customer matches exist (e.g. "1. Griya ff pekalongan" then "SJJ"),
+        // the one directly preceding the order lines/schedule is the active customer!
+        Customer? bestHeaderCust;
+        String bestRawName = lines[1];
+        int bestLineIdx = 1;
+
+        for (int h = 1; h < lines.length && h <= 3; h++) {
+          if (_looksLikeOrderLine(lines[h])) break;
+          if (_isInstructionOrScheduleLine(lines[h]) || _isIgnoredLine(lines[h])) continue;
+          final matchH = _testMatchCustomer(lines[h], customers: customers, customerRules: customerRules);
+          if (matchH != null) {
+            bestHeaderCust = matchH;
+            bestRawName = lines[h];
+            bestLineIdx = h;
+          }
+        }
+
+        if (bestHeaderCust != null) {
           return _CustomerResolution(
-            customer: matchLine1,
-            rawName: lines[1],
-            headerLineCount: 2,
-            customerLineIndex: 1,
+            customer: bestHeaderCust,
+            rawName: bestRawName,
+            headerLineCount: bestLineIdx + 1,
+            customerLineIndex: bestLineIdx,
           );
         } else if (!_looksLikeOrderLine(lines[1])) {
           return _CustomerResolution(
@@ -431,6 +585,16 @@ class AiChatParserService {
             rawName: lines[1],
             headerLineCount: 2,
             customerLineIndex: 1,
+          );
+        }
+      } else {
+        final matchLine0 = _testMatchCustomer(lines[0], customers: customers, customerRules: customerRules);
+        if (matchLine0 != null) {
+          return _CustomerResolution(
+            customer: matchLine0,
+            rawName: lines[0],
+            headerLineCount: 1,
+            customerLineIndex: 0,
           );
         }
       }
@@ -441,7 +605,7 @@ class AiChatParserService {
       final line = lines[i];
       if (_looksLikeOrderLine(line) || _isIgnoredLine(line)) continue;
 
-      final matchBottom = testMatch(line);
+      final matchBottom = _testMatchCustomer(line, customers: customers, customerRules: customerRules);
       if (matchBottom != null) {
         return _CustomerResolution(
           customer: matchBottom,
@@ -517,7 +681,7 @@ class AiChatParserService {
     // Filter out generic stopwords AND city names
     String stripStopwords(String s) {
       return s
-          .replaceAll(RegExp(r'\b(toko|tk|ff|frozen|food)\b', caseSensitive: false), ' ')
+          .replaceAll(RegExp(r'\b(cv|pt|ud|tb|pd|toko|tk|ff|frozen|food)\b', caseSensitive: false), ' ')
           .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
@@ -529,6 +693,14 @@ class AiChatParserService {
         .where((w) => w.length >= 2 && !knownCities.contains(w))
         .toList();
     final queryAlphaNumOnly = clean.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+    // Helper: checks if phrase is found as a whole word/phrase within container (avoids false matches like "selasa" -> "ela")
+    bool containsWordOrPhrase(String container, String phrase) {
+      if (phrase.isEmpty || container.isEmpty) return false;
+      if (container == phrase) return true;
+      final pattern = r'(^|\s+)' + RegExp.escape(phrase) + r'($|\s+)';
+      return RegExp(pattern).hasMatch(container);
+    }
 
     Customer? bestMatch;
     int maxScore = 0;
@@ -551,11 +723,11 @@ class AiChatParserService {
       final cTokens = cNameClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
       final cAliasTokens = cAliasClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
 
-      // 2. Acronym / Initials Match (e.g. "MMM" -> M-aju M-arket M-andiri)
+      // 2. Acronym / Initials Match (e.g. "MMM" -> M-aju M-arket M-andiri, "SJJ" -> S-umber J-adi J-aya)
       // Only for short acronym queries (length 2-5) and EXACT match (== initials)
       if (queryAlphaNumOnly.length >= 2 && queryAlphaNumOnly.length <= 5) {
         if (cTokens.length >= 2) {
-          final initials = cTokens.map((w) => w[0]).join(); // e.g. "mmm"
+          final initials = cTokens.map((w) => w[0]).join(); // e.g. "mmm", "sjj"
           if (queryAlphaNumOnly == initials) {
             score += 150; // Exact acronym match only!
           }
@@ -569,17 +741,17 @@ class AiChatParserService {
         }
       }
 
-      // 3. Direct Substring Containment
-      if (cNameClean.isNotEmpty && queryCleaned.contains(cNameClean)) {
+      // 3. Direct Substring / Whole Word Containment (whole words only to prevent e.g. "selasa" matching "ela")
+      if (cNameClean.isNotEmpty && containsWordOrPhrase(queryCleaned, cNameClean)) {
         score += 80;
       }
-      if (cAliasClean.isNotEmpty && queryCleaned.contains(cAliasClean)) {
+      if (cAliasClean.isNotEmpty && containsWordOrPhrase(queryCleaned, cAliasClean)) {
         score += 70;
       }
-      if (cNameClean.isNotEmpty && cNameClean.contains(queryCleaned)) {
+      if (cNameClean.isNotEmpty && containsWordOrPhrase(cNameClean, queryCleaned)) {
         score += 60;
       }
-      if (cAliasClean.isNotEmpty && cAliasClean.contains(queryCleaned)) {
+      if (cAliasClean.isNotEmpty && containsWordOrPhrase(cAliasClean, queryCleaned)) {
         score += 60;
       }
 
@@ -592,9 +764,10 @@ class AiChatParserService {
         } else if (cAliasTokens.contains(token)) {
           score += 25;
           matchedTokens++;
-        } else {
+        } else if (token.length >= 4) {
+          // Substring token match ONLY for tokens >= 4 chars to avoid false syllable matches
           for (var ct in cTokens) {
-            if (ct.contains(token) || token.contains(ct)) {
+            if (ct.length >= 4 && (ct.contains(token) || token.contains(ct))) {
               score += 15;
               break;
             }
@@ -646,13 +819,15 @@ class AiChatParserService {
     // Clean trailing dots, colons, dashes
     productText = productText.replaceAll(RegExp(r'[\.\:\=\,\-]+$'), '').trim();
 
-    // Clean intermediate packaging notes like "= 2 ball", ": 2 bal", "= 2 dus"
-    productText = productText.replaceAll(RegExp(r'[:=\-]\s*\d+[\s\.\-]*(bal|ball|dus|box|pack|pak|ktn|karton)\b', caseSensitive: false), '').trim();
+    // Clean intermediate / trailing packaging notes like "= 2 ball", ": 2 bal", "= 2 dus", "100 ball", "35 ball", "300 pack"
+    productText = productText.replaceAll(RegExp(r'[:=\-\s]*\b\d+[\s\.\-]*(bal|ball|dus|box|pack|pak|ktn|karton|roll|rol|pcs|pc)\b', caseSensitive: false), '').trim();
     productText = productText.replaceAll(RegExp(r'[\.\:\=\,\-]+$'), '').trim();
 
-    // Remove brand "fiva " if present at the start
+    // Remove brand "fiva " or "fv " if present at the start
     if (productText.toLowerCase().startsWith('fiva ')) {
       productText = productText.substring(5).trim();
+    } else if (productText.toLowerCase().startsWith('fv ')) {
+      productText = productText.substring(3).trim();
     }
 
     Product? matchedProduct;
@@ -837,6 +1012,32 @@ class AiChatParserService {
     );
   }
 
+  /// Parses number string respecting Indonesian formatting (dots as thousands separators, comma as decimal)
+  /// e.g. "2.500" -> 2500.0, "15" -> 15.0, "2,5" -> 2.5, "2.5" -> 2.5 (unless 3 digits after dot like .000)
+  double _parseIndonesianNumber(String str) {
+    String s = str.trim();
+    if (s.isEmpty) return 1.0;
+
+    // Indonesian thousand dot with comma decimal: e.g. "2.500,5" -> "2500.5"
+    if (RegExp(r'^\d{1,3}(\.\d{3})+,\d+$').hasMatch(s)) {
+      s = s.replaceAll('.', '').replaceAll(',', '.');
+      return double.tryParse(s) ?? 1.0;
+    }
+
+    // Indonesian thousand dot: e.g. "2.500", "10.000", "1.500.000"
+    if (RegExp(r'^\d{1,3}(\.\d{3})+$').hasMatch(s)) {
+      s = s.replaceAll('.', '');
+      return double.tryParse(s) ?? 1.0;
+    }
+
+    // Comma decimal: e.g. "2,5" -> "2.5"
+    if (s.contains(',')) {
+      s = s.replaceAll(',', '.');
+    }
+
+    return double.tryParse(s) ?? 1.0;
+  }
+
   /// Extracts quantity and unit from line, returning cleaned product text
   _QtyUnitResolution _extractQuantityAndUnit(String line, List<AiKnowledgeRule> unitRules) {
     double qty = 1.0;
@@ -846,12 +1047,12 @@ class AiChatParserService {
     // Pattern 1: Colon format with optional explicit unit:
     // e.g. ": 35 karton", ": 200 pc", ": 200 pcs", ": 10 roll", or ratio ": 1", ": 2"
     final colonMatch = RegExp(
-      r':\s*(\d+(\.\d+)?)\s*(karton|ktn|k\b|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji)?',
+      r':\s*(\d+([.,]\d+)*)\s*(karton|ktn|k\b|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji)?',
       caseSensitive: false,
     ).firstMatch(line);
 
     if (colonMatch != null) {
-      qty = double.tryParse(colonMatch.group(1) ?? '1') ?? 1.0;
+      qty = _parseIndonesianNumber(colonMatch.group(1) ?? '1');
       final matchedUnitStr = (colonMatch.group(3) ?? '').toLowerCase();
 
       if (matchedUnitStr.contains('roll') || matchedUnitStr.contains('rol')) {
@@ -875,36 +1076,36 @@ class AiChatParserService {
     }
 
     // Pattern 2: "35 k" / "40 K..." / "40 ktn" / "10 karton" / "5 dus"
-    final kartonMatch = RegExp(r'(\d+(\.\d+)?)\s*(k\b|k\.+|ktn|karton|dus|box)', caseSensitive: false).firstMatch(line);
+    final kartonMatch = RegExp(r'(\d+([.,]\d+)*)\s*(k\b|k\.+|ktn|karton|dus|box)', caseSensitive: false).firstMatch(line);
     if (kartonMatch != null) {
-      qty = double.tryParse(kartonMatch.group(1) ?? '1') ?? 1.0;
+      qty = _parseIndonesianNumber(kartonMatch.group(1) ?? '1');
       unit = 'karton';
       cleaned = line.replaceAll(kartonMatch.group(0)!, '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
-    // Pattern 3: "11 ROLL" / "325 roll"
-    final rollMatch = RegExp(r'(\d+(\.\d+)?)\s*(roll|rol)', caseSensitive: false).firstMatch(line);
+    // Pattern 3: "11 ROLL" / "325 roll" / "2.500 roll"
+    final rollMatch = RegExp(r'(\d+([.,]\d+)*)\s*(roll|rol)', caseSensitive: false).firstMatch(line);
     if (rollMatch != null) {
-      qty = double.tryParse(rollMatch.group(1) ?? '1') ?? 1.0;
+      qty = _parseIndonesianNumber(rollMatch.group(1) ?? '1');
       unit = 'roll';
       cleaned = line.replaceAll(rollMatch.group(0)!, '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
     // Pattern 4: "121 pack" / "45 pack" / "10 pcs" / "200 pc" / "10 bks"
-    final packMatch = RegExp(r'(\d+(\.\d+)?)\s*(pack|pak|pcs|pc\b|bks|biji)', caseSensitive: false).firstMatch(line);
+    final packMatch = RegExp(r'(\d+([.,]\d+)*)\s*(pack|pak|pcs|pc\b|bks|biji)', caseSensitive: false).firstMatch(line);
     if (packMatch != null) {
-      qty = double.tryParse(packMatch.group(1) ?? '1') ?? 1.0;
+      qty = _parseIndonesianNumber(packMatch.group(1) ?? '1');
       unit = 'pack';
       cleaned = line.replaceAll(packMatch.group(0)!, '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
     // Pattern 5: Number at the end of line like "Rolade sapi 1000g 35"
-    final endNumberMatch = RegExp(r'\b(\d+(\.\d+)?)$').firstMatch(line);
+    final endNumberMatch = RegExp(r'\b(\d+([.,]\d+)*)$').firstMatch(line);
     if (endNumberMatch != null) {
-      qty = double.tryParse(endNumberMatch.group(1) ?? '1') ?? 1.0;
+      qty = _parseIndonesianNumber(endNumberMatch.group(1) ?? '1');
       unit = 'karton'; // Default to karton for whole bulk numbers in warehouse
       cleaned = line.substring(0, endNumberMatch.start).trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
@@ -940,7 +1141,14 @@ class AiChatParserService {
     final qTokens = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     final bool queryHasRoll = qTokens.contains('roll') || qTokens.contains('rol');
     final bool queryHasLoyang = qTokens.contains('loyang') || qTokens.contains('lyg');
-    final bool queryHas1000 = qTokens.contains('1000') || qTokens.contains('1kg') || cleanQ.contains('1 kg') || cleanQ.contains('1000g') || cleanQ.contains('1000 g');
+    final bool queryHas1000 = qTokens.contains('1000') ||
+        qTokens.contains('1kg') ||
+        cleanQ.contains('1 kg') ||
+        cleanQ.contains('1kg') ||
+        cleanQ.contains('1000g') ||
+        cleanQ.contains('1000 g') ||
+        cleanQ.contains('1000gr') ||
+        cleanQ.contains('1000 gr');
     final bool queryHasPolos = qTokens.contains('polos');
     final bool queryHasBeres = qTokens.contains('beres') || qTokens.contains('beras') || qTokens.contains('brs');
     final bool queryHasMerah = qTokens.contains('merah');
@@ -1065,7 +1273,11 @@ class AiChatParserService {
       final bool hIsRoll = hTokens.contains('roll') ||
           hTokens.contains('rol') ||
           RegExp(r'\b(roll|rol)s?\b', caseSensitive: false).hasMatch(hName);
-      final bool hIs1000 = hName.contains('1000') || hName.contains('1kg') || hTokens.contains('1000') || hTokens.contains('1kg');
+      final bool hIs1000 = hName.contains('1000') ||
+          hName.contains('1kg') ||
+          hTokens.contains('1000') ||
+          hTokens.contains('1kg') ||
+          hName.contains('1 kg');
 
       if (queryHasRoll) {
         if (hIsRoll) {
@@ -1097,12 +1309,12 @@ class AiChatParserService {
         }
       }
 
-      // G. 1000g vs smaller (400g, 500g, roll)
+      // G. 1000g vs smaller (250g, 400g, 500g, roll)
       if (queryHas1000) {
         if (hIs1000) {
           score += 40;
-        } else if (hName.contains('400') || hName.contains('500') || hIsRoll) {
-          score -= 60; // Strongly avoid matching 400g/500g/roll when customer explicitly asked for 1 kg / 1000g
+        } else {
+          score -= 60; // Strongly avoid matching 250g/400g/500g/roll when customer explicitly asked for 1 kg / 1000g
         }
       }
 
@@ -1251,7 +1463,15 @@ class AiChatParserService {
     final qWords = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
     final bool queryHasRoll = qWords.contains('roll') || qWords.contains('rol');
     final bool queryHasLoyang = qWords.contains('loyang') || qWords.contains('lyg');
-    final bool queryHas1000 = qWords.contains('1000') || qWords.contains('1kg');
+    final bool queryHas1000 = qWords.contains('1000') ||
+        qWords.contains('1kg') ||
+        cleanQ.contains('1 kg') ||
+        cleanQ.contains('1kg') ||
+        cleanQ.contains('1000g') ||
+        cleanQ.contains('1000 g') ||
+        cleanQ.contains('1000gr') ||
+        cleanQ.contains('1000 gr');
+    final bool queryHasPolos = qWords.contains('polos');
     final bool queryHasBeres = qWords.contains('beres') || qWords.contains('beras') || qWords.contains('brs');
     final bool queryHasMerah = qWords.contains('merah');
     final bool queryHasCoklat = qWords.contains('coklat') || qWords.contains('cklt');
@@ -1378,7 +1598,11 @@ class AiChatParserService {
       final bool pIsRoll = pWords.contains('roll') ||
           pWords.contains('rol') ||
           RegExp(r'\b(roll|rol)s?\b', caseSensitive: false).hasMatch(pName);
-      final bool pIs1000 = pName.contains('1000') || pName.contains('1kg') || pWords.contains('1000') || pWords.contains('1kg');
+      final bool pIs1000 = pName.contains('1000') ||
+          pName.contains('1kg') ||
+          pWords.contains('1000') ||
+          pWords.contains('1kg') ||
+          pName.contains('1 kg');
 
       if (queryHasRoll) {
         if (pIsRoll) {
@@ -1395,18 +1619,25 @@ class AiChatParserService {
         }
       }
 
-      // E. "LOYANG" variant
+      // E. "POLOS" variant (polos is NEVER roll)
+      if (queryHasPolos) {
+        if (pIsRoll) {
+          score -= 60;
+        }
+      }
+
+      // F. "LOYANG" variant
       if (queryHasLoyang) {
         if (pWords.contains('loyang') || pWords.contains('lyg') || pName.contains('loyang')) {
           score += 25;
         }
       }
 
-      // F. 1000g vs 400g/500g
+      // G. 1000g vs smaller (250g, 400g, 500g, roll)
       if (queryHas1000) {
         if (pIs1000) {
           score += 40;
-        } else if (pName.contains('400') || pName.contains('500') || pIsRoll) {
+        } else {
           score -= 60;
         }
       }
@@ -1521,7 +1752,7 @@ class AiChatParserService {
 
         bonusItemsToAdd.add(ChatOrderItemDraft(
           productId: bonusProduct.id,
-          productName: '${bonusProduct.name} (BONUS)',
+          productName: bonusProduct.name,
           rawText: '[AUTO BONUS] ${rule.keyword} (Kelipatan x$multiplier)',
           qtyUnit: bonusUnit,
           qtyInput: calculatedBonusQty,

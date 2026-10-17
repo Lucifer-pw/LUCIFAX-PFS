@@ -22,6 +22,17 @@ class TransactionItem {
     this.isBonus = false,
   }) : weightKg = (qty * sizeGrams) / 1000.0;
 
+  /// Returns the product name cleaned of any redundant '(BONUS)' text
+  String get cleanProductName {
+    return productName.replaceAll(RegExp(r'\s*\(BONUS\)', caseSensitive: false), '').trim();
+  }
+
+  /// Returns the formatted display name with a single '(BONUS)' if this item is a bonus
+  String get displayNameWithBonus {
+    final clean = cleanProductName;
+    return isBonus ? '$clean (BONUS)' : clean;
+  }
+
   factory TransactionItem.fromMap(Map<String, dynamic> map) {
     return TransactionItem(
       productId: map['productId'] ?? '',

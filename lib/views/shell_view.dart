@@ -32,6 +32,7 @@ import 'operational_invoice_view.dart';
 import 'monthly_operational_expenses_view.dart';
 import 'billing_report_view.dart';
 import 'ai_knowledge_view.dart';
+import 'wa_gateway_view.dart';
 import 'package:flutter/services.dart';
 import '../services/walkie_talkie_service.dart';
 import '../services/auth_service.dart';
@@ -45,7 +46,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.160';
+  String _appVersion = '3.3.198';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
@@ -772,6 +773,11 @@ class _ShellViewState extends State<ShellView> {
         'title': 'Kamus & Otak AI',
         'icon': Icons.psychology_rounded,
         'widget': const AiKnowledgeView(),
+      });
+      items.add({
+        'title': 'WA Gateway Auto-PO',
+        'icon': Icons.mark_chat_unread_rounded,
+        'widget': const WaGatewayView(),
       });
     }
 

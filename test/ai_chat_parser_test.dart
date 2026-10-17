@@ -4,6 +4,7 @@ import 'package:cashier_app/models/product.dart';
 import 'package:cashier_app/models/customer.dart';
 import 'package:cashier_app/models/customer_product_history.dart';
 import 'package:cashier_app/models/ai_knowledge_rule.dart';
+import 'package:cashier_app/models/transaction.dart';
 
 void main() {
   test('AI Parser matches Fiva beres sapi 24 to BRS COKLAT 24S 500 G', () async {
@@ -928,6 +929,218 @@ Mister sosis
     expect(draft.items[4].qtyUnit, 'roll');
     expect(draft.items[4].discountPercent, 17.5);
   });
+
+  test('Multi-store chat with mixed header (SJJ) and footer (Hana makmur) splits into 2 POs without phantom PO for Griya ff pekalongan', () async {
+    final parser = AiChatParserService();
+
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P02', name: 'ROLLADE AYAM 250 G', price: 15000, stock: 100, isiKarton: 20, sizeGrams: 250),
+      Product(id: 'P03', name: 'KORNET AYAM LOYANG 400 G', price: 19363, stock: 100, isiKarton: 20, sizeGrams: 400),
+      Product(id: 'P04', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P05', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'C001',
+        customerName: 'GRIYA FROZEN FOOD',
+        aliasName: 'GRIYA FF PEKALONGAN',
+        address: 'Pekalongan',
+        city: 'PEKALONGAN',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08111111111',
+        ktpNumber: '',
+      ),
+      Customer(
+        id: 'C002',
+        customerName: 'SUMBER JADI JAYA',
+        aliasName: 'SJJ',
+        address: 'Semarang',
+        city: 'SEMARANG',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08222222222',
+        ktpNumber: '',
+      ),
+      Customer(
+        id: 'C003',
+        customerName: 'HANA MAKMUR',
+        aliasName: 'HANA MAKMUR',
+        address: 'Kudus',
+        city: 'KUDUS',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08333333333',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SUMBER JADI JAYA', targetId: 'C002', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'customer_alias', keyword: 'Griya ff pekalongan', mappedValue: 'GRIYA FROZEN FOOD', targetId: 'C001', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'customer_alias', keyword: 'Hana makmur', mappedValue: 'HANA MAKMUR', targetId: 'C003', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Msk erp hari ini....
+1. Griya ff pekalongan
+SJJ
+Kirim hr selasa
+Rolade ayam polos 1 kg ...15 k
+Fv Kornet loyang 15 k.....300 pack
+Fv Rolade ayam roll 100 ball.....2.500 roll
+Fv Rolade sapi roll 35 ball...875 roll
+Krm hari kamis minggu depan
+Hana makmur
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    // Must be exactly 2 drafts: SJJ and HANA MAKMUR (Griya ff pekalongan has 0 items, so no phantom PO)
+    expect(drafts.length, 2);
+
+    // Draft 1: SJJ
+    final draftSjj = drafts[0];
+    expect(draftSjj.customerId, 'C002');
+    expect(draftSjj.customerName, 'SUMBER JADI JAYA');
+    expect(draftSjj.note, contains('Kirim hr selasa'));
+    expect(draftSjj.items.length, 1);
+    expect(draftSjj.items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draftSjj.items[0].qtyInput, 15.0);
+    expect(draftSjj.items[0].qtyUnit, 'karton');
+
+    // Draft 2: HANA MAKMUR
+    final draftHana = drafts[1];
+    expect(draftHana.customerId, 'C003');
+    expect(draftHana.customerName, 'HANA MAKMUR');
+    expect(draftHana.note, contains('kamis minggu depan'));
+    expect(draftHana.items.length, 3);
+
+    // Item 1: Kornet loyang 15 k / 300 pack
+    expect(draftHana.items[0].productName, 'KORNET AYAM LOYANG 400 G');
+    expect(draftHana.items[0].qtyInput, 15.0);
+    expect(draftHana.items[0].qtyUnit, 'karton');
+
+    // Item 2: Rolade ayam roll 2.500 roll
+    expect(draftHana.items[1].productName, 'ROLLADE AYAM ROLL 400 G');
+    expect(draftHana.items[1].qtyInput, 2500.0);
+    expect(draftHana.items[1].qtyUnit, 'roll');
+
+    // Item 3: Rolade sapi roll 875 roll
+    expect(draftHana.items[2].productName, 'ROLLADE SAPI ROLL 400 G');
+    expect(draftHana.items[2].qtyInput, 875.0);
+    expect(draftHana.items[2].qtyUnit, 'roll');
+  });
+  test('Reproduction: Multi-store chat with senderPhone for ELA FF should still resolve SJJ not ELA FF', () async {
+    final parser = AiChatParserService();
+
+    final products = [
+      Product(id: 'P001', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 150000.0, stock: 100.0, isiKarton: 10, sizeGrams: 1000.0),
+      Product(id: 'P002', name: 'KORNET AYAM LOYANG 400 G', price: 150000.0, stock: 100.0, isiKarton: 20, sizeGrams: 400.0),
+      Product(id: 'P003', name: 'ROLLADE AYAM ROLL 400 G', price: 25000.0, stock: 5000.0, isiKarton: 1, sizeGrams: 400.0),
+      Product(id: 'P004', name: 'ROLLADE SAPI ROLL 400 G', price: 25000.0, stock: 5000.0, isiKarton: 1, sizeGrams: 400.0),
+    ];
+
+    // Customer database matching production:
+    // ELA FF has phone +6287789733632
+    // SJJ has customerName 'SUMBER JADI JAYA' (or aliasName 'SUMBER JADI JAYA')
+    // No explicit AiKnowledgeRule for SJJ in rules!
+    final customers = [
+      Customer(id: 'C_ELA', customerName: 'ANDI SUSANTO', aliasName: 'ELA FF', address: '', city: 'JEPARA', province: '', country: '', phone: '+6287789733632', ktpNumber: ''),
+      Customer(id: 'C_SJJ', customerName: 'SUMBER JADI JAYA', aliasName: '', address: '', city: 'PEKALONGAN', province: '', country: '', phone: '', ktpNumber: ''),
+      Customer(id: 'C_HANA', customerName: 'HANA MAKMUR', aliasName: 'Hana makmur', address: '', city: 'PURBALINGGA', province: '', country: '', phone: '', ktpNumber: ''),
+    ];
+
+    // Production rules - Notice NO SJJ rule here!
+    final rules = [
+      AiKnowledgeRule(id: 'r_unit1', type: 'unit', keyword: 'k', mappedValue: '1 Karton', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r_unit2', type: 'unit', keyword: 'roll', mappedValue: '1 Pack', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Msk erp hari ini....
+1. Griya ff pekalongan
+SJJ
+Kirim hr selasa
+Rolade ayam polos 1 kg ...15 k
+Fv Kornet loyang 15 k.....300 pack
+Fv Rolade ayam roll 100 ball.....2.500 roll
+Fv Rolade sapi roll 35 ball...875 roll
+Krm hari kamis minggu depan
+Hana makmur
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+      senderPhone: '+6287789733632',
+    );
+
+    expect(drafts.length, 2);
+    // SJJ should be resolved for Draft 0 despite senderPhone matching ELA FF
+    expect(drafts[0].customerId, 'C_SJJ');
+    expect(drafts[0].customerName, 'SUMBER JADI JAYA');
+    expect(drafts[0].items.length, 1);
+    expect(drafts[0].items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(drafts[0].items[0].qtyInput, 15.0);
+
+    // Hana Makmur should be resolved for Draft 1
+    expect(drafts[1].customerId, 'C_HANA');
+    expect(drafts[1].customerName, 'HANA MAKMUR');
+    expect(drafts[1].items.length, 3);
+  });
+
+  test('TransactionItem displayNameWithBonus never produces duplicate (BONUS) (BONUS)', () {
+    // Normal item: isBonus = false
+    final itemNormal = TransactionItem(
+      productId: 'P1',
+      productName: 'KORNET AYAM LOYANG 400 G',
+      price: 19000,
+      qty: 800,
+      discountPercent: 0,
+      subtotal: 15200000,
+      sizeGrams: 400,
+      isBonus: false,
+    );
+    expect(itemNormal.displayNameWithBonus, 'KORNET AYAM LOYANG 400 G');
+
+    // Clean bonus item: isBonus = true, clean name
+    final itemBonusClean = TransactionItem(
+      productId: 'P1',
+      productName: 'KORNET AYAM LOYANG 400 G',
+      price: 0,
+      qty: 20,
+      discountPercent: 0,
+      subtotal: 0,
+      sizeGrams: 400,
+      isBonus: true,
+    );
+    expect(itemBonusClean.displayNameWithBonus, 'KORNET AYAM LOYANG 400 G (BONUS)');
+
+    // Legacy bonus item where productName already had (BONUS): isBonus = true
+    final itemBonusLegacy = TransactionItem(
+      productId: 'P1',
+      productName: 'KORNET AYAM LOYANG 400 G (BONUS)',
+      price: 0,
+      qty: 20,
+      discountPercent: 0,
+      subtotal: 0,
+      sizeGrams: 400,
+      isBonus: true,
+    );
+    // Must be single (BONUS), NOT (BONUS) (BONUS)
+    expect(itemBonusLegacy.displayNameWithBonus, 'KORNET AYAM LOYANG 400 G (BONUS)');
+  });
 }
+
 
 
