@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../models/ai_knowledge_rule.dart';
 import '../models/customer_product_history.dart';
 import '../models/incoming_po_chat.dart';
@@ -452,8 +455,41 @@ class FirebaseService {
   }) async {
     final optimizedBytes = compressKtpImage(imageBytes);
     final cleanId = customerId.trim().replaceAll(RegExp(r'[^\w\-]'), '_');
-    final ref = _storage.ref().child('customers/ktp/$cleanId.jpg');
+    final objectPath = 'customers/ktp/$cleanId.jpg';
+    const bucketName = 'aplikasi-transaksi-fiva-frozen.firebasestorage.app';
 
+    // 1. Direct Firebase Storage REST Upload (Fast, reliable, bypasses web SDK hangs)
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final idToken = await user?.getIdToken();
+      final uploadUrl = Uri.parse(
+        'https://firebasestorage.googleapis.com/v0/b/$bucketName/o?name=${Uri.encodeComponent(objectPath)}',
+      );
+
+      final response = await http.post(
+        uploadUrl,
+        headers: {
+          if (idToken != null && idToken.isNotEmpty) 'Authorization': 'Firebase $idToken',
+          'Content-Type': 'image/jpeg',
+        },
+        body: optimizedBytes,
+      ).timeout(const Duration(seconds: 25));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final bucket = data['bucket'] ?? bucketName;
+        final name = data['name'] ?? objectPath;
+        final token = data['downloadTokens'] ?? '';
+        return 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(name)}?alt=media&token=$token';
+      } else {
+        debugPrint('REST storage upload status ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('REST storage upload attempt notice: $e');
+    }
+
+    // 2. Fallback via Firebase Storage SDK
+    final ref = _storage.ref().child(objectPath);
     final metadata = SettableMetadata(
       contentType: 'image/jpeg',
       customMetadata: {
@@ -463,7 +499,7 @@ class FirebaseService {
     );
 
     final uploadTask = await ref.putData(optimizedBytes, metadata).timeout(
-      const Duration(seconds: 60),
+      const Duration(seconds: 40),
       onTimeout: () => throw TimeoutException('Waktu upload foto KTP habis (koneksi lambat). Silakan coba lagi.'),
     );
     final downloadUrl = await uploadTask.ref.getDownloadURL();
