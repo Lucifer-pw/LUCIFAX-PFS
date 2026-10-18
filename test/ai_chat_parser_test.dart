@@ -266,8 +266,65 @@ KRM BSK HR KAMIS
     expect(bonusItem.price, 0.0);
 
     // Note
-    expect(draft.note, contains('NOTE : BONUS 1 KARTON KORNET AYAM @400 G'));
-    expect(draft.note, contains('KRM BSK HR KAMIS'));
+    expect(draft.note, 'NOTE : BONUS 1 KARTON KORNET AYAM @400 G');
+  });
+
+  test('LG FF bonus rule scales note for multiples (80 karton -> NOTE : BONUS 2 KARTON...)', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'KORNET AYAM LOYANG 400 G', price: 20000, stock: 100, isiKarton: 20, sizeGrams: 400),
+    ];
+    final customers = [
+      Customer(id: 'AA002', customerName: 'WIMBO WIEK KUSTANTO', aliasName: 'LG FF', address: '', city: 'SEMARANG', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'bonus_rule', keyword: 'LG FF|KORNET AYAM LOYANG 400 G|40', mappedValue: 'KORNET AYAM LOYANG 400 G|1|karton', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+LG FF
+1. Kornet ayam loyang : 80 k
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.note, 'NOTE : BONUS 2 KARTON KORNET AYAM @400 G');
+  });
+
+  test('Normal order (e.g. Berkah tempura with instruction "Krm hr kamis") keeps note strictly empty', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+    ];
+    final customers = [
+      Customer(id: 'C001', customerName: 'ANDI SUSANTO', aliasName: 'BERKAH TEMPURA', address: '', city: 'KARANGANYAR', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+
+    final chatText = '''
+Berkah tempura
+Beres merah 5 k
+Krm hr kamis
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: [],
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerName, 'ANDI SUSANTO');
+    expect(draft.items.length, 1);
+    expect(draft.note, isEmpty);
   });
 
   test('Unregistered new store LUCIFAX FF Surakarta parses correctly with city Surakarta and empty customerId', () async {
@@ -670,7 +727,7 @@ Rolade ayam 1000g 10k
 
     expect(drafts.length, 1);
     expect(drafts.first.items.length, 1);
-    expect(drafts.first.note, contains('Masuk erp bsk pagi'));
+    expect(drafts.first.note, isEmpty);
   });
 
   test('Pak BC Multi-store chat splits into 2 separate drafts: SJJ and Mister Sosis', () async {
@@ -748,14 +805,14 @@ Mister sosis
     final draft1 = drafts[0];
     expect(draft1.customerId, 'AD008');
     expect(draft1.items.length, 5);
-    expect(draft1.note, contains('Krm bsk pg'));
+    expect(draft1.note, isEmpty);
 
     // Draft 2: Mister sosis
     final draft2 = drafts[1];
     expect(draft2.customerId, 'K001');
     expect(draft2.customerName, 'SUSILO HARYAWAN');
     expect(draft2.items.length, 5);
-    expect(draft2.note, contains('Krm bsk pg'));
+    expect(draft2.note, isEmpty);
   });
 
   test('Chat with store at top (Griya ff Pekalongan) parses correctly', () async {
@@ -1010,7 +1067,7 @@ Hana makmur
     final draftSjj = drafts[0];
     expect(draftSjj.customerId, 'C002');
     expect(draftSjj.customerName, 'SUMBER JADI JAYA');
-    expect(draftSjj.note, contains('Kirim hr selasa'));
+    expect(draftSjj.note, isEmpty);
     expect(draftSjj.items.length, 1);
     expect(draftSjj.items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
     expect(draftSjj.items[0].qtyInput, 15.0);
@@ -1020,7 +1077,7 @@ Hana makmur
     final draftHana = drafts[1];
     expect(draftHana.customerId, 'C003');
     expect(draftHana.customerName, 'HANA MAKMUR');
-    expect(draftHana.note, contains('kamis minggu depan'));
+    expect(draftHana.note, isEmpty);
     expect(draftHana.items.length, 3);
 
     // Item 1: Kornet loyang 15 k / 300 pack

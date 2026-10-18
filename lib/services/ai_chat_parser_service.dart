@@ -122,15 +122,9 @@ class AiChatParserService {
         products: products,
       );
 
-      // Build combined note from chat instructions and bonus rules
-      final List<String> combinedNotes = [];
-      if (chatInstructionNotes.isNotEmpty) {
-        combinedNotes.add(chatInstructionNotes.join(' | '));
-      }
-      if (bonusNote != null && bonusNote.isNotEmpty) {
-        combinedNotes.add(bonusNote);
-      }
-      final finalNote = combinedNotes.join(' - ');
+      // Note is strictly empty by default so user doesn't have to erase it manually.
+      // Only filled if a bonus rule applies (e.g. LG FF bonus note).
+      final String finalNote = (bonusNote != null && bonusNote.isNotEmpty) ? bonusNote : '';
 
       // Only add draft if items exist (do NOT create phantom POs for non-order/admin messages!)
       if (draftItems.isNotEmpty) {
@@ -273,25 +267,21 @@ class AiChatParserService {
 
       // 1. Detect Top Customer (lines before the first order line)
       Customer? topCust;
-      int topCustIdx = -1;
       for (int i = 0; i < firstOrderIdx; i++) {
         if (_isInstructionOrScheduleLine(lines[i]) || _isIgnoredLine(lines[i])) continue;
         final cust = _testMatchCustomer(lines[i], customers: customers, customerRules: customerRules);
         if (cust != null) {
           topCust = cust;
-          topCustIdx = i;
         }
       }
 
       // 2. Detect Bottom Customer (lines after the last order line)
       Customer? bottomCust;
-      int bottomCustIdx = -1;
       for (int i = lines.length - 1; i > lastOrderIdx; i--) {
         if (_isInstructionOrScheduleLine(lines[i]) || _isIgnoredLine(lines[i])) continue;
         final cust = _testMatchCustomer(lines[i], customers: customers, customerRules: customerRules);
         if (cust != null) {
           bottomCust = cust;
-          bottomCustIdx = i;
           break;
         }
       }
@@ -945,8 +935,8 @@ class AiChatParserService {
                 name: hist.productName,
                 price: hist.price,
                 stock: 0.0,
-                isiKarton: matchedProduct!.isiKarton,
-                sizeGrams: matchedProduct!.sizeGrams,
+                isiKarton: matchedProduct?.isiKarton ?? 20,
+                sizeGrams: matchedProduct?.sizeGrams ?? 500.0,
               ),
             ),
           );
@@ -1705,10 +1695,17 @@ class AiChatParserService {
       // Sum karton qty for the matching product in draftItems
       double totalKartonForProduct = 0;
       ChatOrderItemDraft? matchedItem;
+      final ruleProdClean = ruleProd.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+
       for (var item in draftItems) {
-        if (item.productName.toLowerCase().contains(ruleProd) ||
-            ruleProd.contains(item.productName.toLowerCase())) {
-          if (item.qtyUnit.toLowerCase() == 'karton') {
+        final itemProdClean = item.productName.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+        final bool isProdMatch = itemProdClean.contains(ruleProdClean) ||
+            ruleProdClean.contains(itemProdClean) ||
+            (ruleProdClean.contains('kornet') && ruleProdClean.contains('loyang') && itemProdClean.contains('kornet') && itemProdClean.contains('loyang'));
+
+        if (isProdMatch) {
+          final unitLower = item.qtyUnit.toLowerCase().trim();
+          if (unitLower == 'karton' || unitLower == 'ktn' || unitLower == 'k') {
             totalKartonForProduct += item.qtyInput;
           }
           matchedItem = item;

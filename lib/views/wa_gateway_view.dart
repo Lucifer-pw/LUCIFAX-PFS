@@ -196,9 +196,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
           country: 'INDONESIA',
           items: trItems,
           grandTotal: draft.grandTotal,
-          note: draft.note.isNotEmpty
-              ? '${draft.note} [Auto-PO WA: ${chat.senderName} - ${chat.senderPhone}]'
-              : 'Auto-PO WhatsApp (${chat.senderName} - ${chat.senderPhone})',
+          note: draft.note, // Kept empty unless bonus rule applies (e.g. NOTE : BONUS 1 KARTON...)
           createdBy: 'AI Auto-PO Gateway',
           idempotencyKey: 'wa_${chat.id}_$dIdx',
         );
