@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
@@ -12,6 +11,7 @@ import '../services/ocr_service.dart';
 import '../services/import_service.dart';
 import '../services/download_helper.dart';
 import '../services/file_drop_helper.dart';
+import '../services/ktp_cache_service.dart';
 
 class CustomerListView extends StatefulWidget {
   const CustomerListView({super.key});
@@ -590,11 +590,51 @@ class _CustomerListViewState extends State<CustomerListView> {
 
   void _showKtpPreviewDialog(Customer customer) {
     bool isDownloading = false;
+    Uint8List? imageBytes;
+    bool isLoadingImage = true;
+    bool isFromCache = false;
+    String? localPath;
+    String? errorMessage;
+    bool hasInitiatedLoad = false;
+
+    if (customer.ktpImageUrl.isEmpty) {
+      isLoadingImage = false;
+      errorMessage = 'Tidak ada foto KTP';
+    }
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            if (customer.ktpImageUrl.isNotEmpty && !hasInitiatedLoad) {
+              hasInitiatedLoad = true;
+              KtpCacheManager.getOrFetchKtpImage(
+                customerId: customer.id,
+                imageUrl: customer.ktpImageUrl,
+              ).then((result) {
+                if (context.mounted) {
+                  setDialogState(() {
+                    isLoadingImage = false;
+                    if (result != null) {
+                      imageBytes = result.bytes;
+                      isFromCache = result.isFromCache;
+                      localPath = result.localFilePath;
+                    } else {
+                      errorMessage = 'Gagal memuat foto KTP dari server';
+                    }
+                  });
+                }
+              }).catchError((e) {
+                if (context.mounted) {
+                  setDialogState(() {
+                    isLoadingImage = false;
+                    errorMessage = 'Terjadi kesalahan: $e';
+                  });
+                }
+              });
+            }
+
             return Dialog(
               backgroundColor: const Color(0xFF1E293B),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -624,6 +664,48 @@ class _CustomerListViewState extends State<CustomerListView> {
                                   style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                if (!isLoadingImage && imageBytes != null) ...[
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isFromCache
+                                          ? const Color(0xFF065F46).withOpacity(0.3)
+                                          : const Color(0xFF1E3A8A).withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isFromCache ? const Color(0xFF10B981) : const Color(0xFF3B82F6),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isFromCache ? Icons.offline_pin_rounded : Icons.cloud_done_rounded,
+                                          size: 13,
+                                          color: isFromCache ? const Color(0xFF34D399) : const Color(0xFF60A5FA),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Flexible(
+                                          child: Text(
+                                            isFromCache
+                                                ? (localPath != null
+                                                    ? 'Tersimpan di Memori HP (0 Kuota / 0s Load)'
+                                                    : 'Tersimpan di Cache Lokal (0 Kuota / 0s Load)')
+                                                : 'Baru Diunduh dari Server (Disimpan ke Cache Lokal)',
+                                            style: TextStyle(
+                                              color: isFromCache ? const Color(0xFF34D399) : const Color(0xFF93C5FD),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -644,39 +726,37 @@ class _CustomerListViewState extends State<CustomerListView> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: customer.ktpImageUrl.isEmpty
+                            child: isLoadingImage
                                 ? const Center(
-                                    child: Text('Tidak ada foto KTP', style: TextStyle(color: Color(0xFF64748B))),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        CircularProgressIndicator(color: Color(0xFF38BDF8)),
+                                        SizedBox(height: 12),
+                                        Text('Memuat Foto KTP...', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                      ],
+                                    ),
                                   )
-                                : InteractiveViewer(
-                                    minScale: 0.5,
-                                    maxScale: 4.0,
-                                    child: Center(
-                                      child: Image.network(
-                                        customer.ktpImageUrl,
-                                        fit: BoxFit.contain,
-                                        loadingBuilder: (context, child, loadingProgress) {
-                                          if (loadingProgress == null) return child;
-                                          final total = loadingProgress.expectedTotalBytes;
-                                          final loaded = loadingProgress.cumulativeBytesLoaded;
-                                          final progress = total != null ? loaded / total : null;
-                                          return Center(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                CircularProgressIndicator(value: progress, color: const Color(0xFF38BDF8)),
-                                                const SizedBox(height: 12),
-                                                const Text('Memuat Foto KTP...', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                                              ],
+                                : (errorMessage != null || imageBytes == null)
+                                    ? Center(
+                                        child: Text(
+                                          errorMessage ?? 'Gagal memuat foto KTP',
+                                          style: const TextStyle(color: Colors.redAccent),
+                                        ),
+                                      )
+                                    : InteractiveViewer(
+                                        minScale: 0.5,
+                                        maxScale: 4.0,
+                                        child: Center(
+                                          child: Image.memory(
+                                            imageBytes!,
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (context, error, stackTrace) => const Center(
+                                              child: Text('Gagal menampilkan foto KTP', style: TextStyle(color: Colors.redAccent)),
                                             ),
-                                          );
-                                        },
-                                        errorBuilder: (context, error, stackTrace) => const Center(
-                                          child: Text('Gagal memuat foto KTP', style: TextStyle(color: Colors.redAccent)),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
                           ),
                         ),
                       ),
@@ -716,30 +796,25 @@ class _CustomerListViewState extends State<CustomerListView> {
                               isDownloading ? 'Mengunduh...' : 'Unduh Foto KTP',
                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                             ),
-                            onPressed: (isDownloading || customer.ktpImageUrl.isEmpty)
+                            onPressed: (isDownloading || customer.ktpImageUrl.isEmpty || imageBytes == null)
                                 ? null
                                 : () async {
                                     setDialogState(() => isDownloading = true);
                                     try {
-                                      final resp = await http.get(Uri.parse(customer.ktpImageUrl));
-                                      if (resp.statusCode == 200) {
-                                        final safeName = customer.aliasName.replaceAll(RegExp(r'[^\w\s\-]'), '').trim().replaceAll(' ', '_');
-                                        final fileName = 'KTP_${customer.id}_$safeName.jpg';
-                                        await downloadFileBytes(
-                                          bytes: resp.bodyBytes,
-                                          fileName: fileName,
-                                          mimeType: 'image/jpeg',
+                                      final safeName = customer.aliasName.replaceAll(RegExp(r'[^\w\s\-]'), '').trim().replaceAll(' ', '_');
+                                      final fileName = 'KTP_${customer.id}_$safeName.jpg';
+                                      await downloadFileBytes(
+                                        bytes: imageBytes!,
+                                        fileName: fileName,
+                                        mimeType: 'image/jpeg',
+                                      );
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Foto KTP berhasil diunduh: $fileName'),
+                                            backgroundColor: Colors.teal,
+                                          ),
                                         );
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Foto KTP berhasil diunduh: $fileName'),
-                                              backgroundColor: Colors.teal,
-                                            ),
-                                          );
-                                        }
-                                      } else {
-                                        throw Exception('Gagal mendownload foto (${resp.statusCode})');
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
