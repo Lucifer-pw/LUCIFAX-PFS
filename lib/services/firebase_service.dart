@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../models/ai_knowledge_rule.dart';
 import '../models/customer_product_history.dart';
 import '../models/incoming_po_chat.dart';
@@ -418,6 +419,11 @@ class FirebaseService {
   /// Guarantees that NIK, names, dates, and faces are crystal clear and sharp (no blur, no pixel blocks),
   /// while shrinking file size to ~150-250 KB to save Firebase storage limit.
   Uint8List compressKtpImage(Uint8List rawBytes) {
+    // If the image is already compact (<= 800 KB), bypass pure-Dart decompression for instant saving (< 0.5s)
+    if (rawBytes.lengthInBytes <= 800 * 1024) {
+      return rawBytes;
+    }
+
     try {
       final decoded = img.decodeImage(rawBytes);
       if (decoded == null) return rawBytes;
@@ -456,7 +462,10 @@ class FirebaseService {
       },
     );
 
-    final uploadTask = await ref.putData(optimizedBytes, metadata);
+    final uploadTask = await ref.putData(optimizedBytes, metadata).timeout(
+      const Duration(seconds: 25),
+      onTimeout: () => throw TimeoutException('Waktu upload foto KTP habis (koneksi lambat). Silakan coba lagi.'),
+    );
     final downloadUrl = await uploadTask.ref.getDownloadURL();
     return downloadUrl;
   }

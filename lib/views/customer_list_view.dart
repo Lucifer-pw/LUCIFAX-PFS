@@ -11,6 +11,7 @@ import '../providers/customer_provider.dart';
 import '../services/ocr_service.dart';
 import '../services/import_service.dart';
 import '../services/download_helper.dart';
+import '../services/file_drop_helper.dart';
 
 class CustomerListView extends StatefulWidget {
   const CustomerListView({super.key});
@@ -44,6 +45,8 @@ class _CustomerListViewState extends State<CustomerListView> {
     String? selectedKtpFileName;
     String existingKtpUrl = customer?.ktpImageUrl ?? '';
     bool isSaving = false;
+    bool isDraggingOver = false;
+    FileDropListener? dropListener;
 
     showDialog(
       context: context,
@@ -52,6 +55,20 @@ class _CustomerListViewState extends State<CustomerListView> {
         bool isScanning = false;
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            dropListener ??= FileDropListener(
+              onFileDropped: (bytes, fileName) {
+                setDialogState(() {
+                  selectedKtpBytes = bytes;
+                  selectedKtpFileName = fileName;
+                });
+              },
+              onDragStateChanged: (isOver) {
+                setDialogState(() {
+                  isDraggingOver = isOver;
+                });
+              },
+            );
+
             Future<void> pickKtpImageFile() async {
               try {
                 final result = await FilePicker.platform.pickFiles(
@@ -256,9 +273,14 @@ class _CustomerListViewState extends State<CustomerListView> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: isDraggingOver
+                              ? const Color(0xFF0369A1).withOpacity(0.25)
+                              : const Color(0xFF0F172A),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          border: Border.all(
+                            color: isDraggingOver ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                            width: isDraggingOver ? 2.0 : 1.0,
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,8 +317,34 @@ class _CustomerListViewState extends State<CustomerListView> {
                               ],
                             ),
                             const SizedBox(height: 10),
-                            // Image Preview Box
-                            if (selectedKtpBytes != null)
+                            // Image Preview Box or Drag Over Box
+                            if (isDraggingOver)
+                              Container(
+                                height: 130,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF38BDF8).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.file_download_rounded, color: Color(0xFF38BDF8), size: 40),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Lepaskan File Foto KTP di Sini',
+                                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Format didukung: JPG, JPEG, PNG, WEBP',
+                                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (selectedKtpBytes != null)
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -375,7 +423,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                               )
                             else
                               Container(
-                                height: 75,
+                                height: 85,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF1E293B).withOpacity(0.5),
@@ -385,11 +433,16 @@ class _CustomerListViewState extends State<CustomerListView> {
                                 child: const Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF64748B), size: 26),
-                                    SizedBox(height: 4),
+                                    Icon(Icons.drive_folder_upload_outlined, color: Color(0xFF38BDF8), size: 28),
+                                    SizedBox(height: 6),
                                     Text(
-                                      'Belum ada foto KTP (Opsional)',
-                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                      'Tarik & Lepas (Drag & Drop) foto KTP ke sini',
+                                      style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'atau klik tombol Pilih File / Kamera di bawah',
+                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
                                     ),
                                   ],
                                 ),
@@ -512,10 +565,17 @@ class _CustomerListViewState extends State<CustomerListView> {
                           }
                         },
                   child: isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      ? const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Menyimpan...', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ],
                         )
                       : const Text('Simpan'),
                 ),
@@ -524,7 +584,7 @@ class _CustomerListViewState extends State<CustomerListView> {
           },
         );
       },
-    );
+    ).then((_) => dropListener?.dispose());
   }
 
   void _showKtpPreviewDialog(Customer customer) {
