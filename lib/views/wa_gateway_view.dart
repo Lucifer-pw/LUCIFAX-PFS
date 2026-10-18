@@ -225,7 +225,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 ${createdInvoiceNos.length} PO Berhasil Dibuat: ${createdStoreNames.join(' & ')} (Invoice #${allInvoicesStr})'),
+            content: Text('🎉 ${createdInvoiceNos.length} PO Berhasil Dibuat: ${createdStoreNames.join(' & ')} (Invoice #$allInvoicesStr)'),
             backgroundColor: Colors.teal,
             duration: const Duration(seconds: 4),
           ),
@@ -726,6 +726,8 @@ Kirim besok pagi ya pak bc''';
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       body: StreamBuilder<WaAutoPoSettings>(
@@ -734,175 +736,374 @@ Kirim besok pagi ya pak bc''';
           final settings = settingsSnap.data ?? WaAutoPoSettings(strictWhitelistOnly: true, autoPoEnabled: false);
 
           return Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top Header Bar
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.mark_chat_unread_rounded, color: Color(0xFF10B981), size: 28),
-                        ),
-                        const SizedBox(width: 14),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('WhatsApp Auto-Sync Gateway', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                            SizedBox(height: 3),
-                            Text('Tangkap otomatis pesanan WhatsApp dari Pak BC tanpa perlu copy-paste manual (Khusus Developer)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                          ],
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF38BDF8),
-                            side: const BorderSide(color: Color(0xFF38BDF8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: () => _showManageWhitelistDialog(context, settings),
-                          icon: const Icon(Icons.contacts_rounded, size: 16),
-                          label: Text('📋 Kelola Whitelist (${settings.whitelistContacts.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(width: 10),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.tealAccent,
-                            side: const BorderSide(color: Colors.teal),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: _simulateIncomingChat,
-                          icon: const Icon(Icons.science_outlined, size: 16),
-                          label: const Text('🧪 Tes Simulasi Chat', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0284C7),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: () => showAiChatOrderDialog(context),
-                          icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
-                          label: const Text('Buka AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                // Control Toggles Banner
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: settings.autoPoEnabled ? Colors.teal.withOpacity(0.4) : const Color(0xFF334155)),
-                  ),
-                  child: Row(
+                if (isMobile)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Auto-PO Zero Click Toggle
-                      Icon(
-                        settings.autoPoEnabled ? Icons.bolt_rounded : Icons.flash_off_rounded,
-                        color: settings.autoPoEnabled ? Colors.tealAccent : const Color(0xFF64748B),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              const Text('Otomatis Buat PO (Zero-Click): ', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                              Text(
-                                settings.autoPoEnabled ? 'AKTIF (PO dibuat seketika)' : 'NONAKTIF (Perlu persetujuan)',
-                                style: TextStyle(
-                                  color: settings.autoPoEnabled ? Colors.tealAccent : const Color(0xFF94A3B8),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.mark_chat_unread_rounded, color: Color(0xFF10B981), size: 24),
                           ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'PO default: statusDikirim = PENDING, statusTransfer = UNPAID, statusERP = kosong',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('WhatsApp Auto-Sync Gateway', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                SizedBox(height: 2),
+                                Text('Tangkap otomatis PO WhatsApp (Khusus Developer)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(width: 14),
-                      Switch(
-                        value: settings.autoPoEnabled,
-                        activeColor: Colors.tealAccent,
-                        onChanged: (val) async {
-                          final updated = settings.copyWith(autoPoEnabled: val);
-                          await _firebaseService.saveWaAutoPoSettings(updated);
-                        },
-                      ),
-                      const Spacer(),
-
-                      // Strict Filter Badge/Button
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: settings.strictWhitelistOnly ? const Color(0xFF065F46).withOpacity(0.4) : const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: settings.strictWhitelistOnly ? const Color(0xFF059669) : const Color(0xFF334155)),
-                        ),
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            Icon(Icons.shield_rounded, color: settings.strictWhitelistOnly ? const Color(0xFF34D399) : const Color(0xFF64748B), size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              settings.strictWhitelistOnly ? 'Strict Filter: ON (Hanya nomor whitelist)' : 'Strict Filter: OFF',
-                              style: TextStyle(
-                                color: settings.strictWhitelistOnly ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF38BDF8),
+                                side: const BorderSide(color: Color(0xFF38BDF8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
+                              onPressed: () => _showManageWhitelistDialog(context, settings),
+                              icon: const Icon(Icons.contacts_rounded, size: 14),
+                              label: Text('📋 Whitelist (${settings.whitelistContacts.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.tealAccent,
+                                side: const BorderSide(color: Colors.teal),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: _simulateIncomingChat,
+                              icon: const Icon(Icons.science_outlined, size: 14),
+                              label: const Text('🧪 Tes Chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0284C7),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => showAiChatOrderDialog(context),
+                              icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                              label: const Text('Buka AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                             ),
                           ],
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Main Content
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Gateway Session Card (Flex 4)
-                      Expanded(
-                        flex: 4,
-                        child: _buildGatewayStatusCard(),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.mark_chat_unread_rounded, color: Color(0xFF10B981), size: 28),
+                          ),
+                          const SizedBox(width: 14),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('WhatsApp Auto-Sync Gateway', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                              SizedBox(height: 3),
+                              Text('Tangkap otomatis pesanan WhatsApp dari Pak BC tanpa perlu copy-paste manual (Khusus Developer)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 18),
-
-                      // Incoming Orders Stream (Flex 7)
-                      Expanded(
-                        flex: 7,
-                        child: _buildIncomingOrdersPanel(settings),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF38BDF8),
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => _showManageWhitelistDialog(context, settings),
+                            icon: const Icon(Icons.contacts_rounded, size: 16),
+                            label: Text('📋 Kelola Whitelist (${settings.whitelistContacts.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 10),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.tealAccent,
+                              side: const BorderSide(color: Colors.teal),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: _simulateIncomingChat,
+                            icon: const Icon(Icons.science_outlined, size: 16),
+                            label: const Text('🧪 Tes Simulasi Chat', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 10),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => showAiChatOrderDialog(context),
+                            icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                            label: const Text('Buka AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                const SizedBox(height: 12),
+
+                // Control Toggles Banner
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: settings.autoPoEnabled ? Colors.teal.withOpacity(0.4) : const Color(0xFF334155)),
+                  ),
+                  child: isMobile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  settings.autoPoEnabled ? Icons.bolt_rounded : Icons.flash_off_rounded,
+                                  color: settings.autoPoEnabled ? Colors.tealAccent : const Color(0xFF64748B),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Text('Auto-PO: ', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                          Text(
+                                            settings.autoPoEnabled ? 'AKTIF (PO instan)' : 'NONAKTIF',
+                                            style: TextStyle(
+                                              color: settings.autoPoEnabled ? Colors.tealAccent : const Color(0xFF94A3B8),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 28,
+                                  child: Switch(
+                                    value: settings.autoPoEnabled,
+                                    activeColor: Colors.tealAccent,
+                                    onChanged: (val) async {
+                                      final updated = settings.copyWith(autoPoEnabled: val);
+                                      await _firebaseService.saveWaAutoPoSettings(updated);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: settings.strictWhitelistOnly ? const Color(0xFF065F46).withOpacity(0.4) : const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: settings.strictWhitelistOnly ? const Color(0xFF059669) : const Color(0xFF334155)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.shield_rounded, color: settings.strictWhitelistOnly ? const Color(0xFF34D399) : const Color(0xFF64748B), size: 14),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    settings.strictWhitelistOnly ? 'Strict Filter: ON (Whitelist saja)' : 'Strict Filter: OFF',
+                                    style: TextStyle(
+                                      color: settings.strictWhitelistOnly ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            // Auto-PO Zero Click Toggle
+                            Icon(
+                              settings.autoPoEnabled ? Icons.bolt_rounded : Icons.flash_off_rounded,
+                              color: settings.autoPoEnabled ? Colors.tealAccent : const Color(0xFF64748B),
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text('Otomatis Buat PO (Zero-Click): ', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      settings.autoPoEnabled ? 'AKTIF (PO dibuat seketika)' : 'NONAKTIF (Perlu persetujuan)',
+                                      style: TextStyle(
+                                        color: settings.autoPoEnabled ? Colors.tealAccent : const Color(0xFF94A3B8),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'PO default: statusDikirim = PENDING, statusTransfer = UNPAID, statusERP = kosong',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 14),
+                            Switch(
+                              value: settings.autoPoEnabled,
+                              activeColor: Colors.tealAccent,
+                              onChanged: (val) async {
+                                final updated = settings.copyWith(autoPoEnabled: val);
+                                await _firebaseService.saveWaAutoPoSettings(updated);
+                              },
+                            ),
+                            const Spacer(),
+
+                            // Strict Filter Badge/Button
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: settings.strictWhitelistOnly ? const Color(0xFF065F46).withOpacity(0.4) : const Color(0xFF0F172A),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: settings.strictWhitelistOnly ? const Color(0xFF059669) : const Color(0xFF334155)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.shield_rounded, color: settings.strictWhitelistOnly ? const Color(0xFF34D399) : const Color(0xFF64748B), size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    settings.strictWhitelistOnly ? 'Strict Filter: ON (Hanya nomor whitelist)' : 'Strict Filter: OFF',
+                                    style: TextStyle(
+                                      color: settings.strictWhitelistOnly ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+                const SizedBox(height: 14),
+
+                // Main Content
+                Expanded(
+                  child: isMobile
+                      ? DefaultTabController(
+                          length: 2,
+                          child: Column(
+                            children: [
+                              Container(
+                                height: 40,
+                                margin: const EdgeInsets.only(bottom: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                                ),
+                                child: const TabBar(
+                                  indicator: BoxDecoration(
+                                    color: Color(0xFF0284C7),
+                                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                                  ),
+                                  labelColor: Colors.white,
+                                  unselectedLabelColor: Color(0xFF94A3B8),
+                                  labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  tabs: [
+                                    Tab(
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.inbox_rounded, size: 15),
+                                          SizedBox(width: 6),
+                                          Text('Kotak Masuk PO'),
+                                        ],
+                                      ),
+                                    ),
+                                    Tab(
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.phonelink_ring_rounded, size: 15),
+                                          SizedBox(width: 6),
+                                          Text('Status Perangkat WA'),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: TabBarView(
+                                  children: [
+                                    _buildIncomingOrdersPanel(settings, isMobile: true),
+                                    _buildGatewayStatusCard(isMobile: true),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Gateway Session Card (Flex 4)
+                            Expanded(
+                              flex: 4,
+                              child: _buildGatewayStatusCard(isMobile: false),
+                            ),
+                            const SizedBox(width: 18),
+
+                            // Incoming Orders Stream (Flex 7)
+                            Expanded(
+                              flex: 7,
+                              child: _buildIncomingOrdersPanel(settings, isMobile: false),
+                            ),
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -912,7 +1113,7 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
-  Widget _buildGatewayStatusCard() {
+  Widget _buildGatewayStatusCard({bool isMobile = false}) {
     return StreamBuilder<WaGatewaySession>(
       stream: _firebaseService.streamWaGatewaySession(),
       builder: (context, snapshot) {
@@ -920,119 +1121,159 @@ Kirim besok pagi ya pak bc''';
         final isConnected = session.isConnected;
         final isQrReady = session.isQrReady;
 
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isConnected
-                  ? Colors.teal.withOpacity(0.4)
-                  : (isQrReady ? Colors.amber.withOpacity(0.4) : Colors.white.withOpacity(0.08)),
+        Widget content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 20),
+                    SizedBox(width: 8),
+                    Text('Status Perangkat WA', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                _buildStatusBadge(session.status),
+              ],
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            const SizedBox(height: 16),
+
+            if (isConnected) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF064E3B).withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF059669)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 22),
+                        SizedBox(width: 8),
+                        Text('WhatsApp Web Aktif', style: TextStyle(color: Color(0xFF34D399), fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text('Nomor Terhubung: +${session.phone ?? '-'}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('Nama Akun: ${session.pushName ?? 'Admin Lucifax'}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                    const SizedBox(height: 10),
+                    const Divider(color: Color(0xFF059669), height: 1),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Gateway aktif mendengarkan chat dari Pak BC dan otomatis menginput ke sistem sebagai antrean PO.',
+                      style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (isMobile) const SizedBox(height: 20) else const Spacer(),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 20),
-                      SizedBox(width: 8),
-                      Text('Status Perangkat WA', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                    ],
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF38BDF8),
+                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _firebaseService.sendWaGatewayCommand('RESTART'),
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Restart'),
+                    ),
                   ),
-                  _buildStatusBadge(session.status),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent.shade700,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: const Color(0xFF1E293B),
+                            title: const Text('Putuskan Sesi WhatsApp?', style: TextStyle(color: Colors.white)),
+                            content: const Text('Perangkat akan di-logout dan perlu scan QR ulang untuk menghubungkan kembali.', style: TextStyle(color: Color(0xFF94A3B8))),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Putuskan'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await _firebaseService.sendWaGatewayCommand('LOGOUT');
+                        }
+                      },
+                      icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 16),
+                      label: const Text('Logout WA', style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              if (isConnected) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF064E3B).withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF059669)),
-                  ),
+            ] else if (isQrReady) ...[
+              if (isMobile)
+                Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 22),
-                          SizedBox(width: 8),
-                          Text('WhatsApp Web Aktif', style: TextStyle(color: Color(0xFF34D399), fontWeight: FontWeight.bold, fontSize: 15)),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, spreadRadius: 2),
+                          ],
+                        ),
+                        child: _buildQrImage(session.qrCode!),
                       ),
-                      const SizedBox(height: 12),
-                      Text('Nomor Terhubung: +${session.phone ?? '-'}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text('Nama Akun: ${session.pushName ?? 'Admin Lucifax'}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                      const SizedBox(height: 10),
-                      const Divider(color: Color(0xFF059669), height: 1),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Gateway aktif mendengarkan chat dari Pak BC dan otomatis menginput ke sistem sebagai antrean PO.',
-                        style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 12),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('📱 Petunjuk Scan QR:', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
+                            SizedBox(height: 6),
+                            Text('1. Buka WhatsApp di HP Anda', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
+                            Text('2. Tekan menu (⋮) > Perangkat Tertaut', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
+                            Text('3. Pilih "Tautkan Perangkat" dan arahkan kamera ke QR ini.', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF38BDF8),
                           side: const BorderSide(color: Color(0xFF38BDF8)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: () => _firebaseService.sendWaGatewayCommand('RESTART'),
                         icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('Restart'),
+                        label: const Text('Muat Ulang QR', style: TextStyle(fontSize: 12)),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent.shade700,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: const Color(0xFF1E293B),
-                              title: const Text('Putuskan Sesi WhatsApp?', style: TextStyle(color: Colors.white)),
-                              content: const Text('Perangkat akan di-logout dan perlu scan QR ulang untuk menghubungkan kembali.', style: TextStyle(color: Color(0xFF94A3B8))),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Putuskan'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await _firebaseService.sendWaGatewayCommand('LOGOUT');
-                          }
-                        },
-                        icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 16),
-                        label: const Text('Logout WA', style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                  ],
-                ),
-              ] else if (isQrReady) ...[
+                    ],
+                  ),
+                )
+              else
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -1086,7 +1327,39 @@ Kirim besok pagi ya pak bc''';
                     ),
                   ),
                 ),
-              ] else ...[
+            ] else ...[
+              if (isMobile)
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 24),
+                      Icon(Icons.wifi_off_rounded, color: const Color(0xFF64748B).withOpacity(0.6), size: 48),
+                      const SizedBox(height: 12),
+                      const Text('Gateway Offline / Belum Berjalan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          'Jalankan microservice gateway di server atau lokal dengan perintah:\ncd wa-gateway; node server.js',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.4),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => _firebaseService.sendWaGatewayCommand('RESTART'),
+                        icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 16),
+                        label: const Text('Coba Sambungkan', style: TextStyle(color: Colors.white, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                )
+              else
                 Expanded(
                   child: Center(
                     child: Column(
@@ -1118,9 +1391,28 @@ Kirim besok pagi ya pak bc''';
                     ),
                   ),
                 ),
-              ],
             ],
+          ],
+        );
+
+        if (isMobile) {
+          content = SingleChildScrollView(
+            child: content,
+          );
+        }
+
+        return Container(
+          padding: EdgeInsets.all(isMobile ? 14 : 20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isConnected
+                  ? Colors.teal.withOpacity(0.4)
+                  : (isQrReady ? Colors.amber.withOpacity(0.4) : Colors.white.withOpacity(0.08)),
+            ),
           ),
+          child: content,
         );
       },
     );
@@ -1174,9 +1466,9 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
-  Widget _buildIncomingOrdersPanel(WaAutoPoSettings settings) {
+  Widget _buildIncomingOrdersPanel(WaAutoPoSettings settings, {bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isMobile ? 12 : 20),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(14),
@@ -1185,46 +1477,78 @@ Kirim besok pagi ya pak bc''';
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.inbox_rounded, color: Color(0xFF38BDF8), size: 20),
-              const SizedBox(width: 8),
-              const Text('Kotak Masuk Pesanan WhatsApp', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              SizedBox(
-                width: 220,
-                height: 36,
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'Cari pesan / pengirim...',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
-                    filled: true,
-                    fillColor: const Color(0xFF0F172A),
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                  ),
-                  onChanged: (_) => setState(() {}),
+          if (isMobile) ...[
+            const Row(
+              children: [
+                Icon(Icons.inbox_rounded, color: Color(0xFF38BDF8), size: 18),
+                SizedBox(width: 8),
+                Text('Kotak Masuk Pesanan WA', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 36,
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Cari pesan / pengirim...',
+                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
                 ),
+                onChanged: (_) => setState(() {}),
               ),
-            ],
-          ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                const Icon(Icons.inbox_rounded, color: Color(0xFF38BDF8), size: 20),
+                const SizedBox(width: 8),
+                const Text('Kotak Masuk Pesanan WhatsApp', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                SizedBox(
+                  width: 220,
+                  height: 36,
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'Cari pesan / pengirim...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
 
-          // Filter chips
-          Row(
-            children: [
-              _buildFilterChip('all', 'Semua'),
-              const SizedBox(width: 8),
-              _buildFilterChip('pending', 'Menunggu Diproses'),
-              const SizedBox(width: 8),
-              _buildFilterChip('processed', 'Sudah Jadi PO'),
-              const SizedBox(width: 8),
-              _buildFilterChip('dismissed', 'Diabaikan / Bukan Order'),
-            ],
+          // Filter chips wrapped in SingleChildScrollView for mobile responsiveness
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip('all', 'Semua'),
+                const SizedBox(width: 8),
+                _buildFilterChip('pending', 'Menunggu Diproses'),
+                const SizedBox(width: 8),
+                _buildFilterChip('processed', 'Sudah Jadi PO'),
+                const SizedBox(width: 8),
+                _buildFilterChip('dismissed', 'Diabaikan / Bukan Order'),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
 
@@ -1285,7 +1609,7 @@ Kirim besok pagi ya pak bc''';
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, idx) {
                     final chat = filteredChats[idx];
-                    return _buildChatItemCard(chat);
+                    return _buildChatItemCard(chat, isMobile: isMobile);
                   },
                 );
               },
@@ -1320,7 +1644,7 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
-  Widget _buildChatItemCard(IncomingPoChat chat) {
+  Widget _buildChatItemCard(IncomingPoChat chat, {bool isMobile = false}) {
     final isPending = chat.status == 'pending';
     final isProcessed = chat.status == 'processed';
     final dateStr = DateFormat('dd MMM yyyy, HH:mm').format(chat.receivedAt);
@@ -1340,23 +1664,33 @@ Kirim besok pagi ya pak bc''';
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: const Color(0xFF0284C7).withOpacity(0.2),
-                    child: const Icon(Icons.person, color: Color(0xFF38BDF8), size: 16),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(chat.senderName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(width: 8),
-                  Text('(+${chat.senderPhone})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: const Color(0xFF0284C7).withOpacity(0.2),
+                      child: const Icon(Icons.person, color: Color(0xFF38BDF8), size: 16),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        chat.senderName,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text('(+${chat.senderPhone})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-                  const SizedBox(width: 8),
+                  Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                  const SizedBox(width: 6),
                   _buildChatStatusBadge(chat),
                 ],
               ),
@@ -1380,98 +1714,187 @@ Kirim besok pagi ya pak bc''';
           ),
           const SizedBox(height: 10),
 
-          // Action Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (isProcessed && chat.createdInvoiceNo != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF064E3B).withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF059669)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 15),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Invoice #${chat.createdInvoiceNo} (statusDikirim: PENDING, statusTransfer: UNPAID, ERP: kosong)',
+          // Action Row / Wrap
+          if (isMobile) ...[
+            if (isProcessed && chat.createdInvoiceNo != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF064E3B).withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF059669)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 15),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Invoice #${chat.createdInvoiceNo} (PENDING, UNPAID)',
                         style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ] else if (chat.status == 'dismissed') ...[
+              Text(
+                chat.dismissReason == 'BUKAN_ORDER' ? '⚠️ Bukan format pesanan barang' : 'Diabaikan secara manual',
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (isPending) ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF64748B),
+                      side: const BorderSide(color: Color(0xFF334155)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed'),
+                    icon: const Icon(Icons.close_rounded, size: 14),
+                    label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
                   ),
-                ),
-              ] else if (chat.status == 'dismissed') ...[
-                Text(
-                  chat.dismissReason == 'BUKAN_ORDER' ? '⚠️ Bukan format pesanan barang' : 'Diabaikan secara manual',
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
-                ),
-              ] else ...[
-                const SizedBox(),
-              ],
-
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isPending) ...[
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF64748B),
-                        side: const BorderSide(color: Color(0xFF334155)),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed'),
-                      icon: const Icon(Icons.close_rounded, size: 14),
-                      label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () => _processSingleChatToPo(chat, isAuto: false),
-                      icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
-                      label: const Text('⚡ Langsung Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  if (chat.status == 'dismissed') ...[
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF38BDF8),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'pending'),
-                      icon: const Icon(Icons.undo_rounded, size: 14),
-                      label: const Text('Kembalikan ke Pending', style: TextStyle(fontSize: 11)),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
+                      backgroundColor: const Color(0xFF10B981),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    onPressed: () => _openInAiScanner(chat),
-                    icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 14),
-                    label: const Text('Buka di AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
-                    tooltip: 'Hapus Pesan',
-                    onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                    onPressed: () => _processSingleChatToPo(chat, isAuto: false),
+                    icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
+                    label: const Text('⚡ Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
-              ),
-            ],
-          ),
+                if (chat.status == 'dismissed') ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF38BDF8),
+                      side: const BorderSide(color: Color(0xFF38BDF8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'pending'),
+                    icon: const Icon(Icons.undo_rounded, size: 14),
+                    label: const Text('Ke Pending', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0284C7),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _openInAiScanner(chat),
+                  icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                  label: const Text('AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                  tooltip: 'Hapus Pesan',
+                  onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (isProcessed && chat.createdInvoiceNo != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF064E3B).withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF059669)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 15),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Invoice #${chat.createdInvoiceNo} (statusDikirim: PENDING, statusTransfer: UNPAID, ERP: kosong)',
+                          style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (chat.status == 'dismissed') ...[
+                  Text(
+                    chat.dismissReason == 'BUKAN_ORDER' ? '⚠️ Bukan format pesanan barang' : 'Diabaikan secara manual',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ] else ...[
+                  const SizedBox(),
+                ],
+
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isPending) ...[
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF64748B),
+                          side: const BorderSide(color: Color(0xFF334155)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed'),
+                        icon: const Icon(Icons.close_rounded, size: 14),
+                        label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => _processSingleChatToPo(chat, isAuto: false),
+                        icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
+                        label: const Text('⚡ Langsung Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (chat.status == 'dismissed') ...[
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF38BDF8),
+                          side: const BorderSide(color: Color(0xFF38BDF8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'pending'),
+                        icon: const Icon(Icons.undo_rounded, size: 14),
+                        label: const Text('Kembalikan ke Pending', style: TextStyle(fontSize: 11)),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _openInAiScanner(chat),
+                      icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                      label: const Text('Buka di AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                      tooltip: 'Hapus Pesan',
+                      onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

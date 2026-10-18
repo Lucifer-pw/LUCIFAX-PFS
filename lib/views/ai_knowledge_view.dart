@@ -618,362 +618,644 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header Bar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF38BDF8).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.psychology_rounded, color: Color(0xFF38BDF8), size: 28),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Pusat Pengetahuan & Kamus AI', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 3),
-                        Text('Kelola kamus istilah, singkatan toko, dan aturan slang chat Pak BC (Khusus Developer)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                      ],
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const WaGatewayView()),
-                        );
-                      },
-                      icon: const Icon(Icons.mark_chat_unread_rounded, size: 16),
-                      label: const Text('📱 WA Gateway', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF38BDF8),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _isSyncingMemory ? null : () async {
-                        setState(() => _isSyncingMemory = true);
-                        try {
-                          final res = await _firebaseService.syncCustomerProductMemory();
-                          final customersCount = res['customersCount'] ?? 0;
-                          final productsCount = res['productsCount'] ?? 0;
-                          if (mounted) {
-                            if (res['success'] == true) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('🧠 Memori pelanggan berhasil disinkronkan ($customersCount toko, $productsCount barang)!'),
-                                  backgroundColor: Colors.teal,
-                                ),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Gagal sinkronkan memori: ${res['error']}'),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                            }
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal sinkronkan memori: $e'), backgroundColor: Colors.redAccent),
-                            );
-                          }
-                        } finally {
-                          if (mounted) setState(() => _isSyncingMemory = false);
-                        }
-                      },
-                      icon: _isSyncingMemory
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
-                          : const Icon(Icons.psychology_alt_rounded, size: 16),
-                      label: Text(_isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.tealAccent,
-                        side: const BorderSide(color: Colors.teal),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _seedDefaultRules,
-                      icon: const Icon(Icons.grass_rounded, size: 16),
-                      label: const Text('Muat Kamus Standar', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0284C7),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () => _showAddEditRuleDialog(),
-                      icon: const Icon(Icons.add_rounded, color: Colors.white),
-                      label: const Text('Tambah Ilmu Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            // Top Quick Filter & Search Bar
-            Row(
-              children: [
-                _buildFilterChip('all', 'Semua'),
-                const SizedBox(width: 8),
-                _buildFilterChip('customer_alias', 'Singkatan Toko'),
-                const SizedBox(width: 8),
-                _buildFilterChip('product_alias', 'Singkatan Barang'),
-                const SizedBox(width: 8),
-                _buildFilterChip('unit', 'Satuan Kuantiti'),
-                const SizedBox(width: 8),
-                _buildFilterChip('bonus_rule', 'Bonus / Promo'),
-                const Spacer(),
-                SizedBox(
-                  width: 280,
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Cari kata atau arti...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                    ),
-                    onChanged: (val) => setState(() {}),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Main Content: Knowledge Rules Table & General Prompt Instructions Side-by-Side or Stacked
-            Expanded(
-              child: Row(
+            if (isMobile)
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Table Column (Flex 7)
-                  Expanded(
-                    flex: 7,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.psychology_rounded, color: Color(0xFF38BDF8), size: 24),
                       ),
-                      child: StreamBuilder<List<AiKnowledgeRule>>(
-                        stream: _firebaseService.streamAiKnowledgeRules(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
-                          }
-
-                          final allRules = snapshot.data ?? [];
-                          final query = _searchController.text.trim().toLowerCase();
-
-                          final filteredRules = allRules.where((r) {
-                            if (_selectedFilter != 'all' && r.type != _selectedFilter) return false;
-                            if (query.isNotEmpty) {
-                              return r.keyword.toLowerCase().contains(query) ||
-                                  r.mappedValue.toLowerCase().contains(query);
-                            }
-                            return true;
-                          }).toList();
-
-                          if (filteredRules.isEmpty) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.auto_stories_outlined, color: const Color(0xFF64748B).withOpacity(0.6), size: 48),
-                                  const SizedBox(height: 10),
-                                  const Text('Belum ada aturan kamus yang sesuai.', style: TextStyle(color: Color(0xFF94A3B8))),
-                                  const SizedBox(height: 6),
-                                  const Text('Klik tombol "Tambah Ilmu Baru" atau muat kamus standar di bawah.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                                  const SizedBox(height: 14),
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.teal,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: _seedDefaultRules,
-                                    icon: const Icon(Icons.grass_rounded, color: Colors.white, size: 16),
-                                    label: const Text('🌱 Muat Kamus Standar Sekarang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                  ),
-                                ],
-                              ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Pusat Pengetahuan & Kamus AI', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            SizedBox(height: 2),
+                            Text('Kelola kamus istilah & singkatan chat Pak BC', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const WaGatewayView()),
                             );
-                          }
-
-                          return SingleChildScrollView(
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: DataTable(
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
-                                headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
-                                dataRowMinHeight: 48,
-                                dataRowMaxHeight: 52,
-                                columns: const [
-                                  DataColumn(label: Text('KATA DI CHAT')),
-                                  DataColumn(label: Text('KATEGORI')),
-                                  DataColumn(label: Text('ARTINYA DI SISTEM')),
-                                  DataColumn(label: Text('TANGGAL')),
-                                  DataColumn(label: Text('AKSI')),
-                                ],
-                                rows: filteredRules.map((rule) {
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(
-                                        Text(
-                                          rule.keyword,
-                                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                      ),
-                                      DataCell(_buildTypeBadge(rule.type)),
-                                      DataCell(
-                                        Text(
-                                          rule.mappedValue,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Text(
-                                          DateFormat('dd-MM-yyyy').format(rule.createdAt),
-                                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 18),
-                                              tooltip: 'Edit Aturan',
-                                              onPressed: () => _showAddEditRuleDialog(rule),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                              tooltip: 'Hapus Aturan',
-                                              onPressed: () => _deleteRule(rule),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                          },
+                          icon: const Icon(Icons.mark_chat_unread_rounded, size: 14),
+                          label: const Text('📱 WA Gateway', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _isSyncingMemory ? null : _syncCustomerMemory,
+                          icon: _isSyncingMemory
+                              ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                              : const Icon(Icons.psychology_alt_rounded, size: 14),
+                          label: Text(_isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkron Memori', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.tealAccent,
+                            side: const BorderSide(color: Colors.teal),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _seedDefaultRules,
+                          icon: const Icon(Icons.grass_rounded, size: 14),
+                          label: const Text('Kamus Standar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _showAddEditRuleDialog(),
+                          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 14),
+                          label: const Text('Tambah Ilmu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-
-                  // General Rules Panel (Flex 4)
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.psychology_rounded, color: Color(0xFF38BDF8), size: 28),
                       ),
-                      child: Column(
+                      const SizedBox(width: 14),
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: const [
-                              Icon(Icons.notes_rounded, color: Colors.amberAccent, size: 20),
-                              SizedBox(width: 8),
-                              Text('Catatan Aturan Bebas AI', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Instruksi bahasa manusia yang dibaca AI setiap kali menganalisa chat:',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                          ),
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: _isLoadingInstructions
-                                ? const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)))
-                                : TextField(
-                                    controller: _generalInstructionsController,
-                                    maxLines: null,
-                                    expands: true,
-                                    textAlignVertical: TextAlignVertical.top,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.5),
-                                    decoration: InputDecoration(
-                                      filled: true,
-                                      fillColor: const Color(0xFF0F172A),
-                                      hintText: 'Tulis aturan bebas di sini...',
-                                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                    ),
-                                  ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0284C7),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: _isSavingInstructions ? null : _saveGeneralInstructions,
-                              icon: _isSavingInstructions
-                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
-                              label: const Text('Simpan Aturan Bebas', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                            ),
-                          ),
+                        children: const [
+                          Text('Pusat Pengetahuan & Kamus AI', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 3),
+                          Text('Kelola kamus istilah, singkatan toko, dan aturan slang chat Pak BC (Khusus Developer)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                         ],
                       ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const WaGatewayView()),
+                          );
+                        },
+                        icon: const Icon(Icons.mark_chat_unread_rounded, size: 16),
+                        label: const Text('📱 WA Gateway', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF38BDF8),
+                          side: const BorderSide(color: Color(0xFF38BDF8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _isSyncingMemory ? null : _syncCustomerMemory,
+                        icon: _isSyncingMemory
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                            : const Icon(Icons.psychology_alt_rounded, size: 16),
+                        label: Text(_isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.tealAccent,
+                          side: const BorderSide(color: Colors.teal),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _seedDefaultRules,
+                        icon: const Icon(Icons.grass_rounded, size: 16),
+                        label: const Text('Muat Kamus Standar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => _showAddEditRuleDialog(),
+                        icon: const Icon(Icons.add_rounded, color: Colors.white),
+                        label: const Text('Tambah Ilmu Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            const SizedBox(height: 14),
+
+            // Top Quick Filter & Search Bar
+            if (isMobile)
+              Column(
+                children: [
+                  SizedBox(
+                    height: 38,
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Cari kata atau arti...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      ),
+                      onChanged: (val) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip('all', 'Semua'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('customer_alias', 'Singkatan Toko'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('product_alias', 'Singkatan Barang'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('unit', 'Satuan Kuantiti'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('bonus_rule', 'Bonus / Promo'),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  _buildFilterChip('all', 'Semua'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('customer_alias', 'Singkatan Toko'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('product_alias', 'Singkatan Barang'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('unit', 'Satuan Kuantiti'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('bonus_rule', 'Bonus / Promo'),
+                  const Spacer(),
+                  SizedBox(
+                    width: 280,
+                    height: 40,
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Cari kata atau arti...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      ),
+                      onChanged: (val) => setState(() {}),
                     ),
                   ),
                 ],
               ),
+            const SizedBox(height: 14),
+
+            // Main Content: Desktop Row or Mobile TabBar
+            Expanded(
+              child: StreamBuilder<List<AiKnowledgeRule>>(
+                stream: _firebaseService.streamAiKnowledgeRules(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                  }
+
+                  final allRules = snapshot.data ?? [];
+                  final query = _searchController.text.trim().toLowerCase();
+
+                  final filteredRules = allRules.where((r) {
+                    if (_selectedFilter != 'all' && r.type != _selectedFilter) return false;
+                    if (query.isNotEmpty) {
+                      return r.keyword.toLowerCase().contains(query) ||
+                          r.mappedValue.toLowerCase().contains(query);
+                    }
+                    return true;
+                  }).toList();
+
+                  if (isMobile) {
+                    return DefaultTabController(
+                      length: 2,
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 40,
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white.withOpacity(0.08)),
+                            ),
+                            child: TabBar(
+                              indicator: BoxDecoration(
+                                color: const Color(0xFF0284C7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              labelColor: Colors.white,
+                              unselectedLabelColor: const Color(0xFF94A3B8),
+                              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              tabs: [
+                                Tab(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.auto_stories_rounded, size: 15),
+                                      const SizedBox(width: 6),
+                                      Text('Kamus Aturan (${filteredRules.length})'),
+                                    ],
+                                  ),
+                                ),
+                                const Tab(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.notes_rounded, size: 15),
+                                      SizedBox(width: 6),
+                                      Text('Catatan Bebas AI'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              children: [
+                                _buildRulesContent(filteredRules, isMobile: true),
+                                _buildGeneralInstructionsCard(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Table Column (Flex 7)
+                      Expanded(
+                        flex: 7,
+                        child: _buildRulesContent(filteredRules, isMobile: false),
+                      ),
+                      const SizedBox(width: 16),
+
+                      // General Rules Panel (Flex 4)
+                      Expanded(
+                        flex: 4,
+                        child: _buildGeneralInstructionsCard(),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _syncCustomerMemory() async {
+    setState(() => _isSyncingMemory = true);
+    try {
+      final res = await _firebaseService.syncCustomerProductMemory();
+      final customersCount = res['customersCount'] ?? 0;
+      final productsCount = res['productsCount'] ?? 0;
+      if (mounted) {
+        if (res['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🧠 Memori pelanggan berhasil disinkronkan ($customersCount toko, $productsCount barang)!'),
+              backgroundColor: Colors.teal,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal sinkronkan memori: ${res['error']}'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal sinkronkan memori: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingMemory = false);
+    }
+  }
+
+  Widget _buildRulesContent(List<AiKnowledgeRule> filteredRules, {required bool isMobile}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: filteredRules.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.auto_stories_outlined, color: const Color(0xFF64748B).withOpacity(0.6), size: 48),
+                  const SizedBox(height: 10),
+                  const Text('Belum ada aturan kamus yang sesuai.', style: TextStyle(color: Color(0xFF94A3B8))),
+                  const SizedBox(height: 6),
+                  const Text('Klik tombol "Tambah Ilmu Baru" atau muat kamus standar di atas.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _seedDefaultRules,
+                    icon: const Icon(Icons.grass_rounded, color: Colors.white, size: 16),
+                    label: const Text('🌱 Muat Kamus Standar Sekarang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
+              ),
+            )
+          : isMobile
+              ? ListView.separated(
+                  padding: const EdgeInsets.all(10),
+                  itemCount: filteredRules.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, idx) {
+                    final rule = filteredRules[idx];
+                    return _buildMobileRuleCard(rule);
+                  },
+                )
+              : SingleChildScrollView(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(const Color(0xFF0F172A)),
+                      headingTextStyle: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+                      dataRowMinHeight: 48,
+                      dataRowMaxHeight: 52,
+                      columns: const [
+                        DataColumn(label: Text('KATA DI CHAT')),
+                        DataColumn(label: Text('KATEGORI')),
+                        DataColumn(label: Text('ARTINYA DI SISTEM')),
+                        DataColumn(label: Text('TANGGAL')),
+                        DataColumn(label: Text('AKSI')),
+                      ],
+                      rows: filteredRules.map((rule) {
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              Text(
+                                rule.keyword,
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                            DataCell(_buildTypeBadge(rule.type)),
+                            DataCell(
+                              Text(
+                                rule.mappedValue,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                DateFormat('dd-MM-yyyy').format(rule.createdAt),
+                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                              ),
+                            ),
+                            DataCell(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 18),
+                                    tooltip: 'Edit Aturan',
+                                    onPressed: () => _showAddEditRuleDialog(rule),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                    tooltip: 'Hapus Aturan',
+                                    onPressed: () => _deleteRule(rule),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+    );
+  }
+
+  Widget _buildMobileRuleCard(AiKnowledgeRule rule) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  rule.keyword,
+                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+              _buildTypeBadge(rule.type),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.subdirectory_arrow_right_rounded, color: Color(0xFF94A3B8), size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  rule.mappedValue,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                DateFormat('dd-MM-yyyy').format(rule.createdAt),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(6),
+                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 18),
+                    tooltip: 'Edit Aturan',
+                    onPressed: () => _showAddEditRuleDialog(rule),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(6),
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                    tooltip: 'Hapus Aturan',
+                    onPressed: () => _deleteRule(rule),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneralInstructionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.notes_rounded, color: Colors.amberAccent, size: 20),
+              SizedBox(width: 8),
+              Text('Catatan Aturan Bebas AI', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Instruksi bahasa manusia yang dibaca AI setiap kali menganalisa chat:',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _isLoadingInstructions
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)))
+                : TextField(
+                    controller: _generalInstructionsController,
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.5),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      hintText: 'Tulis aturan bebas di sini...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _isSavingInstructions ? null : _saveGeneralInstructions,
+              icon: _isSavingInstructions
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save_rounded, color: Colors.white, size: 18),
+              label: const Text('Simpan Aturan Bebas', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ),
+        ],
       ),
     );
   }

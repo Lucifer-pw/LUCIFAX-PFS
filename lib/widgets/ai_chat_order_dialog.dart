@@ -783,11 +783,11 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
     return Dialog(
       backgroundColor: const Color(0xFF1E293B),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 32, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 32, vertical: isMobile ? 12 : 24),
       child: Container(
         width: 1020,
-        height: MediaQuery.of(context).size.height * 0.88,
-        padding: const EdgeInsets.all(20),
+        height: MediaQuery.of(context).size.height * (isMobile ? 0.94 : 0.88),
+        padding: EdgeInsets.all(isMobile ? 12 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -795,32 +795,40 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF38BDF8).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF38BDF8), size: 24),
                       ),
-                      child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF38BDF8), size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Scan Chat WhatsApp → Auto PO',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Scan Chat WhatsApp → Auto PO',
+                              style: TextStyle(color: Colors.white, fontSize: isMobile ? 15 : 18, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Otomatis mengenali toko, kuantiti, dan histori nota',
+                              style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 10 : 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Otomatis mengenali toko, kuantiti (Karton/Pack/Roll), dan menarik harga nota terakhir',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
@@ -876,77 +884,151 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _isSyncingMemory ? null : _syncMemory,
-                        icon: _isSyncingMemory
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
-                            : const Icon(Icons.psychology_alt_rounded, color: Color(0xFF38BDF8), size: 16),
-                        label: Text(
-                          _isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori Pelanggan',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                  if (isMobile)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _isAnalyzing ? null : _analyzeChat,
+                          icon: _isAnalyzing
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.bolt_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            _isAnalyzing ? 'Menganalisa...' : '⚡ Analisa & Pecah Chat Jadi PO',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
                         ),
-                      ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        const SizedBox(height: 4),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _isSyncingMemory ? null : _syncMemory,
+                            icon: _isSyncingMemory
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                                : const Icon(Icons.psychology_alt_rounded, color: Color(0xFF38BDF8), size: 16),
+                            label: Text(
+                              _isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori Pelanggan',
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
                         ),
-                        onPressed: _isAnalyzing ? null : _analyzeChat,
-                        icon: _isAnalyzing
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.bolt_rounded, color: Colors.white, size: 18),
-                        label: Text(
-                          _isAnalyzing ? 'Menganalisa...' : 'Analisa & Pecah Chat Jadi PO',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      ],
+                    )
+                  else
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _isSyncingMemory ? null : _syncMemory,
+                          icon: _isSyncingMemory
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)))
+                              : const Icon(Icons.psychology_alt_rounded, color: Color(0xFF38BDF8), size: 16),
+                          label: Text(
+                            _isSyncingMemory ? 'Menyinkronkan...' : '🧠 Sinkronkan Memori Pelanggan',
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _isAnalyzing ? null : _analyzeChat,
+                          icon: _isAnalyzing
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.bolt_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            _isAnalyzing ? 'Menganalisa...' : 'Analisa & Pecah Chat Jadi PO',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
 
             // Results Section Title
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Text('Hasil Deteksi Draft PO:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF38BDF8).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Hasil Deteksi Draft PO:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${_parsedDrafts.length} Toko Terdeteksi',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
                       ),
-                      child: Text(
-                        '${_parsedDrafts.length} Toko Terdeteksi',
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                    ],
+                  ),
+                  if (_parsedDrafts.length > 1) ...[
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
+                      onPressed: _isSavingAll ? null : _createAllTransactions,
+                      icon: _isSavingAll
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.done_all_rounded, color: Colors.white, size: 16),
+                      label: const Text('Buat Semua PO Sekaligus (Status PENDING)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
-                ),
-                if (_parsedDrafts.length > 1)
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: _isSavingAll ? null : _createAllTransactions,
-                    icon: _isSavingAll
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.done_all_rounded, color: Colors.white, size: 16),
-                    label: const Text('Buat Semua PO Sekaligus (Status PENDING)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Hasil Deteksi Draft PO:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${_parsedDrafts.length} Toko Terdeteksi',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
-              ],
-            ),
+                  if (_parsedDrafts.length > 1)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: _isSavingAll ? null : _createAllTransactions,
+                      icon: _isSavingAll
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.done_all_rounded, color: Colors.white, size: 16),
+                      label: const Text('Buat Semua PO Sekaligus (Status PENDING)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
             const SizedBox(height: 10),
 
             // Drafts List
@@ -1029,6 +1111,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
 
   Widget _buildDraftCard(ChatOrderDraft draft, int draftIndex) {
     final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -1042,221 +1125,435 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
         children: [
           // Header Card: Customer Selection & Quick Actions
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 8 : 10),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B).withOpacity(0.7),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: draft.customerId.isNotEmpty ? draft.customerId : null,
-                            hint: Text(
-                              draft.customerName.isNotEmpty ? draft.customerName : draft.customerRawName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: draft.customerId.isNotEmpty ? draft.customerId : null,
+                                hint: Text(
+                                  draft.customerName.isNotEmpty ? draft.customerName : draft.customerRawName,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF1E293B),
+                                items: customerProvider.customers.map((c) {
+                                  return DropdownMenuItem<String>(
+                                    value: c.id,
+                                    child: Text(
+                                      '${c.customerName}${c.aliasName.isNotEmpty ? " (${c.aliasName})" : ""}${c.city.isNotEmpty ? " - ${c.city}" : ""} [${c.id}]',
+                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (newId) {
+                                  if (newId != null) {
+                                    final selected = customerProvider.customers.firstWhere((item) => item.id == newId);
+                                    setState(() {
+                                      draft.customerId = selected.id;
+                                      draft.customerName = selected.customerName;
+                                      draft.aliasName = selected.aliasName;
+                                      draft.city = selected.city;
+                                      draft.province = selected.province;
+                                    });
+                                  }
+                                },
+                              ),
                             ),
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF1E293B),
-                              items: customerProvider.customers.map((c) {
-                                return DropdownMenuItem<String>(
-                                  value: c.id,
-                                  child: Text(
-                                    '${c.customerName}${c.aliasName.isNotEmpty ? " (${c.aliasName})" : ""}${c.city.isNotEmpty ? " - ${c.city}" : ""} [${c.id}]',
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (newId) {
-                                if (newId != null) {
-                                  final selected = customerProvider.customers.firstWhere((item) => item.id == newId);
+                          ),
+                          if (draft.customerId.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF38BDF8)),
+                              ),
+                              child: Text('ID: ${draft.customerId}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          ] else ...[
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () async {
+                                final registered = await _showAutoRegisterCustomerDialog(draft);
+                                if (registered != null) {
                                   setState(() {
-                                    draft.customerId = selected.id;
-                                    draft.customerName = selected.customerName;
-                                    draft.aliasName = selected.aliasName;
-                                    draft.city = selected.city;
-                                    draft.province = selected.province;
+                                    draft.customerId = registered.id;
+                                    draft.customerName = registered.customerName;
+                                    draft.aliasName = registered.aliasName;
+                                    draft.city = registered.city;
+                                    draft.province = registered.province;
                                   });
                                 }
                               },
-                            ),
-                          ),
-                        ),
-                        if (draft.customerId.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0284C7).withOpacity(0.2),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFF38BDF8)),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amberAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.amberAccent),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('⚠️ Belum Terdaftar', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    SizedBox(width: 4),
+                                    Text('(Daftar)', style: TextStyle(color: Colors.white70, fontSize: 9.5)),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Text('ID: ${draft.customerId}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
-                        ] else ...[
-                          const SizedBox(width: 8),
-                          InkWell(
-                            onTap: () async {
-                              final registered = await _showAutoRegisterCustomerDialog(draft);
-                              if (registered != null) {
-                                setState(() {
-                                  draft.customerId = registered.id;
-                                  draft.customerName = registered.customerName;
-                                  draft.aliasName = registered.aliasName;
-                                  draft.city = registered.city;
-                                  draft.province = registered.province;
-                                });
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(4),
-                            child: Container(
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (draft.city.isNotEmpty)
+                            Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.amberAccent.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.amberAccent),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('⚠️ Belum Terdaftar', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                                  SizedBox(width: 4),
-                                  Text('(Daftarkan)', style: TextStyle(color: Colors.white70, fontSize: 9.5)),
-                                ],
+                              decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(4)),
+                              child: Text(draft.city, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                            )
+                          else
+                            const SizedBox(),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            onPressed: () => _createTransactionFromDraft(draft, draftIndex),
+                            icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 14),
+                            label: const Text('Buat PO Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.storefront_rounded, color: Color(0xFF38BDF8), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: draft.customerId.isNotEmpty ? draft.customerId : null,
+                                  hint: Text(
+                                    draft.customerName.isNotEmpty ? draft.customerName : draft.customerRawName,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  isExpanded: true,
+                                  dropdownColor: const Color(0xFF1E293B),
+                                  items: customerProvider.customers.map((c) {
+                                    return DropdownMenuItem<String>(
+                                      value: c.id,
+                                      child: Text(
+                                        '${c.customerName}${c.aliasName.isNotEmpty ? " (${c.aliasName})" : ""}${c.city.isNotEmpty ? " - ${c.city}" : ""} [${c.id}]',
+                                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newId) {
+                                    if (newId != null) {
+                                      final selected = customerProvider.customers.firstWhere((item) => item.id == newId);
+                                      setState(() {
+                                        draft.customerId = selected.id;
+                                        draft.customerName = selected.customerName;
+                                        draft.aliasName = selected.aliasName;
+                                        draft.city = selected.city;
+                                        draft.province = selected.province;
+                                      });
+                                    }
+                                  },
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                        if (draft.city.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(4)),
-                            child: Text(draft.city, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-                          ),
-                        ],
-                      ],
-                    ),
+                            if (draft.customerId.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0284C7).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: const Color(0xFF38BDF8)),
+                                ),
+                                child: Text('ID: ${draft.customerId}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                              ),
+                            ] else ...[
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () async {
+                                  final registered = await _showAutoRegisterCustomerDialog(draft);
+                                  if (registered != null) {
+                                    setState(() {
+                                      draft.customerId = registered.id;
+                                      draft.customerName = registered.customerName;
+                                      draft.aliasName = registered.aliasName;
+                                      draft.city = registered.city;
+                                      draft.province = registered.province;
+                                    });
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amberAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.amberAccent),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('⚠️ Belum Terdaftar', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      SizedBox(width: 4),
+                                      Text('(Daftarkan)', style: TextStyle(color: Colors.white70, fontSize: 9.5)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (draft.city.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(4)),
+                                child: Text(draft.city, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => _createTransactionFromDraft(draft, draftIndex),
+                        icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 16),
+                        label: const Text('Buat PO Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                      ),
+                    ],
                   ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => _createTransactionFromDraft(draft, draftIndex),
-                  icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 16),
-                  label: const Text('Buat PO Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                ),
-              ],
-            ),
           ),
 
           // Items Table
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isMobile ? 8 : 12),
             child: Column(
               children: [
-                Table(
-                  columnWidths: const {
-                    0: FlexColumnWidth(2.5), // Nama Barang
-                    1: FlexColumnWidth(1.2), // Kuantiti Chat
-                    2: FlexColumnWidth(1.2), // Total Pack
-                    3: FlexColumnWidth(1.4), // Harga Unit (Histori)
-                    4: FlexColumnWidth(1.4), // Subtotal
-                  },
-                  children: [
-                    TableRow(
-                      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFF334155)))),
-                      children: const [
-                        Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                        Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                        Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                        Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                        Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                  ],
-                ),
-                ...draft.items.map((item) {
-                  return TableRow(
+                if (isMobile)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: 520,
+                      child: Table(
+                        columnWidths: const {
+                          0: FlexColumnWidth(2.5), // Nama Barang
+                          1: FlexColumnWidth(1.2), // Kuantiti Chat
+                          2: FlexColumnWidth(1.2), // Total Pack
+                          3: FlexColumnWidth(1.4), // Harga Unit (Histori)
+                          4: FlexColumnWidth(1.4), // Subtotal
+                        },
+                        children: [
+                          TableRow(
+                            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFF334155)))),
+                            children: const [
+                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                            ],
+                          ),
+                          ...draft.items.map((item) {
+                            return TableRow(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                      if (item.isBonus)
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 2),
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(color: Colors.pinkAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                          child: const Text('🎁 BONUS OTOMATIS (Rp 0)', style: TextStyle(color: Colors.pinkAccent, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                        )
+                                      else if (item.isNewItemForCustomer)
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 2),
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(color: Colors.amberAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                          child: const Text('⚠️ Barang Baru (Harga Master)', style: TextStyle(color: Colors.amberAccent, fontSize: 9.5)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Text(
+                                    '${item.qtyInput % 1 == 0 ? item.qtyInput.toInt() : item.qtyInput} ${item.qtyUnit.toUpperCase()}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Text(
+                                    '${item.qtyPcs % 1 == 0 ? item.qtyPcs.toInt() : item.qtyPcs} Pack',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(_rupiahFormatter.format(item.price), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                      if (item.discountPercent > 0)
+                                        Text('Disc ${item.discountPercent}%', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                                      if (item.discountAmount > 0)
+                                        Text('Pot. ${_rupiahFormatter.format(item.discountAmount)}', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                                      if (item.invoiceNo.isNotEmpty)
+                                        Text('[Ref: #${item.invoiceNo}]', style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.7), fontSize: 9)),
+                                    ],
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Text(
+                                    _rupiahFormatter.format(item.subtotal),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(2.5), // Nama Barang
+                      1: FlexColumnWidth(1.2), // Kuantiti Chat
+                      2: FlexColumnWidth(1.2), // Total Pack
+                      3: FlexColumnWidth(1.4), // Harga Unit (Histori)
+                      4: FlexColumnWidth(1.4), // Subtotal
+                    },
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      TableRow(
+                        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFF334155)))),
+                        children: const [
+                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                        ],
+                      ),
+                      ...draft.items.map((item) {
+                        return TableRow(
                           children: [
-                            Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                            if (item.isBonus)
-                              Container(
-                                margin: const EdgeInsets.only(top: 2),
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(color: Colors.pinkAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                child: const Text('🎁 BONUS OTOMATIS (Rp 0)', style: TextStyle(color: Colors.pinkAccent, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                              )
-                            else if (item.isNewItemForCustomer)
-                              Container(
-                                margin: const EdgeInsets.only(top: 2),
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                decoration: BoxDecoration(color: Colors.amberAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                child: const Text('⚠️ Barang Baru (Harga Master)', style: TextStyle(color: Colors.amberAccent, fontSize: 9.5)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.productName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  if (item.isBonus)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(color: Colors.pinkAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                      child: const Text('🎁 BONUS OTOMATIS (Rp 0)', style: TextStyle(color: Colors.pinkAccent, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                    )
+                                  else if (item.isNewItemForCustomer)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(color: Colors.amberAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                      child: const Text('⚠️ Barang Baru (Harga Master)', style: TextStyle(color: Colors.amberAccent, fontSize: 9.5)),
+                                    ),
+                                ],
                               ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                '${item.qtyInput % 1 == 0 ? item.qtyInput.toInt() : item.qtyInput} ${item.qtyUnit.toUpperCase()}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                '${item.qtyPcs % 1 == 0 ? item.qtyPcs.toInt() : item.qtyPcs} Pack',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(_rupiahFormatter.format(item.price), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                  if (item.discountPercent > 0)
+                                    Text('Disc ${item.discountPercent}%', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                                  if (item.discountAmount > 0)
+                                    Text('Pot. ${_rupiahFormatter.format(item.discountAmount)}', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
+                                  if (item.invoiceNo.isNotEmpty)
+                                    Text('[Ref: #${item.invoiceNo}]', style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.7), fontSize: 9)),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                _rupiahFormatter.format(item.subtotal),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
                           ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          '${item.qtyInput % 1 == 0 ? item.qtyInput.toInt() : item.qtyInput} ${item.qtyUnit.toUpperCase()}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          '${item.qtyPcs % 1 == 0 ? item.qtyPcs.toInt() : item.qtyPcs} Pack',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(_rupiahFormatter.format(item.price), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                            if (item.discountPercent > 0)
-                              Text('Disc ${item.discountPercent}%', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
-                            if (item.discountAmount > 0)
-                              Text('Pot. ${_rupiahFormatter.format(item.discountAmount)}', style: const TextStyle(color: Colors.greenAccent, fontSize: 10)),
-                            if (item.invoiceNo.isNotEmpty)
-                              Text('[Ref: #${item.invoiceNo}]', style: TextStyle(color: const Color(0xFF38BDF8).withOpacity(0.7), fontSize: 9)),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          _rupiahFormatter.format(item.subtotal),
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
+                        );
+                      }).toList(),
                     ],
-                  );
-                }).toList(),
-              ],
-            ),
+                  ),
             const Divider(color: Color(0xFF334155)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

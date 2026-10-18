@@ -52,7 +52,6 @@ class _ShellViewState extends State<ShellView> {
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
   final Set<String> _processedCommandIds = {};
   final FirebaseService _firebaseService = FirebaseService();
-  bool _hasShownSyncPrompt = false;
 
   bool _handleGlobalKeyEvent(KeyEvent event) {
     if (event.logicalKey == LogicalKeyboardKey.altLeft ||
@@ -815,6 +814,7 @@ class _ShellViewState extends State<ShellView> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
+        titleSpacing: isMobile ? 4 : null,
         title: Text(
           navItems[_currentIndex]['title'],
           maxLines: 1,
@@ -822,7 +822,7 @@ class _ShellViewState extends State<ShellView> {
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: isMobile ? 15 : 18,
+            fontSize: isMobile ? 14 : 18,
           ),
         ),
         actions: [
