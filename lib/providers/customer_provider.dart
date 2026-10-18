@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/customer.dart';
@@ -51,6 +52,20 @@ class CustomerProvider extends ChangeNotifier {
 
   Future<void> deleteCustomer(String id) async {
     await _dbService.deleteCustomer(id);
+  }
+
+  Future<String> uploadCustomerKtp({
+    required String customerId,
+    required Uint8List imageBytes,
+  }) async {
+    return await _dbService.uploadCustomerKtpImage(
+      customerId: customerId,
+      imageBytes: imageBytes,
+    );
+  }
+
+  Future<void> deleteCustomerKtp(String customerId) async {
+    await _dbService.deleteCustomerKtpImage(customerId);
   }
 
   Future<String> getNextCustomerID(String city) async {

@@ -8,6 +8,7 @@ class Customer {
   final String country;
   final String phone;
   final String ktpNumber;
+  final String ktpImageUrl;
   final double depositBalance;
 
   Customer({
@@ -20,6 +21,7 @@ class Customer {
     required this.country,
     required this.phone,
     required this.ktpNumber,
+    this.ktpImageUrl = '',
     this.depositBalance = 0.0,
   });
 
@@ -43,6 +45,7 @@ class Customer {
       country: map['country'] ?? 'INDONESIA',
       phone: map['phone'] ?? '',
       ktpNumber: map['ktpNumber'] ?? '',
+      ktpImageUrl: map['ktpImageUrl'] ?? '',
       depositBalance: (map['depositBalance'] is num) ? (map['depositBalance'] as num).toDouble() : 0.0,
     );
   }
@@ -57,6 +60,7 @@ class Customer {
       'country': country,
       'phone': phone,
       'ktpNumber': ktpNumber,
+      'ktpImageUrl': ktpImageUrl,
       'depositBalance': depositBalance,
     };
   }
@@ -71,6 +75,7 @@ class Customer {
     String? country,
     String? phone,
     String? ktpNumber,
+    String? ktpImageUrl,
     double? depositBalance,
   }) {
     return Customer(
@@ -83,6 +88,7 @@ class Customer {
       country: country ?? this.country,
       phone: phone ?? this.phone,
       ktpNumber: ktpNumber ?? this.ktpNumber,
+      ktpImageUrl: ktpImageUrl ?? this.ktpImageUrl,
       depositBalance: depositBalance ?? this.depositBalance,
     );
   }

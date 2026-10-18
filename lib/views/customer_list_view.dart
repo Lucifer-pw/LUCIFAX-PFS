@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../models/customer.dart';
 import '../providers/customer_provider.dart';
 import '../services/ocr_service.dart';
 import '../services/import_service.dart';
+import '../services/download_helper.dart';
 
 class CustomerListView extends StatefulWidget {
   const CustomerListView({super.key});
@@ -37,12 +40,43 @@ class _CustomerListViewState extends State<CustomerListView> {
     final phoneController = TextEditingController(text: customer?.phone ?? '');
     final ktpController = TextEditingController(text: customer?.ktpNumber ?? '');
 
+    Uint8List? selectedKtpBytes;
+    String? selectedKtpFileName;
+    String existingKtpUrl = customer?.ktpImageUrl ?? '';
+    bool isSaving = false;
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         bool isScanning = false;
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            Future<void> pickKtpImageFile() async {
+              try {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+                  withData: true,
+                );
+                if (result != null && result.files.isNotEmpty) {
+                  final file = result.files.first;
+                  if (file.bytes != null) {
+                    setDialogState(() {
+                      selectedKtpBytes = file.bytes;
+                      selectedKtpFileName = file.name;
+                    });
+                  }
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Gagal memilih file: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            }
+
             Future<void> scanKtp() async {
               try {
                 // Select image source
@@ -72,25 +106,36 @@ class _CustomerListViewState extends State<CustomerListView> {
                 final XFile? image = await picker.pickImage(source: source);
                 if (image == null) return;
 
+                final bytes = await image.readAsBytes();
                 setDialogState(() {
                   isScanning = true;
+                  selectedKtpBytes = bytes;
+                  selectedKtpFileName = image.name;
                 });
 
-                final ktpData = await OcrService.scanKtp(File(image.path));
+                if (!kIsWeb) {
+                  try {
+                    final ktpData = await OcrService.scanKtp(File(image.path));
+                    setDialogState(() {
+                      if (ktpData.nama.isNotEmpty) nameController.text = ktpData.nama;
+                      if (ktpData.nik.isNotEmpty) ktpController.text = ktpData.nik;
+                      if (ktpData.fullAddress.isNotEmpty) addressController.text = ktpData.fullAddress;
+                      if (ktpData.estimatedCity.isNotEmpty) {
+                        cityController.text = ktpData.estimatedCity.toUpperCase();
+                      }
+                    });
+                  } catch (ocrErr) {
+                    debugPrint('OCR warning: $ocrErr');
+                  }
+                }
 
                 setDialogState(() {
                   isScanning = false;
-                  if (ktpData.nama.isNotEmpty) nameController.text = ktpData.nama;
-                  if (ktpData.nik.isNotEmpty) ktpController.text = ktpData.nik;
-                  if (ktpData.fullAddress.isNotEmpty) addressController.text = ktpData.fullAddress;
-                  if (ktpData.estimatedCity.isNotEmpty) {
-                    cityController.text = ktpData.estimatedCity.toUpperCase();
-                  }
                 });
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('KTP berhasil dipindai dan data diisi otomatis!'), backgroundColor: Colors.teal),
+                    const SnackBar(content: Text('Foto KTP berhasil dipilih!'), backgroundColor: Colors.teal),
                   );
                 }
               } catch (e) {
@@ -206,81 +251,457 @@ class _CustomerListViewState extends State<CustomerListView> {
                         style: const TextStyle(color: Colors.white),
                         decoration: _buildInputDecoration(hint: 'Nomor KTP'),
                       ),
+                      const SizedBox(height: 16),
+                      // Foto KTP Section
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.badge_rounded, color: Color(0xFF38BDF8), size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Foto KTP Pelanggan',
+                                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                if (selectedKtpBytes != null || existingKtpUrl.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: (selectedKtpBytes != null ? Colors.amber : Colors.teal).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      selectedKtpBytes != null ? 'Siap Upload' : 'Tersimpan di Cloud',
+                                      style: TextStyle(
+                                        color: selectedKtpBytes != null ? Colors.amber : Colors.tealAccent,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // Image Preview Box
+                            if (selectedKtpBytes != null)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Stack(
+                                      alignment: Alignment.topRight,
+                                      children: [
+                                        Container(
+                                          height: 150,
+                                          width: double.infinity,
+                                          color: const Color(0xFF1E293B),
+                                          child: Image.memory(selectedKtpBytes!, fit: BoxFit.contain),
+                                        ),
+                                        IconButton(
+                                          icon: const CircleAvatar(
+                                            radius: 12,
+                                            backgroundColor: Colors.redAccent,
+                                            child: Icon(Icons.close, size: 14, color: Colors.white),
+                                          ),
+                                          tooltip: 'Batalkan Foto',
+                                          onPressed: () {
+                                            setDialogState(() {
+                                              selectedKtpBytes = null;
+                                              selectedKtpFileName = null;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (selectedKtpFileName != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'File: $selectedKtpFileName',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                              )
+                            else if (existingKtpUrl.isNotEmpty)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Stack(
+                                  alignment: Alignment.topRight,
+                                  children: [
+                                    Container(
+                                      height: 150,
+                                      width: double.infinity,
+                                      color: const Color(0xFF1E293B),
+                                      child: Image.network(
+                                        existingKtpUrl,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (context, error, stackTrace) => const Center(
+                                          child: Text('Gagal memuat preview', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const CircleAvatar(
+                                        radius: 12,
+                                        backgroundColor: Colors.redAccent,
+                                        child: Icon(Icons.delete_outline, size: 14, color: Colors.white),
+                                      ),
+                                      tooltip: 'Hapus Foto KTP',
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          existingKtpUrl = '';
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              Container(
+                                height: 75,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B).withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF334155)),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF64748B), size: 26),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Belum ada foto KTP (Opsional)',
+                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 10),
+                            // Action Buttons to pick
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF38BDF8),
+                                    side: const BorderSide(color: Color(0xFF0284C7)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  ),
+                                  onPressed: isSaving ? null : pickKtpImageFile,
+                                  icon: const Icon(Icons.folder_open_rounded, size: 16),
+                                  label: const Text('Pilih File (Flashdisk / PC)', style: TextStyle(fontSize: 11)),
+                                ),
+                                if (!kIsWeb)
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF38BDF8),
+                                      side: const BorderSide(color: Color(0xFF0284C7)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    ),
+                                    onPressed: (isScanning || isSaving) ? null : scanKtp,
+                                    icon: isScanning
+                                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                        : const Icon(Icons.camera_alt_rounded, size: 16),
+                                    label: Text(isScanning ? 'Memindai...' : 'Kamera / Scan', style: const TextStyle(fontSize: 11)),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: isSaving ? null : () => Navigator.pop(context),
                   child: const Text('Batal', style: TextStyle(color: Color(0xFF64748B))),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-                  onPressed: () async {
-                    final custName = nameController.text.trim();
-                    final alias = aliasController.text.trim();
-                    final address = addressController.text.trim();
-                    final city = cityController.text.trim();
-                    final province = provinceController.text.trim();
-                    final country = countryController.text.trim();
-                    final phone = phoneController.text.trim();
-                    final ktp = ktpController.text.trim();
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final custName = nameController.text.trim();
+                          final alias = aliasController.text.trim();
+                          final address = addressController.text.trim();
+                          final city = cityController.text.trim();
+                          final province = provinceController.text.trim();
+                          final country = countryController.text.trim();
+                          final phone = phoneController.text.trim();
+                          final ktp = ktpController.text.trim();
 
-                    if (custName.isEmpty || alias.isEmpty || city.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Nama Toko, Nama Pemilik, dan Kota wajib diisi!'), backgroundColor: Colors.orange),
-                      );
-                      return;
-                    }
+                          if (custName.isEmpty || alias.isEmpty || city.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Nama Toko, Nama Pemilik, dan Kota wajib diisi!'), backgroundColor: Colors.orange),
+                            );
+                            return;
+                          }
 
-                    try {
-                      final custProvider = Provider.of<CustomerProvider>(context, listen: false);
-                      String finalId;
+                          setDialogState(() => isSaving = true);
 
-                      if (isEdit) {
-                        finalId = customer.id;
-                      } else {
-                        finalId = await custProvider.getNextCustomerID(city);
-                      }
+                          try {
+                            final custProvider = Provider.of<CustomerProvider>(context, listen: false);
+                            String finalId = isEdit ? customer.id : await custProvider.getNextCustomerID(city);
 
-                      final newCustomer = Customer(
-                        id: finalId,
-                        customerName: custName,
-                        aliasName: alias,
-                        address: address,
-                        city: city,
-                        province: province.isNotEmpty ? province : 'JAWA TENGAH',
-                        country: country.isNotEmpty ? country : 'INDONESIA',
-                        phone: phone,
-                        ktpNumber: ktp,
-                      );
+                            String finalKtpUrl = existingKtpUrl;
+                            if (selectedKtpBytes != null) {
+                              finalKtpUrl = await custProvider.uploadCustomerKtp(
+                                customerId: finalId,
+                                imageBytes: selectedKtpBytes!,
+                              );
+                            } else if (existingKtpUrl.isEmpty && (customer?.ktpImageUrl.isNotEmpty ?? false)) {
+                              await custProvider.deleteCustomerKtp(finalId);
+                            }
 
-                      await custProvider.saveCustomer(newCustomer);
+                            final newCustomer = Customer(
+                              id: finalId,
+                              customerName: custName,
+                              aliasName: alias,
+                              address: address,
+                              city: city,
+                              province: province.isNotEmpty ? province : 'JAWA TENGAH',
+                              country: country.isNotEmpty ? country : 'INDONESIA',
+                              phone: phone,
+                              ktpNumber: ktp,
+                              ktpImageUrl: finalKtpUrl,
+                              depositBalance: customer?.depositBalance ?? 0.0,
+                            );
 
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(isEdit
-                                ? 'Pelanggan ${newCustomer.aliasName} berhasil diperbarui.'
-                                : 'Pelanggan berhasil ditambahkan dengan ID: $finalId'),
-                            backgroundColor: Colors.teal,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.redAccent),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Simpan'),
+                            await custProvider.saveCustomer(newCustomer);
+
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isEdit
+                                      ? 'Pelanggan ${newCustomer.aliasName} berhasil diperbarui.'
+                                      : 'Pelanggan berhasil ditambahkan dengan ID: $finalId'),
+                                  backgroundColor: Colors.teal,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              setDialogState(() => isSaving = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Simpan'),
                 ),
               ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showKtpPreviewDialog(Customer customer) {
+    bool isDownloading = false;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 750, maxHeight: 680),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Foto KTP - ${customer.aliasName.isNotEmpty ? customer.aliasName : customer.customerName}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'NIK: ${customer.ktpNumber.isNotEmpty ? customer.ktpNumber : '-'} | Pemilik: ${customer.customerName}',
+                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                            tooltip: 'Tutup',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: customer.ktpImageUrl.isEmpty
+                                ? const Center(
+                                    child: Text('Tidak ada foto KTP', style: TextStyle(color: Color(0xFF64748B))),
+                                  )
+                                : InteractiveViewer(
+                                    minScale: 0.5,
+                                    maxScale: 4.0,
+                                    child: Center(
+                                      child: Image.network(
+                                        customer.ktpImageUrl,
+                                        fit: BoxFit.contain,
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          final total = loadingProgress.expectedTotalBytes;
+                                          final loaded = loadingProgress.cumulativeBytesLoaded;
+                                          final progress = total != null ? loaded / total : null;
+                                          return Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                CircularProgressIndicator(value: progress, color: const Color(0xFF38BDF8)),
+                                                const SizedBox(height: 12),
+                                                const Text('Memuat Foto KTP...', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                        errorBuilder: (context, error, stackTrace) => const Center(
+                                          child: Text('Gagal memuat foto KTP', style: TextStyle(color: Colors.redAccent)),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0369A1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                            label: const Text('Buka Ukuran Penuh', style: TextStyle(fontSize: 13)),
+                            onPressed: customer.ktpImageUrl.isNotEmpty
+                                ? () async {
+                                    final uri = Uri.parse(customer.ktpImageUrl);
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    }
+                                  }
+                                : null,
+                          ),
+                          const Spacer(),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF059669),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: isDownloading
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.download_rounded, size: 16),
+                            label: Text(
+                              isDownloading ? 'Mengunduh...' : 'Unduh Foto KTP',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            onPressed: (isDownloading || customer.ktpImageUrl.isEmpty)
+                                ? null
+                                : () async {
+                                    setDialogState(() => isDownloading = true);
+                                    try {
+                                      final resp = await http.get(Uri.parse(customer.ktpImageUrl));
+                                      if (resp.statusCode == 200) {
+                                        final safeName = customer.aliasName.replaceAll(RegExp(r'[^\w\s\-]'), '').trim().replaceAll(' ', '_');
+                                        final fileName = 'KTP_${customer.id}_$safeName.jpg';
+                                        await downloadFileBytes(
+                                          bytes: resp.bodyBytes,
+                                          fileName: fileName,
+                                          mimeType: 'image/jpeg',
+                                        );
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Foto KTP berhasil diunduh: $fileName'),
+                                              backgroundColor: Colors.teal,
+                                            ),
+                                          );
+                                        }
+                                      } else {
+                                        throw Exception('Gagal mendownload foto (${resp.statusCode})');
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error unduh: $e'),
+                                            backgroundColor: Colors.redAccent,
+                                          ),
+                                        );
+                                      }
+                                    } finally {
+                                      if (context.mounted) {
+                                        setDialogState(() => isDownloading = false);
+                                      }
+                                    }
+                                  },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         );
@@ -476,6 +897,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                                     DataColumn(label: Text('PROVINSI')),
                                     DataColumn(label: Text('NEGARA')),
                                     DataColumn(label: Text('TELEPON')),
+                                    DataColumn(label: Text('FOTO KTP')),
                                     DataColumn(label: Text('AKSI')),
                                   ],
                                   rows: filteredCustomers.map((c) {
@@ -490,6 +912,30 @@ class _CustomerListViewState extends State<CustomerListView> {
                                         DataCell(Text(c.country.isNotEmpty ? c.country : 'INDONESIA', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
                                         DataCell(Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white, fontSize: 11))),
                                         DataCell(
+                                          c.ktpImageUrl.isNotEmpty
+                                              ? InkWell(
+                                                  onTap: () => _showKtpPreviewDialog(c),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF0369A1).withOpacity(0.2),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.badge_rounded, size: 14, color: Color(0xFF38BDF8)),
+                                                        SizedBox(width: 4),
+                                                        Text('Lihat KTP', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                )
+                                              : const Text('-', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                        ),
+                                        DataCell(
                                           PopupMenuButton<String>(
                                             icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
                                             color: const Color(0xFF1E293B),
@@ -499,7 +945,9 @@ class _CustomerListViewState extends State<CustomerListView> {
                                               side: const BorderSide(color: Color(0xFF334155)),
                                             ),
                                             onSelected: (value) {
-                                              if (value == 'edit') {
+                                              if (value == 'view_ktp') {
+                                                _showKtpPreviewDialog(c);
+                                              } else if (value == 'edit') {
                                                 _showCustomerDialog(c);
                                               } else if (value == 'delete') {
                                                 showDialog(
@@ -527,6 +975,17 @@ class _CustomerListViewState extends State<CustomerListView> {
                                               }
                                             },
                                             itemBuilder: (context) => [
+                                              if (c.ktpImageUrl.isNotEmpty)
+                                                const PopupMenuItem(
+                                                  value: 'view_ktp',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.badge_outlined, color: Color(0xFF38BDF8), size: 18),
+                                                      SizedBox(width: 10),
+                                                      Text('Lihat Foto KTP', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                    ],
+                                                  ),
+                                                ),
                                               const PopupMenuItem(
                                                 value: 'edit',
                                                 child: Row(

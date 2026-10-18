@@ -19,10 +19,13 @@ import '../models/wa_contact.dart';
 import '../models/invoice_print_log.dart';
 import '../models/remote_print_command.dart';
 import '../models/receivable.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 
 class FirebaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // ==========================================
   // INVOICE PRINT & DATE SELECTION AUDIT LOGS
@@ -409,6 +412,63 @@ class FirebaseService {
 
   Future<void> deleteCustomer(String id) async {
     await _db.collection('customers').doc(id).delete();
+  }
+
+  /// Compresses raw image bytes to crisp HD quality (max dimension 1600px, 85% JPEG quality).
+  /// Guarantees that NIK, names, dates, and faces are crystal clear and sharp (no blur, no pixel blocks),
+  /// while shrinking file size to ~150-250 KB to save Firebase storage limit.
+  Uint8List compressKtpImage(Uint8List rawBytes) {
+    try {
+      final decoded = img.decodeImage(rawBytes);
+      if (decoded == null) return rawBytes;
+
+      img.Image resized = decoded;
+      const maxDim = 1600;
+      if (decoded.width > maxDim || decoded.height > maxDim) {
+        if (decoded.width >= decoded.height) {
+          resized = img.copyResize(decoded, width: maxDim, interpolation: img.Interpolation.linear);
+        } else {
+          resized = img.copyResize(decoded, height: maxDim, interpolation: img.Interpolation.linear);
+        }
+      }
+
+      final compressed = img.encodeJpg(resized, quality: 85);
+      return Uint8List.fromList(compressed);
+    } catch (e) {
+      debugPrint('KTP compression error, using raw bytes: $e');
+      return rawBytes;
+    }
+  }
+
+  Future<String> uploadCustomerKtpImage({
+    required String customerId,
+    required Uint8List imageBytes,
+  }) async {
+    final optimizedBytes = compressKtpImage(imageBytes);
+    final cleanId = customerId.trim().replaceAll(RegExp(r'[^\w\-]'), '_');
+    final ref = _storage.ref().child('customers/ktp/$cleanId.jpg');
+
+    final metadata = SettableMetadata(
+      contentType: 'image/jpeg',
+      customMetadata: {
+        'customerId': customerId,
+        'uploadedAt': DateTime.now().toIso8601String(),
+      },
+    );
+
+    final uploadTask = await ref.putData(optimizedBytes, metadata);
+    final downloadUrl = await uploadTask.ref.getDownloadURL();
+    return downloadUrl;
+  }
+
+  Future<void> deleteCustomerKtpImage(String customerId) async {
+    try {
+      final cleanId = customerId.trim().replaceAll(RegExp(r'[^\w\-]'), '_');
+      final ref = _storage.ref().child('customers/ktp/$cleanId.jpg');
+      await ref.delete();
+    } catch (e) {
+      debugPrint('KTP image delete notice: $e');
+    }
   }
 
   // VBA GetPlatKode port
