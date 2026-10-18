@@ -635,19 +635,40 @@ class _CustomerListViewState extends State<CustomerListView> {
               });
             }
 
+            final screenWidth = MediaQuery.of(context).size.width;
+            final screenHeight = MediaQuery.of(context).size.height;
+            final isMobile = screenWidth < 600;
+
+            final badgeText = isFromCache
+                ? (isMobile
+                    ? '🟢 Cache HP (0 Kuota / 0s)'
+                    : (localPath != null
+                        ? 'Tersimpan di Memori HP (0 Kuota / 0s Load)'
+                        : 'Tersimpan di Cache Lokal (0 Kuota / 0s Load)'))
+                : (isMobile
+                    ? '☁️ Baru Diunduh (Disimpan)'
+                    : 'Baru Diunduh dari Server (Disimpan ke Cache Lokal)');
+
             return Dialog(
               backgroundColor: const Color(0xFF1E293B),
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 16 : 40,
+                vertical: isMobile ? 24 : 40,
+              ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 750, maxHeight: 680),
+                constraints: BoxConstraints(
+                  maxWidth: 750,
+                  maxHeight: isMobile ? screenHeight * 0.82 : 680,
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(isMobile ? 14 : 20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Column(
@@ -655,13 +676,17 @@ class _CustomerListViewState extends State<CustomerListView> {
                               children: [
                                 Text(
                                   'Foto KTP - ${customer.aliasName.isNotEmpty ? customer.aliasName : customer.customerName}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isMobile ? 15 : 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   'NIK: ${customer.ktpNumber.isNotEmpty ? customer.ktpNumber : '-'} | Pemilik: ${customer.customerName}',
-                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 if (!isLoadingImage && imageBytes != null) ...[
@@ -689,11 +714,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                                         const SizedBox(width: 5),
                                         Flexible(
                                           child: Text(
-                                            isFromCache
-                                                ? (localPath != null
-                                                    ? 'Tersimpan di Memori HP (0 Kuota / 0s Load)'
-                                                    : 'Tersimpan di Cache Lokal (0 Kuota / 0s Load)')
-                                                : 'Baru Diunduh dari Server (Disimpan ke Cache Lokal)',
+                                            badgeText,
                                             style: TextStyle(
                                               color: isFromCache ? const Color(0xFF34D399) : const Color(0xFF93C5FD),
                                               fontSize: 11,
@@ -713,12 +734,18 @@ class _CustomerListViewState extends State<CustomerListView> {
                             onPressed: () => Navigator.pop(context),
                             icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
                             tooltip: 'Tutup',
+                            visualDensity: VisualDensity.compact,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      Expanded(
+                      SizedBox(height: isMobile ? 12 : 16),
+                      Flexible(
+                        fit: isMobile ? FlexFit.loose : FlexFit.tight,
                         child: Container(
+                          constraints: BoxConstraints(
+                            maxHeight: isMobile ? screenHeight * 0.48 : 480,
+                            minHeight: isMobile ? 180 : 250,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF0F172A),
                             borderRadius: BorderRadius.circular(12),
@@ -760,77 +787,87 @@ class _CustomerListViewState extends State<CustomerListView> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: isMobile ? 12 : 16),
                       Row(
                         children: [
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0369A1),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          Tooltip(
+                            message: 'Buka Ukuran Penuh',
+                            child: Material(
+                              color: const Color(0xFF0369A1),
+                              borderRadius: BorderRadius.circular(8),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: customer.ktpImageUrl.isNotEmpty
+                                    ? () async {
+                                        final uri = Uri.parse(customer.ktpImageUrl);
+                                        if (await canLaunchUrl(uri)) {
+                                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                        }
+                                      }
+                                    : null,
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  child: const Icon(
+                                    Icons.open_in_new_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
                             ),
-                            icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                            label: const Text('Buka Ukuran Penuh', style: TextStyle(fontSize: 13)),
-                            onPressed: customer.ktpImageUrl.isNotEmpty
-                                ? () async {
-                                    final uri = Uri.parse(customer.ktpImageUrl);
-                                    if (await canLaunchUrl(uri)) {
-                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                    }
-                                  }
-                                : null,
                           ),
-                          const Spacer(),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF059669),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: isDownloading
-                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Icon(Icons.download_rounded, size: 16),
-                            label: Text(
-                              isDownloading ? 'Mengunduh...' : 'Unduh Foto KTP',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: (isDownloading || customer.ktpImageUrl.isEmpty || imageBytes == null)
-                                ? null
-                                : () async {
-                                    setDialogState(() => isDownloading = true);
-                                    try {
-                                      final safeName = customer.aliasName.replaceAll(RegExp(r'[^\w\s\-]'), '').trim().replaceAll(' ', '_');
-                                      final fileName = 'KTP_${customer.id}_$safeName.jpg';
-                                      await downloadFileBytes(
-                                        bytes: imageBytes!,
-                                        fileName: fileName,
-                                        mimeType: 'image/jpeg',
-                                      );
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Foto KTP berhasil diunduh: $fileName'),
-                                            backgroundColor: Colors.teal,
-                                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: isDownloading
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.download_rounded, size: 18),
+                              label: Text(
+                                isDownloading ? 'Mengunduh...' : 'Unduh Foto KTP',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: (isDownloading || customer.ktpImageUrl.isEmpty || imageBytes == null)
+                                  ? null
+                                  : () async {
+                                      setDialogState(() => isDownloading = true);
+                                      try {
+                                        final safeName = customer.aliasName.replaceAll(RegExp(r'[^\w\s\-]'), '').trim().replaceAll(' ', '_');
+                                        final fileName = 'KTP_${customer.id}_$safeName.jpg';
+                                        await downloadFileBytes(
+                                          bytes: imageBytes!,
+                                          fileName: fileName,
+                                          mimeType: 'image/jpeg',
                                         );
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Foto KTP berhasil diunduh: $fileName'),
+                                              backgroundColor: Colors.teal,
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Error unduh: $e'),
+                                              backgroundColor: Colors.redAccent,
+                                            ),
+                                          );
+                                        }
+                                      } finally {
+                                        if (context.mounted) {
+                                          setDialogState(() => isDownloading = false);
+                                        }
                                       }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Error unduh: $e'),
-                                            backgroundColor: Colors.redAccent,
-                                          ),
-                                        );
-                                      }
-                                    } finally {
-                                      if (context.mounted) {
-                                        setDialogState(() => isDownloading = false);
-                                      }
-                                    }
-                                  },
+                                    },
+                            ),
                           ),
                         ],
                       ),
