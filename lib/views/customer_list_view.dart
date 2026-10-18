@@ -558,8 +558,9 @@ class _CustomerListViewState extends State<CustomerListView> {
                           } catch (e) {
                             if (context.mounted) {
                               setDialogState(() => isSaving = false);
+                              final errMsg = e.toString().replaceAll('TimeoutException: ', '').replaceAll('Exception: ', '');
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.redAccent),
+                                SnackBar(content: Text(errMsg), backgroundColor: Colors.redAccent),
                               );
                             }
                           }

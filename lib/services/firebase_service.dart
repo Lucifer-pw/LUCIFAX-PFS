@@ -463,7 +463,7 @@ class FirebaseService {
     );
 
     final uploadTask = await ref.putData(optimizedBytes, metadata).timeout(
-      const Duration(seconds: 25),
+      const Duration(seconds: 60),
       onTimeout: () => throw TimeoutException('Waktu upload foto KTP habis (koneksi lambat). Silakan coba lagi.'),
     );
     final downloadUrl = await uploadTask.ref.getDownloadURL();
