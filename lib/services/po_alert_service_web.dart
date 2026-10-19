@@ -18,13 +18,13 @@ void showWebDesktopNotification(String title, String body) {
   }
 }
 
-void playPlatformAudioFallback() {
+Future<void> playPlatformAudio() async {
   try {
     final audio = html.AudioElement('assets/notifications/cihuy.mp3');
     audio.play().catchError((e) {
       debugPrint('HTML5 audio play error: $e');
     });
   } catch (e) {
-    debugPrint('HTML5 fallback error: $e');
+    debugPrint('HTML5 audio error: $e');
   }
 }

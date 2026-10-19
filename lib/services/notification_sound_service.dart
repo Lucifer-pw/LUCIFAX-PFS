@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'po_alert_service.dart';
 
@@ -13,8 +12,6 @@ class NotificationSoundService extends ChangeNotifier {
   static const String _prefMuteKey = 'pref_po_notification_muted';
   bool _isMuted = false;
   bool get isMuted => _isMuted;
-
-  final AudioPlayer _audioPlayer = AudioPlayer();
 
   Future<void> _loadMutePreference() async {
     try {
@@ -43,19 +40,17 @@ class NotificationSoundService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Play the "cihuy.mp3" sound alert
+  /// Play the "cihuy.mp3" sound alert across all platforms (Web and Android native)
   Future<void> playCihuyAlert() async {
     if (_isMuted) {
       debugPrint('[NotificationSoundService] Sound is muted, skipping chime.');
       return;
     }
     try {
-      await _audioPlayer.stop(); // Stop previous if currently playing
-      await _audioPlayer.play(AssetSource('notifications/cihuy.mp3'));
+      await playPlatformAudio();
       debugPrint('[NotificationSoundService] 🔊 Cihuy sound played successfully!');
     } catch (e) {
-      debugPrint('[NotificationSoundService] AudioPlayer play failed: $e, trying platform fallback...');
-      playPlatformAudioFallback();
+      debugPrint('[NotificationSoundService] playPlatformAudio failed: $e');
     }
   }
 
