@@ -36,6 +36,11 @@ import 'wa_gateway_view.dart';
 import 'package:flutter/services.dart';
 import '../services/walkie_talkie_service.dart';
 import '../services/auth_service.dart';
+import '../services/notification_sound_service.dart';
+import '../models/incoming_po_chat.dart';
+import '../models/po_notification_alert.dart';
+import '../widgets/po_alert_banner.dart';
+import '../widgets/po_invoice_quick_dialog.dart';
 
 class ShellView extends StatefulWidget {
   const ShellView({super.key});
@@ -52,6 +57,12 @@ class _ShellViewState extends State<ShellView> {
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
   final Set<String> _processedCommandIds = {};
   final FirebaseService _firebaseService = FirebaseService();
+  StreamSubscription<List<IncomingPoChat>>? _incomingPoSubscription;
+  final Set<String> _knownProcessedChatIds = {};
+  bool _isPoStreamInitialized = false;
+  int _pendingPoChatCount = 0;
+  PoNotificationAlert? _activePoAlert;
+  Timer? _poAlertDismissTimer;
 
   bool _handleGlobalKeyEvent(KeyEvent event) {
     if (event.logicalKey == LogicalKeyboardKey.altLeft ||
@@ -72,6 +83,7 @@ class _ShellViewState extends State<ShellView> {
     _loadVersionAndCheckUpdate();
     HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupIncomingPoListener();
       _setupRemotePrintListener();
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.currentUser;
@@ -101,8 +113,102 @@ class _ShellViewState extends State<ShellView> {
     HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
     WalkieTalkieService().dispose();
     _printCommandSubscription?.cancel();
+    _incomingPoSubscription?.cancel();
+    _poAlertDismissTimer?.cancel();
     _menuSearchController.dispose();
     super.dispose();
+  }
+
+  void _setupIncomingPoListener() {
+    _incomingPoSubscription?.cancel();
+    _incomingPoSubscription = _firebaseService.streamIncomingPoChats(limit: 50).listen((chats) {
+      if (!mounted) return;
+
+      // 1. Update pending count for sidebar badge
+      final pendingCount = chats.where((c) => c.status == 'pending').length;
+      if (pendingCount != _pendingPoChatCount) {
+        setState(() => _pendingPoChatCount = pendingCount);
+      }
+
+      // 2. On first snapshot load, remember all already-processed IDs so we don't alert old historical chats
+      if (!_isPoStreamInitialized) {
+        for (final chat in chats) {
+          if (chat.status == 'processed') {
+            _knownProcessedChatIds.add(chat.id);
+          }
+        }
+        _isPoStreamInitialized = true;
+        return;
+      }
+
+      // 3. Check for newly processed POs
+      for (final chat in chats) {
+        if (chat.status == 'processed' && !_knownProcessedChatIds.contains(chat.id)) {
+          _knownProcessedChatIds.add(chat.id);
+
+          // Only alert if processed recently (within last 15 minutes) or processedAt is null
+          final processedTime = chat.processedAt ?? chat.receivedAt;
+          if (DateTime.now().difference(processedTime).inMinutes > 15) {
+            continue;
+          }
+
+          final rawInvoices = chat.createdInvoiceNo ?? '';
+          final invoiceNos = rawInvoices
+              .split(',')
+              .map((s) => s.trim().replaceAll('#', ''))
+              .where((s) => s.isNotEmpty)
+              .toList();
+
+          _triggerPoAlert(
+            PoNotificationAlert(
+              chatId: chat.id,
+              senderName: chat.senderName,
+              senderPhone: chat.senderPhone,
+              invoiceNos: invoiceNos,
+              timestamp: chat.processedAt ?? DateTime.now(),
+              rawText: chat.messageText,
+            ),
+          );
+          break; // Alert latest one
+        }
+      }
+    }, onError: (err) {
+      debugPrint('[ShellView] Incoming PO Stream error: $err');
+    });
+  }
+
+  void _triggerPoAlert(PoNotificationAlert alert) {
+    if (!mounted) return;
+
+    _poAlertDismissTimer?.cancel();
+
+    setState(() {
+      _activePoAlert = alert;
+    });
+
+    // 1. Play "Cihuy!" sound effect
+    NotificationSoundService().playCihuyAlert();
+
+    // 2. Trigger Web desktop notification if browser tab is backgrounded
+    final invText = alert.invoiceNos.isNotEmpty ? 'Invoice #${alert.invoiceNos.join(', #')}' : 'Invoice Baru';
+    NotificationSoundService().triggerDesktopNotification(
+      title: '🔔 PO WhatsApp Baru: ${alert.senderName.isNotEmpty ? alert.senderName : "Customer"}',
+      body: '$invText berhasil dibuat otomatis oleh AI Scanner!',
+    );
+
+    // 3. Auto dismiss banner after 14 seconds
+    _poAlertDismissTimer = Timer(const Duration(seconds: 14), () {
+      if (mounted && _activePoAlert?.chatId == alert.chatId) {
+        setState(() => _activePoAlert = null);
+      }
+    });
+  }
+
+  void _navigateToHistory(List<Map<String, dynamic>> navItems) {
+    final idx = navItems.indexWhere((it) => it['title'] == 'Histori Transaksi');
+    if (idx != -1) {
+      setState(() => _currentIndex = idx);
+    }
   }
 
   void _setupRemotePrintListener() {
@@ -1143,6 +1249,80 @@ class _ShellViewState extends State<ShellView> {
             ),
           ),
 
+          // ══════════════════════════════════════════════════════════
+          // PO WA NOTIFICATION AUDIO TOGGLE (cihuy.mp3)
+          // ══════════════════════════════════════════════════════════
+          Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: ListenableBuilder(
+              listenable: NotificationSoundService(),
+              builder: (context, _) {
+                final sound = NotificationSoundService();
+                final isMuted = sound.isMuted;
+                return Tooltip(
+                  message: isMuted
+                      ? 'Suara Notif PO WA: Senyap (Klik untuk Bunyikan "Cihuy!")'
+                      : 'Suara Notif PO WA: Aktif (cihuy.mp3)',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      sound.toggleMute();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            sound.isMuted
+                                ? '🔇 Suara notifikasi PO WA dibisukan.'
+                                : '🔊 Suara notifikasi PO WA ("Cihuy!") diaktifkan.',
+                          ),
+                          backgroundColor: const Color(0xFF1E293B),
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 6 : 8,
+                        vertical: isMobile ? 5 : 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isMuted
+                            ? const Color(0xFF334155).withOpacity(0.6)
+                            : const Color(0xFF065F46).withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isMuted ? const Color(0xFF475569) : const Color(0xFF10B981),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isMuted ? Icons.notifications_off_rounded : Icons.notifications_active_rounded,
+                            size: isMobile ? 14 : 16,
+                            color: isMuted ? const Color(0xFF94A3B8) : const Color(0xFF34D399),
+                          ),
+                          if (!isMobile) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              isMuted ? 'MUTE' : 'CIHUY!',
+                              style: TextStyle(
+                                color: isMuted ? const Color(0xFF94A3B8) : const Color(0xFF34D399),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
           // User profile chips and sign-out
           Padding(
             padding: EdgeInsets.symmetric(horizontal: isMobile ? 6.0 : 12.0),
@@ -1206,21 +1386,47 @@ class _ShellViewState extends State<ShellView> {
               child: _buildDrawerContent(navItems, updateProvider),
             ),
           Expanded(
-            child: Container(
-              color: const Color(0xFF0F172A),
-              child: IndexedStack(
-                index: _currentIndex,
-                children: navItems.asMap().entries.map<Widget>((entry) {
-                  final isSelected = entry.key == _currentIndex;
-                  return ExcludeFocus(
-                    excluding: !isSelected,
-                    child: FocusScope(
-                      canRequestFocus: isSelected,
-                      child: entry.value['widget'] as Widget,
-                    ),
-                  );
-                }).toList(),
-              ),
+            child: Stack(
+              children: [
+                Container(
+                  color: const Color(0xFF0F172A),
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: navItems.asMap().entries.map<Widget>((entry) {
+                      final isSelected = entry.key == _currentIndex;
+                      return ExcludeFocus(
+                        excluding: !isSelected,
+                        child: FocusScope(
+                          canRequestFocus: isSelected,
+                          child: entry.value['widget'] as Widget,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                if (_activePoAlert != null)
+                  PoAlertBanner(
+                    alert: _activePoAlert!,
+                    onDismiss: () {
+                      _poAlertDismissTimer?.cancel();
+                      setState(() => _activePoAlert = null);
+                    },
+                    onOpenInvoice: (inv) {
+                      _poAlertDismissTimer?.cancel();
+                      setState(() => _activePoAlert = null);
+                      PoInvoiceQuickDialog.show(
+                        context,
+                        invoiceNo: inv,
+                        onOpenInHistory: () => _navigateToHistory(navItems),
+                      );
+                    },
+                    onOpenHistory: () {
+                      _poAlertDismissTimer?.cancel();
+                      setState(() => _activePoAlert = null);
+                      _navigateToHistory(navItems);
+                    },
+                  ),
+              ],
             ),
           ),
         ],
@@ -1538,11 +1744,21 @@ class _ShellViewState extends State<ShellView> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
                       selected: isSelected,
                       selectedTileColor: const Color(0xFF0284C7).withOpacity(0.2),
-                      leading: Icon(
-                        item['icon'],
-                        color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
-                        size: 20,
-                      ),
+                      leading: (item['title'] == 'WA Gateway Auto-PO' && _pendingPoChatCount > 0)
+                          ? Badge(
+                              label: Text('$_pendingPoChatCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                              backgroundColor: Colors.redAccent,
+                              child: Icon(
+                                item['icon'],
+                                color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                size: 20,
+                              ),
+                            )
+                          : Icon(
+                              item['icon'],
+                              color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                              size: 20,
+                            ),
                       title: Text(
                         item['title'],
                         style: TextStyle(
@@ -1551,6 +1767,24 @@ class _ShellViewState extends State<ShellView> {
                           fontSize: 13.0,
                         ),
                       ),
+                      trailing: (item['title'] == 'WA Gateway Auto-PO' && _pendingPoChatCount > 0)
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.redAccent, width: 1),
+                              ),
+                              child: Text(
+                                '$_pendingPoChatCount Baru',
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : null,
                       onTap: () {
                         setState(() {
                           _currentIndex = originalIndex;
