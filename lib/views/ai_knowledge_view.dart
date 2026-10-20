@@ -1099,21 +1099,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                               ),
                             ),
                             DataCell(
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 18),
-                                    tooltip: 'Edit Aturan',
-                                    onPressed: () => _showAddEditRuleDialog(rule),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                    tooltip: 'Hapus Aturan',
-                                    onPressed: () => _deleteRule(rule),
-                                  ),
-                                ],
-                              ),
+                              _buildRuleActionMenu(rule),
                             ),
                           ],
                         );
@@ -1121,6 +1107,50 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                     ),
                   ),
                 ),
+    );
+  }
+
+
+  Widget _buildRuleActionMenu(AiKnowledgeRule rule) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8), size: 20),
+      tooltip: 'Opsi Aturan',
+      color: const Color(0xFF1E293B),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: Color(0xFF334155)),
+      ),
+      onSelected: (value) {
+        if (value == 'edit') {
+          _showAddEditRuleDialog(rule);
+        } else if (value == 'delete') {
+          _deleteRule(rule);
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem<String>(
+          value: 'edit',
+          height: 38,
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 16),
+              SizedBox(width: 8),
+              Text('Edit Aturan', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'delete',
+          height: 38,
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+              SizedBox(width: 8),
+              Text('Hapus Aturan', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1169,26 +1199,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                 DateFormat('dd-MM-yyyy').format(rule.createdAt),
                 style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(6),
-                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 18),
-                    tooltip: 'Edit Aturan',
-                    onPressed: () => _showAddEditRuleDialog(rule),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(6),
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                    tooltip: 'Hapus Aturan',
-                    onPressed: () => _deleteRule(rule),
-                  ),
-                ],
-              ),
+              _buildRuleActionMenu(rule),
             ],
           ),
         ],

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/incoming_po_chat.dart';
 import '../models/wa_gateway_session.dart';
@@ -23,6 +24,46 @@ class WaGatewayView extends StatefulWidget {
 }
 
 class _WaGatewayViewState extends State<WaGatewayView> {
+  bool _hidePhoneNumbers = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHidePhonePreference();
+  }
+
+  Future<void> _loadHidePhonePreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _hidePhoneNumbers = prefs.getBool('pref_hide_wa_phone_numbers') ?? false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleHidePhoneNumbers() async {
+    setState(() {
+      _hidePhoneNumbers = !_hidePhoneNumbers;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('pref_hide_wa_phone_numbers', _hidePhoneNumbers);
+    } catch (_) {}
+  }
+
+  String _maskPhone(String? phone) {
+    if (phone == null || phone.isEmpty) return '-';
+    if (!_hidePhoneNumbers) return phone;
+    String clean = phone.trim();
+    bool hasPlus = clean.startsWith('+');
+    if (hasPlus) clean = clean.substring(1);
+    if (clean.length <= 6) return (hasPlus ? '+' : '') + '••••••';
+    final prefix = clean.substring(0, clean.length >= 5 ? 5 : 3);
+    final suffix = clean.substring(clean.length - 3);
+    return '${hasPlus ? "+" : ""}$prefix•••••$suffix';
+  }
   final FirebaseService _firebaseService = FirebaseService();
   final TextEditingController _searchController = TextEditingController();
   String _selectedStatusFilter = 'all'; // 'all', 'pending', 'processed', 'dismissed'
@@ -523,7 +564,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
-                                            '(+${item['phone'] ?? ''})',
+                                            '(+${_maskPhone(item['phone'])})',
                                             style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                                           ),
                                         ],
@@ -1156,7 +1197,27 @@ Kirim besok pagi ya pak bc''';
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text('Nomor Terhubung: +${session.phone ?? '-'}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    Row(
+                      children: [
+                        Text('Nomor Terhubung: +${_maskPhone(session.phone)}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: _hidePhoneNumbers ? 'Tampilkan Nomor HP' : 'Sembunyikan Nomor HP',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: _toggleHidePhoneNumbers,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Icon(
+                                _hidePhoneNumbers ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                color: _hidePhoneNumbers ? const Color(0xFF94A3B8) : const Color(0xFF34D399),
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Text('Nama Akun: ${session.pushName ?? 'Admin Lucifax'}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
                     const SizedBox(height: 10),
@@ -1476,11 +1537,27 @@ Kirim besok pagi ya pak bc''';
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isMobile) ...[
-            const Row(
+            Row(
               children: [
-                Icon(Icons.inbox_rounded, color: Color(0xFF38BDF8), size: 18),
-                SizedBox(width: 8),
-                Text('Kotak Masuk Pesanan WA', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                const Icon(Icons.inbox_rounded, color: Color(0xFF38BDF8), size: 18),
+                const SizedBox(width: 8),
+                const Text('Kotak Masuk Pesanan WA', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Tooltip(
+                  message: _hidePhoneNumbers ? 'Tampilkan Nomor HP' : 'Sembunyikan Nomor HP',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: _toggleHidePhoneNumbers,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        _hidePhoneNumbers ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                        color: _hidePhoneNumbers ? const Color(0xFF94A3B8) : const Color(0xFF38BDF8),
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -1509,6 +1586,19 @@ Kirim besok pagi ya pak bc''';
                 const SizedBox(width: 8),
                 const Text('Kotak Masuk Pesanan WhatsApp', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                 const Spacer(),
+                Tooltip(
+                  message: _hidePhoneNumbers ? 'Tampilkan Nomor HP' : 'Sembunyikan Nomor HP',
+                  child: IconButton(
+                    icon: Icon(
+                      _hidePhoneNumbers ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      color: _hidePhoneNumbers ? const Color(0xFF94A3B8) : const Color(0xFF38BDF8),
+                      size: 20,
+                    ),
+                    tooltip: _hidePhoneNumbers ? 'Tampilkan Nomor HP' : 'Sembunyikan Nomor HP',
+                    onPressed: _toggleHidePhoneNumbers,
+                  ),
+                ),
+                const SizedBox(width: 6),
                 SizedBox(
                   width: 220,
                   height: 36,
@@ -1679,7 +1769,7 @@ Kirim besok pagi ya pak bc''';
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text('(+${chat.senderPhone})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                    Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
                   ],
                 ),
               ),
