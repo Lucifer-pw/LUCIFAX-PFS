@@ -164,33 +164,30 @@ class AiChatParserService {
       caseSensitive: false,
     );
 
-    // Helper: peek ahead to see if the next non-empty line is an order line
-    bool isNextLineOrder(int fromIndex) {
+    // Helper: checks if ANY line after fromIndex contains an order item
+    bool hasSubsequentOrderLines(int fromIndex) {
       for (int j = fromIndex + 1; j < rawLines.length; j++) {
         final nextTrimmed = rawLines[j].trim();
         if (nextTrimmed.isEmpty) continue;
-        return _looksLikeOrderLine(nextTrimmed);
+        if (_looksLikeOrderLine(nextTrimmed)) return true;
       }
       return false;
     }
 
-    for (int i = 0; i < rawLines.length; i++) {
-      final line = rawLines[i];
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
-
-      // 1. Check if this line is a STORE HEADER (Store at TOP)
-      bool isHeaderStore = false;
-      if (newStoreRegex.hasMatch(trimmed) || _isStoreHeaderLine(trimmed)) {
-        isHeaderStore = true;
+    // Helper: get next non-empty line
+    String? getNextNonEmptyLine(int fromIndex) {
+      for (int j = fromIndex + 1; j < rawLines.length; j++) {
+        final t = rawLines[j].trim();
+        if (t.isNotEmpty) return t;
       }
+      return null;
+    }
 
-    // Helper: does currentBlock already have a customer/store identified at its top?
-    bool currentBlockHasTopStore() {
+    // Helper: checks if currentBlock already has a customer identified (top, middle, or bottom)
+    bool currentBlockHasCustomer() {
       for (var l in currentBlock) {
         final t = l.trim();
         if (t.isEmpty) continue;
-        if (_looksLikeOrderLine(t)) break; // reached first order line
         if (_isCandidateCustomerLine(t, customers: customers, customerRules: customerRules) ||
             newStoreRegex.hasMatch(t) ||
             _isStoreHeaderLine(t)) {
@@ -200,23 +197,70 @@ class AiChatParserService {
       return false;
     }
 
-      // If this is a header for a NEW store and currentBlock ALREADY has order items:
-      // We ONLY split BEFORE this line if:
-      // a) There are actually order items coming after this line (isNextLineOrder(i) is TRUE), AND
-      // b) Either currentBlock ALREADY has a top store (so this line must be the start of the next store),
-      //    OR this line has an explicit header keyword (e.g. "po ", "order dari", "pak mau order dari").
-      // If currentBlock has NO top store, this line is actually the FOOTER for currentBlock,
-      // so we must NOT split before it!
-      if (isHeaderStore && currentBlock.isNotEmpty) {
-        final bool prevHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
-        final bool hasNextOrder = isNextLineOrder(i);
-        final bool hasExplicitHeaderPrefix = trimmed.toLowerCase().startsWith('po ') ||
-            trimmed.toLowerCase().startsWith('order ') ||
-            trimmed.toLowerCase().contains('order dari') ||
-            trimmed.toLowerCase().startsWith('toko ') ||
-            trimmed.toLowerCase().startsWith('pak mau order');
+    // Helper: checks if a line starts a new numbered list (e.g. "1. ", "1) ", "1- ")
+    bool isNumberedListStart(String s) {
+      return RegExp(r'^1[\.\)\-]\s+').hasMatch(s);
+    }
 
-        if (prevHasItems && hasNextOrder && (currentBlockHasTopStore() || hasExplicitHeaderPrefix)) {
+    for (int i = 0; i < rawLines.length; i++) {
+      final line = rawLines[i];
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      final bool currentHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
+      final bool remainingHasItems = hasSubsequentOrderLines(i);
+      final bool isThisLineCust = _isCandidateCustomerLine(
+        trimmed,
+        customers: customers,
+        customerRules: customerRules,
+      );
+      final bool isHeaderStore = newStoreRegex.hasMatch(trimmed) || _isStoreHeaderLine(trimmed);
+      final String? nextLine = getNextNonEmptyLine(i);
+      final bool isNextLineCust = nextLine != null && _isCandidateCustomerLine(
+        nextLine,
+        customers: customers,
+        customerRules: customerRules,
+      );
+      final bool isNextLineOrder = nextLine != null && _looksLikeOrderLine(nextLine);
+
+      // =========================================================================
+      // 1. SPLIT BEFORE THIS LINE (Start of a New Order Block)
+      // =========================================================================
+      if (currentHasItems) {
+        bool shouldSplitBefore = false;
+
+        // Case 1A: This line starts a new numbered list ("1. "), and currentBlock
+        // ALREADY has a customer specified (e.g. Paris FF completed, and now MMM's "1. Fiva bakso..." starts).
+        if (isNumberedListStart(trimmed) && currentBlockHasCustomer()) {
+          shouldSplitBefore = true;
+        }
+
+        // Case 1B: This line is a store header (Store at TOP) introducing upcoming items.
+        // We split before this line if:
+        // - There are items following in the chat (remainingHasItems is true)
+        // - AND either:
+        //   * currentBlock already has its own customer, OR
+        //   * this line has an explicit header keyword ("po ", "order dari", "toko ", "pak mau order"), OR
+        //   * the previous non-empty line in currentBlock was ALSO a customer line (adjacent customer transition)
+        else if ((isHeaderStore || isThisLineCust) && remainingHasItems) {
+          final bool hasExplicitHeaderPrefix = trimmed.toLowerCase().startsWith('po ') ||
+              trimmed.toLowerCase().startsWith('order ') ||
+              trimmed.toLowerCase().contains('order dari') ||
+              trimmed.toLowerCase().startsWith('toko ') ||
+              trimmed.toLowerCase().startsWith('pak mau order');
+
+          final String? lastInCurrent = currentBlock.reversed
+              .map((l) => l.trim())
+              .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+          final bool prevWasCust = lastInCurrent != null &&
+              _isCandidateCustomerLine(lastInCurrent, customers: customers, customerRules: customerRules);
+
+          if (currentBlockHasCustomer() || hasExplicitHeaderPrefix || prevWasCust) {
+            shouldSplitBefore = true;
+          }
+        }
+
+        if (shouldSplitBefore) {
           blocks.add(List.from(currentBlock));
           currentBlock.clear();
         }
@@ -225,31 +269,29 @@ class AiChatParserService {
       // Add line to current block
       currentBlock.add(line);
 
-      // 2. Check if this line is a STORE FOOTER (Store at BOTTOM / CLOSING)
+      // =========================================================================
+      // 2. SPLIT AFTER THIS LINE (Closing of Current Order Block / Store at Footer)
+      // =========================================================================
       // Conditions:
       // - currentBlock ALREADY has order items
-      // - this line is a candidate customer line
-      // - the NEXT non-empty line starts a new set of order items!
-      final bool blockHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
-      final bool isCust = _isCandidateCustomerLine(
-        trimmed,
-        customers: customers,
-        customerRules: customerRules,
-      );
-
-      if (blockHasItems && isCust && isNextLineOrder(i)) {
-        // This store line was the FOOTER for the current order!
-        // Finish currentBlock and start a fresh block for the next order.
-        blocks.add(List.from(currentBlock));
-        currentBlock.clear();
+      // - this line is a customer line (closing/footer store for the items above)
+      // - there ARE subsequent items in the remaining chat (remainingHasItems is true)
+      // - AND:
+      //   * The next non-empty line is the next order's item (isNextLineOrder), OR
+      //   * The next non-empty line is ANOTHER store header (isNextLineCust)!
+      if (currentHasItems && isThisLineCust && remainingHasItems) {
+        if (isNextLineOrder || isNextLineCust) {
+          blocks.add(List.from(currentBlock));
+          currentBlock.clear();
+        }
       }
     }
 
     if (currentBlock.isNotEmpty) {
       blocks.add(currentBlock);
     }
-
-    // Post-process: Split blocks that contain BOTH a header store and a footer store
+
+        // Post-process: Split blocks that contain BOTH a header store and a footer store
     final refinedBlocks = _splitMixedHeaderFooterBlocks(
       blocks,
       customers: customers,

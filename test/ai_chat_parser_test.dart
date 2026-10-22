@@ -1261,4 +1261,133 @@ Krm hari ini
     expect(draft.customerName.toLowerCase(), contains('paris ff'));
     expect(draft.items.length, 2);
   });
+  test('Debug user issue MMM and Griya FF', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'BRS COKLAT 24S 500 G', price: 37000, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P04', name: 'BRS COKLAT 13S 500 G', price: 37000, stock: 100, isiKarton: 13, sizeGrams: 500),
+      Product(id: 'P05', name: 'BAKSO SAPI 250 G', price: 20000, stock: 100, isiKarton: 20, sizeGrams: 250),
+      Product(id: 'P06', name: 'BRATWURST SAPI 500 G', price: 35000, stock: 100, isiKarton: 20, sizeGrams: 500),
+      Product(id: 'P07', name: 'KORNET AYAM 250 G', price: 15000, stock: 100, isiKarton: 20, sizeGrams: 250),
+      Product(id: 'P08', name: 'SOSIS AYAM 250 G', price: 15000, stock: 100, isiKarton: 20, sizeGrams: 250),
+    ];
+    final customers = [
+      Customer(id: '0002', customerName: 'MAJU MARKET MANDIRI', aliasName: 'MMM', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+      Customer(id: 'G001', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'MMM', mappedValue: 'MAJU MARKET MANDIRI', targetId: '0002', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'customer_alias', keyword: 'Griya ff', mappedValue: 'GRIYA FROZEN FOOD', targetId: 'G001', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+1. Fiva bakso sapi 250gr 30pcs
+2. Fiva beres sosis merah 500gr 4k
+3. Fiva bratwust sapi 500gr 2k
+4. Fiva kornet ayam 250gr 15pcs
+5. Fiva sosis ayam 250gr 30 pcs
+6. Fiva beres sapi 13s 500gr 10k
+7. Fiva beres sapi 24s 500gr 3k
+MMM
+
+Griya ff Pekalongan
+Beres merah 20 k
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    print('DEBUG_DRAFTS_COUNT: ${drafts.length}');
+    for (int i = 0; i < drafts.length; i++) {
+      print('DEBUG_DRAFT_$i: cust=${drafts[i].customerName} (id=${drafts[i].customerId}) items=${drafts[i].items.length}');
+      print('DEBUG_RAW_BLOCK_$i:\n${drafts[i].rawChatBlock}');
+    }
+  });
+  test('User 4-Store Multi-Order: Paris FF + MMM + AW + Griya FF in one chat splits into 4 drafts', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P03', name: 'BRS COKLAT 24S 500 G', price: 37000, stock: 100, isiKarton: 24, sizeGrams: 500),
+      Product(id: 'P04', name: 'BRS COKLAT 13S 500 G', price: 37000, stock: 100, isiKarton: 13, sizeGrams: 500),
+      Product(id: 'P05', name: 'BAKSO SAPI 250 G', price: 20000, stock: 100, isiKarton: 20, sizeGrams: 250),
+      Product(id: 'P06', name: 'BRATWURST SAPI 500 G', price: 35000, stock: 100, isiKarton: 20, sizeGrams: 500),
+      Product(id: 'P07', name: 'KORNET AYAM 250 G', price: 15000, stock: 100, isiKarton: 20, sizeGrams: 250),
+      Product(id: 'P08', name: 'SOSIS AYAM 250 G', price: 15000, stock: 100, isiKarton: 20, sizeGrams: 250),
+      Product(id: 'P09', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P10', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+    final customers = [
+      Customer(id: 'C_PARIS', customerName: 'PARIS FF', aliasName: 'PARIS FF', address: '', city: 'SEMARANG', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+      Customer(id: '0002', customerName: 'MAJU MARKET MANDIRI', aliasName: 'MMM', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+      Customer(id: 'C_AW', customerName: 'AW FROZEN FOOD', aliasName: 'AW', address: '', city: 'KENDAL', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+      Customer(id: 'G001', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'MMM', mappedValue: 'MAJU MARKET MANDIRI', targetId: '0002', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'customer_alias', keyword: 'AW', mappedValue: 'AW FROZEN FOOD', targetId: 'C_AW', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'customer_alias', keyword: 'Griya ff', mappedValue: 'GRIYA FROZEN FOOD', targetId: 'G001', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Fiva rolade ayam roll 200
+Fiva rolade sapi roll 350
+Paris ff
+Krm hari ini
+
+1. Fiva bakso sapi 250gr 30pcs
+2. Fiva beres sosis merah 500gr 4k
+3. Fiva bratwust sapi 500gr 2k
+4. Fiva kornet ayam 250gr 15pcs
+5. Fiva sosis ayam 250gr 30 pcs
+6. Fiva beres sapi 13s 500gr 10k
+7. Fiva beres sapi 24s 500gr 3k
+MMM
+
+1. Fiva bakso sapi 250gr 30pcs
+2. Fiva beres sosis merah 500gr 4k
+3. Fiva bratwust sapi 500gr 2k
+4. Fiva kornet ayam 250gr 15pcs
+5. Fiva sosis ayam 250gr 30 pcs
+6. Fiva beres sapi 13s 500gr 10k
+7. Fiva beres sapi 24s 500gr 3k
+AW 
+
+Griya ff Pekalongan
+Beres merah 20 k
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 4);
+
+    // Draft 1: Paris FF
+    expect(drafts[0].customerName, 'PARIS FF');
+    expect(drafts[0].customerId, 'C_PARIS');
+    expect(drafts[0].items.length, 2);
+
+    // Draft 2: MMM
+    expect(drafts[1].customerName, 'MAJU MARKET MANDIRI');
+    expect(drafts[1].customerId, '0002');
+    expect(drafts[1].items.length, 7);
+
+    // Draft 3: AW
+    expect(drafts[2].customerName, 'AW FROZEN FOOD');
+    expect(drafts[2].customerId, 'C_AW');
+    expect(drafts[2].items.length, 7);
+
+    // Draft 4: Griya FF
+    expect(drafts[3].customerName, 'GRIYA FROZEN FOOD');
+    expect(drafts[3].customerId, 'G001');
+    expect(drafts[3].items.length, 1);
+  });
 }
