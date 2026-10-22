@@ -1197,7 +1197,68 @@ Hana makmur
     // Must be single (BONUS), NOT (BONUS) (BONUS)
     expect(itemBonusLegacy.displayNameWithBonus, 'KORNET AYAM LOYANG 400 G (BONUS)');
   });
+
+  test('Reproduction: Chat with items first, then store name at footer (Paris ff), and instruction (Krm hari ini)', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P06', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P07', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+    final customers = [
+      Customer(id: 'C_PARIS', customerName: 'PARIS FF', aliasName: 'PARIS FF', address: '', city: 'SEMARANG', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+
+    final chatText = '''
+Fiva rolade ayam roll 200
+Fiva rolade sapi roll 350
+Paris ff
+Krm hari ini
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: [],
+      senderPhone: '628122589564', // Jokosetiawan
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'C_PARIS');
+    expect(draft.customerName, 'PARIS FF');
+    expect(draft.items.length, 2);
+    expect(draft.items[0].productName, 'ROLLADE AYAM ROLL 400 G');
+    expect(draft.items[0].qtyInput, 200.0);
+    expect(draft.items[1].productName, 'ROLLADE SAPI ROLL 400 G');
+    expect(draft.items[1].qtyInput, 350.0);
+  });
+  test('Reproduction 2: Unregistered store at footer (Paris ff) with instruction preserves Paris ff name instead of Pelanggan WhatsApp', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P06', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P07', name: 'ROLLADE SAPI ROLL 400 G', price: 26194, stock: 100, isiKarton: 50, sizeGrams: 400),
+    ];
+
+    final chatText = '''
+Fiva rolade ayam roll 200
+Fiva rolade sapi roll 350
+Paris ff
+Krm hari ini
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: [], // Unregistered customer!
+      rules: [],
+      senderPhone: '628122589564', // Jokosetiawan
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, '');
+    expect(draft.customerName.toLowerCase(), contains('paris ff'));
+    expect(draft.items.length, 2);
+  });
 }
-
-
-

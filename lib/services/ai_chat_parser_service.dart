@@ -185,11 +185,38 @@ class AiChatParserService {
         isHeaderStore = true;
       }
 
+    // Helper: does currentBlock already have a customer/store identified at its top?
+    bool currentBlockHasTopStore() {
+      for (var l in currentBlock) {
+        final t = l.trim();
+        if (t.isEmpty) continue;
+        if (_looksLikeOrderLine(t)) break; // reached first order line
+        if (_isCandidateCustomerLine(t, customers: customers, customerRules: customerRules) ||
+            newStoreRegex.hasMatch(t) ||
+            _isStoreHeaderLine(t)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
       // If this is a header for a NEW store and currentBlock ALREADY has order items:
-      // Split BEFORE this line!
+      // We ONLY split BEFORE this line if:
+      // a) There are actually order items coming after this line (isNextLineOrder(i) is TRUE), AND
+      // b) Either currentBlock ALREADY has a top store (so this line must be the start of the next store),
+      //    OR this line has an explicit header keyword (e.g. "po ", "order dari", "pak mau order dari").
+      // If currentBlock has NO top store, this line is actually the FOOTER for currentBlock,
+      // so we must NOT split before it!
       if (isHeaderStore && currentBlock.isNotEmpty) {
         final bool prevHasItems = currentBlock.any((l) => _looksLikeOrderLine(l));
-        if (prevHasItems) {
+        final bool hasNextOrder = isNextLineOrder(i);
+        final bool hasExplicitHeaderPrefix = trimmed.toLowerCase().startsWith('po ') ||
+            trimmed.toLowerCase().startsWith('order ') ||
+            trimmed.toLowerCase().contains('order dari') ||
+            trimmed.toLowerCase().startsWith('toko ') ||
+            trimmed.toLowerCase().startsWith('pak mau order');
+
+        if (prevHasItems && hasNextOrder && (currentBlockHasTopStore() || hasExplicitHeaderPrefix)) {
           blocks.add(List.from(currentBlock));
           currentBlock.clear();
         }
@@ -591,6 +618,9 @@ class AiChatParserService {
     }
 
     // B. Check BOTTOM lines (scan non-order lines from bottom upwards, e.g. "Mister sosis", "Po aw")
+    String? candidateBottomRawName;
+    int? candidateBottomLineIdx;
+
     for (int i = lines.length - 1; i >= 0; i--) {
       final line = lines[i];
       if (_looksLikeOrderLine(line) || _isIgnoredLine(line)) continue;
@@ -603,6 +633,9 @@ class AiChatParserService {
           headerLineCount: 0,
           customerLineIndex: i,
         );
+      } else if (candidateBottomRawName == null && _isCandidateCustomerLine(line, customers: customers, customerRules: customerRules)) {
+        candidateBottomRawName = line;
+        candidateBottomLineIdx = i;
       }
     }
 
@@ -627,6 +660,16 @@ class AiChatParserService {
         rawName: lines[0],
         headerLineCount: 1,
         customerLineIndex: 0,
+      );
+    }
+
+    // D2. If a candidate customer line was found at the bottom (even if unregistered in master), use it!
+    if (candidateBottomRawName != null) {
+      return _CustomerResolution(
+        customer: null,
+        rawName: candidateBottomRawName,
+        headerLineCount: 0,
+        customerLineIndex: candidateBottomLineIdx,
       );
     }
 
