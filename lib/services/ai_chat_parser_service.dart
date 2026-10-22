@@ -1181,8 +1181,20 @@ class AiChatParserService {
     final endNumberMatch = RegExp(r'\b(\d+([.,]\d+)*)$').firstMatch(line);
     if (endNumberMatch != null) {
       qty = _parseIndonesianNumber(endNumberMatch.group(1) ?? '1');
-      unit = 'karton'; // Default to karton for whole bulk numbers in warehouse
       cleaned = line.substring(0, endNumberMatch.start).trim();
+      final lowerCleaned = cleaned.toLowerCase();
+      if (lowerCleaned.endsWith('roll') || lowerCleaned.endsWith('rol')) {
+        unit = 'roll';
+      } else if (lowerCleaned.endsWith('pack') ||
+          lowerCleaned.endsWith('pak') ||
+          lowerCleaned.endsWith('pcs') ||
+          lowerCleaned.endsWith('pc') ||
+          lowerCleaned.endsWith('bks') ||
+          lowerCleaned.endsWith('biji')) {
+        unit = 'pack';
+      } else {
+        unit = 'karton'; // Default to karton for whole bulk numbers in warehouse
+      }
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
