@@ -52,6 +52,19 @@ let lidToPhoneMap = new Map(); // '33668835856433' -> '6287789733632'
 let phoneToLidMap = new Map(); // '6287789733632' -> '33668835856433'
 let autoPoEnabled = false;
 
+// Processed message IDs to prevent duplicates across restarts and history sync
+const processedMessageIds = new Set();
+
+// Seed recent message IDs from Firestore on startup
+if (firebaseAdapter && typeof firebaseAdapter.loadRecentMessageIds === 'function') {
+  firebaseAdapter.loadRecentMessageIds().then(ids => {
+    ids.forEach(id => processedMessageIds.add(id));
+    if (ids.size > 0) {
+      console.log(`[CACHE INIT] Memuat ${ids.size} ID pesan terakhir untuk mencegah duplikasi.`);
+    }
+  }).catch(() => {});
+}
+
 // Dynamic Message Buffering / Debounce per Sender (Tahap 1: Gabung Chat Otomatis)
 // Combines separate bubble messages from the same sender within 20 seconds into 1 full order
 const pendingMessageBuffers = new Map();
@@ -77,7 +90,10 @@ async function flushMessageBuffer(bufferKey) {
     senderName: buf.senderName,
     messageText: combinedText,
     isOrderDetected: buf.isOrderDetected,
-    messageCount: buf.texts.length
+    messageCount: buf.texts.length,
+    messageId: buf.messageIds?.[0] || '',
+    messageIds: buf.messageIds || [],
+    receivedAt: buf.receivedAt || new Date()
   };
 
   recentChats.unshift({
@@ -350,170 +366,242 @@ async function startBaileys() {
       }
     });
 
-    // Incoming messages handler
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      for (const m of messages) {
-        if (!m.message) continue;
-        if (m.key.fromMe) continue;
+    // Helper to unwrap nested messages (ephemeral, viewOnce, etc.)
+    function unwrapMessage(msg) {
+      if (!msg) return {};
+      let m = msg;
+      if (m.ephemeralMessage?.message) m = m.ephemeralMessage.message;
+      if (m.viewOnceMessage?.message) m = m.viewOnceMessage.message;
+      if (m.viewOnceMessageV2?.message) m = m.viewOnceMessageV2.message;
+      if (m.documentWithCaptionMessage?.message) m = m.documentWithCaptionMessage.message;
+      return m;
+    }
 
-        const remoteJid = m.key.remoteJid || '';
-        const isLid = remoteJid.endsWith('@lid');
-        const rawJidDigits = remoteJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+    function extractText(rawMsg) {
+      if (!rawMsg) return '';
+      const m = unwrapMessage(rawMsg);
+      return (
+        m.conversation ||
+        m.extendedTextMessage?.text ||
+        m.imageMessage?.caption ||
+        m.videoMessage?.caption ||
+        m.documentMessage?.caption ||
+        rawMsg.conversation ||
+        rawMsg.extendedTextMessage?.text ||
+        ''
+      ).trim();
+    }
 
-        // Extract possible sender phone number
-        // 1. Check stanza PN attributes if present
-        let senderPhone = '';
-        if (m.key.senderPn) {
-          senderPhone = cleanPhone(m.key.senderPn);
-        } else if (m.key.participantPn) {
-          senderPhone = cleanPhone(m.key.participantPn);
+    // Process a single incoming or history sync message
+    async function processSingleMessage(m, isHistorySync = false) {
+      if (!m || !m.message) return;
+      if (m.key?.fromMe) return;
+
+      const msgId = m.key?.id;
+      if (msgId && processedMessageIds.has(msgId)) {
+        return; // Sudah pernah diproses, lewati
+      }
+
+      // Parse timestamp pesan
+      const rawTs = m.messageTimestamp;
+      const tsSec = typeof rawTs === 'number'
+        ? rawTs
+        : (rawTs?.low || (typeof rawTs?.toNumber === 'function' ? rawTs.toNumber() : 0));
+      const msgTimeMs = tsSec > 0 ? tsSec * 1000 : Date.now();
+
+      // Jika sinkronisasi riwayat, batasi pesan maksimal 12 jam terakhir
+      const MAX_HISTORY_AGE_MS = 12 * 60 * 60 * 1000;
+      if (isHistorySync && (Date.now() - msgTimeMs > MAX_HISTORY_AGE_MS)) {
+        return; // Terlalu lama, lewati
+      }
+
+      const cleanText = extractText(m.message);
+      if (!cleanText || cleanText.length === 0) return;
+
+      const remoteJid = m.key.remoteJid || '';
+      const isLid = remoteJid.endsWith('@lid');
+      const rawJidDigits = remoteJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+
+      // Extract sender phone
+      let senderPhone = '';
+      if (m.key.senderPn) {
+        senderPhone = cleanPhone(m.key.senderPn);
+      } else if (m.key.participantPn) {
+        senderPhone = cleanPhone(m.key.participantPn);
+      }
+
+      if (!senderPhone && !isLid) {
+        senderPhone = cleanPhone(rawJidDigits);
+      }
+
+      if (!senderPhone && isLid && lidToPhoneMap.has(rawJidDigits)) {
+        senderPhone = lidToPhoneMap.get(rawJidDigits);
+      }
+
+      let senderName = m.pushName || 'Kontak WhatsApp';
+
+      // Name matching fallback against whitelistContactsList
+      const cleanPushName = (m.pushName || '').trim().toLowerCase();
+      let matchedContact = null;
+      if (cleanPushName) {
+        matchedContact = whitelistContactsList.find(c => {
+          const cn = c.name.toLowerCase().trim();
+          return cn.length >= 3 && (cleanPushName.includes(cn) || cn.includes(cleanPushName));
+        });
+      }
+
+      if (matchedContact) {
+        if (!senderPhone || isLid) {
+          senderPhone = matchedContact.phone;
         }
-
-        // 2. If not LID, rawJid is standard phone number
-        if (!senderPhone && !isLid) {
-          senderPhone = cleanPhone(rawJidDigits);
+        if (isLid && rawJidDigits) {
+          whitelistLids.add(rawJidDigits);
+          lidToPhoneMap.set(rawJidDigits, matchedContact.phone);
+          phoneToLidMap.set(matchedContact.phone, rawJidDigits);
+          console.log(`[AUTO-LEARN LID] Memetakan WhatsApp LID ${rawJidDigits} ke ${matchedContact.name} (+${matchedContact.phone})`);
         }
-
-        // 3. If LID, check lidToPhoneMap
-        if (!senderPhone && isLid && lidToPhoneMap.has(rawJidDigits)) {
-          senderPhone = lidToPhoneMap.get(rawJidDigits);
+        if (!m.pushName || m.pushName === 'Kontak WhatsApp') {
+          senderName = matchedContact.name;
         }
+      }
 
-        let senderName = m.pushName || 'Kontak WhatsApp';
+      if (!senderPhone) {
+        senderPhone = rawJidDigits;
+      }
 
-        // 4. Name matching fallback against whitelistContactsList
-        const cleanPushName = (m.pushName || '').trim().toLowerCase();
-        let matchedContact = null;
-        if (cleanPushName) {
-          matchedContact = whitelistContactsList.find(c => {
-            const cn = c.name.toLowerCase().trim();
-            return cn.length >= 3 && (cleanPushName.includes(cn) || cn.includes(cleanPushName));
+      // STRICT WHITELIST CHECK
+      if (strictWhitelistOnly && whitelistNumbers.size > 0) {
+        let isAllowed = false;
+
+        if (senderPhone) {
+          isAllowed = Array.from(whitelistNumbers).some(wn => {
+            const cleanWn = cleanPhone(wn);
+            return cleanWn.length >= 7 && (senderPhone.endsWith(cleanWn) || cleanWn.endsWith(senderPhone) || senderPhone === cleanWn);
           });
         }
 
-        if (matchedContact) {
-          if (!senderPhone || isLid) {
-            senderPhone = matchedContact.phone;
-          }
-          if (isLid && rawJidDigits) {
-            whitelistLids.add(rawJidDigits);
-            lidToPhoneMap.set(rawJidDigits, matchedContact.phone);
-            phoneToLidMap.set(matchedContact.phone, rawJidDigits);
-            console.log(`[AUTO-LEARN LID] Memetakan WhatsApp LID ${rawJidDigits} ke ${matchedContact.name} (+${matchedContact.phone})`);
-          }
-          if (!m.pushName || m.pushName === 'Kontak WhatsApp') {
-            senderName = matchedContact.name;
+        if (!isAllowed && rawJidDigits && whitelistLids.has(rawJidDigits)) {
+          isAllowed = true;
+          if (lidToPhoneMap.has(rawJidDigits)) {
+            senderPhone = lidToPhoneMap.get(rawJidDigits);
           }
         }
 
-        // If still no phone resolved, fallback to raw digits
-        if (!senderPhone) {
-          senderPhone = rawJidDigits;
+        if (!isAllowed && matchedContact) {
+          isAllowed = true;
         }
 
-        // STRICT WHITELIST CHECK
-        if (strictWhitelistOnly && whitelistNumbers.size > 0) {
-          let isAllowed = false;
-
-          // Check if senderPhone matches whitelistNumbers
-          if (senderPhone) {
-            isAllowed = Array.from(whitelistNumbers).some(wn => {
-              const cleanWn = cleanPhone(wn);
-              return cleanWn.length >= 7 && (senderPhone.endsWith(cleanWn) || cleanWn.endsWith(senderPhone) || senderPhone === cleanWn);
-            });
-          }
-
-          // Check if rawJidDigits is in whitelistLids
-          if (!isAllowed && rawJidDigits && whitelistLids.has(rawJidDigits)) {
-            isAllowed = true;
-            if (lidToPhoneMap.has(rawJidDigits)) {
-              senderPhone = lidToPhoneMap.get(rawJidDigits);
-            }
-          }
-
-          // Check if pushName matched a whitelisted contact
-          if (!isAllowed && matchedContact) {
-            isAllowed = true;
-          }
-
-          if (!isAllowed) {
+        if (!isAllowed) {
+          if (!isHistorySync) {
             console.log(`[STRICT FILTER BLOCKED] Pesan dari ${senderName} (+${senderPhone}) diblokir karena nomor tidak terdaftar.`);
-            continue; // 🛑 DROP! Do not save to Firestore!
           }
+          return;
+        }
+      }
+
+      // Catat msgId ke cache memory agar tidak ganda
+      if (msgId) {
+        processedMessageIds.add(msgId);
+        if (processedMessageIds.size > 5000) {
+          const firstEntry = processedMessageIds.values().next().value;
+          processedMessageIds.delete(firstEntry);
+        }
+      }
+
+      const tag = isHistorySync ? '[CHAT TERTUNDA / HISTORY]' : '[CHAT MASUK]';
+      console.log(`${tag} Dari ${senderName} (+${senderPhone}): "${cleanText.substring(0, 50)}..."`);
+
+      // Cek kata kunci pesanan
+      const lower = cleanText.toLowerCase();
+      const isOrderDetected =
+        lower.includes('karton') ||
+        lower.includes('ktn') ||
+        lower.includes('dus') ||
+        lower.includes('box') ||
+        lower.includes('roll') ||
+        lower.includes('pack') ||
+        lower.includes('pcs') ||
+        lower.includes('beres') ||
+        lower.includes('rolade') ||
+        lower.includes('kornet') ||
+        lower.includes('fiva') ||
+        lower.includes('order') ||
+        lower.includes('po') ||
+        lower.includes('kirim');
+
+      const bufferKey = senderPhone || rawJidDigits || remoteJid;
+      const now = Date.now();
+      const waitMs = isHistorySync ? 2000 : DEBOUNCE_WAIT_MS;
+
+      if (pendingMessageBuffers.has(bufferKey)) {
+        const buf = pendingMessageBuffers.get(bufferKey);
+        buf.texts.push(cleanText);
+        if (msgId) buf.messageIds.push(msgId);
+        buf.isOrderDetected = buf.isOrderDetected || isOrderDetected;
+        buf.lastReceivedAt = now;
+        if (senderName && senderName !== 'Kontak WhatsApp') {
+          buf.senderName = senderName;
         }
 
-        // Extract message text from various structures
-        const text =
-          m.message.conversation ||
-          m.message.extendedTextMessage?.text ||
-          m.message.imageMessage?.caption ||
-          m.message.videoMessage?.caption ||
-          '';
+        console.log(`[BUFFER WA] 📥 Chat lanjutan dari ${senderName} (+${senderPhone}) diterima. Pesan ke-${buf.texts.length} digabungkan.`);
 
-        if (!text || text.trim().length === 0) continue;
+        if (buf.timer) clearTimeout(buf.timer);
 
-        const cleanText = text.trim();
-        console.log(`[CHAT MASUK] Dari ${senderName} (+${senderPhone}): "${cleanText.substring(0, 50)}..."`);
+        const totalHold = now - buf.firstReceivedAt;
+        const finalWait = totalHold >= MAX_BUFFER_HOLD_MS ? 100 : waitMs;
 
-        // Check if text likely contains order keywords
-        const lower = cleanText.toLowerCase();
-        const isOrderDetected =
-          lower.includes('karton') ||
-          lower.includes('ktn') ||
-          lower.includes('dus') ||
-          lower.includes('box') ||
-          lower.includes('roll') ||
-          lower.includes('pack') ||
-          lower.includes('pcs') ||
-          lower.includes('beres') ||
-          lower.includes('rolade') ||
-          lower.includes('kornet') ||
-          lower.includes('fiva') ||
-          lower.includes('order') ||
-          lower.includes('po') ||
-          lower.includes('kirim');
+        buf.timer = setTimeout(async () => {
+          await flushMessageBuffer(bufferKey);
+        }, finalWait);
+      } else {
+        console.log(`[BUFFER WA] ⏳ Chat baru dari ${senderName} (+${senderPhone}). Menunggu pesan lanjutan sebelum diproses AI...`);
+        const buf = {
+          senderJid: remoteJid,
+          senderPhone,
+          senderName,
+          texts: [cleanText],
+          messageIds: msgId ? [msgId] : [],
+          isOrderDetected,
+          firstReceivedAt: now,
+          lastReceivedAt: now,
+          receivedAt: new Date(msgTimeMs),
+          timer: null,
+        };
 
-        // TAHAP 1: Gabung Chat Otomatis via Active Debounce Buffer per Sender
-        const bufferKey = senderPhone || rawJidDigits || remoteJid;
-        const now = Date.now();
+        buf.timer = setTimeout(async () => {
+          await flushMessageBuffer(bufferKey);
+        }, waitMs);
 
-        if (pendingMessageBuffers.has(bufferKey)) {
-          const buf = pendingMessageBuffers.get(bufferKey);
-          buf.texts.push(cleanText);
-          buf.isOrderDetected = buf.isOrderDetected || isOrderDetected;
-          buf.lastReceivedAt = now;
-          if (senderName && senderName !== 'Kontak WhatsApp') {
-            buf.senderName = senderName;
-          }
+        pendingMessageBuffers.set(bufferKey, buf);
+      }
+    }
 
-          console.log(`[BUFFER WA] 📥 Chat lanjutan dari ${senderName} (+${senderPhone}) diterima. Pesan ke-${buf.texts.length} digabungkan (timer di-reset).`);
+    // 1. Tangkap pesan tertunda saat server offline / restart via history sync
+    sock.ev.on('messaging-history.set', async ({ messages }) => {
+      if (!Array.isArray(messages) || messages.length === 0) return;
+      console.log(`[HISTORY SYNC] 📦 WhatsApp mengirim ${messages.length} riwayat pesan. Memeriksa pesan tertunda saat server offline...`);
+      const sorted = [...messages].sort((a, b) => {
+        const tA = Number(a.messageTimestamp) || 0;
+        const tB = Number(b.messageTimestamp) || 0;
+        return tA - tB;
+      });
+      for (const m of sorted) {
+        try {
+          await processSingleMessage(m, true);
+        } catch (e) {
+          console.warn('[HISTORY SYNC ITEM ERROR]', e.message);
+        }
+      }
+    });
 
-          if (buf.timer) clearTimeout(buf.timer);
-
-          const totalHold = now - buf.firstReceivedAt;
-          const waitTime = totalHold >= MAX_BUFFER_HOLD_MS ? 100 : DEBOUNCE_WAIT_MS;
-
-          buf.timer = setTimeout(async () => {
-            await flushMessageBuffer(bufferKey);
-          }, waitTime);
-        } else {
-          console.log(`[BUFFER WA] ⏳ Chat baru dari ${senderName} (+${senderPhone}). Menunggu pesan lanjutan selama 20 detik sebelum diproses AI...`);
-          const buf = {
-            senderJid: remoteJid,
-            senderPhone,
-            senderName,
-            texts: [cleanText],
-            isOrderDetected,
-            firstReceivedAt: now,
-            lastReceivedAt: now,
-            timer: null,
-          };
-
-          buf.timer = setTimeout(async () => {
-            await flushMessageBuffer(bufferKey);
-          }, DEBOUNCE_WAIT_MS);
-
-          pendingMessageBuffers.set(bufferKey, buf);
+    // 2. Tangkap pesan masuk real-time
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (!Array.isArray(messages)) return;
+      for (const m of messages) {
+        try {
+          await processSingleMessage(m, false);
+        } catch (e) {
+          console.error('[UPSERT ERROR]', e.message);
         }
       }
     });
@@ -533,12 +621,21 @@ async function startBaileys() {
 }
 
 // Listen to commands from Flutter via Firestore
+let restartDebounceTimer = null;
 firebaseAdapter.listenToCommands(async (cmd) => {
   console.log(`[COMMAND DITERIMA DARI FLUTTER]: ${cmd}`);
   if (cmd === 'RESTART') {
+    if (restartDebounceTimer) {
+      console.log('[COMMAND RESTART] Mengabaikan perintah restart ganda yang beruntun...');
+      return;
+    }
+    restartDebounceTimer = setTimeout(() => {
+      restartDebounceTimer = null;
+    }, 5000);
+
     cleanupSocket();
     isConnecting = false;
-    setTimeout(startBaileys, 1000);
+    setTimeout(startBaileys, 1500);
   } else if (cmd === 'LOGOUT') {
     cleanupSocket();
     try {

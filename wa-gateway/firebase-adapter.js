@@ -108,7 +108,7 @@ class FirebaseAdapter {
   async saveIncomingChat(chatData) {
     const payload = {
       ...chatData,
-      receivedAt: new Date(),
+      receivedAt: chatData.receivedAt || new Date(),
       status: 'pending',
       processedAt: null
     };
@@ -125,7 +125,7 @@ class FirebaseAdapter {
     } else if (this.mode === 'client') {
       try {
         const { collection, addDoc, doc, setDoc, serverTimestamp } = this.clientSdk;
-        const cPayload = { ...payload, receivedAt: serverTimestamp() };
+        const cPayload = { ...payload, receivedAt: chatData.receivedAt || serverTimestamp() };
         const res = await addDoc(collection(this.clientDb, 'incoming_po_chats'), cPayload);
         await setDoc(doc(this.clientDb, 'incoming_wa_orders', res.id), cPayload);
         return res.id;
@@ -135,14 +135,40 @@ class FirebaseAdapter {
     }
   }
 
+  async loadRecentMessageIds() {
+    const ids = new Set();
+    try {
+      if (this.mode === 'admin' && this.db) {
+        const snap = await this.db.collection('incoming_po_chats')
+          .orderBy('receivedAt', 'desc')
+          .limit(100)
+          .get();
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (d.messageId) ids.add(d.messageId);
+          if (Array.isArray(d.messageIds)) {
+            d.messageIds.forEach(id => ids.add(id));
+          }
+        });
+      }
+    } catch (_) {}
+    return ids;
+  }
+
   listenToCommands(onCommand) {
+    let isExecuting = false;
     if (this.mode === 'admin') {
       this.db.collection('wa_bot_session').doc('gateway_command').onSnapshot(async doc => {
         if (doc.exists) {
           const data = doc.data();
-          if (data && data.command && !data.executed) {
-            await doc.ref.update({ executed: true, executedAt: new Date() });
-            onCommand(data.command);
+          if (data && data.command && !data.executed && !isExecuting) {
+            isExecuting = true;
+            try {
+              await doc.ref.update({ executed: true, executedAt: new Date() });
+              onCommand(data.command);
+            } finally {
+              setTimeout(() => { isExecuting = false; }, 2000);
+            }
           }
         }
       });
@@ -151,12 +177,17 @@ class FirebaseAdapter {
       onSnapshot(doc(this.clientDb, 'wa_bot_session', 'gateway_command'), async snap => {
         if (snap.exists()) {
           const data = snap.data();
-          if (data && data.command && !data.executed) {
-            await updateDoc(doc(this.clientDb, 'wa_bot_session', 'gateway_command'), {
-              executed: true,
-              executedAt: serverTimestamp()
-            });
-            onCommand(data.command);
+          if (data && data.command && !data.executed && !isExecuting) {
+            isExecuting = true;
+            try {
+              await updateDoc(doc(this.clientDb, 'wa_bot_session', 'gateway_command'), {
+                executed: true,
+                executedAt: serverTimestamp()
+              });
+              onCommand(data.command);
+            } finally {
+              setTimeout(() => { isExecuting = false; }, 2000);
+            }
           }
         }
       });
