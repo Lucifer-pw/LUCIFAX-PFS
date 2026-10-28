@@ -23,7 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 // Device Identification & Multi-Device Preemption
-const START_TIME = Date.now();
+let lastClaimTime = Date.now();
 const INSTANCE_ID = `inst_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 function detectDeviceName() {
   if (process.env.DEVICE_NAME && process.env.DEVICE_NAME.trim()) {
@@ -778,6 +778,52 @@ async function startBaileys() {
   }
 }
 
+// Switch & Take-over mechanism: activate Gateway on this device cleanly
+async function activateGatewayThisDevice(reason = 'MANUAL') {
+  if (!isStandby && gatewayStatus === 'CONNECTED') {
+    console.log(`\n[INFO] Perangkat "${DEVICE_NAME}" saat ini SUDAH AKTIF dan terhubung ke WhatsApp.`);
+    return;
+  }
+
+  console.log(`\n======================================================`);
+  console.log(`[TAKE-OVER] 🚀 Mengambil alih Gateway untuk "${DEVICE_NAME}" (${reason})...`);
+  console.log(`[TAKE-OVER] 📡 Mengirim sinyal kepemilikan Gateway ke server...`);
+  console.log(`======================================================\n`);
+
+  isStandby = false;
+  lastClaimTime = Date.now();
+
+  try {
+    await firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform);
+  } catch (e) {
+    console.error('[TAKE-OVER ERROR]', e.message);
+  }
+
+  cleanupSocket();
+  isConnecting = false;
+  setTimeout(startBaileys, 1000);
+}
+
+// Setup interactive stdin listener for instant takeover via Enter key in Termux
+try {
+  if (process.stdin.setEncoding) {
+    process.stdin.setEncoding('utf8');
+  }
+  if (typeof process.stdin.resume === 'function') {
+    process.stdin.resume();
+  }
+  process.stdin.on('data', async (chunk) => {
+    if (isStandby) {
+      await activateGatewayThisDevice('TOMBOL ENTER DI TERMINAL');
+    } else {
+      console.log(`\n[INFO] Perangkat "${DEVICE_NAME}" saat ini sedang AKTIF.`);
+      console.log(`👉 Untuk beralih ke HP lain: Buka Termux di HP tersebut lalu tekan [ENTER].\n`);
+    }
+  });
+} catch (e) {
+  console.warn('[STDIN WARNING] Tidak dapat mendengarkan input keyboard:', e.message);
+}
+
 // Preemption Listener: If another device starts node server.js and claims master, yield immediately
 firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
   if (!masterData || !masterData.activeInstanceId || masterData.activeInstanceId === INSTANCE_ID) return;
@@ -785,8 +831,8 @@ firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
   const claimedTimeMs = masterData.claimedAt?.toDate?.()?.getTime() || 
     (typeof masterData.claimedAt === 'string' ? new Date(masterData.claimedAt).getTime() : 0);
   
-  // Abaikan klaim lama sebelum proses ini dinyalakan
-  if (claimedTimeMs <= START_TIME) {
+  // Abaikan klaim lama sebelum proses ini dinyalakan / diaktifkan ulang
+  if (claimedTimeMs <= lastClaimTime) {
     return;
   }
 
@@ -800,7 +846,8 @@ firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
     console.log(`\n======================================================`);
     console.log(`[AUTO-YIELD] ⚠️ Terdeteksi "${masterData.activeDeviceName || 'Perangkat Lain'}" baru saja mengambil alih Gateway!`);
     console.log(`[AUTO-YIELD] 💤 Menutup koneksi WhatsApp dan masuk ke mode STANDBY agar tidak terjadi bentrok.`);
-    console.log(`======================================================\n`);
+    console.log(`👉 Ingin beralih ke HP ini lagi? Cukup tekan [ENTER] di layar ini kapan saja!`);
+    console.log(`======================================================\x07\n`);
     isStandby = true;
     cleanupSocket();
     gatewayStatus = 'STANDBY';
@@ -816,7 +863,18 @@ firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
 let restartDebounceTimer = null;
 firebaseAdapter.listenToCommands(async (cmd) => {
   console.log(`[COMMAND DITERIMA DARI FLUTTER]: ${cmd}`);
-  if (cmd === 'RESTART') {
+  if (cmd === 'SWITCH_DEVICE' || cmd === 'SWITCH_GATEWAY') {
+    if (isStandby) {
+      console.log(`[COMMAND] Menerima instruksi alih perangkat dari Website/App untuk mengaktifkan "${DEVICE_NAME}"!`);
+      await activateGatewayThisDevice('WEBSITE COMMAND');
+    } else {
+      console.log(`[COMMAND] Perangkat "${DEVICE_NAME}" sudah aktif, mengabaikan sinyal switch.`);
+    }
+  } else if (cmd === 'RESTART') {
+    if (isStandby) {
+      console.log('[COMMAND RESTART] Perangkat ini dalam mode STANDBY, abaikan restart agar tidak bentrok.');
+      return;
+    }
     if (restartDebounceTimer) {
       console.log('[COMMAND RESTART] Mengabaikan perintah restart ganda yang beruntun...');
       return;
@@ -826,6 +884,7 @@ firebaseAdapter.listenToCommands(async (cmd) => {
     }, 5000);
 
     isStandby = false;
+    lastClaimTime = Date.now();
     await firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform);
     cleanupSocket();
     isConnecting = false;

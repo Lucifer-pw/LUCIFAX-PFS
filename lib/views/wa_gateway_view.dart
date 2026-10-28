@@ -1401,7 +1401,20 @@ Kirim besok pagi ya pak bc''';
                       label: const Text('Restart'),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D9488),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: _showSwitchDeviceDialog,
+                      icon: const Icon(Icons.swap_horiz_rounded, color: Colors.white, size: 16),
+                      label: const Text('Alihkan HP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
@@ -1630,6 +1643,53 @@ Kirim besok pagi ya pak bc''';
         );
       },
     );
+  }
+
+  Future<void> _showSwitchDeviceDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.swap_horiz_rounded, color: Color(0xFF2DD4BF), size: 24),
+            SizedBox(width: 10),
+            Text('Alihkan Gateway ke HP Lain?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Perintah ini akan meminta HP cadangan (yang sedang STANDBY) untuk mengambil alih koneksi WhatsApp secara otomatis tanpa perlu restart proses.',
+          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: Colors.white),
+            label: const Text('Ya, Alihkan Sekarang', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await _firebaseService.sendWaGatewayCommand('SWITCH_DEVICE');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sinyal alih perangkat terkirim ke HP yang sedang standby!'),
+            backgroundColor: Color(0xFF0D9488),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildQrImage(String qrDataUrl) {
