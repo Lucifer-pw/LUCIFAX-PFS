@@ -4886,11 +4886,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
 
         // Status Filter Dropdown
         Container(
-          width: 190,
+          width: 175,
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           alignment: Alignment.center,
@@ -4931,14 +4931,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
 
         // Product Filter Selector (Searchable Dropdown)
         InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => _showSearchableProductFilterDialog(allProductsList),
           child: Container(
-            width: 215,
+            width: 185,
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
@@ -4978,7 +4978,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
 
         // Toggle Barang Keluar Summary Button
         SizedBox(
@@ -5017,7 +5017,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           ),
         ),
         if (_monthFilter != "SEMUA" || _statusFilter != "SEMUA" || _productFilter != "SEMUA") ...[
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           InkWell(
             onTap: () {
               setState(() {
@@ -5057,65 +5057,73 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final actionButtonsRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Grafik Pengiriman Tahunan (Status DIKIRIM) Button
+        // Grafik Pengiriman Tahunan (Status DIKIRIM) Button - Icon Only
         SizedBox(
           height: 44,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              int yr = 2026;
-              if (_monthFilter != "SEMUA") {
-                final parts = _monthFilter.split('-');
-                if (parts.length == 2) {
-                  yr = int.tryParse(parts[1]) ?? yr;
+          width: 44,
+          child: Tooltip(
+            message: 'Grafik Tahunan',
+            child: ElevatedButton(
+              onPressed: () {
+                int yr = 2026;
+                if (_monthFilter != "SEMUA") {
+                  final parts = _monthFilter.split('-');
+                  if (parts.length == 2) {
+                    yr = int.tryParse(parts[1]) ?? yr;
+                  }
                 }
-              }
-              YearlyShipmentChartDialog.show(context, initialYear: yr);
-            },
-            icon: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 16),
-            label: const Text('Grafik Tahunan', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                YearlyShipmentChartDialog.show(context, initialYear: yr);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                padding: EdgeInsets.zero,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 20),
             ),
           ),
         ),
         if (isDeveloper) ...[
-          const SizedBox(width: 12),
-          // Kirim WA List ERP Button (Developer Only)
+          const SizedBox(width: 8),
+          // Kirim WA List ERP Button (Developer Only) - Icon Only
           SizedBox(
             height: 44,
-            child: ElevatedButton.icon(
-              onPressed: () => _showShareWhatsappErpModal(context, trProvider.transactions),
-              icon: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 16),
-              label: const Text('Kirim WA List ERP', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            width: 44,
+            child: Tooltip(
+              message: 'Kirim WA List ERP',
+              child: ElevatedButton(
+                onPressed: () => _showShareWhatsappErpModal(context, trProvider.transactions),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  padding: EdgeInsets.zero,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 20),
               ),
             ),
           ),
         ],
         if (!isKacab) ...[
-          const SizedBox(width: 12),
-          // Scan Chat WA PO Button (Admin & Developer)
+          const SizedBox(width: 8),
+          // Scan Chat WA PO Button (Admin & Developer) - Label: Scan PO
           SizedBox(
             height: 44,
             child: ElevatedButton.icon(
               onPressed: () => showAiChatOrderDialog(context),
               icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
-              label: const Text('Scan Chat PO', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              label: const Text('Scan PO', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0284C7),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
         ],
         if (!isKacab) ...[
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           // Import Excel Button
           SizedBox(
             height: 44,
@@ -5125,7 +5133,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal[700],
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -5923,9 +5931,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             // Search Input, Filters & Action Buttons Header Area
             LayoutBuilder(
               builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 960;
-
-                if (isMobile || !isWide) {
+                if (isMobile) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -5944,28 +5950,39 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   );
                 }
 
-                // Desktop Layout (Wide screen >= 960px):
-                // Row 1: Spacious Search Input (Expanded) + Quick Action Buttons
-                // Row 2: Filter Controls directly above the Table (Month, Status, Product, Toggle, Reset)
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
+                // Desktop Layout: 1 baris sejajar semua (Search + Filters + Action Buttons)
+                final hasReset = (_monthFilter != "SEMUA" || _statusFilter != "SEMUA" || _productFilter != "SEMUA");
+                final controlsWidth = (hasReset ? 1040.0 : 930.0);
+
+                if (constraints.maxWidth >= controlsWidth + 200) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: searchField,
+                      ),
+                      const SizedBox(width: 8),
+                      filterChipsRow,
+                      const SizedBox(width: 8),
+                      actionButtonsRow,
+                    ],
+                  );
+                } else {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Expanded(
+                        SizedBox(
+                          width: 220,
                           child: searchField,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
+                        filterChipsRow,
+                        const SizedBox(width: 8),
                         actionButtonsRow,
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: filterChipsRow,
-                    ),
-                  ],
-                );
+                  );
+                }
               },
             ),
             const SizedBox(height: 12),
