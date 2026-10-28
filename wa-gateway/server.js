@@ -62,6 +62,65 @@ const DEVICE_NAME = detectDeviceName();
 let isStandby = false;
 let heartbeatTimer = null;
 
+function getDeviceDetails() {
+  const isAndroid = process.platform === 'android' || !!process.env.TERMUX_VERSION || fs.existsSync('/data/data/com.termux');
+  const isWindows = process.platform === 'win32';
+
+  let brand = '';
+  let model = '';
+  let androidVer = '';
+  let battery = '';
+  let batteryStatus = '';
+
+  if (isAndroid) {
+    try {
+      const { execSync } = require('child_process');
+      brand = execSync('getprop ro.product.brand', { encoding: 'utf8', timeout: 500 }).trim();
+      model = execSync('getprop ro.product.model', { encoding: 'utf8', timeout: 500 }).trim();
+      androidVer = execSync('getprop ro.build.version.release', { encoding: 'utf8', timeout: 500 }).trim();
+    } catch (_) {}
+
+    try {
+      if (fs.existsSync('/sys/class/power_supply/battery/capacity')) {
+        battery = fs.readFileSync('/sys/class/power_supply/battery/capacity', 'utf8').trim() + '%';
+      }
+      if (fs.existsSync('/sys/class/power_supply/battery/status')) {
+        batteryStatus = fs.readFileSync('/sys/class/power_supply/battery/status', 'utf8').trim();
+      }
+    } catch (_) {}
+  }
+
+  const totalRamGb = (os.totalmem() / (1024 * 1024 * 1024)).toFixed(1);
+  const freeRamGb = (os.freemem() / (1024 * 1024 * 1024)).toFixed(1);
+
+  let fullModelName = '';
+  if (isAndroid) {
+    const b = (brand || '').toUpperCase();
+    const m = model || '';
+    if (b && m) {
+      fullModelName = b === m.split(' ')[0].toUpperCase() ? m : `${b} ${m}`;
+    } else {
+      fullModelName = b || m || 'Android Device';
+    }
+  } else if (isWindows) {
+    fullModelName = `Laptop (${os.hostname() || 'Windows PC'})`;
+  } else {
+    fullModelName = os.hostname() || process.platform;
+  }
+
+  return {
+    brand: brand ? brand.toUpperCase() : (isWindows ? 'PC/Laptop' : 'Android'),
+    model: model || (isWindows ? os.hostname() : 'Termux'),
+    fullModelName: fullModelName.trim(),
+    osVersion: isAndroid ? (androidVer ? `Android ${androidVer}` : 'Android (Termux)') : `${os.type()} ${os.release()}`,
+    ramInfo: `${freeRamGb} GB free / ${totalRamGb} GB`,
+    batteryInfo: battery ? `${battery}${batteryStatus ? ` (${batteryStatus})` : ''}` : null,
+    hostname: os.hostname() || '',
+    platform: process.platform,
+    nodeVersion: process.version
+  };
+}
+
 console.log(`[DEVICE IDENTIFIER] Perangkat: ${DEVICE_NAME} (ID: ${INSTANCE_ID})`);
 
 // Claim master upfront so any older running device on another phone yields immediately
@@ -413,13 +472,15 @@ async function startBaileys() {
         await firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform);
 
         console.log(`[BAILEYS] 🎉 BERHASIL TERHUBUNG & STABIL! Akun: ${pushName} (${phone}) [Perangkat: ${DEVICE_NAME}]`);
+        const devDetails = getDeviceDetails();
         await firebaseAdapter.updateGatewayStatus({
           status: 'CONNECTED',
           qrCode: null,
           phone,
           pushName,
-          deviceName: DEVICE_NAME,
+          deviceName: devDetails.fullModelName || DEVICE_NAME,
           devicePlatform: process.platform,
+          deviceDetails: devDetails,
           instanceId: INSTANCE_ID,
           lastConnectedAt: new Date(),
           lastHeartbeat: new Date()
@@ -429,7 +490,7 @@ async function startBaileys() {
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         heartbeatTimer = setInterval(async () => {
           if (gatewayStatus === 'CONNECTED' && !isStandby) {
-            await firebaseAdapter.sendHeartbeat(INSTANCE_ID, DEVICE_NAME, process.platform);
+            await firebaseAdapter.sendHeartbeat(INSTANCE_ID, devDetails.fullModelName || DEVICE_NAME, process.platform, getDeviceDetails());
           }
         }, 10000);
 

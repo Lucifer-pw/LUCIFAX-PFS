@@ -1238,13 +1238,13 @@ Kirim besok pagi ya pak bc''';
                     const SizedBox(height: 10),
                     const Divider(color: Color(0xFF059669), height: 1),
                     const SizedBox(height: 10),
-                    // MONITORING PERANGKAT AKTIF & DETAK JANTUNG (HEARTBEAT)
+                    // MONITORING PERANGKAT AKTIF & SPESIFIKASI HP LENGKAP
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A).withOpacity(0.65),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF1E293B)),
+                        color: const Color(0xFF0F172A).withOpacity(0.75),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF334155)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1255,32 +1255,115 @@ Kirim besok pagi ya pak bc''';
                                 session.devicePlatform == 'win32'
                                     ? Icons.laptop_mac_rounded
                                     : (session.devicePlatform == 'android' ? Icons.smartphone_rounded : Icons.dns_rounded),
-                                size: 16,
+                                size: 18,
                                 color: const Color(0xFF38BDF8),
                               ),
-                              const SizedBox(width: 6),
-                              const Text('Perangkat Aktif:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Spesifikasi Mesin Gateway Aktif:',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Divider(color: Color(0xFF1E293B), height: 1),
+                          const SizedBox(height: 8),
+
+                          // 1. Model & Nama Device
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(
+                                width: 85,
+                                child: Text('Model HP/PC', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                              ),
+                              const Text(': ', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
                               Expanded(
                                 child: Text(
                                   session.formattedDeviceName,
                                   style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
+
+                          // 2. Sistem Operasi (Android / Windows)
+                          if (session.osVersion != null && session.osVersion!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 85,
+                                  child: Text('OS / Versi', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                ),
+                                const Text(': ', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                Expanded(
+                                  child: Text(
+                                    session.osVersion!,
+                                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // 3. Status Baterai HP
+                          if (session.batteryInfo != null && session.batteryInfo!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 85,
+                                  child: Text('Baterai HP', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                ),
+                                const Text(': ', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.battery_charging_full_rounded, size: 14, color: Color(0xFF34D399)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      session.batteryInfo!,
+                                      style: const TextStyle(color: Color(0xFF34D399), fontSize: 11, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // 4. Memori RAM
+                          if (session.ramInfo != null && session.ramInfo!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 85,
+                                  child: Text('Memori RAM', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                ),
+                                const Text(': ', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                Text(
+                                  session.ramInfo!,
+                                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // 5. Sinyal Heartbeat
+                          const SizedBox(height: 4),
                           Row(
                             children: [
+                              const SizedBox(
+                                width: 85,
+                                child: Text('Detak Sinyal', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                              ),
+                              const Text(': ', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
                               Icon(
                                 Icons.wifi_tethering_rounded,
-                                size: 16,
+                                size: 13,
                                 color: session.isHeartbeatAlive ? const Color(0xFF34D399) : const Color(0xFFF87171),
                               ),
-                              const SizedBox(width: 6),
-                              const Text('Detak Sinyal:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               Text(
                                 session.heartbeatAgo,
                                 style: TextStyle(

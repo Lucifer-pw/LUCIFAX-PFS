@@ -8,6 +8,7 @@ class WaGatewaySession {
   final String? deviceName;
   final String? devicePlatform;
   final String? instanceId;
+  final Map<String, dynamic>? deviceDetails;
   final DateTime? updatedAt;
   final DateTime? lastConnectedAt;
   final DateTime? lastHeartbeat;
@@ -21,6 +22,7 @@ class WaGatewaySession {
     this.deviceName,
     this.devicePlatform,
     this.instanceId,
+    this.deviceDetails,
     this.updatedAt,
     this.lastConnectedAt,
     this.lastHeartbeat,
@@ -37,8 +39,20 @@ class WaGatewaySession {
     return DateTime.now().difference(lastHeartbeat!).inSeconds < 45;
   }
 
+  // Rincian Spesifikasi Perangkat
+  String? get brand => deviceDetails?['brand'] as String?;
+  String? get model => deviceDetails?['model'] as String?;
+  String? get fullModelName => (deviceDetails?['fullModelName'] as String?) ?? deviceName;
+  String? get osVersion => deviceDetails?['osVersion'] as String?;
+  String? get ramInfo => deviceDetails?['ramInfo'] as String?;
+  String? get batteryInfo => deviceDetails?['batteryInfo'] as String?;
+  String? get hostname => deviceDetails?['hostname'] as String?;
+
   /// Nama perangkat yang ramah pengguna
   String get formattedDeviceName {
+    if (fullModelName != null && fullModelName!.trim().isNotEmpty) {
+      return fullModelName!.trim();
+    }
     if (deviceName != null && deviceName!.trim().isNotEmpty) {
       return deviceName!.trim();
     }
@@ -81,6 +95,7 @@ class WaGatewaySession {
       deviceName: map['deviceName'] as String?,
       devicePlatform: map['devicePlatform'] as String?,
       instanceId: map['instanceId'] as String?,
+      deviceDetails: map['deviceDetails'] is Map ? Map<String, dynamic>.from(map['deviceDetails'] as Map) : null,
       updatedAt: parseDate(map['updatedAt'] ?? map['lastUpdated']),
       lastConnectedAt: parseDate(map['lastConnectedAt']),
       lastHeartbeat: parseDate(map['lastHeartbeat'] ?? map['updatedAt']),

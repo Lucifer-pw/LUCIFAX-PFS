@@ -134,13 +134,16 @@ class FirebaseAdapter {
     }
   }
 
-  async sendHeartbeat(instanceId, deviceName, devicePlatform) {
+  async sendHeartbeat(instanceId, deviceName, devicePlatform, deviceDetails = null) {
     const payload = {
       deviceName,
       devicePlatform,
       instanceId,
       lastHeartbeat: new Date()
     };
+    if (deviceDetails) {
+      payload.deviceDetails = deviceDetails;
+    }
     if (this.mode === 'admin') {
       try {
         await this.db.collection('wa_bot_session').doc('gateway').set(payload, { merge: true });
@@ -158,23 +161,38 @@ class FirebaseAdapter {
   }
 
   listenToMaster(currentInstanceId, onPreempted) {
+    const checkDoc = (data) => {
+      if (!data) return;
+      const targetId = data.activeInstanceId || data.instanceId;
+      if (targetId && targetId !== currentInstanceId) {
+        onPreempted({
+          activeInstanceId: targetId,
+          activeDeviceName: data.activeDeviceName || data.deviceName || 'Perangkat Lain',
+          claimedAt: data.claimedAt || data.lastConnectedAt || data.updatedAt,
+          lastHeartbeat: data.lastHeartbeat || data.updatedAt
+        });
+      }
+    };
+
     if (this.mode === 'admin') {
       this.db.collection('wa_bot_session').doc('gateway_master').onSnapshot(doc => {
+        if (doc && doc.exists) checkDoc(doc.data());
+      });
+      this.db.collection('wa_bot_session').doc('gateway').onSnapshot(doc => {
         if (doc && doc.exists) {
-          const data = doc.data();
-          if (data && data.activeInstanceId && data.activeInstanceId !== currentInstanceId) {
-            onPreempted(data);
-          }
+          const d = doc.data();
+          if (d && d.status === 'CONNECTED') checkDoc(d);
         }
       });
     } else if (this.mode === 'client') {
       const { doc, onSnapshot } = this.clientSdk;
       onSnapshot(doc(this.clientDb, 'wa_bot_session', 'gateway_master'), snap => {
+        if (snap && snap.exists()) checkDoc(snap.data());
+      });
+      onSnapshot(doc(this.clientDb, 'wa_bot_session', 'gateway'), snap => {
         if (snap && snap.exists()) {
-          const data = snap.data();
-          if (data && data.activeInstanceId && data.activeInstanceId !== currentInstanceId) {
-            onPreempted(data);
-          }
+          const d = snap.data();
+          if (d && d.status === 'CONNECTED') checkDoc(d);
         }
       });
     }
