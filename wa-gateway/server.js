@@ -23,6 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 // Device Identification & Multi-Device Preemption
+const START_TIME = Date.now();
 const INSTANCE_ID = `inst_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 function detectDeviceName() {
   if (process.env.DEVICE_NAME && process.env.DEVICE_NAME.trim()) {
@@ -39,6 +40,17 @@ function detectDeviceName() {
     return `💻 Laptop Kasir (${hostname || 'Windows'})`;
   }
   if (isAndroid) {
+    try {
+      const { execSync } = require('child_process');
+      const model = execSync('getprop ro.product.model', { encoding: 'utf8', timeout: 500 }).trim();
+      const brand = execSync('getprop ro.product.brand', { encoding: 'utf8', timeout: 500 }).trim();
+      if (model || brand) {
+        let name = brand ? brand.toUpperCase() : 'ANDROID';
+        if (model && !name.includes(model.toUpperCase())) name += ` ${model}`;
+        return `📱 HP ${name}`;
+      }
+    } catch (_) {}
+
     if (hostname && hostname !== 'localhost') {
       return `📱 HP Android (${hostname})`;
     }
@@ -51,6 +63,9 @@ let isStandby = false;
 let heartbeatTimer = null;
 
 console.log(`[DEVICE IDENTIFIER] Perangkat: ${DEVICE_NAME} (ID: ${INSTANCE_ID})`);
+
+// Claim master upfront so any older running device on another phone yields immediately
+firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform).catch(() => {});
 
 // Global process error handlers to prevent unexpected crashes
 process.on('uncaughtException', (err) => {
@@ -679,21 +694,35 @@ async function startBaileys() {
 
 // Preemption Listener: If another device starts node server.js and claims master, yield immediately
 firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
-  if (masterData && masterData.activeInstanceId && masterData.activeInstanceId !== INSTANCE_ID) {
-    if (!isStandby) {
-      console.log(`\n======================================================`);
-      console.log(`[AUTO-YIELD] ⚠️ Terdeteksi "${masterData.activeDeviceName || 'Perangkat Lain'}" baru saja mengambil alih Gateway!`);
-      console.log(`[AUTO-YIELD] 💤 Menutup koneksi WhatsApp dan masuk ke mode STANDBY agar tidak terjadi bentrok.`);
-      console.log(`======================================================\n`);
-      isStandby = true;
-      cleanupSocket();
-      gatewayStatus = 'STANDBY';
-      isConnecting = false;
-      await firebaseAdapter.updateGatewayStatus({
-        status: 'STANDBY',
-        standbyDevice: DEVICE_NAME
-      });
-    }
+  if (!masterData || !masterData.activeInstanceId || masterData.activeInstanceId === INSTANCE_ID) return;
+
+  const claimedTimeMs = masterData.claimedAt?.toDate?.()?.getTime() || 
+    (typeof masterData.claimedAt === 'string' ? new Date(masterData.claimedAt).getTime() : 0);
+  
+  // Abaikan klaim lama sebelum proses ini dinyalakan
+  if (claimedTimeMs <= START_TIME) {
+    return;
+  }
+
+  // Abaikan jika master lain sudah mati/tidak ada detak sinyal (> 35 detik)
+  const lastHeartbeatMs = masterData.lastHeartbeat?.toDate?.()?.getTime() || 0;
+  if (lastHeartbeatMs > 0 && (Date.now() - lastHeartbeatMs > 35000)) {
+    return;
+  }
+
+  if (!isStandby) {
+    console.log(`\n======================================================`);
+    console.log(`[AUTO-YIELD] ⚠️ Terdeteksi "${masterData.activeDeviceName || 'Perangkat Lain'}" baru saja mengambil alih Gateway!`);
+    console.log(`[AUTO-YIELD] 💤 Menutup koneksi WhatsApp dan masuk ke mode STANDBY agar tidak terjadi bentrok.`);
+    console.log(`======================================================\n`);
+    isStandby = true;
+    cleanupSocket();
+    gatewayStatus = 'STANDBY';
+    isConnecting = false;
+    await firebaseAdapter.updateGatewayStatus({
+      status: 'STANDBY',
+      standbyDevice: DEVICE_NAME
+    });
   }
 });
 
