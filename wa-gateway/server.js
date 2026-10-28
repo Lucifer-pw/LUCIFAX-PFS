@@ -5,6 +5,7 @@ const qrcode = require('qrcode');
 const pino = require('pino');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -20,6 +21,36 @@ const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 
 app.use(cors());
 app.use(express.json());
+
+// Device Identification & Multi-Device Preemption
+const INSTANCE_ID = `inst_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+function detectDeviceName() {
+  if (process.env.DEVICE_NAME && process.env.DEVICE_NAME.trim()) {
+    return process.env.DEVICE_NAME.trim();
+  }
+  const hostname = os.hostname() || '';
+  const isAndroid = process.platform === 'android' || !!process.env.TERMUX_VERSION || fs.existsSync('/data/data/com.termux');
+  const isWindows = process.platform === 'win32';
+
+  if (isWindows) {
+    if (hostname.toUpperCase().includes('REDMI')) {
+      return `💻 Laptop Lenovo (${hostname})`;
+    }
+    return `💻 Laptop Kasir (${hostname || 'Windows'})`;
+  }
+  if (isAndroid) {
+    if (hostname && hostname !== 'localhost') {
+      return `📱 HP Android (${hostname})`;
+    }
+    return '📱 HP Android (Termux)';
+  }
+  return `🖥️ Server (${hostname || process.platform})`;
+}
+const DEVICE_NAME = detectDeviceName();
+let isStandby = false;
+let heartbeatTimer = null;
+
+console.log(`[DEVICE IDENTIFIER] Perangkat: ${DEVICE_NAME} (ID: ${INSTANCE_ID})`);
 
 // Global process error handlers to prevent unexpected crashes
 process.on('uncaughtException', (err) => {
@@ -212,6 +243,10 @@ firebaseAdapter.listenToSettings((settings) => {
 });
 
 function cleanupSocket() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
   flushAllBuffers().catch(() => {});
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -227,6 +262,10 @@ function cleanupSocket() {
 }
 
 async function startBaileys() {
+  if (isStandby) {
+    console.log(`[BAILEYS] Perangkat "${DEVICE_NAME}" dalam mode STANDBY. Menunggu giliran atau aksi manual...`);
+    return;
+  }
   if (isConnecting) {
     console.log('[BAILEYS] Proses koneksi sedang berjalan, abaikan panggilan ganda...');
     return;
@@ -242,7 +281,10 @@ async function startBaileys() {
       status: 'CONNECTING',
       qrCode: null,
       phone: null,
-      pushName: null
+      pushName: null,
+      deviceName: DEVICE_NAME,
+      devicePlatform: process.platform,
+      instanceId: INSTANCE_ID
     });
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -352,14 +394,29 @@ async function startBaileys() {
         const pushName = sock.user?.name || 'Admin Lucifax';
         connectedUser = { phone, pushName };
 
-        console.log(`[BAILEYS] 🎉 BERHASIL TERHUBUNG & STABIL! Akun: ${pushName} (${phone})`);
+        // Claim master and notify Firestore of active device
+        await firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform);
+
+        console.log(`[BAILEYS] 🎉 BERHASIL TERHUBUNG & STABIL! Akun: ${pushName} (${phone}) [Perangkat: ${DEVICE_NAME}]`);
         await firebaseAdapter.updateGatewayStatus({
           status: 'CONNECTED',
           qrCode: null,
           phone,
           pushName,
-          lastConnectedAt: new Date()
+          deviceName: DEVICE_NAME,
+          devicePlatform: process.platform,
+          instanceId: INSTANCE_ID,
+          lastConnectedAt: new Date(),
+          lastHeartbeat: new Date()
         });
+
+        // Start 10s Heartbeat Timer to keep status alive in Flutter
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(async () => {
+          if (gatewayStatus === 'CONNECTED' && !isStandby) {
+            await firebaseAdapter.sendHeartbeat(INSTANCE_ID, DEVICE_NAME, process.platform);
+          }
+        }, 10000);
 
         // Resolve Whitelist WhatsApp LIDs
         resolveWhitelistLids();
@@ -620,6 +677,26 @@ async function startBaileys() {
   }
 }
 
+// Preemption Listener: If another device starts node server.js and claims master, yield immediately
+firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
+  if (masterData && masterData.activeInstanceId && masterData.activeInstanceId !== INSTANCE_ID) {
+    if (!isStandby) {
+      console.log(`\n======================================================`);
+      console.log(`[AUTO-YIELD] ⚠️ Terdeteksi "${masterData.activeDeviceName || 'Perangkat Lain'}" baru saja mengambil alih Gateway!`);
+      console.log(`[AUTO-YIELD] 💤 Menutup koneksi WhatsApp dan masuk ke mode STANDBY agar tidak terjadi bentrok.`);
+      console.log(`======================================================\n`);
+      isStandby = true;
+      cleanupSocket();
+      gatewayStatus = 'STANDBY';
+      isConnecting = false;
+      await firebaseAdapter.updateGatewayStatus({
+        status: 'STANDBY',
+        standbyDevice: DEVICE_NAME
+      });
+    }
+  }
+});
+
 // Listen to commands from Flutter via Firestore
 let restartDebounceTimer = null;
 firebaseAdapter.listenToCommands(async (cmd) => {
@@ -633,6 +710,8 @@ firebaseAdapter.listenToCommands(async (cmd) => {
       restartDebounceTimer = null;
     }, 5000);
 
+    isStandby = false;
+    await firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform);
     cleanupSocket();
     isConnecting = false;
     setTimeout(startBaileys, 1500);

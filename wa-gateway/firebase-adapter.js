@@ -82,7 +82,8 @@ class FirebaseAdapter {
   async updateGatewayStatus(data) {
     const payload = {
       ...data,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      lastHeartbeat: new Date()
     };
 
     if (this.mode === 'admin') {
@@ -96,12 +97,86 @@ class FirebaseAdapter {
     } else if (this.mode === 'client') {
       try {
         const { doc, setDoc, serverTimestamp } = this.clientSdk;
-        const cPayload = { ...payload, updatedAt: serverTimestamp() };
+        const cPayload = { ...payload, updatedAt: serverTimestamp(), lastHeartbeat: serverTimestamp() };
         await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway'), cPayload, { merge: true });
         await setDoc(doc(this.clientDb, 'wa_gateway_session', 'gateway'), cPayload, { merge: true });
       } catch (e) {
         console.error('[FIREBASE] Error updating status (Client):', e.message);
       }
+    }
+  }
+
+  async claimMaster(instanceId, deviceName, devicePlatform) {
+    const payload = {
+      activeInstanceId: instanceId,
+      activeDeviceName: deviceName,
+      activeDevicePlatform: devicePlatform,
+      claimedAt: new Date(),
+      lastHeartbeat: new Date()
+    };
+    if (this.mode === 'admin') {
+      try {
+        await this.db.collection('wa_bot_session').doc('gateway_master').set(payload, { merge: true });
+      } catch (e) {
+        console.error('[FIREBASE] Error claiming master (Admin):', e.message);
+      }
+    } else if (this.mode === 'client') {
+      try {
+        const { doc, setDoc, serverTimestamp } = this.clientSdk;
+        await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway_master'), {
+          ...payload,
+          claimedAt: serverTimestamp(),
+          lastHeartbeat: serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error('[FIREBASE] Error claiming master (Client):', e.message);
+      }
+    }
+  }
+
+  async sendHeartbeat(instanceId, deviceName, devicePlatform) {
+    const payload = {
+      deviceName,
+      devicePlatform,
+      instanceId,
+      lastHeartbeat: new Date()
+    };
+    if (this.mode === 'admin') {
+      try {
+        await this.db.collection('wa_bot_session').doc('gateway').set(payload, { merge: true });
+        await this.db.collection('wa_bot_session').doc('gateway_master').set(payload, { merge: true });
+        await this.db.collection('wa_gateway_session').doc('gateway').set(payload, { merge: true });
+      } catch (_) {}
+    } else if (this.mode === 'client') {
+      try {
+        const { doc, setDoc, serverTimestamp } = this.clientSdk;
+        const cPayload = { ...payload, lastHeartbeat: serverTimestamp() };
+        await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway'), cPayload, { merge: true });
+        await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway_master'), cPayload, { merge: true });
+      } catch (_) {}
+    }
+  }
+
+  listenToMaster(currentInstanceId, onPreempted) {
+    if (this.mode === 'admin') {
+      this.db.collection('wa_bot_session').doc('gateway_master').onSnapshot(doc => {
+        if (doc && doc.exists) {
+          const data = doc.data();
+          if (data && data.activeInstanceId && data.activeInstanceId !== currentInstanceId) {
+            onPreempted(data);
+          }
+        }
+      });
+    } else if (this.mode === 'client') {
+      const { doc, onSnapshot } = this.clientSdk;
+      onSnapshot(doc(this.clientDb, 'wa_bot_session', 'gateway_master'), snap => {
+        if (snap && snap.exists()) {
+          const data = snap.data();
+          if (data && data.activeInstanceId && data.activeInstanceId !== currentInstanceId) {
+            onPreempted(data);
+          }
+        }
+      });
     }
   }
 

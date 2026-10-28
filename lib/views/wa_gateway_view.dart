@@ -1166,14 +1166,29 @@ Kirim besok pagi ya pak bc''';
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 20),
-                    SizedBox(width: 8),
-                    Text('Status Perangkat WA', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                    const Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Status Perangkat WA', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                    if (session.deviceName != null && session.deviceName!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                        ),
+                        child: Text(
+                          session.formattedDeviceName,
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                _buildStatusBadge(session.status),
+                _buildStatusBadge(session),
               ],
             ),
             const SizedBox(height: 16),
@@ -1222,6 +1237,63 @@ Kirim besok pagi ya pak bc''';
                     Text('Nama Akun: ${session.pushName ?? 'Admin Lucifax'}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
                     const SizedBox(height: 10),
                     const Divider(color: Color(0xFF059669), height: 1),
+                    const SizedBox(height: 10),
+                    // MONITORING PERANGKAT AKTIF & DETAK JANTUNG (HEARTBEAT)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A).withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF1E293B)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                session.devicePlatform == 'win32'
+                                    ? Icons.laptop_mac_rounded
+                                    : (session.devicePlatform == 'android' ? Icons.smartphone_rounded : Icons.dns_rounded),
+                                size: 16,
+                                color: const Color(0xFF38BDF8),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('Perangkat Aktif:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  session.formattedDeviceName,
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.wifi_tethering_rounded,
+                                size: 16,
+                                color: session.isHeartbeatAlive ? const Color(0xFF34D399) : const Color(0xFFF87171),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('Detak Sinyal:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                              const SizedBox(width: 6),
+                              Text(
+                                session.heartbeatAgo,
+                                style: TextStyle(
+                                  color: session.isHeartbeatAlive ? const Color(0xFF34D399) : const Color(0xFFF87171),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     const Text(
                       'Gateway aktif mendengarkan chat dari Pak BC dan otomatis menginput ke sistem sebagai antrean PO.',
@@ -1491,37 +1563,65 @@ Kirim besok pagi ya pak bc''';
     }
   }
 
-  Widget _buildStatusBadge(String status) {
+  Widget _buildStatusBadge(WaGatewaySession session) {
     Color bg;
     Color fg;
     String label;
+    IconData? icon;
+
+    final status = session.status;
+    final isAlive = session.isHeartbeatAlive;
 
     switch (status) {
       case 'CONNECTED':
-        bg = const Color(0xFF065F46);
-        fg = const Color(0xFF34D399);
-        label = 'TERHUBUNG';
+        if (isAlive) {
+          bg = const Color(0xFF065F46);
+          fg = const Color(0xFF34D399);
+          label = 'TERHUBUNG';
+          icon = Icons.check_circle_rounded;
+        } else {
+          bg = const Color(0xFF78350F);
+          fg = const Color(0xFFFBBF24);
+          label = 'TIDAK MERESPONS';
+          icon = Icons.warning_amber_rounded;
+        }
+        break;
+      case 'STANDBY':
+        bg = const Color(0xFF334155);
+        fg = const Color(0xFF94A3B8);
+        label = 'STANDBY (SIAGA)';
+        icon = Icons.pause_circle_outline_rounded;
         break;
       case 'QR_READY':
         bg = const Color(0xFF78350F);
         fg = const Color(0xFFFBBF24);
         label = 'SCAN QR';
+        icon = Icons.qr_code_scanner_rounded;
         break;
       case 'CONNECTING':
         bg = const Color(0xFF1E3A8A);
         fg = const Color(0xFF60A5FA);
         label = 'MENGHUBUNGKAN';
+        icon = Icons.sync_rounded;
         break;
       default:
         bg = const Color(0xFF7F1D1D);
         fg = const Color(0xFFF87171);
         label = 'OFFLINE';
+        icon = Icons.wifi_off_rounded;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: fg, size: 12),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
