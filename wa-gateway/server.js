@@ -430,7 +430,7 @@ async function startBaileys() {
         if (statusCode === DisconnectReason.loggedOut) {
           // Logged out
           gatewayStatus = 'DISCONNECTED';
-          console.log('[BAILEYS] Sesi di-logout dari WhatsApp. Menghapus data sesi...');
+          console.log('[BAILEYS] Sesi di-logout dari WhatsApp (401). Menghapus data sesi lama...');
           try {
             fs.rmSync(AUTH_DIR, { recursive: true, force: true });
           } catch (_) {}
@@ -441,6 +441,12 @@ async function startBaileys() {
             pushName: null,
             lastDisconnectReason: 'LOGGED_OUT'
           });
+          console.log('[BAILEYS] 🔄 Menyiapkan QR Code baru dalam 2 detik...');
+          cleanupSocket();
+          reconnectTimer = setTimeout(() => {
+            isConnecting = false;
+            startBaileys();
+          }, 2000);
         } else if (statusCode === DisconnectReason.connectionReplaced) {
           // Connection replaced by another session
           gatewayStatus = 'DISCONNECTED';
