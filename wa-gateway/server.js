@@ -143,6 +143,21 @@ let recentChats = [];
 let isConnecting = false;
 let reconnectTimer = null;
 
+// Continuous Cluster Node Heartbeat (runs every 10s for cluster discovery)
+setInterval(async () => {
+  try {
+    const curStatus = isStandby ? 'STANDBY' : gatewayStatus;
+    const curDetails = getDeviceDetails();
+    await firebaseAdapter.sendHeartbeat(
+      INSTANCE_ID,
+      curDetails.fullModelName || DEVICE_NAME,
+      process.platform,
+      curDetails,
+      curStatus
+    );
+  } catch (_) {}
+}, 10000);
+
 // Dynamic Whitelist Settings & WhatsApp LID Resolution
 let strictWhitelistOnly = true;
 let whitelistNumbers = new Set(
@@ -867,9 +882,22 @@ firebaseAdapter.listenToMaster(INSTANCE_ID, async (masterData) => {
 
 // Listen to commands from Flutter via Firestore
 let restartDebounceTimer = null;
-firebaseAdapter.listenToCommands(async (cmd) => {
-  console.log(`[COMMAND DITERIMA DARI FLUTTER]: ${cmd}`);
-  if (cmd === 'SWITCH_DEVICE' || cmd === 'SWITCH_GATEWAY') {
+firebaseAdapter.listenToCommands(async (cmd, data) => {
+  console.log(`[COMMAND DITERIMA DARI FLUTTER]: ${cmd}`, data || '');
+  if (cmd === 'SWITCH_TO') {
+    const targetId = data?.targetInstanceId;
+    const targetName = data?.targetDeviceName;
+    const details = getDeviceDetails();
+    const isTarget = (targetId && targetId === INSTANCE_ID) ||
+                     (targetName && (targetName === DEVICE_NAME || targetName === details.fullModelName));
+
+    if (isTarget) {
+      console.log(`[COMMAND SWITCH_TO] 🎯 Perangkat ini dipilih secara spesifik dari Website untuk diaktifkan!`);
+      await activateGatewayThisDevice('WEBSITE TARGETED SWITCH');
+    } else {
+      console.log(`[COMMAND SWITCH_TO] Instruksi ditujukan untuk perangkat lain (${targetName || targetId}), perangkat ini tetap STANDBY.`);
+    }
+  } else if (cmd === 'SWITCH_DEVICE' || cmd === 'SWITCH_GATEWAY') {
     if (isStandby) {
       console.log(`[COMMAND] Menerima instruksi alih perangkat dari Website/App untuk mengaktifkan "${DEVICE_NAME}"!`);
       await activateGatewayThisDevice('WEBSITE COMMAND');

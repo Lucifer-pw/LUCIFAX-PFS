@@ -3420,6 +3420,32 @@ class FirebaseService {
     });
   }
 
+  /// Stream daftar node perangkat yang aktif/siaga di cluster WA Gateway
+  Stream<List<WaGatewayNode>> streamWaGatewayNodes() {
+    return _db.collection('wa_gateway_nodes').snapshots().map((snap) {
+      final list = snap.docs
+          .map((d) => WaGatewayNode.fromMap(d.data(), d.id))
+          .where((node) => node.isAlive)
+          .toList();
+      list.sort((a, b) => (b.lastHeartbeat ?? DateTime(0)).compareTo(a.lastHeartbeat ?? DateTime(0)));
+      return list;
+    });
+  }
+
+  /// Kirim sinyal pengalihan gateway ke perangkat spesifik
+  Future<void> sendWaGatewaySwitchTarget({
+    required String targetInstanceId,
+    String? targetDeviceName,
+  }) async {
+    await _db.collection('wa_bot_session').doc('gateway_command').set({
+      'command': 'SWITCH_TO',
+      'targetInstanceId': targetInstanceId,
+      'targetDeviceName': targetDeviceName,
+      'timestamp': FieldValue.serverTimestamp(),
+      'executed': false,
+    });
+  }
+
   /// Stream incoming WhatsApp chats
   Stream<List<IncomingPoChat>> streamIncomingPoChats({int limit = 50}) {
     return _db

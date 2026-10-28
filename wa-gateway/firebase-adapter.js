@@ -91,6 +91,13 @@ class FirebaseAdapter {
         await this.db.collection('wa_bot_session').doc('gateway').set(payload, { merge: true });
         // Dual-write to wa_gateway_session for backward compatibility
         await this.db.collection('wa_gateway_session').doc('gateway').set(payload, { merge: true });
+        if (payload.instanceId) {
+          await this.db.collection('wa_gateway_nodes').doc(payload.instanceId).set({
+            ...payload,
+            updatedAt: new Date(),
+            lastHeartbeat: new Date()
+          }, { merge: true });
+        }
       } catch (e) {
         console.error('[FIREBASE] Error updating status (Admin):', e.message);
       }
@@ -100,6 +107,9 @@ class FirebaseAdapter {
         const cPayload = { ...payload, updatedAt: serverTimestamp(), lastHeartbeat: serverTimestamp() };
         await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway'), cPayload, { merge: true });
         await setDoc(doc(this.clientDb, 'wa_gateway_session', 'gateway'), cPayload, { merge: true });
+        if (payload.instanceId) {
+          await setDoc(doc(this.clientDb, 'wa_gateway_nodes', payload.instanceId), cPayload, { merge: true });
+        }
       } catch (e) {
         console.error('[FIREBASE] Error updating status (Client):', e.message);
       }
@@ -117,6 +127,11 @@ class FirebaseAdapter {
     if (this.mode === 'admin') {
       try {
         await this.db.collection('wa_bot_session').doc('gateway_master').set(payload, { merge: true });
+        await this.db.collection('wa_gateway_nodes').doc(instanceId).set({
+          status: 'CONNECTED',
+          updatedAt: new Date(),
+          lastHeartbeat: new Date()
+        }, { merge: true });
       } catch (e) {
         console.error('[FIREBASE] Error claiming master (Admin):', e.message);
       }
@@ -128,17 +143,23 @@ class FirebaseAdapter {
           claimedAt: serverTimestamp(),
           lastHeartbeat: serverTimestamp()
         }, { merge: true });
+        await setDoc(doc(this.clientDb, 'wa_gateway_nodes', instanceId), {
+          status: 'CONNECTED',
+          updatedAt: serverTimestamp(),
+          lastHeartbeat: serverTimestamp()
+        }, { merge: true });
       } catch (e) {
         console.error('[FIREBASE] Error claiming master (Client):', e.message);
       }
     }
   }
 
-  async sendHeartbeat(instanceId, deviceName, devicePlatform, deviceDetails = null) {
+  async sendHeartbeat(instanceId, deviceName, devicePlatform, deviceDetails = null, status = 'ONLINE') {
     const payload = {
       deviceName,
       devicePlatform,
       instanceId,
+      status,
       lastHeartbeat: new Date()
     };
     if (deviceDetails) {
@@ -146,16 +167,26 @@ class FirebaseAdapter {
     }
     if (this.mode === 'admin') {
       try {
-        await this.db.collection('wa_bot_session').doc('gateway').set(payload, { merge: true });
-        await this.db.collection('wa_bot_session').doc('gateway_master').set(payload, { merge: true });
-        await this.db.collection('wa_gateway_session').doc('gateway').set(payload, { merge: true });
+        if (status === 'CONNECTED') {
+          await this.db.collection('wa_bot_session').doc('gateway').set(payload, { merge: true });
+          await this.db.collection('wa_bot_session').doc('gateway_master').set(payload, { merge: true });
+          await this.db.collection('wa_gateway_session').doc('gateway').set(payload, { merge: true });
+        }
+        // Always record node in cluster list
+        await this.db.collection('wa_gateway_nodes').doc(instanceId).set({
+          ...payload,
+          updatedAt: new Date()
+        }, { merge: true });
       } catch (_) {}
     } else if (this.mode === 'client') {
       try {
         const { doc, setDoc, serverTimestamp } = this.clientSdk;
-        const cPayload = { ...payload, lastHeartbeat: serverTimestamp() };
-        await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway'), cPayload, { merge: true });
-        await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway_master'), cPayload, { merge: true });
+        const cPayload = { ...payload, lastHeartbeat: serverTimestamp(), updatedAt: serverTimestamp() };
+        if (status === 'CONNECTED') {
+          await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway'), cPayload, { merge: true });
+          await setDoc(doc(this.clientDb, 'wa_bot_session', 'gateway_master'), cPayload, { merge: true });
+        }
+        await setDoc(doc(this.clientDb, 'wa_gateway_nodes', instanceId), cPayload, { merge: true });
       } catch (_) {}
     }
   }
@@ -258,7 +289,7 @@ class FirebaseAdapter {
             isExecuting = true;
             try {
               await doc.ref.update({ executed: true, executedAt: new Date() });
-              onCommand(data.command);
+              onCommand(data.command, data);
             } finally {
               setTimeout(() => { isExecuting = false; }, 2000);
             }
@@ -277,7 +308,7 @@ class FirebaseAdapter {
                 executed: true,
                 executedAt: serverTimestamp()
               });
-              onCommand(data.command);
+              onCommand(data.command, data);
             } finally {
               setTimeout(() => { isExecuting = false; }, 2000);
             }

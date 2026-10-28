@@ -1646,50 +1646,207 @@ Kirim besok pagi ya pak bc''';
   }
 
   Future<void> _showSwitchDeviceDialog() async {
-    final confirm = await showDialog<bool>(
+    showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.swap_horiz_rounded, color: Color(0xFF2DD4BF), size: 24),
             SizedBox(width: 10),
-            Text('Alihkan Gateway ke HP Lain?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              'Pilih Perangkat Gateway Pengganti',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
-        content: const Text(
-          'Perintah ini akan meminta HP cadangan (yang sedang STANDBY) untuk mengambil alih koneksi WhatsApp secara otomatis tanpa perlu restart proses.',
-          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pilih perangkat yang sedang siaga (STANDBY) untuk mengambil alih tugas Gateway WhatsApp:',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              StreamBuilder<List<WaGatewayNode>>(
+                stream: _firebaseService.streamWaGatewayNodes(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: CircularProgressIndicator(color: Color(0xFF0D9488), strokeWidth: 2),
+                      ),
+                    );
+                  }
+
+                  final nodes = snapshot.data ?? [];
+                  // Saring node yang sedang STANDBY (bukan yang sedang CONNECTED)
+                  final standbyNodes = nodes.where((n) => n.isStandby).toList();
+
+                  if (standbyNodes.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded, color: Colors.amber, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Belum Ada HP Siaga Terdeteksi',
+                                style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Pastikan Termux di HP Asus atau HP Redmi Anda sudah dibuka dan sedang menjalankan perintah:\nnode server.js',
+                            style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+                          ),
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF38BDF8),
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              Navigator.pop(ctx);
+                              await _firebaseService.sendWaGatewayCommand('SWITCH_DEVICE');
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Sinyal siaga umum terkirim ke seluruh perangkat!'),
+                                  backgroundColor: Color(0xFF0D9488),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.broadcast_on_personal_rounded, size: 16),
+                            label: const Text('Tetap Kirim Sinyal Siaga Umum', style: TextStyle(fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: standbyNodes.map((node) {
+                      final isAndroid = node.devicePlatform == 'android';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                isAndroid ? Icons.smartphone_rounded : Icons.laptop_mac_rounded,
+                                color: const Color(0xFF38BDF8),
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    node.fullModelName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      if (node.batteryInfo != null && node.batteryInfo!.isNotEmpty) ...[
+                                        const Icon(Icons.battery_charging_full_rounded, size: 13, color: Color(0xFF34D399)),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          node.batteryInfo!,
+                                          style: const TextStyle(color: Color(0xFF34D399), fontSize: 11, fontWeight: FontWeight.w600),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Text(
+                                        'Detak: ${node.heartbeatAgo}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0D9488),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                Navigator.pop(ctx);
+                                await _firebaseService.sendWaGatewaySwitchTarget(
+                                  targetInstanceId: node.instanceId,
+                                  targetDeviceName: node.deviceName,
+                                );
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text('Mengalihkan Gateway ke ${node.fullModelName}...'),
+                                    backgroundColor: const Color(0xFF0D9488),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.power_settings_new_rounded, size: 16, color: Colors.white),
+                              label: const Text('Aktifkan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '💡 Tips: Anda juga bisa langsung membuka Termux di HP tujuan lalu menekan tombol [ENTER] untuk mengaktifkan.',
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0D9488),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: Colors.white),
-            label: const Text('Ya, Alihkan Sekarang', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup', style: TextStyle(color: Color(0xFF94A3B8))),
           ),
         ],
       ),
     );
-    if (confirm == true) {
-      await _firebaseService.sendWaGatewayCommand('SWITCH_DEVICE');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sinyal alih perangkat terkirim ke HP yang sedang standby!'),
-            backgroundColor: Color(0xFF0D9488),
-          ),
-        );
-      }
-    }
   }
 
   Widget _buildQrImage(String qrDataUrl) {
