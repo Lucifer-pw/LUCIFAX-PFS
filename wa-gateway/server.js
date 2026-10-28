@@ -176,6 +176,20 @@ const pendingMessageBuffers = new Map();
 const DEBOUNCE_WAIT_MS = 20000; // 20 detik jeda tunggu pesan lanjutan
 const MAX_BUFFER_HOLD_MS = 60000; // 60 detik batas maksimal tunggu
 
+// In-memory cache for recent raw messages to support Baileys getMessage / retry requests
+const rawMessageCache = new Map();
+const MAX_RAW_CACHE_SIZE = 1000;
+
+function storeRawMessage(jid, id, message) {
+  if (!id || !message) return;
+  const key = `${jid}_${id}`;
+  if (rawMessageCache.size >= MAX_RAW_CACHE_SIZE) {
+    const firstKey = rawMessageCache.keys().next().value;
+    rawMessageCache.delete(firstKey);
+  }
+  rawMessageCache.set(key, message);
+}
+
 async function flushMessageBuffer(bufferKey) {
   const buf = pendingMessageBuffers.get(bufferKey);
   if (!buf) return;
@@ -373,6 +387,11 @@ async function startBaileys() {
       connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 0,
       keepAliveIntervalMs: 25000,
+      getMessage: async (key) => {
+        if (!key) return undefined;
+        const lookupKey = `${key.remoteJid}_${key.id}`;
+        return rawMessageCache.get(lookupKey) || undefined;
+      }
     });
 
     currentSock = sock;
@@ -719,6 +738,9 @@ async function startBaileys() {
         return tA - tB;
       });
       for (const m of sorted) {
+        if (m.key && m.message) {
+          storeRawMessage(m.key.remoteJid, m.key.id, m.message);
+        }
         try {
           await processSingleMessage(m, true);
         } catch (e) {
@@ -731,6 +753,9 @@ async function startBaileys() {
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (!Array.isArray(messages)) return;
       for (const m of messages) {
+        if (m.key && m.message) {
+          storeRawMessage(m.key.remoteJid, m.key.id, m.message);
+        }
         try {
           await processSingleMessage(m, false);
         } catch (e) {
