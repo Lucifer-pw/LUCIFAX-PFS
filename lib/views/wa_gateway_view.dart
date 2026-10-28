@@ -1684,9 +1684,24 @@ Kirim besok pagi ya pak bc''';
                     );
                   }
 
+                  if (snapshot.hasError) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade900.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        'Gagal memuat status cluster: ${snapshot.error}',
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                      ),
+                    );
+                  }
+
                   final nodes = snapshot.data ?? [];
-                  // Saring node yang sedang STANDBY (bukan yang sedang CONNECTED)
-                  final standbyNodes = nodes.where((n) => n.isStandby).toList();
+                  // Saring node yang sedang STANDBY / bukan yang sedang aktif CONNECTED
+                  final standbyNodes = nodes.where((n) => n.status != 'CONNECTED' && n.status != 'DISCONNECTED').toList();
 
                   if (standbyNodes.isEmpty) {
                     return Container(

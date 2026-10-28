@@ -303,6 +303,10 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    match /wa_gateway_nodes/{nodeId} {
+      allow read, write: if isAuthenticated();
+    }
+
 
 
     // ═══════════════════════════════════════════════════
