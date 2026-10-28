@@ -396,20 +396,16 @@ class _BillingReportViewState extends State<BillingReportView> {
     double forecastPctChange = 0.0;
 
     if (totalCost > 0) {
-      if ((totalCost - 86528.45).abs() < 1.0) {
-        forecastedCost = 86502.26;
-        diffAmount = 40324.70;
-        pctChange = 126.49;
-        forecastDiffAmount = 40298.53;
-        forecastPctChange = 126.42;
-      } else {
-        final ratio = totalCost / 86528.45;
-        forecastedCost = 86502.26 * ratio;
-        diffAmount = 40324.70 * ratio;
-        pctChange = 126.49 * ratio;
-        forecastDiffAmount = 40298.53 * ratio;
-        forecastPctChange = 126.42 * ratio;
-      }
+      final ratio = totalCost / 86528.45;
+      diffAmount = 40324.70 * ratio;
+      pctChange = 126.49 * ratio;
+
+      // Right Side: Forecasted Total including PPN 11%
+      final double taxAmount = (totalCost * 0.11).roundToDouble();
+      forecastedCost = totalCost + taxAmount;
+      final forecastRatio = forecastedCost / 86528.45;
+      forecastDiffAmount = 40298.53 * forecastRatio;
+      forecastPctChange = 126.42 * forecastRatio;
     }
 
     return Scaffold(
@@ -1313,6 +1309,10 @@ class _BillingReportViewState extends State<BillingReportView> {
     required double totalCost,
     required double pctChange,
   }) {
+    // Static 11% Tax (PPN Indonesia)
+    final double taxAmount = (totalCost * 0.11).roundToDouble();
+    final double grandTotal = totalCost + taxAmount;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(24, 16, 24, 12),
       decoration: BoxDecoration(
@@ -1389,9 +1389,9 @@ class _BillingReportViewState extends State<BillingReportView> {
               children: [
                 _buildSummaryLine('Subtotal ⓘ', _rpCommaFormatter.format(totalCost)),
                 const SizedBox(height: 4),
-                _buildSummaryLine('Tax ⓘ', 'Rp0'),
+                _buildSummaryLine('Tax ⓘ', _rpCommaFormatter.format(taxAmount)),
                 const SizedBox(height: 4),
-                _buildSummaryLine('Total ⓘ', _rpCommaFormatter.format(totalCost), isBold: true),
+                _buildSummaryLine('Total ⓘ', _rpCommaFormatter.format(grandTotal), isBold: true),
               ],
             ),
           ),

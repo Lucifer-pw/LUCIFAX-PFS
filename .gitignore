@@ -48,6 +48,7 @@ app.*.map.json
 *.txt
 *.pdf
 *.csv
+*.zip
 *.db
 *.sqlite
 /PDF_Transaksi/

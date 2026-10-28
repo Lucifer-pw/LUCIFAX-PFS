@@ -4789,14 +4789,36 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       style: const TextStyle(color: Colors.white, fontSize: 13),
       decoration: InputDecoration(
         hintText: 'Cari invoice, pelanggan, tanggal (dd-mm-yyyy), catatan...',
-        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear_rounded, color: Color(0xFF94A3B8), size: 18),
+                tooltip: 'Hapus Pencarian',
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {
+                    _searchQuery = '';
+                    _currentPage = 1;
+                  });
+                },
+              )
+            : null,
         filled: true,
         fillColor: const Color(0xFF1E293B),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        isDense: true,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.0),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
         ),
       ),
       onChanged: (val) {
@@ -4810,7 +4832,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       },
     );
 
-    final filterRow = Row(
+    final filterChipsRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         // Month / Periode Picker Filter Button
@@ -4994,7 +5016,47 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             },
           ),
         ),
-        const SizedBox(width: 12),
+        if (_monthFilter != "SEMUA" || _statusFilter != "SEMUA" || _productFilter != "SEMUA") ...[
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: () {
+              setState(() {
+                _monthFilter = "SEMUA";
+                _statusFilter = "SEMUA";
+                _productFilter = "SEMUA";
+                _currentPage = 1;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.filter_alt_off_rounded, color: Color(0xFFF87171), size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'Reset Filter',
+                    style: TextStyle(color: Color(0xFFF87171), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final actionButtonsRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         // Grafik Pengiriman Tahunan (Status DIKIRIM) Button
         SizedBox(
           height: 44,
@@ -5858,30 +5920,54 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         padding: EdgeInsets.all(isMobile ? 10.0 : 20.0),
         child: Column(
           children: [
-            // Search Input, Month Filter, Status Dropdown & Action Buttons Header Row
-            if (isMobile)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  searchField,
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: filterRow,
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: searchField,
-                  ),
-                  const SizedBox(width: 12),
-                  filterRow,
-                ],
-              ),
+            // Search Input, Filters & Action Buttons Header Area
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 960;
+
+                if (isMobile || !isWide) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: filterChipsRow,
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: actionButtonsRow,
+                      ),
+                    ],
+                  );
+                }
+
+                // Desktop Layout (Wide screen >= 960px):
+                // Row 1: Spacious Search Input (Expanded) + Quick Action Buttons
+                // Row 2: Filter Controls directly above the Table (Month, Status, Product, Toggle, Reset)
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: searchField,
+                        ),
+                        const SizedBox(width: 12),
+                        actionButtonsRow,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: filterChipsRow,
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 12),
             if (isMobile)
               _buildMobileSegmentedTab(filteredTransactions.length),
@@ -6509,7 +6595,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     }
 
     int getWeekOfMonth(DateTime dt) {
-      return ((dt.day - 1) ~/ 7) + 1;
+      final firstDayOfMonth = DateTime(dt.year, dt.month, 1);
+      final firstDayOffset = firstDayOfMonth.weekday % 7; // Sunday = 0
+      return ((dt.day - 1 + firstDayOffset) ~/ 7) + 1;
     }
 
     String getMonthName(int month) {
