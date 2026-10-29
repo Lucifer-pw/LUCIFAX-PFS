@@ -182,11 +182,20 @@ class _ProductListViewState extends State<ProductListView> {
                           Expanded(
                             child: TextFormField(
                               controller: idController,
-                              enabled: true, // Editable Kode Barang (ID)
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              enabled: !isEdit, // Read-Only saat Edit Barang, hanya aktif saat Tambah Baru
+                              style: TextStyle(
+                                color: isEdit ? const Color(0xFF94A3B8) : Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                               decoration: _buildInputDecoration(hint: 'Kode Barang (ID)').copyWith(
-                                labelText: 'Kode Barang (ID)',
-                                labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                                labelText: isEdit ? 'Kode Barang (ID) [Terkunci]' : 'Kode Barang (ID)',
+                                labelStyle: TextStyle(
+                                  color: isEdit ? const Color(0xFF64748B) : const Color(0xFF38BDF8),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                fillColor: isEdit ? const Color(0xFF1E293B).withOpacity(0.5) : const Color(0xFF0F172A),
+                                suffixIcon: isEdit ? const Icon(Icons.lock_rounded, size: 16, color: Color(0xFF64748B)) : null,
                               ),
                             ),
                           ),
@@ -378,6 +387,27 @@ class _ProductListViewState extends State<ProductListView> {
                       return;
                     }
 
+                    // Anti-Duplicate ID Validation saat Tambah Barang Baru
+                    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+                    if (!isEdit) {
+                      final isDuplicate = productProvider.products.any(
+                        (p) => p.id.trim().toUpperCase() == id,
+                      );
+                      if (isDuplicate) {
+                        final existingProd = productProvider.products.firstWhere(
+                          (p) => p.id.trim().toUpperCase() == id,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Kode Barang "$id" sudah digunakan oleh "${existingProd.name}"! Harap gunakan ID lain.'),
+                            backgroundColor: Colors.redAccent,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                        return;
+                      }
+                    }
+
                     if (name.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Harap isi Nama Barang!'), backgroundColor: Colors.orange),
@@ -390,12 +420,9 @@ class _ProductListViewState extends State<ProductListView> {
                     try {
                       final localProduct = product;
                       if (localProduct != null) {
-                        // Edit Existing Product
-                        if (localProduct.id != id) {
-                          await Provider.of<ProductProvider>(context, listen: false).deleteProduct(localProduct.id);
-                        }
+                        // Edit Existing Product (ID selalu sama dan aman karena terkunci)
                         final updated = Product(
-                          id: id,
+                          id: localProduct.id,
                           kodeInduk: kodeInduk,
                           name: name,
                           price: price,
@@ -404,7 +431,7 @@ class _ProductListViewState extends State<ProductListView> {
                           isiKarton: carton,
                           sizeGrams: size,
                         );
-                        await Provider.of<ProductProvider>(context, listen: false).saveProduct(
+                        await productProvider.saveProduct(
                           updated,
                           logMutation: true,
                           oldStock: localProduct.stock,
@@ -421,7 +448,7 @@ class _ProductListViewState extends State<ProductListView> {
                           isiKarton: carton,
                           sizeGrams: size,
                         );
-                        await Provider.of<ProductProvider>(context, listen: false).saveProduct(newProd);
+                        await productProvider.saveProduct(newProd);
                       }
 
                       if (context.mounted) {
@@ -2897,16 +2924,27 @@ class _ProductListViewState extends State<ProductListView> {
       final String pKey = p.kodeInduk.trim().toLowerCase();
       final String pId = p.id.trim().toLowerCase();
       final String pNameLower = p.name.trim().toLowerCase();
+      final bool pIsMbg = pNameLower.contains('mbg') || pKey.contains('mbg');
 
       final prodEntries = allEntries.where((e) {
         final eKey = e.productId.trim().toLowerCase();
         final eName = e.productName.trim().toLowerCase();
+        final bool eIsMbg = eName.contains('mbg') || eKey.contains('mbg');
+
+        // MBG strictly matches only MBG, Non-MBG strictly matches only Non-MBG
+        if (pIsMbg != eIsMbg) return false;
+
         return (eKey == pKey || eKey == pId || eName == pNameLower);
       }).toList();
 
       final prodMutations = allMutations.where((m) {
         final mKey = m.kodeInduk.trim().toLowerCase();
         final mName = m.productName.trim().toLowerCase();
+        final bool mIsMbg = mName.contains('mbg') || mKey.contains('mbg');
+
+        // MBG strictly matches only MBG, Non-MBG strictly matches only Non-MBG
+        if (pIsMbg != mIsMbg) return false;
+
         return (mKey == pKey || mKey == pId || mName == pNameLower);
       }).toList();
       prodMutations.sort((a, b) => a.timestamp.compareTo(b.timestamp));
