@@ -1253,17 +1253,11 @@ class AiChatParserService {
     final bool queryHas7 = qTokens.contains('7') || qTokens.contains('7s');
     final bool queryHas215 = qTokens.contains('215') || qTokens.contains('215g') || qTokens.contains('215gr');
 
-    final bool queryHasMbg = cleanQ.contains('mbg') || qTokens.contains('mbg');
-
     CustomerProductHistory? bestMatch;
     int maxScore = 0;
 
     for (var h in historyList) {
       final hName = h.productName.toLowerCase();
-      final bool hIsMbg = hName.contains('mbg') || h.productId.toLowerCase().contains('mbg');
-      // STRICT GUARD: If customer did not type "mbg", never match MBG variants!
-      if (!queryHasMbg && hIsMbg) continue;
-      if (queryHasMbg && !hIsMbg) continue;
       final hTokens = hName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').split(RegExp(r'\s+')).toSet();
       int score = 0;
 
@@ -1581,17 +1575,11 @@ class AiChatParserService {
     final bool queryHas7 = qWords.contains('7') || qWords.contains('7s');
     final bool queryHas215 = qWords.contains('215') || qWords.contains('215g') || qWords.contains('215gr');
 
-    final bool queryHasMbg = cleanQ.contains('mbg') || qWords.contains('mbg');
-
     Product? bestProduct;
     int maxScore = 0;
 
     for (var p in products) {
       final pName = p.name.toLowerCase();
-      final bool pIsMbg = pName.contains('mbg') || p.kodeInduk.toLowerCase().contains('mbg');
-      // STRICT GUARD: If customer did not type "mbg", never match MBG variants!
-      if (!queryHasMbg && pIsMbg) continue;
-      if (queryHasMbg && !pIsMbg) continue;
       final pWords = pName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').split(RegExp(r'\s+')).toSet();
       int score = 0;
 

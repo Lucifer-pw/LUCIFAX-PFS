@@ -2236,7 +2236,10 @@ Kirim besok pagi ya pak bc''';
   }
 
   Future<void> _showLinkToInvoiceDialog(BuildContext context, IncomingPoChat chat) async {
-    final searchCtrl = TextEditingController(text: chat.matchedInvoiceNo ?? '');
+    final initialQuery = (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty)
+        ? chat.matchedInvoiceNo!
+        : (chat.transferInfo?['customerHint'] ?? '').toString();
+    final searchCtrl = TextEditingController(text: initialQuery);
     String selectedInv = chat.matchedInvoiceNo ?? '';
 
     await showDialog(
@@ -2604,6 +2607,21 @@ Kirim besok pagi ya pak bc''';
                               'Target Faktur: #${chat.matchedInvoiceNo}',
                               style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold),
                             ),
+                            if (chat.transferInfo?['alreadyPaid'] == true) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                                ),
+                                child: const Text(
+                                  'SUDAH PERNAH LUNAS',
+                                  style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -2664,7 +2682,7 @@ Kirim besok pagi ya pak bc''';
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
+                    if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty && chat.transferInfo?['alreadyPaid'] != true) ...[
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF059669),

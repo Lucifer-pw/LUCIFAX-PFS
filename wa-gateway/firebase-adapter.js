@@ -378,6 +378,76 @@ class FirebaseAdapter {
       });
     }
   }
+
+  async findMatchingReceivable(customerHint, amount) {
+    if (!amount || amount <= 0) return null;
+    const cleanHint = (customerHint || '').toUpperCase().trim();
+
+    try {
+      let snap;
+      if (this.mode === 'admin') {
+        snap = await this.db.collection('receivables').get();
+      } else if (this.mode === 'client') {
+        const { collection, getDocs } = this.clientSdk;
+        snap = await getDocs(collection(this.clientDb, 'receivables'));
+      } else {
+        return null;
+      }
+
+      const getInitials = (str) => {
+        return str
+          .replace(/[^A-Za-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter(Boolean)
+          .map(w => w[0])
+          .join('')
+          .toUpperCase();
+      };
+
+      const candidates = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        const toko = (d.toko || d.customerName || '').toUpperCase();
+        const nominal = Number(d.nominal || d.totalTagihan || d.total || 0);
+        const noInvoice = String(d.noInvoice || d.invoiceNo || '');
+        const isLunas = !!d.isLunas;
+
+        const amountDiff = Math.abs(nominal - amount);
+        const isAmountMatch = amountDiff <= 100;
+
+        if (!isAmountMatch) return;
+
+        let nameMatch = false;
+        if (cleanHint && toko) {
+          const tokoInitials = getInitials(toko);
+          const hintInitials = getInitials(cleanHint);
+
+          if (cleanHint.includes(toko) || toko.includes(cleanHint)) {
+            nameMatch = true;
+          } else if (cleanHint === tokoInitials || hintInitials === cleanHint || tokoInitials === hintInitials) {
+            nameMatch = true;
+          } else {
+            const hintWords = cleanHint.split(/\s+/).filter(w => w.length >= 4 && !['CV', 'PT', 'TOKO'].includes(w));
+            if (hintWords.some(w => toko.includes(w))) {
+              nameMatch = true;
+            }
+          }
+        }
+
+        if (nameMatch) {
+          candidates.push({ noInvoice, toko, nominal, isLunas, docId: doc.id });
+        }
+      });
+
+      const unpaid = candidates.find(c => !c.isLunas);
+      if (unpaid) return unpaid;
+      if (candidates.length > 0) return candidates[0];
+      return null;
+    } catch (err) {
+      console.warn('[FIREBASE RECEIVABLE MATCH ERROR]:', err.message);
+      return null;
+    }
+  }
 }
 
 module.exports = new FirebaseAdapter();
