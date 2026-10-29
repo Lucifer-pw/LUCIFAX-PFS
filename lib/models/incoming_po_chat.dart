@@ -20,6 +20,8 @@ class IncomingPoChat {
   final Map<String, dynamic>? transferInfo;
   final bool isPaymentApplied;
   final String? matchedInvoiceNo;
+  final bool isPartialPayment;
+  final double remainingAmount;
 
   IncomingPoChat({
     required this.id,
@@ -41,6 +43,8 @@ class IncomingPoChat {
     this.transferInfo,
     this.isPaymentApplied = false,
     this.matchedInvoiceNo,
+    this.isPartialPayment = false,
+    this.remainingAmount = 0.0,
   });
 
   bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || transferInfo != null;
@@ -82,6 +86,8 @@ class IncomingPoChat {
       transferInfo: tInfo,
       isPaymentApplied: map['isPaymentApplied'] == true,
       matchedInvoiceNo: (map['matchedInvoiceNo'] ?? tInfo?['invoiceNo'])?.toString(),
+      isPartialPayment: map['isPartialPayment'] == true || (tInfo?['isPartial'] == true),
+      remainingAmount: ((map['remainingAmount'] ?? tInfo?['remainingAmount'] ?? 0) as num).toDouble(),
     );
   }
 
@@ -105,6 +111,8 @@ class IncomingPoChat {
       'transferInfo': transferInfo,
       'isPaymentApplied': isPaymentApplied,
       'matchedInvoiceNo': matchedInvoiceNo,
+      'isPartialPayment': isPartialPayment,
+      'remainingAmount': remainingAmount,
     };
   }
 
@@ -121,6 +129,8 @@ class IncomingPoChat {
     Map<String, dynamic>? transferInfo,
     bool? isPaymentApplied,
     String? matchedInvoiceNo,
+    bool? isPartialPayment,
+    double? remainingAmount,
   }) {
     return IncomingPoChat(
       id: id,
@@ -142,6 +152,8 @@ class IncomingPoChat {
       transferInfo: transferInfo ?? this.transferInfo,
       isPaymentApplied: isPaymentApplied ?? this.isPaymentApplied,
       matchedInvoiceNo: matchedInvoiceNo ?? this.matchedInvoiceNo,
+      isPartialPayment: isPartialPayment ?? this.isPartialPayment,
+      remainingAmount: remainingAmount ?? this.remainingAmount,
     );
   }
 }

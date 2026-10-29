@@ -451,26 +451,127 @@ class FirebaseAdapter {
 
   async settleInvoicePayment(invoiceNo, paymentData = {}) {
     const invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
-    if (!invClean) return false;
+    if (!invClean) return { success: false };
 
     try {
-      console.log(`[AUTO-SETTLE] Memproses pelunasan otomatis Faktur #${invClean}...`);
+      console.log(`[AUTO-SETTLE] Memproses pembayaran otomatis Faktur #${invClean}...`);
+      const payAmount = Number(paymentData.amount) || 0;
+      let effectiveNominal = 0;
+      let newPaidAmount = payAmount;
+      let willBeLunas = true;
+      let remainingAfter = 0;
+      let matchedReceivable = false;
+
+      // 1. Process receivables update
+      if (this.mode === 'admin') {
+        const snap = await this.db.collection('receivables').where('noInvoice', '==', invClean).get();
+        if (!snap.empty) {
+          matchedReceivable = true;
+          for (const d of snap.docs) {
+            const existing = d.data();
+            effectiveNominal = Number(existing.nominal || existing.totalTagihan || existing.total || 0);
+            const currentPaid = Number(existing.paidAmount || (Array.isArray(existing.payments) ? existing.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0));
+            newPaidAmount = currentPaid + (payAmount > 0 ? payAmount : (effectiveNominal - currentPaid));
+            willBeLunas = newPaidAmount >= (effectiveNominal - 1.0);
+            remainingAfter = willBeLunas ? 0 : Math.max(0, effectiveNominal - newPaidAmount);
+
+            const payments = Array.isArray(existing.payments) ? [...existing.payments] : [];
+            payments.push({
+              id: `pay_${Date.now()}`,
+              amount: payAmount > 0 ? payAmount : effectiveNominal,
+              date: new Date(),
+              method: paymentData.bank ? `Transfer ${paymentData.bank}` : 'TRANSFER',
+              notes: willBeLunas
+                ? `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`
+                : `Pembayaran Cicilan via WhatsApp Gateway (${paymentData.bank || 'Transfer'}) - Sisa Rp ${remainingAfter.toLocaleString('id-ID')}`,
+              receiptUrl: paymentData.imageUrl || '',
+              createdAt: new Date()
+            });
+
+            await d.ref.update({
+              isLunas: willBeLunas,
+              paidAmount: newPaidAmount,
+              payments,
+              updatedAt: new Date()
+            });
+          }
+        }
+      } else if (this.mode === 'client') {
+        const { collection, query, where, getDocs, updateDoc } = this.clientSdk;
+        const q = query(collection(this.clientDb, 'receivables'), where('noInvoice', '==', invClean));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          matchedReceivable = true;
+          for (const d of snap.docs) {
+            const existing = d.data();
+            effectiveNominal = Number(existing.nominal || existing.totalTagihan || existing.total || 0);
+            const currentPaid = Number(existing.paidAmount || (Array.isArray(existing.payments) ? existing.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0));
+            newPaidAmount = currentPaid + (payAmount > 0 ? payAmount : (effectiveNominal - currentPaid));
+            willBeLunas = newPaidAmount >= (effectiveNominal - 1.0);
+            remainingAfter = willBeLunas ? 0 : Math.max(0, effectiveNominal - newPaidAmount);
+
+            const payments = Array.isArray(existing.payments) ? [...existing.payments] : [];
+            payments.push({
+              id: `pay_${Date.now()}`,
+              amount: payAmount > 0 ? payAmount : effectiveNominal,
+              date: new Date(),
+              method: paymentData.bank ? `Transfer ${paymentData.bank}` : 'TRANSFER',
+              notes: willBeLunas
+                ? `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`
+                : `Pembayaran Cicilan via WhatsApp Gateway (${paymentData.bank || 'Transfer'}) - Sisa Rp ${remainingAfter.toLocaleString('id-ID')}`,
+              receiptUrl: paymentData.imageUrl || '',
+              createdAt: new Date()
+            });
+
+            await updateDoc(d.ref, {
+              isLunas: willBeLunas,
+              paidAmount: newPaidAmount,
+              payments,
+              updatedAt: new Date()
+            });
+          }
+        }
+      }
+
+      // If not in receivables yet, read transaction to check grandTotal
+      if (!matchedReceivable) {
+        let trSnap;
+        if (this.mode === 'admin') {
+          trSnap = await this.db.collection('transactions').doc(invClean).get();
+        } else if (this.mode === 'client') {
+          const { doc, getDoc } = this.clientSdk;
+          trSnap = await getDoc(doc(this.clientDb, 'transactions', invClean));
+        }
+        if (trSnap && (trSnap.exists || (typeof trSnap.exists === 'function' && trSnap.exists()))) {
+          const trData = trSnap.data();
+          effectiveNominal = Number(trData.grandTotal || 0);
+          if (effectiveNominal > 0 && payAmount > 0) {
+            willBeLunas = payAmount >= (effectiveNominal - 1.0);
+            remainingAfter = willBeLunas ? 0 : Math.max(0, effectiveNominal - payAmount);
+          }
+        }
+      }
+
+      // 2. Update transactions collection
       const updateData = {
-        statusTransfer: 'PAID',
+        statusTransfer: willBeLunas ? 'PAID' : 'PARTIAL',
         transferDate: new Date(),
         transferReceiptUrl: paymentData.imageUrl || null,
         transferBankDetails: {
           bank: paymentData.bank || '',
-          amount: paymentData.amount || 0,
+          amount: payAmount,
           berita: paymentData.berita || '',
           refNo: paymentData.refNo || '',
           senderName: paymentData.senderName || '',
           settledAt: new Date().toISOString(),
-          settleSource: 'WA_GATEWAY_AUTO_SETTLE'
+          settleSource: 'WA_GATEWAY_AUTO_SETTLE',
+          isPartial: !willBeLunas,
+          remaining: remainingAfter,
+          totalPaid: newPaidAmount,
+          totalTagihan: effectiveNominal
         }
       };
 
-      // 1. Update transactions
       if (this.mode === 'admin') {
         await this.db.collection('transactions').doc(invClean).set(updateData, { merge: true });
       } else if (this.mode === 'client') {
@@ -478,52 +579,18 @@ class FirebaseAdapter {
         await setDoc(doc(this.clientDb, 'transactions', invClean), updateData, { merge: true });
       }
 
-      // 2. Update receivables
-      if (this.mode === 'admin') {
-        const snap = await this.db.collection('receivables').where('noInvoice', '==', invClean).get();
-        for (const d of snap.docs) {
-          const existing = d.data();
-          const payments = Array.isArray(existing.payments) ? [...existing.payments] : [];
-          payments.push({
-            amount: paymentData.amount || existing.nominal || 0,
-            date: new Date(),
-            method: paymentData.bank || 'TRANSFER',
-            notes: `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`,
-            receiptUrl: paymentData.imageUrl || ''
-          });
-          await d.ref.update({
-            isLunas: true,
-            paidAmount: paymentData.amount || existing.nominal || 0,
-            payments
-          });
-        }
-      } else if (this.mode === 'client') {
-        const { collection, query, where, getDocs, updateDoc } = this.clientSdk;
-        const q = query(collection(this.clientDb, 'receivables'), where('noInvoice', '==', invClean));
-        const snap = await getDocs(q);
-        for (const d of snap.docs) {
-          const existing = d.data();
-          const payments = Array.isArray(existing.payments) ? [...existing.payments] : [];
-          payments.push({
-            amount: paymentData.amount || existing.nominal || 0,
-            date: new Date(),
-            method: paymentData.bank || 'TRANSFER',
-            notes: `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`,
-            receiptUrl: paymentData.imageUrl || ''
-          });
-          await updateDoc(d.ref, {
-            isLunas: true,
-            paidAmount: paymentData.amount || existing.nominal || 0,
-            payments
-          });
-        }
-      }
-
-      console.log(`[AUTO-SETTLE SUCCESS] 🎉 Faktur #${invClean} BERHASIL DILUNASI OTOMATIS! (Transactions & Receivables updated)`);
-      return true;
+      const statusLog = willBeLunas ? 'LUNAS PENUH' : `CICILAN (Sisa: Rp ${remainingAfter.toLocaleString('id-ID')})`;
+      console.log(`[AUTO-SETTLE SUCCESS] 🎉 Faktur #${invClean} BERHASIL DIPROSES! Status: ${statusLog}`);
+      return {
+        success: true,
+        isLunas: willBeLunas,
+        remaining: remainingAfter,
+        paidAmount: newPaidAmount,
+        totalTagihan: effectiveNominal
+      };
     } catch (err) {
-      console.error(`[AUTO-SETTLE ERROR] Gagal melunasi Faktur #${invClean}:`, err.message);
-      return false;
+      console.error(`[AUTO-SETTLE ERROR] Gagal memproses Faktur #${invClean}:`, err.message);
+      return { success: false, error: err.message };
     }
   }
 }

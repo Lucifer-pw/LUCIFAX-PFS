@@ -2246,33 +2246,104 @@ Kirim besok pagi ya pak bc''';
       }
 
       final trData = trDoc.data() ?? {};
-      final String custName = trData['customerName'] ?? 'Pelanggan';
+      final String custName = (trData['aliasName'] != null && trData['aliasName'].toString().isNotEmpty)
+          ? trData['aliasName'].toString()
+          : (trData['customerName'] ?? 'Pelanggan').toString();
 
-      // Update transaction status & sync to receivables
-      await _firebaseService.updateTransactionTransferStatus(invClean, 'PAID', DateTime.now());
-      if (chat.imageUrl != null || chat.transferInfo != null) {
-        await FirebaseFirestore.instance.collection('transactions').doc(invClean).update({
-          if (chat.imageUrl != null) 'transferReceiptUrl': chat.imageUrl,
-          if (chat.transferInfo != null) 'transferBankDetails': chat.transferInfo,
+      // 1. Ambil data piutang untuk perhitungan cicilan vs lunas
+      final recSnap = await FirebaseFirestore.instance.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      double effectiveNominal = ((trData['grandTotal'] ?? 0) as num).toDouble();
+      double currentPaid = 0.0;
+      DocumentReference? targetRecRef;
+
+      if (recSnap.docs.isNotEmpty) {
+        final recDoc = recSnap.docs.first;
+        targetRecRef = recDoc.reference;
+        final recData = recDoc.data();
+        effectiveNominal = ((recData['nominal'] ?? recData['totalTagihan'] ?? effectiveNominal) as num).toDouble();
+        if (recData['paidAmount'] != null) {
+          currentPaid = ((recData['paidAmount']) as num).toDouble();
+        } else if (recData['payments'] is List) {
+          final list = recData['payments'] as List;
+          currentPaid = list.fold<double>(0.0, (sum, p) => sum + (((p as Map)['amount'] as num?)?.toDouble() ?? 0.0));
+        }
+      }
+
+      final double payAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
+      final double effectivePay = payAmount > 0 ? payAmount : (effectiveNominal - currentPaid);
+      final double newPaidAmount = currentPaid + effectivePay;
+      final bool willBeLunas = newPaidAmount >= (effectiveNominal - 1.0);
+      final double remainingAfter = willBeLunas ? 0.0 : (effectiveNominal - newPaidAmount);
+
+      final bankName = (chat.transferInfo?['bank'] ?? 'Transfer').toString();
+      final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+      final paymentItem = {
+        'id': 'pay_${DateTime.now().millisecondsSinceEpoch}',
+        'amount': effectivePay,
+        'date': Timestamp.now(),
+        'note': willBeLunas
+            ? 'Pelunasan manual via WA Gateway ($bankName)'
+            : 'Cicilan manual via WA Gateway ($bankName) - Sisa ${currencyFormatter.format(remainingAfter)}',
+        'paymentMethod': 'Transfer $bankName',
+        'receiptUrl': chat.imageUrl ?? '',
+        'createdAt': Timestamp.now(),
+      };
+
+      // 2. Sinkronisasi ke koleksi receivables
+      if (targetRecRef != null) {
+        await targetRecRef.update({
+          'isLunas': willBeLunas,
+          'paidAmount': newPaidAmount,
+          'payments': FieldValue.arrayUnion([paymentItem]),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       }
 
-      // Update chat document
+      // 3. Update koleksi transactions
+      await FirebaseFirestore.instance.collection('transactions').doc(invClean).update({
+        'statusTransfer': willBeLunas ? 'PAID' : 'PARTIAL',
+        if (willBeLunas) 'transferDate': Timestamp.now(),
+        if (chat.imageUrl != null) 'transferReceiptUrl': chat.imageUrl,
+        'transferBankDetails': {
+          if (chat.transferInfo != null) ...chat.transferInfo!,
+          'isPartial': !willBeLunas,
+          'remaining': remainingAfter,
+          'totalPaid': newPaidAmount,
+          'totalTagihan': effectiveNominal,
+          'settledAt': DateTime.now().toIso8601String(),
+          'settleSource': 'WA_GATEWAY_MANUAL_LINK',
+        },
+      });
+
+      // 4. Update koleksi incoming_po_chats
       await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
         'status': 'processed',
         'isPaymentApplied': true,
         'matchedInvoiceNo': invClean,
+        'isPartialPayment': !willBeLunas,
+        'remainingAmount': remainingAfter,
         'processedAt': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 Pembayaran Faktur #$invClean ($custName) BERHASIL DILUNASI! Bukti transfer tersimpan.'),
-            backgroundColor: const Color(0xFF059669),
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        if (willBeLunas) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎉 Pembayaran Faktur #$invClean ($custName) LUNAS PENUH! Bukti transfer tersimpan.'),
+              backgroundColor: const Color(0xFF059669),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('💳 Pembayaran Cicilan ${currencyFormatter.format(effectivePay)} dicatat ke Faktur #$invClean ($custName). Sisa Tagihan: ${currencyFormatter.format(remainingAfter)}'),
+              backgroundColor: const Color(0xFF0284C7),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -2527,7 +2598,7 @@ Kirim besok pagi ya pak bc''';
                           : null,
                       icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
                       label: Text(
-                        selectedInv.isNotEmpty ? 'Konfirmasi Pelunasan Faktur #$selectedInv' : 'Pilih Faktur Dahulu',
+                        selectedInv.isNotEmpty ? 'Konfirmasi Pembayaran Faktur #$selectedInv' : 'Pilih Faktur Dahulu',
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -2775,32 +2846,61 @@ Kirim besok pagi ya pak bc''';
 
           // Action Row for Transfer Slip
           if (isProcessed) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF064E3B).withOpacity(0.4),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF059669)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Pembayaran Telah Diterapkan (Faktur #${chat.matchedInvoiceNo ?? '-'}) - STATUS: LUNAS',
-                      style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 12, fontWeight: FontWeight.bold),
+            if (chat.isPartialPayment) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0369A1).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF0284C7)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.pie_chart_outline_rounded, color: Color(0xFF38BDF8), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Pembayaran Cicilan Diterapkan (Faktur #${chat.matchedInvoiceNo ?? '-'}) - Sisa Piutang: ${currencyFormatter.format(chat.remainingAmount)}',
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
-                    tooltip: 'Hapus Bukti',
-                    onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
-                  ),
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                      tooltip: 'Hapus Bukti',
+                      onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF064E3B).withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF059669)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Pembayaran Telah Diterapkan (Faktur #${chat.matchedInvoiceNo ?? '-'}) - STATUS: LUNAS',
+                        style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                      tooltip: 'Hapus Bukti',
+                      onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ] else ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3131,11 +3231,19 @@ Kirim besok pagi ya pak bc''';
 
     if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') {
       if (chat.status == 'processed' || chat.isPaymentApplied) {
-        bg = const Color(0xFF065F46);
-        fg = const Color(0xFF34D399);
-        label = chat.matchedInvoiceNo != null
-            ? 'LUNAS (Faktur #${chat.matchedInvoiceNo})'
-            : 'LUNAS (TERVERIFIKASI)';
+        if (chat.isPartialPayment) {
+          bg = const Color(0xFF0C4A6E);
+          fg = const Color(0xFF38BDF8);
+          label = chat.matchedInvoiceNo != null
+              ? 'CICILAN (Faktur #${chat.matchedInvoiceNo})'
+              : 'CICILAN DITERAPKAN';
+        } else {
+          bg = const Color(0xFF065F46);
+          fg = const Color(0xFF34D399);
+          label = chat.matchedInvoiceNo != null
+              ? 'LUNAS (Faktur #${chat.matchedInvoiceNo})'
+              : 'LUNAS (TERVERIFIKASI)';
+        }
       } else if (chat.status == 'dismissed') {
         bg = const Color(0xFF334155);
         fg = const Color(0xFF94A3B8);

@@ -1,6 +1,6 @@
 /**
  * Bank Receipt / Transfer Slip Parser
- * Detects whether OCR text represents a bank transfer slip and extracts structured details
+ * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
 
 function parseBankReceipt(rawText) {
@@ -12,10 +12,14 @@ function parseBankReceipt(rawText) {
   const upper = clean.toUpperCase();
 
   // Bank name indicators
-  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA');
+  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051');
   const isMandiri = upper.includes('MANDIRI') || upper.includes('LIVIN');
   const isBri = upper.includes('BRI') || upper.includes('BRIMO');
   const isBni = upper.includes('BNI') || upper.includes('WONDR');
+
+  // E-banking / mutasi indicators
+  const isEBanking = upper.includes('E-BANKING') || upper.includes('TRSF') || upper.includes('MUTASI') || upper.includes('REKENING KORAN');
+  const isFivaRelated = upper.includes('FIVA') || upper.includes('SEJAHTE') || upper.includes('TITIP INV');
 
   // Transfer receipt indicator keywords
   const receiptKeywords = [
@@ -31,7 +35,12 @@ function parseBankReceipt(rawText) {
     'NAMA PENERIMA',
     'DETAIL TRANSAKSI',
     'FIVA SEJAHTERA',
-    '2306039099' // Rekening BCA PT Putra Fiva Sejahtera
+    'FIVA SEJAHTE',
+    'PUTRA FIVA',
+    '2306039099', // Rekening BCA PT Putra Fiva Sejahtera
+    'TRSF E-BANKING',
+    'TITIP INV',
+    'MUTASI'
   ];
 
   let keywordHits = 0;
@@ -43,6 +52,8 @@ function parseBankReceipt(rawText) {
   const hasStrongIndicator =
     upper.includes('BUKTI TRANSAKSI') ||
     upper.includes('TRANSFER DANA') ||
+    upper.includes('TRSF E-BANKING') ||
+    (isEBanking && isFivaRelated) ||
     (upper.includes('BERHASIL') && (isBca || isMandiri || isBri || isBni));
 
   if (keywordHits < 2 && !hasStrongIndicator) {
@@ -58,9 +69,14 @@ function parseBankReceipt(rawText) {
   // Extract Amount (Nominal Uang)
   let amount = 0;
   const amountPatterns = [
+    // Pattern for mutasi accounting line e.g. "22,000,000.00 DB" or "22.000.000,00 DB" or "22,000,000.00 CR"
+    /([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?)\s*(?:DB|CR)\b/i,
+    // Standard format with Jumlah / Total / Nominal
     /(?:Jumlah|Total|Nominal)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
     /(?:IDR|Rp\.?)\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?)/i,
-    /(?:IDR|Rp\.?)\s*([0-9]+(?:[.,][0-9]{2})?)/i
+    /(?:IDR|Rp\.?)\s*([0-9]+(?:[.,][0-9]{2})?)/i,
+    // Raw mutasi digits without comma e.g. "22000000.00"
+    /\b([0-9]{5,10}\.[0-9]{2})\b/
   ];
 
   for (const pat of amountPatterns) {
@@ -100,6 +116,9 @@ function parseBankReceipt(rawText) {
   const refMatch = clean.match(/(?:Nomor Referensi|No\. Referensi|Ref\.? No\.?|No\. Transaksi)\s*[:=]?\s*([A-Za-z0-9]+)/i);
   if (refMatch) {
     refNumber = refMatch[1].trim();
+  } else {
+    const ftscyMatch = clean.match(/\b([0-9A-Z]{4,8}\/[A-Z0-9]+\/[A-Z0-9]+)\b/i);
+    if (ftscyMatch) refNumber = ftscyMatch[1].trim();
   }
 
   // Extract Berita / Keterangan / Detail Transaksi
@@ -107,6 +126,15 @@ function parseBankReceipt(rawText) {
   const beritaMatch = clean.match(/(?:Berita|Detail Transaksi|Catatan|Keterangan)\s*[:=]?\s*([^\n\r]+)/i);
   if (beritaMatch) {
     berita = beritaMatch[1].trim();
+  } else {
+    const titipMatch = clean.match(/(titip\s+inv[^\n\r]*)/i);
+    if (titipMatch) {
+      berita = titipMatch[1].trim();
+    } else if (upper.includes('TRSF E-BANKING')) {
+      const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+      const lastLine = lines.find(l => l.toUpperCase().includes('FIVA') || l.toUpperCase().includes('SEJAHTE'));
+      if (lastLine) berita = lastLine;
+    }
   }
 
   // Extract Target Invoice Number
@@ -135,6 +163,7 @@ function parseBankReceipt(rawText) {
   else if (upper.includes('ANNISA') || upper.includes('ANIZA')) customerHint = 'ANIZA FF';
   else if (upper.includes('PARIS')) customerHint = 'PARIS FOOD';
   else if (upper.includes('HANA MAKMUR')) customerHint = 'HANA MAKMUR';
+  else if (upper.includes('AW FF') || upper.includes('AW')) customerHint = 'AW FF';
 
   // Extract Date
   let rawDate = '';

@@ -779,10 +779,12 @@ async function startBaileys() {
       // =========================================================================
       if (bankResult.isBankSlip) {
         let isAutoSettled = false;
-        // OPSI B: Jika autoSettle aktif dan nomor faktur teridentifikasi -> LUNASI SEKETIKA!
+        let isPartial = false;
+        let remainingAmount = 0;
+        // OPSI B: Jika autoSettle aktif dan nomor faktur teridentifikasi -> LUNASI / CICIL SEKETIKA!
         if (autoSettleTransferSlips && bankResult.invoiceNo) {
           try {
-            isAutoSettled = await firebaseAdapter.settleInvoicePayment(bankResult.invoiceNo, {
+            const settleRes = await firebaseAdapter.settleInvoicePayment(bankResult.invoiceNo, {
               amount: bankResult.amount,
               bank: bankResult.bank,
               imageUrl: imageUrl,
@@ -790,13 +792,19 @@ async function startBaileys() {
               refNo: bankResult.refNo,
               senderName: bankResult.matchedToko || senderName
             });
+            if (settleRes) {
+              isAutoSettled = (settleRes.success === true || settleRes === true);
+              isPartial = (settleRes.isLunas === false);
+              remainingAmount = settleRes.remaining || 0;
+            }
           } catch (setErr) {
             console.warn('[AUTO-SETTLE CALL ERROR]', setErr.message);
           }
         }
 
         const settleStatus = isAutoSettled ? 'processed' : 'pending';
-        console.log(`[TRANSFER SLIP DISPATCH] 🚀 Bukti transfer ${bankResult.bank} Rp ${bankResult.amount.toLocaleString('id-ID')} dikirim ke Firestore (Status: ${settleStatus}, AutoSettled: ${isAutoSettled})!`);
+        const typeLog = isPartial ? `CICILAN (Sisa: Rp ${remainingAmount.toLocaleString('id-ID')})` : 'LUNAS';
+        console.log(`[TRANSFER SLIP DISPATCH] 🚀 Bukti transfer ${bankResult.bank} Rp ${bankResult.amount.toLocaleString('id-ID')} dikirim ke Firestore (Status: ${settleStatus}, AutoSettled: ${isAutoSettled}, Tipe: ${typeLog})!`);
 
         const slipPayload = {
           senderJid: remoteJid,
@@ -807,10 +815,16 @@ async function startBaileys() {
           messageType: 'TRANSFER_SLIP',
           hasImage: true,
           imageUrl: imageUrl || null,
-          transferInfo: bankResult,
+          transferInfo: {
+            ...bankResult,
+            isPartial,
+            remainingAmount
+          },
           matchedInvoiceNo: bankResult.invoiceNo || null,
           status: settleStatus,
           isPaymentApplied: isAutoSettled,
+          isPartialPayment: isPartial,
+          remainingAmount: remainingAmount,
           caption: rawCaption || '',
           rawOcrText: ocrText || '',
           messageCount: 1,
