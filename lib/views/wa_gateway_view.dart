@@ -2123,7 +2123,310 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
-  Widget _buildFilterChip(String key, String label) {
+  Future<void> _confirmTransferPayment(IncomingPoChat chat, String invoiceNo) async {
+    final invClean = invoiceNo.replaceAll('#', '').trim();
+    if (invClean.isEmpty) return;
+
+    try {
+      final trDoc = await FirebaseFirestore.instance.collection('transactions').doc(invClean).get();
+      if (!trDoc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Faktur #$invClean tidak ditemukan di database.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
+
+      final trData = trDoc.data() ?? {};
+      final String custName = trData['customerName'] ?? 'Pelanggan';
+
+      // Update transaction status & sync to receivables
+      await _firebaseService.updateTransactionTransferStatus(invClean, 'PAID', DateTime.now());
+      if (chat.imageUrl != null || chat.transferInfo != null) {
+        await FirebaseFirestore.instance.collection('transactions').doc(invClean).update({
+          if (chat.imageUrl != null) 'transferReceiptUrl': chat.imageUrl,
+          if (chat.transferInfo != null) 'transferBankDetails': chat.transferInfo,
+        });
+      }
+
+      // Update chat document
+      await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
+        'status': 'processed',
+        'isPaymentApplied': true,
+        'matchedInvoiceNo': invClean,
+        'processedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Pembayaran Faktur #$invClean ($custName) BERHASIL DILUNASI! Bukti transfer tersimpan.'),
+            backgroundColor: const Color(0xFF059669),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal verifikasi pembayaran: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  void _showReceiptImageDialog(BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 750),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text('Gagal memuat gambar bukti transfer.', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLinkToInvoiceDialog(BuildContext context, IncomingPoChat chat) async {
+    final searchCtrl = TextEditingController(text: chat.matchedInvoiceNo ?? '');
+    String selectedInv = chat.matchedInvoiceNo ?? '';
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Dialog(
+            backgroundColor: const Color(0xFF0F172A),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 550, maxHeight: 600),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.link_rounded, color: Color(0xFF38BDF8), size: 22),
+                          SizedBox(width: 8),
+                          Text('Tautkan Bukti Transfer ke Faktur', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                        onPressed: () => Navigator.pop(dialogCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (chat.transferInfo != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF064E3B).withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF059669)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.account_balance_rounded, color: Color(0xFF34D399), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bank: ${chat.transferInfo?['bank'] ?? '-'} | Nominal: Rp ${((chat.transferInfo?['amount'] as num?) ?? 0).toStringAsFixed(0)}',
+                                  style: const TextStyle(color: Color(0xFF6EE7B7), fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                                if ((chat.transferInfo?['berita'] ?? '').toString().isNotEmpty)
+                                  Text(
+                                    'Berita: "${chat.transferInfo?['berita']}"',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  TextField(
+                    controller: searchCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Cari Nomor Faktur / Nama Toko',
+                      hintText: 'e.g. 683 atau Maju Market',
+                      labelStyle: const TextStyle(color: Color(0xFF38BDF8)),
+                      hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8)),
+                      filled: true,
+                      fillColor: const Color(0xFF1E293B),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Pilih faktur tertunggak untuk dilunasi:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('transactions').orderBy('date', descending: true).limit(30).snapshots(),
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                        }
+                        final docs = snap.data?.docs ?? [];
+                        final q = searchCtrl.text.trim().toLowerCase();
+                        final filteredDocs = docs.where((d) {
+                          final data = d.data() as Map<String, dynamic>;
+                          final inv = (data['invoiceNo'] ?? d.id).toString().toLowerCase();
+                          final cust = (data['customerName'] ?? '').toString().toLowerCase();
+                          final alias = (data['aliasName'] ?? '').toString().toLowerCase();
+                          if (q.isNotEmpty) {
+                            return inv.contains(q) || cust.contains(q) || alias.contains(q);
+                          }
+                          return true;
+                        }).toList();
+
+                        if (filteredDocs.isEmpty) {
+                          return const Center(child: Text('Tidak ada faktur yang cocok.', style: TextStyle(color: Color(0xFF64748B))));
+                        }
+
+                        return ListView.separated(
+                          itemCount: filteredDocs.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 6),
+                          itemBuilder: (ctx, i) {
+                            final doc = filteredDocs[i];
+                            final data = doc.data() as Map<String, dynamic>;
+                            final invNo = (data['invoiceNo'] ?? doc.id).toString();
+                            final cust = (data['aliasName'] != null && data['aliasName'].toString().isNotEmpty)
+                                ? data['aliasName'].toString()
+                                : (data['customerName'] ?? 'Pelanggan').toString();
+                            final total = (data['grandTotal'] as num?)?.toDouble() ?? 0.0;
+                            final isUnpaid = (data['statusTransfer'] ?? 'UNPAID') == 'UNPAID';
+                            final isSel = selectedInv == invNo;
+
+                            return InkWell(
+                              onTap: () => setDialogState(() => selectedInv = invNo),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: isSel ? const Color(0xFF38BDF8) : (isUnpaid ? Colors.amber.withOpacity(0.3) : const Color(0xFF334155))),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isSel ? Icons.radio_button_checked : Icons.radio_button_off,
+                                      color: isSel ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Faktur #$invNo - $cust', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                          Text('Total: Rp ${total.toStringAsFixed(0)} | Status: ${isUnpaid ? "Belum Lunas (UNPAID)" : "Lunas (PAID)"}', style: TextStyle(color: isUnpaid ? Colors.amber : const Color(0xFF34D399), fontSize: 11)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: selectedInv.isNotEmpty ? const Color(0xFF10B981) : const Color(0xFF334155),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: selectedInv.isNotEmpty
+                          ? () {
+                              Navigator.pop(dialogCtx);
+                              _confirmTransferPayment(chat, selectedInv);
+                            }
+                          : null,
+                      icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                      label: Text(
+                        selectedInv.isNotEmpty ? 'Konfirmasi Pelunasan Faktur #$selectedInv' : 'Pilih Faktur Dahulu',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String key, String label) {
+
     final isSelected = _selectedStatusFilter == key;
     return InkWell(
       onTap: () => setState(() => _selectedStatusFilter = key),
@@ -2147,7 +2450,281 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
+  Widget _buildTransferSlipCard(IncomingPoChat chat, {bool isMobile = false}) {
+    final isProcessed = chat.status == 'processed' || chat.isPaymentApplied;
+    final dateStr = DateFormat('dd MMM yyyy, HH:mm').format(chat.receivedAt);
+    final bank = (chat.transferInfo?['bank'] ?? 'BANK').toString();
+    final double amount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
+    final String berita = (chat.transferInfo?['berita'] ?? '').toString();
+    final String customerHint = (chat.transferInfo?['customerHint'] ?? '').toString();
+    final String refNumber = (chat.transferInfo?['refNumber'] ?? '').toString();
+
+    final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final formattedAmount = currencyFormatter.format(amount);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isProcessed
+              ? const Color(0xFF059669).withOpacity(0.5)
+              : const Color(0xFF38BDF8).withOpacity(0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: const Color(0xFF059669).withOpacity(0.2),
+                      child: const Icon(Icons.account_balance_rounded, color: Color(0xFF34D399), size: 16),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        chat.senderName,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                  const SizedBox(width: 6),
+                  _buildChatStatusBadge(chat),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Transfer Slip Content Box
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Thumbnail Image if available
+                if (chat.hasImage && chat.imageUrl != null && chat.imageUrl!.isNotEmpty) ...[
+                  InkWell(
+                    onTap: () => _showReceiptImageDialog(context, chat.imageUrl!, 'Bukti Transfer $bank ($formattedAmount)'),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.network(
+                            chat.imageUrl!,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 80,
+                              height: 80,
+                              color: const Color(0xFF334155),
+                              child: const Icon(Icons.broken_image_rounded, color: Color(0xFF64748B)),
+                            ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.zoom_in_rounded, color: Colors.white, size: 24),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                // Info details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
+                            ),
+                            child: Text(
+                              bank,
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            formattedAmount,
+                            style: const TextStyle(
+                              color: Color(0xFF34D399),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.receipt_long_rounded, color: Color(0xFFF59E0B), size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Target Faktur: #${chat.matchedInvoiceNo}',
+                              style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      if (customerHint.isNotEmpty) ...[
+                        Text('Pengirim/Toko: $customerHint', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                      ],
+                      if (berita.isNotEmpty) ...[
+                        Text('Berita Transfer: "$berita"', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
+                      ],
+                      if (refNumber.isNotEmpty) ...[
+                        Text('No. Ref: $refNumber', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                      ],
+                      if (chat.caption != null && chat.caption!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text('Catatan Pengirim: "${chat.caption}"', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontStyle: FontStyle.italic)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Action Row for Transfer Slip
+          if (isProcessed) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF064E3B).withOpacity(0.4),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF059669)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pembayaran Telah Diterapkan (Faktur #${chat.matchedInvoiceNo ?? '-'}) - STATUS: LUNAS',
+                      style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                    tooltip: 'Hapus Bukti',
+                    onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => _confirmTransferPayment(chat, chat.matchedInvoiceNo!),
+                        icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                        label: Text(
+                          'Tandai Faktur #${chat.matchedInvoiceNo} Lunas',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF38BDF8),
+                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      onPressed: () => _showLinkToInvoiceDialog(context, chat),
+                      icon: const Icon(Icons.link_rounded, size: 16),
+                      label: Text(
+                        chat.matchedInvoiceNo != null ? 'Tautkan ke Faktur Lain' : 'Tautkan ke Faktur',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF64748B),
+                        side: const BorderSide(color: Color(0xFF334155)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed'),
+                      icon: const Icon(Icons.close_rounded, size: 14),
+                      label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                  tooltip: 'Hapus Pesan',
+                  onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+
   Widget _buildChatItemCard(IncomingPoChat chat, {bool isMobile = false}) {
+    if (chat.isTransferSlip) {
+      return _buildTransferSlipCard(chat, isMobile: isMobile);
+    }
+
     final isPending = chat.status == 'pending';
     final isProcessed = chat.status == 'processed';
     final dateStr = DateFormat('dd MMM yyyy, HH:mm').format(chat.receivedAt);

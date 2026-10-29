@@ -249,10 +249,10 @@ class AiChatParserService {
               trimmed.toLowerCase().startsWith('toko ') ||
               trimmed.toLowerCase().startsWith('pak mau order');
 
-          final String? lastInCurrent = currentBlock.reversed
+          final String lastInCurrent = currentBlock.reversed
               .map((l) => l.trim())
               .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-          final bool prevWasCust = lastInCurrent != null &&
+          final bool prevWasCust = lastInCurrent.isNotEmpty &&
               _isCandidateCustomerLine(lastInCurrent, customers: customers, customerRules: customerRules);
 
           if (currentBlockHasCustomer() || hasExplicitHeaderPrefix || prevWasCust) {
@@ -1193,7 +1193,13 @@ class AiChatParserService {
           lowerCleaned.endsWith('biji')) {
         unit = 'pack';
       } else {
-        unit = 'karton'; // Default to karton for whole bulk numbers in warehouse
+        // Sanity Check: If bulk number > 50 without explicit unit word ("karton/ktn/dus"),
+        // it is almost certainly pack/pcs (e.g. 150 pack), NOT 150 karton (which would be 1.5 tons!).
+        if (qty > 50) {
+          unit = 'pack';
+        } else {
+          unit = 'karton'; // Default to karton for reasonable bulk order numbers (1..50)
+        }
       }
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
@@ -1247,11 +1253,17 @@ class AiChatParserService {
     final bool queryHas7 = qTokens.contains('7') || qTokens.contains('7s');
     final bool queryHas215 = qTokens.contains('215') || qTokens.contains('215g') || qTokens.contains('215gr');
 
+    final bool queryHasMbg = cleanQ.contains('mbg') || qTokens.contains('mbg');
+
     CustomerProductHistory? bestMatch;
     int maxScore = 0;
 
     for (var h in historyList) {
       final hName = h.productName.toLowerCase();
+      final bool hIsMbg = hName.contains('mbg') || h.productId.toLowerCase().contains('mbg');
+      // STRICT GUARD: If customer did not type "mbg", never match MBG variants!
+      if (!queryHasMbg && hIsMbg) continue;
+      if (queryHasMbg && !hIsMbg) continue;
       final hTokens = hName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').split(RegExp(r'\s+')).toSet();
       int score = 0;
 
@@ -1569,11 +1581,17 @@ class AiChatParserService {
     final bool queryHas7 = qWords.contains('7') || qWords.contains('7s');
     final bool queryHas215 = qWords.contains('215') || qWords.contains('215g') || qWords.contains('215gr');
 
+    final bool queryHasMbg = cleanQ.contains('mbg') || qWords.contains('mbg');
+
     Product? bestProduct;
     int maxScore = 0;
 
     for (var p in products) {
       final pName = p.name.toLowerCase();
+      final bool pIsMbg = pName.contains('mbg') || p.kodeInduk.toLowerCase().contains('mbg');
+      // STRICT GUARD: If customer did not type "mbg", never match MBG variants!
+      if (!queryHasMbg && pIsMbg) continue;
+      if (queryHasMbg && !pIsMbg) continue;
       final pWords = pName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').split(RegExp(r'\s+')).toSet();
       int score = 0;
 

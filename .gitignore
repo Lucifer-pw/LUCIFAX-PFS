@@ -85,3 +85,4 @@ ios/Runner/GoogleService-Info.plist
 # WhatsApp Gateway Sessions
 auth_info_baileys/
 **/auth_info_baileys/
+*.traineddata

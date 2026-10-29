@@ -13,6 +13,13 @@ class IncomingPoChat {
   final String? createdInvoiceNo;
   final String? createdTransactionId;
   final String? dismissReason;
+  final String messageType; // 'ORDER_PO', 'TRANSFER_SLIP', 'CASUAL_CHAT'
+  final bool hasImage;
+  final String? imageUrl;
+  final String? caption;
+  final Map<String, dynamic>? transferInfo;
+  final bool isPaymentApplied;
+  final String? matchedInvoiceNo;
 
   IncomingPoChat({
     required this.id,
@@ -27,7 +34,16 @@ class IncomingPoChat {
     this.createdInvoiceNo,
     this.createdTransactionId,
     this.dismissReason,
+    this.messageType = 'ORDER_PO',
+    this.hasImage = false,
+    this.imageUrl,
+    this.caption,
+    this.transferInfo,
+    this.isPaymentApplied = false,
+    this.matchedInvoiceNo,
   });
+
+  bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || transferInfo != null;
 
   factory IncomingPoChat.fromMap(Map<String, dynamic> map, String id) {
     DateTime parseDate(dynamic val) {
@@ -39,6 +55,12 @@ class IncomingPoChat {
       }
       return DateTime.now();
     }
+
+    final rawType = (map['messageType'] ?? '').toString();
+    final Map<String, dynamic>? tInfo = map['transferInfo'] is Map ? Map<String, dynamic>.from(map['transferInfo']) : null;
+    final String resolvedType = rawType.isNotEmpty
+        ? rawType
+        : (tInfo != null ? 'TRANSFER_SLIP' : (map['isOrderDetected'] == true ? 'ORDER_PO' : 'CASUAL_CHAT'));
 
     return IncomingPoChat(
       id: id,
@@ -53,6 +75,13 @@ class IncomingPoChat {
       createdInvoiceNo: map['createdInvoiceNo'] as String?,
       createdTransactionId: map['createdTransactionId'] as String?,
       dismissReason: map['dismissReason'] as String?,
+      messageType: resolvedType,
+      hasImage: map['hasImage'] == true || map['imageUrl'] != null,
+      imageUrl: map['imageUrl'] as String?,
+      caption: map['caption'] as String?,
+      transferInfo: tInfo,
+      isPaymentApplied: map['isPaymentApplied'] == true,
+      matchedInvoiceNo: (map['matchedInvoiceNo'] ?? tInfo?['invoiceNo'])?.toString(),
     );
   }
 
@@ -69,6 +98,13 @@ class IncomingPoChat {
       'createdInvoiceNo': createdInvoiceNo,
       'createdTransactionId': createdTransactionId,
       'dismissReason': dismissReason,
+      'messageType': messageType,
+      'hasImage': hasImage,
+      'imageUrl': imageUrl,
+      'caption': caption,
+      'transferInfo': transferInfo,
+      'isPaymentApplied': isPaymentApplied,
+      'matchedInvoiceNo': matchedInvoiceNo,
     };
   }
 
@@ -78,6 +114,13 @@ class IncomingPoChat {
     String? createdInvoiceNo,
     String? createdTransactionId,
     String? dismissReason,
+    String? messageType,
+    bool? hasImage,
+    String? imageUrl,
+    String? caption,
+    Map<String, dynamic>? transferInfo,
+    bool? isPaymentApplied,
+    String? matchedInvoiceNo,
   }) {
     return IncomingPoChat(
       id: id,
@@ -92,6 +135,13 @@ class IncomingPoChat {
       createdInvoiceNo: createdInvoiceNo ?? this.createdInvoiceNo,
       createdTransactionId: createdTransactionId ?? this.createdTransactionId,
       dismissReason: dismissReason ?? this.dismissReason,
+      messageType: messageType ?? this.messageType,
+      hasImage: hasImage ?? this.hasImage,
+      imageUrl: imageUrl ?? this.imageUrl,
+      caption: caption ?? this.caption,
+      transferInfo: transferInfo ?? this.transferInfo,
+      isPaymentApplied: isPaymentApplied ?? this.isPaymentApplied,
+      matchedInvoiceNo: matchedInvoiceNo ?? this.matchedInvoiceNo,
     );
   }
 }

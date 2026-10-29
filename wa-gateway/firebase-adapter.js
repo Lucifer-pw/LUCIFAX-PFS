@@ -18,7 +18,8 @@ class FirebaseAdapter {
         const serviceAccount = require(serviceAccountPath);
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
-          projectId: serviceAccount.project_id || 'aplikasi-transaksi-fiva-frozen'
+          projectId: serviceAccount.project_id || 'aplikasi-transaksi-fiva-frozen',
+          storageBucket: 'aplikasi-transaksi-fiva-frozen.firebasestorage.app'
         });
         this.db = admin.firestore();
         this.admin = admin;
@@ -257,6 +258,33 @@ class FirebaseAdapter {
         console.error('[FIREBASE] Error saving incoming chat (Client):', e.message);
       }
     }
+  }
+
+  async uploadReceiptImage(buffer, filename = `receipt_${Date.now()}.jpg`) {
+    if (!buffer) return null;
+    const destPath = `payment_receipts/${filename}`;
+    const token = `receipt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    if (this.mode === 'admin' && this.admin) {
+      try {
+        const bucket = this.admin.storage().bucket();
+        const file = bucket.file(destPath);
+        await file.save(buffer, {
+          metadata: {
+            contentType: 'image/jpeg',
+            metadata: {
+              firebaseStorageDownloadTokens: token
+            }
+          }
+        });
+        const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(destPath)}?alt=media&token=${token}`;
+        console.log(`[FIREBASE STORAGE] 📸 Struk transfer berhasil diunggah: ${downloadUrl}`);
+        return downloadUrl;
+      } catch (err) {
+        console.warn('[FIREBASE STORAGE ERROR] Gagal upload struk ke Firebase Storage:', err.message);
+      }
+    }
+    return null;
   }
 
   async loadRecentMessageIds() {
