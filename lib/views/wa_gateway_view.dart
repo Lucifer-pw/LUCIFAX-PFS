@@ -98,6 +98,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
   }
 
   Future<void> _processSingleChatToPo(IncomingPoChat chat, {bool isAuto = false}) async {
+    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') return;
     if (_isProcessingBatch && !isAuto) return;
     if (!isAuto) setState(() => _isProcessingBatch = true);
 
@@ -285,6 +286,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
   void _checkAndAutoProcess(List<IncomingPoChat> chats, bool autoPoEnabled) {
     if (!autoPoEnabled) return;
     for (var chat in chats) {
+      if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') continue;
       if (chat.status == 'pending' && !_processingChatIds.contains(chat.id)) {
         _processingChatIds.add(chat.id);
         _processSingleChatToPo(chat, isAuto: true);
@@ -2073,7 +2075,13 @@ Kirim besok pagi ya pak bc''';
 
                 final query = _searchController.text.trim().toLowerCase();
                 final filteredChats = allChats.where((chat) {
-                  if (_selectedStatusFilter != 'all' && chat.status != _selectedStatusFilter) return false;
+                  if (_selectedStatusFilter != 'all') {
+                    if (_selectedStatusFilter == 'transfer') {
+                      if (!chat.isTransferSlip && chat.messageType != 'TRANSFER_SLIP') return false;
+                    } else if (chat.status != _selectedStatusFilter) {
+                      return false;
+                    }
+                  }
                   if (query.isNotEmpty) {
                     return chat.senderName.toLowerCase().contains(query) ||
                         chat.senderPhone.contains(query) ||

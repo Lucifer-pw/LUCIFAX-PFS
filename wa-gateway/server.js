@@ -774,33 +774,62 @@ async function startBaileys() {
       const tag = isHistorySync ? '[CHAT TERTUNDA / HISTORY]' : '[CHAT MASUK]';
       console.log(`${tag} Dari ${senderName} (+${senderPhone}): "${cleanText.substring(0, 50)}..."`);
 
-      // Cek kata kunci pesanan & klasifikasi tipe pesan
-      let isOrderDetected = false;
-      let messageType = 'ORDER_PO';
-
+      // =========================================================================
+      // KHUSUS BUKTI TRANSFER BANK: BYPASS BUFFER & KIRIM LANGSUNG (1 STRUK = 1 KARTU)
+      // Bukti transfer TIDAK BOLEH digabung atau saling menimpa dalam buffer pesanan!
+      // =========================================================================
       if (bankResult.isBankSlip) {
-        // STRICT GUARD: Bukti transfer dilarang keras membuat PO!
-        isOrderDetected = false;
-        messageType = 'TRANSFER_SLIP';
-      } else {
-        const lower = cleanText.toLowerCase();
-        isOrderDetected =
-          lower.includes('karton') ||
-          lower.includes('ktn') ||
-          lower.includes('dus') ||
-          lower.includes('box') ||
-          lower.includes('roll') ||
-          lower.includes('pack') ||
-          lower.includes('pcs') ||
-          lower.includes('beres') ||
-          lower.includes('rolade') ||
-          lower.includes('kornet') ||
-          lower.includes('fiva') ||
-          lower.includes('order') ||
-          lower.includes('po') ||
-          lower.includes('kirim');
-        messageType = isOrderDetected ? 'ORDER_PO' : 'CASUAL_CHAT';
+        console.log(`[TRANSFER SLIP DISPATCH] 🚀 Bukti transfer ${bankResult.bank} Rp ${bankResult.amount.toLocaleString('id-ID')} langsung dikirim ke Firestore sebagai kartu tersendiri (Bypass Buffer)!`);
+
+        const slipPayload = {
+          senderJid: remoteJid,
+          senderPhone,
+          senderName,
+          messageText: cleanText,
+          isOrderDetected: false,
+          messageType: 'TRANSFER_SLIP',
+          hasImage: true,
+          imageUrl: imageUrl || null,
+          transferInfo: bankResult,
+          matchedInvoiceNo: bankResult.invoiceNo || null,
+          caption: rawCaption || '',
+          rawOcrText: ocrText || '',
+          messageCount: 1,
+          messageId: msgId || '',
+          messageIds: msgId ? [msgId] : [],
+          receivedAt: new Date(msgTimeMs)
+        };
+
+        recentChats.unshift({
+          ...slipPayload,
+          receivedAt: new Date()
+        });
+        if (recentChats.length > 20) recentChats.pop();
+
+        await firebaseAdapter.saveIncomingChat(slipPayload);
+        return; // Selesai! Langsung keluar agar tidak masuk buffer chat teks pesanan
       }
+
+      // =========================================================================
+      // ALUR PESANAN TEKS BIASA: Tetap menggunakan Debounce Buffer (Jeda 8 detik)
+      // =========================================================================
+      const lower = cleanText.toLowerCase();
+      const isOrderDetected =
+        lower.includes('karton') ||
+        lower.includes('ktn') ||
+        lower.includes('dus') ||
+        lower.includes('box') ||
+        lower.includes('roll') ||
+        lower.includes('pack') ||
+        lower.includes('pcs') ||
+        lower.includes('beres') ||
+        lower.includes('rolade') ||
+        lower.includes('kornet') ||
+        lower.includes('fiva') ||
+        lower.includes('order') ||
+        lower.includes('po') ||
+        lower.includes('kirim');
+      const messageType = isOrderDetected ? 'ORDER_PO' : 'CASUAL_CHAT';
 
       const bufferKey = senderPhone || rawJidDigits || remoteJid;
       const now = Date.now();
@@ -810,27 +839,13 @@ async function startBaileys() {
         const buf = pendingMessageBuffers.get(bufferKey);
         buf.texts.push(cleanText);
         if (msgId) buf.messageIds.push(msgId);
-
-        // Jika salah satu pesan adalah bukti transfer, KUNCI buffer agar TIDAK jadi PO!
-        if (messageType === 'TRANSFER_SLIP' || bankResult.isBankSlip) {
-          buf.messageType = 'TRANSFER_SLIP';
-          buf.isOrderDetected = false;
-          buf.hasImage = true;
-          if (imageUrl) buf.imageUrl = imageUrl;
-          buf.transferInfo = bankResult;
-          if (bankResult.invoiceNo) buf.matchedInvoiceNo = bankResult.invoiceNo;
-          if (ocrText) buf.rawOcrText = ocrText;
-          if (rawCaption) buf.caption = rawCaption;
-        } else if (buf.messageType !== 'TRANSFER_SLIP') {
-          buf.isOrderDetected = buf.isOrderDetected || isOrderDetected;
-        }
-
+        buf.isOrderDetected = buf.isOrderDetected || isOrderDetected;
         buf.lastReceivedAt = now;
         if (senderName && senderName !== 'Kontak WhatsApp') {
           buf.senderName = senderName;
         }
 
-        console.log(`[BUFFER WA] 📥 Chat lanjutan dari ${senderName} (+${senderPhone}) [${buf.messageType}]. Digabungkan.`);
+        console.log(`[BUFFER WA] 📥 Chat lanjutan dari ${senderName} (+${senderPhone}) diterima. Pesan ke-${buf.texts.length} digabungkan.`);
 
         if (buf.timer) clearTimeout(buf.timer);
 
@@ -848,12 +863,12 @@ async function startBaileys() {
           senderName,
           texts: [cleanText],
           messageIds: msgId ? [msgId] : [],
-          isOrderDetected: messageType === 'TRANSFER_SLIP' ? false : isOrderDetected,
+          isOrderDetected,
           messageType,
           hasImage: isImageMessage,
           imageUrl,
-          transferInfo: bankResult.isBankSlip ? bankResult : null,
-          matchedInvoiceNo: bankResult.isBankSlip && bankResult.invoiceNo ? bankResult.invoiceNo : null,
+          transferInfo: null,
+          matchedInvoiceNo: null,
           caption: rawCaption,
           rawOcrText: ocrText,
           firstReceivedAt: now,
