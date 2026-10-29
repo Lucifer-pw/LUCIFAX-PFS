@@ -16,11 +16,13 @@ class FirebaseAdapter {
       try {
         const admin = require('firebase-admin');
         const serviceAccount = require(serviceAccountPath);
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
-          projectId: serviceAccount.project_id || 'aplikasi-transaksi-fiva-frozen',
-          storageBucket: 'aplikasi-transaksi-fiva-frozen.firebasestorage.app'
-        });
+        if (!admin.apps.length) {
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: serviceAccount.project_id || 'aplikasi-transaksi-fiva-frozen',
+            storageBucket: 'aplikasi-transaksi-fiva-frozen.firebasestorage.app'
+          });
+        }
         this.db = admin.firestore();
         this.admin = admin;
         this.mode = 'admin';
