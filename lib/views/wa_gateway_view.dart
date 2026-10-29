@@ -2645,6 +2645,8 @@ Kirim besok pagi ya pak bc''';
     final String berita = (chat.transferInfo?['berita'] ?? '').toString();
     final String customerHint = (chat.transferInfo?['customerHint'] ?? '').toString();
     final String refNumber = (chat.transferInfo?['refNumber'] ?? '').toString();
+    final String recipient = (chat.recipientName ?? chat.transferInfo?['recipient'] ?? '').toString();
+    final bool isExpense = chat.isExpense;
 
     final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     final formattedAmount = currencyFormatter.format(amount);
@@ -2782,7 +2784,19 @@ Kirim besok pagi ya pak bc''';
                         ],
                       ),
                       const SizedBox(height: 6),
-                      if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
+                      if (isExpense) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.outbox_rounded, color: Color(0xFFFB923C), size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Pengeluaran Operasional (${chat.expenseCategory?.replaceAll('_', ' ') ?? 'BIAYA'})',
+                              style: const TextStyle(color: Color(0xFFFB923C), fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ] else if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
                         Row(
                           children: [
                             const Icon(Icons.receipt_long_rounded, color: Color(0xFFF59E0B), size: 14),
@@ -2809,8 +2823,7 @@ Kirim besok pagi ya pak bc''';
                           ],
                         ),
                         const SizedBox(height: 4),
-                      ],
-                      if (chat.matchedInvoiceNo == null || chat.matchedInvoiceNo!.isEmpty) ...[
+                      ] else ...[
                         Row(
                           children: [
                             const Icon(Icons.help_outline_rounded, color: Color(0xFF38BDF8), size: 14),
@@ -2822,6 +2835,9 @@ Kirim besok pagi ya pak bc''';
                           ],
                         ),
                         const SizedBox(height: 4),
+                      ],
+                      if (recipient.isNotEmpty) ...[
+                        Text('Penerima: $recipient', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                       ],
                       if (customerHint.isNotEmpty) ...[
                         Text('Pengirim/Toko: $customerHint', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
@@ -2846,7 +2862,34 @@ Kirim besok pagi ya pak bc''';
 
           // Action Row for Transfer Slip
           if (isProcessed) ...[
-            if (chat.isPartialPayment) ...[
+            if (isExpense) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC2410C).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFB923C).withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.outbox_rounded, color: Color(0xFFFB923C), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Bukti Pengeluaran Diarsipkan (${chat.expenseCategory?.replaceAll('_', ' ') ?? 'BIAYA'} - $formattedAmount)',
+                        style: const TextStyle(color: Color(0xFFFDBA74), fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
+                      tooltip: 'Hapus Bukti',
+                      onPressed: () => _firebaseService.deleteIncomingPoChat(chat.id),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (chat.isPartialPayment) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -2908,7 +2951,25 @@ Kirim besok pagi ya pak bc''';
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty && chat.transferInfo?['alreadyPaid'] != true) ...[
+                    if (isExpense) ...[
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC2410C),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
+                          'status': 'processed',
+                          'processedAt': FieldValue.serverTimestamp(),
+                        }),
+                        icon: const Icon(Icons.archive_outlined, color: Colors.white, size: 16),
+                        label: const Text(
+                          'Arsipkan Pengeluaran',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ] else if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty && chat.transferInfo?['alreadyPaid'] != true) ...[
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF059669),
@@ -3230,7 +3291,22 @@ Kirim besok pagi ya pak bc''';
     String label;
 
     if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') {
-      if (chat.status == 'processed' || chat.isPaymentApplied) {
+      if (chat.isExpense) {
+        if (chat.status == 'processed') {
+          bg = const Color(0xFF78350F);
+          fg = const Color(0xFFFBBF24);
+          label = 'PENGELUARAN (DIARSIPKAN)';
+        } else if (chat.status == 'dismissed') {
+          bg = const Color(0xFF334155);
+          fg = const Color(0xFF94A3B8);
+          label = 'PENGELUARAN DIABAIKAN';
+        } else {
+          bg = const Color(0xFF7C2D12);
+          fg = const Color(0xFFFB923C);
+          final cat = chat.expenseCategory != null ? chat.expenseCategory!.replaceAll('_', ' ') : 'PENGELUARAN';
+          label = 'BIAYA ($cat)';
+        }
+      } else if (chat.status == 'processed' || chat.isPaymentApplied) {
         if (chat.isPartialPayment) {
           bg = const Color(0xFF0C4A6E);
           fg = const Color(0xFF38BDF8);

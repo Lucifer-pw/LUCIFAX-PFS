@@ -12,7 +12,7 @@ function parseBankReceipt(rawText) {
   const upper = clean.toUpperCase();
 
   // Bank name indicators
-  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051');
+  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051') || upper.includes('M-TRANSFER') || upper.includes('M-BCA') || upper.includes('M TRANSFER');
   const isMandiri = upper.includes('MANDIRI') || upper.includes('LIVIN');
   const isBri = upper.includes('BRI') || upper.includes('BRIMO');
   const isBni = upper.includes('BNI') || upper.includes('WONDR');
@@ -40,7 +40,11 @@ function parseBankReceipt(rawText) {
     '2306039099', // Rekening BCA PT Putra Fiva Sejahtera
     'TRSF E-BANKING',
     'TITIP INV',
-    'MUTASI'
+    'MUTASI',
+    'M-TRANSFER',
+    'M-BCA',
+    'M TRANSFER',
+    'BIAYA BONGKAR'
   ];
 
   let keywordHits = 0;
@@ -53,6 +57,8 @@ function parseBankReceipt(rawText) {
     upper.includes('BUKTI TRANSAKSI') ||
     upper.includes('TRANSFER DANA') ||
     upper.includes('TRSF E-BANKING') ||
+    upper.includes('M-TRANSFER') ||
+    upper.includes('M-BCA') ||
     (isEBanking && isFivaRelated) ||
     (upper.includes('BERHASIL') && (isBca || isMandiri || isBri || isBni));
 
@@ -134,6 +140,15 @@ function parseBankReceipt(rawText) {
       const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
       const lastLine = lines.find(l => l.toUpperCase().includes('FIVA') || l.toUpperCase().includes('SEJAHTE'));
       if (lastLine) berita = lastLine;
+    } else {
+      const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+      const amountIdx = lines.findIndex(l => /(?:Rp\.?|IDR)\s*[0-9]/i.test(l));
+      if (amountIdx !== -1 && amountIdx + 1 < lines.length) {
+        const candidate = lines[amountIdx + 1];
+        if (!candidate.toUpperCase().includes('BERHASIL') && !candidate.toUpperCase().includes('M-TRANSFER')) {
+          berita = candidate;
+        }
+      }
     }
   }
 
@@ -165,11 +180,44 @@ function parseBankReceipt(rawText) {
   else if (upper.includes('HANA MAKMUR')) customerHint = 'HANA MAKMUR';
   else if (upper.includes('AW FF') || upper.includes('AW')) customerHint = 'AW FF';
 
+  // Extract Recipient if available (e.g. "Ke 8175683107\nARSANDY VIDYA GUPTA PRAD")
+  let recipient = '';
+  const keMatch = clean.match(/Ke\s+([0-9]+)\s*[\r\n]+([^\r\n]+)/i);
+  if (keMatch) {
+    recipient = keMatch[2].trim();
+  }
+
+  // Detect Operational Expense vs Invoice Payment
+  const expenseKeywords = [
+    'BIAYA BONGKAR',
+    'BONGKAR MUAT',
+    'UANG MAKAN',
+    'BENSIN',
+    'SOLAR',
+    'PARKIR',
+    'TOL',
+    'ONGKIR',
+    'KASBON',
+    'RETRIBUSI',
+    'BIAYA OPERASIONAL'
+  ];
+
+  let isExpense = false;
+  let expenseCategory = '';
+  for (const exp of expenseKeywords) {
+    if (upper.includes(exp)) {
+      isExpense = true;
+      expenseCategory = exp.replace(/\s+/g, '_');
+      break;
+    }
+  }
+
   // Extract Date
   let rawDate = '';
   const dateMatch =
     clean.match(/(?:Tanggal|Tanggal Efektif|Tgl)\s*[:=]?\s*([0-9]{1,2}[\/\-\s][0-9A-Za-z]{2,8}[\/\-\s][0-9]{2,4})/i) ||
-    clean.match(/(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i);
+    clean.match(/(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i) ||
+    clean.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
   if (dateMatch) {
     rawDate = dateMatch[1].trim();
   }
@@ -180,8 +228,11 @@ function parseBankReceipt(rawText) {
     amount,
     refNumber,
     berita,
-    invoiceNo,
-    customerHint,
+    recipient,
+    isExpense,
+    expenseCategory,
+    invoiceNo: isExpense ? null : invoiceNo,
+    customerHint: isExpense ? '' : customerHint,
     rawDate,
     keywordHits,
     rawOcrText: clean

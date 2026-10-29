@@ -48,6 +48,9 @@ class IncomingPoChat {
   });
 
   bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || transferInfo != null;
+  bool get isExpense => transferInfo?['isExpense'] == true;
+  String? get expenseCategory => transferInfo?['expenseCategory']?.toString();
+  String? get recipientName => transferInfo?['recipient']?.toString();
 
   factory IncomingPoChat.fromMap(Map<String, dynamic> map, String id) {
     DateTime parseDate(dynamic val) {
