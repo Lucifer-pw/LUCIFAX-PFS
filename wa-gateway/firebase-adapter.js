@@ -448,6 +448,84 @@ class FirebaseAdapter {
       return null;
     }
   }
+
+  async settleInvoicePayment(invoiceNo, paymentData = {}) {
+    const invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
+    if (!invClean) return false;
+
+    try {
+      console.log(`[AUTO-SETTLE] Memproses pelunasan otomatis Faktur #${invClean}...`);
+      const updateData = {
+        statusTransfer: 'PAID',
+        transferDate: new Date(),
+        transferReceiptUrl: paymentData.imageUrl || null,
+        transferBankDetails: {
+          bank: paymentData.bank || '',
+          amount: paymentData.amount || 0,
+          berita: paymentData.berita || '',
+          refNo: paymentData.refNo || '',
+          senderName: paymentData.senderName || '',
+          settledAt: new Date().toISOString(),
+          settleSource: 'WA_GATEWAY_AUTO_SETTLE'
+        }
+      };
+
+      // 1. Update transactions
+      if (this.mode === 'admin') {
+        await this.db.collection('transactions').doc(invClean).set(updateData, { merge: true });
+      } else if (this.mode === 'client') {
+        const { doc, setDoc } = this.clientSdk;
+        await setDoc(doc(this.clientDb, 'transactions', invClean), updateData, { merge: true });
+      }
+
+      // 2. Update receivables
+      if (this.mode === 'admin') {
+        const snap = await this.db.collection('receivables').where('noInvoice', '==', invClean).get();
+        for (const d of snap.docs) {
+          const existing = d.data();
+          const payments = Array.isArray(existing.payments) ? [...existing.payments] : [];
+          payments.push({
+            amount: paymentData.amount || existing.nominal || 0,
+            date: new Date(),
+            method: paymentData.bank || 'TRANSFER',
+            notes: `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`,
+            receiptUrl: paymentData.imageUrl || ''
+          });
+          await d.ref.update({
+            isLunas: true,
+            paidAmount: paymentData.amount || existing.nominal || 0,
+            payments
+          });
+        }
+      } else if (this.mode === 'client') {
+        const { collection, query, where, getDocs, updateDoc } = this.clientSdk;
+        const q = query(collection(this.clientDb, 'receivables'), where('noInvoice', '==', invClean));
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          const existing = d.data();
+          const payments = Array.isArray(existing.payments) ? [...existing.payments] : [];
+          payments.push({
+            amount: paymentData.amount || existing.nominal || 0,
+            date: new Date(),
+            method: paymentData.bank || 'TRANSFER',
+            notes: `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`,
+            receiptUrl: paymentData.imageUrl || ''
+          });
+          await updateDoc(d.ref, {
+            isLunas: true,
+            paidAmount: paymentData.amount || existing.nominal || 0,
+            payments
+          });
+        }
+      }
+
+      console.log(`[AUTO-SETTLE SUCCESS] 🎉 Faktur #${invClean} BERHASIL DILUNASI OTOMATIS! (Transactions & Receivables updated)`);
+      return true;
+    } catch (err) {
+      console.error(`[AUTO-SETTLE ERROR] Gagal melunasi Faktur #${invClean}:`, err.message);
+      return false;
+    }
+  }
 }
 
 module.exports = new FirebaseAdapter();

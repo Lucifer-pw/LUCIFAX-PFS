@@ -147,7 +147,7 @@ let recentChats = [];
 let isConnecting = false;
 let reconnectTimer = null;
 
-// Continuous Cluster Node Heartbeat (runs every 10s for cluster discovery)
+// Continuous Cluster Node Heartbeat (runs every 50s to optimize Firestore writes & stay within free tier)
 setInterval(async () => {
   try {
     const curStatus = isStandby ? 'STANDBY' : gatewayStatus;
@@ -160,7 +160,7 @@ setInterval(async () => {
       curStatus
     );
   } catch (_) {}
-}, 10000);
+}, 50000);
 
 // Dynamic Whitelist Settings & WhatsApp LID Resolution
 let strictWhitelistOnly = true;
@@ -175,6 +175,7 @@ let whitelistLids = new Set(); // Set of LID digits e.g. '33668835856433'
 let lidToPhoneMap = new Map(); // '33668835856433' -> '6287789733632'
 let phoneToLidMap = new Map(); // '6287789733632' -> '33668835856433'
 let autoPoEnabled = false;
+let autoSettleTransferSlips = true; // Opsi B (100% Otomatis Penuh) default true
 
 // Processed message IDs to prevent duplicates across restarts and history sync
 const processedMessageIds = new Set();
@@ -303,6 +304,9 @@ firebaseAdapter.listenToSettings((settings) => {
   }
   if (settings.autoPoEnabled !== undefined) {
     autoPoEnabled = settings.autoPoEnabled;
+  }
+  if (settings.autoSettleTransferSlips !== undefined) {
+    autoSettleTransferSlips = settings.autoSettleTransferSlips;
   }
 
   if (Array.isArray(settings.whitelistContacts)) {
@@ -538,13 +542,8 @@ async function startBaileys() {
           lastHeartbeat: new Date()
         });
 
-        // Start 10s Heartbeat Timer to keep status alive in Flutter
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        heartbeatTimer = setInterval(async () => {
-          if (gatewayStatus === 'CONNECTED' && !isStandby) {
-            await firebaseAdapter.sendHeartbeat(INSTANCE_ID, devDetails.fullModelName || DEVICE_NAME, process.platform, getDeviceDetails());
-          }
-        }, 10000);
+        // Kirim 1x status aktif saat koneksi terhubung; interval detak berkala ditangani oleh timer 50s
+        await firebaseAdapter.sendHeartbeat(INSTANCE_ID, devDetails.fullModelName || DEVICE_NAME, process.platform, getDeviceDetails(), 'CONNECTED');
 
         // Resolve Whitelist WhatsApp LIDs
         resolveWhitelistLids();
@@ -779,7 +778,25 @@ async function startBaileys() {
       // Bukti transfer TIDAK BOLEH digabung atau saling menimpa dalam buffer pesanan!
       // =========================================================================
       if (bankResult.isBankSlip) {
-        console.log(`[TRANSFER SLIP DISPATCH] 🚀 Bukti transfer ${bankResult.bank} Rp ${bankResult.amount.toLocaleString('id-ID')} langsung dikirim ke Firestore sebagai kartu tersendiri (Bypass Buffer)!`);
+        let isAutoSettled = false;
+        // OPSI B: Jika autoSettle aktif dan nomor faktur teridentifikasi -> LUNASI SEKETIKA!
+        if (autoSettleTransferSlips && bankResult.invoiceNo) {
+          try {
+            isAutoSettled = await firebaseAdapter.settleInvoicePayment(bankResult.invoiceNo, {
+              amount: bankResult.amount,
+              bank: bankResult.bank,
+              imageUrl: imageUrl,
+              berita: bankResult.berita,
+              refNo: bankResult.refNo,
+              senderName: bankResult.matchedToko || senderName
+            });
+          } catch (setErr) {
+            console.warn('[AUTO-SETTLE CALL ERROR]', setErr.message);
+          }
+        }
+
+        const settleStatus = isAutoSettled ? 'processed' : 'pending';
+        console.log(`[TRANSFER SLIP DISPATCH] 🚀 Bukti transfer ${bankResult.bank} Rp ${bankResult.amount.toLocaleString('id-ID')} dikirim ke Firestore (Status: ${settleStatus}, AutoSettled: ${isAutoSettled})!`);
 
         const slipPayload = {
           senderJid: remoteJid,
@@ -792,12 +809,15 @@ async function startBaileys() {
           imageUrl: imageUrl || null,
           transferInfo: bankResult,
           matchedInvoiceNo: bankResult.invoiceNo || null,
+          status: settleStatus,
+          isPaymentApplied: isAutoSettled,
           caption: rawCaption || '',
           rawOcrText: ocrText || '',
           messageCount: 1,
           messageId: msgId || '',
           messageIds: msgId ? [msgId] : [],
-          receivedAt: new Date(msgTimeMs)
+          receivedAt: new Date(msgTimeMs),
+          processedAt: isAutoSettled ? new Date() : null
         };
 
         recentChats.unshift({

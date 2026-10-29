@@ -283,13 +283,30 @@ class _WaGatewayViewState extends State<WaGatewayView> {
     }
   }
 
-  void _checkAndAutoProcess(List<IncomingPoChat> chats, bool autoPoEnabled) {
-    if (!autoPoEnabled) return;
-    for (var chat in chats) {
-      if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') continue;
-      if (chat.status == 'pending' && !_processingChatIds.contains(chat.id)) {
-        _processingChatIds.add(chat.id);
-        _processSingleChatToPo(chat, isAuto: true);
+  void _checkAndAutoProcess(List<IncomingPoChat> chats, WaAutoPoSettings settings) {
+    // 1. Auto-PO untuk pesanan teks (hanya jika autoPoEnabled aktif)
+    if (settings.autoPoEnabled) {
+      for (var chat in chats) {
+        if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') continue;
+        if (chat.status == 'pending' && !_processingChatIds.contains(chat.id)) {
+          _processingChatIds.add(chat.id);
+          _processSingleChatToPo(chat, isAuto: true);
+        }
+      }
+    }
+
+    // 2. Auto-Settle untuk bukti transfer (Opsi B: jika autoSettleTransferSlips aktif dan ada faktur target)
+    if (settings.autoSettleTransferSlips) {
+      for (var chat in chats) {
+        if ((chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') &&
+            chat.status == 'pending' &&
+            chat.matchedInvoiceNo != null &&
+            chat.matchedInvoiceNo!.isNotEmpty &&
+            !chat.isPaymentApplied &&
+            !_processingChatIds.contains(chat.id)) {
+          _processingChatIds.add(chat.id);
+          _confirmTransferPayment(chat, chat.matchedInvoiceNo!);
+        }
       }
     }
   }
@@ -974,6 +991,38 @@ Kirim besok pagi ya pak bc''';
                               ],
                             ),
                             const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  settings.autoSettleTransferSlips ? Icons.verified_rounded : Icons.pending_actions_rounded,
+                                  color: settings.autoSettleTransferSlips ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    settings.autoSettleTransferSlips ? 'Pelunasan: Opsi B (Otomatis)' : 'Pelunasan: Opsi A (Konfirmasi)',
+                                    style: TextStyle(
+                                      color: settings.autoSettleTransferSlips ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 28,
+                                  child: Switch(
+                                    value: settings.autoSettleTransferSlips,
+                                    activeColor: const Color(0xFF34D399),
+                                    onChanged: (val) async {
+                                      final updated = settings.copyWith(autoSettleTransferSlips: val);
+                                      await _firebaseService.saveWaAutoPoSettings(updated);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
@@ -1037,6 +1086,53 @@ Kirim besok pagi ya pak bc''';
                               activeColor: Colors.tealAccent,
                               onChanged: (val) async {
                                 final updated = settings.copyWith(autoPoEnabled: val);
+                                await _firebaseService.saveWaAutoPoSettings(updated);
+                              },
+                            ),
+                            Container(
+                              height: 32,
+                              width: 1,
+                              color: const Color(0xFF334155),
+                              margin: const EdgeInsets.symmetric(horizontal: 14),
+                            ),
+                            // Auto-Settle Transfer Slips Toggle (Opsi B vs Opsi A)
+                            Icon(
+                              settings.autoSettleTransferSlips ? Icons.verified_rounded : Icons.pending_actions_rounded,
+                              color: settings.autoSettleTransferSlips ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text('Pelunasan Struk: ', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      settings.autoSettleTransferSlips ? 'OPSI B (Otomatis Penuh)' : 'OPSI A (Konfirmasi Kasir)',
+                                      style: TextStyle(
+                                        color: settings.autoSettleTransferSlips ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  settings.autoSettleTransferSlips
+                                      ? 'Struk cocok langsung lunas seketika di Piutang (Zero-Click)'
+                                      : 'Struk menunggu klik konfirmasi tombol hijau kasir',
+                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 10),
+                            Switch(
+                              value: settings.autoSettleTransferSlips,
+                              activeColor: const Color(0xFF34D399),
+                              onChanged: (val) async {
+                                final updated = settings.copyWith(autoSettleTransferSlips: val);
                                 await _firebaseService.saveWaAutoPoSettings(updated);
                               },
                             ),
@@ -2070,7 +2166,7 @@ Kirim besok pagi ya pak bc''';
 
                 // Trigger Auto-PO processing if toggle is ON
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _checkAndAutoProcess(allChats, settings.autoPoEnabled);
+                  _checkAndAutoProcess(allChats, settings);
                 });
 
                 final query = _searchController.text.trim().toLowerCase();
@@ -2351,6 +2447,15 @@ Kirim besok pagi ya pak bc''';
                           return true;
                         }).toList();
 
+                        // Utamakan faktur BELUM LUNAS (UNPAID) di urutan paling atas
+                        filteredDocs.sort((a, b) {
+                          final da = a.data() as Map<String, dynamic>;
+                          final db = b.data() as Map<String, dynamic>;
+                          final aUnpaid = (da['statusTransfer'] ?? 'UNPAID') == 'UNPAID' ? 0 : 1;
+                          final bUnpaid = (db['statusTransfer'] ?? 'UNPAID') == 'UNPAID' ? 0 : 1;
+                          return aUnpaid.compareTo(bUnpaid);
+                        });
+
                         if (filteredDocs.isEmpty) {
                           return const Center(child: Text('Tidak ada faktur yang cocok.', style: TextStyle(color: Color(0xFF64748B))));
                         }
@@ -2436,7 +2541,7 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
-  Widget _buildFilterChip(String key, String label) {
+  Widget _buildFilterChip(String key, String label) {
 
     final isSelected = _selectedStatusFilter == key;
     return InkWell(
@@ -2630,6 +2735,19 @@ Kirim besok pagi ya pak bc''';
                                 ),
                               ),
                             ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      if (chat.matchedInvoiceNo == null || chat.matchedInvoiceNo!.isEmpty) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.help_outline_rounded, color: Color(0xFF38BDF8), size: 14),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Target Belum Ditentukan (Perlu Tautkan Manual)',
+                              style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontStyle: FontStyle.italic),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -3011,21 +3129,45 @@ Kirim besok pagi ya pak bc''';
     Color fg;
     String label;
 
-    switch (chat.status) {
-      case 'processed':
+    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') {
+      if (chat.status == 'processed' || chat.isPaymentApplied) {
         bg = const Color(0xFF065F46);
         fg = const Color(0xFF34D399);
-        label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} SELESAI' : 'SELESAI PO';
-        break;
-      case 'dismissed':
+        label = chat.matchedInvoiceNo != null
+            ? 'LUNAS (Faktur #${chat.matchedInvoiceNo})'
+            : 'LUNAS (TERVERIFIKASI)';
+      } else if (chat.status == 'dismissed') {
         bg = const Color(0xFF334155);
         fg = const Color(0xFF94A3B8);
-        label = chat.dismissReason == 'BUKAN_ORDER' ? 'BUKAN ORDER' : 'DIABAIKAN';
-        break;
-      default:
-        bg = const Color(0xFF78350F);
-        fg = const Color(0xFFFBBF24);
-        label = 'PENDING';
+        label = 'STRUK DIABAIKAN';
+      } else {
+        if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) {
+          bg = const Color(0xFF78350F);
+          fg = const Color(0xFFFBBF24);
+          label = 'TARGET #${chat.matchedInvoiceNo}';
+        } else {
+          bg = const Color(0xFF075985);
+          fg = const Color(0xFF38BDF8);
+          label = 'PERLU TAUTKAN';
+        }
+      }
+    } else {
+      switch (chat.status) {
+        case 'processed':
+          bg = const Color(0xFF065F46);
+          fg = const Color(0xFF34D399);
+          label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} SELESAI' : 'SELESAI PO';
+          break;
+        case 'dismissed':
+          bg = const Color(0xFF334155);
+          fg = const Color(0xFF94A3B8);
+          label = chat.dismissReason == 'BUKAN_ORDER' ? 'BUKAN ORDER' : 'DIABAIKAN';
+          break;
+        default:
+          bg = const Color(0xFF78350F);
+          fg = const Color(0xFFFBBF24);
+          label = 'PENDING';
+      }
     }
 
     return Container(

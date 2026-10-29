@@ -129,7 +129,7 @@ class WaGatewayNode {
 
   bool get isAlive {
     if (lastHeartbeat == null) return false;
-    return DateTime.now().difference(lastHeartbeat!).inSeconds < 65;
+    return DateTime.now().difference(lastHeartbeat!).inSeconds < 130;
   }
 
   String get fullModelName {

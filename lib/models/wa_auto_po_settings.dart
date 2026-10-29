@@ -1,12 +1,14 @@
 class WaAutoPoSettings {
   final bool autoPoEnabled;
   final bool strictWhitelistOnly;
+  final bool autoSettleTransferSlips; // Opsi B (true: Otomatis Penuh / Zero-Click), Opsi A (false: Konfirmasi Kasir)
   final List<String> whitelistNumbers;
   final List<Map<String, String>> whitelistContacts; // [{ 'phone': '08123...', 'name': 'Pak BC' }]
 
   WaAutoPoSettings({
     this.autoPoEnabled = false,
     this.strictWhitelistOnly = true,
+    this.autoSettleTransferSlips = true,
     this.whitelistNumbers = const [],
     this.whitelistContacts = const [],
   });
@@ -49,6 +51,7 @@ class WaAutoPoSettings {
     return WaAutoPoSettings(
       autoPoEnabled: map['autoPoEnabled'] == true,
       strictWhitelistOnly: map['strictWhitelistOnly'] ?? true,
+      autoSettleTransferSlips: map['autoSettleTransferSlips'] ?? true,
       whitelistNumbers: numbers,
       whitelistContacts: contacts,
     );
@@ -58,6 +61,7 @@ class WaAutoPoSettings {
     return {
       'autoPoEnabled': autoPoEnabled,
       'strictWhitelistOnly': strictWhitelistOnly,
+      'autoSettleTransferSlips': autoSettleTransferSlips,
       'whitelistNumbers': whitelistNumbers,
       'whitelistContacts': whitelistContacts,
       'updatedAt': DateTime.now().toIso8601String(),
@@ -67,6 +71,7 @@ class WaAutoPoSettings {
   WaAutoPoSettings copyWith({
     bool? autoPoEnabled,
     bool? strictWhitelistOnly,
+    bool? autoSettleTransferSlips,
     List<String>? whitelistNumbers,
     List<Map<String, String>>? whitelistContacts,
   }) {
@@ -78,6 +83,7 @@ class WaAutoPoSettings {
     return WaAutoPoSettings(
       autoPoEnabled: autoPoEnabled ?? this.autoPoEnabled,
       strictWhitelistOnly: strictWhitelistOnly ?? this.strictWhitelistOnly,
+      autoSettleTransferSlips: autoSettleTransferSlips ?? this.autoSettleTransferSlips,
       whitelistNumbers: newNumbers,
       whitelistContacts: newContacts,
     );
