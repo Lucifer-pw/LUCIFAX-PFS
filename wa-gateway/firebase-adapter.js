@@ -386,16 +386,6 @@ class FirebaseAdapter {
     const cleanHint = (customerHint || '').toUpperCase().trim();
 
     try {
-      let snap;
-      if (this.mode === 'admin') {
-        snap = await this.db.collection('receivables').get();
-      } else if (this.mode === 'client') {
-        const { collection, getDocs } = this.clientSdk;
-        snap = await getDocs(collection(this.clientDb, 'receivables'));
-      } else {
-        return null;
-      }
-
       const getInitials = (str) => {
         return str
           .replace(/[^A-Za-z0-9\s]/g, ' ')
@@ -406,7 +396,74 @@ class FirebaseAdapter {
           .toUpperCase();
       };
 
+      const isNameMatched = (toko, hint) => {
+        if (!hint || !toko) return false;
+        const cleanToko = toko.toUpperCase().trim();
+        const tokoInitials = getInitials(cleanToko);
+        const hintInitials = getInitials(hint);
+
+        if (hint.includes(cleanToko) || cleanToko.includes(hint)) return true;
+        if (hint === tokoInitials || hintInitials === hint || tokoInitials === hintInitials) return true;
+        const hintWords = hint.split(/\s+/).filter(w => w.length >= 4 && !['CV', 'PT', 'TOKO', 'WARUNG', 'MARKET'].includes(w));
+        if (hintWords.some(w => cleanToko.includes(w))) return true;
+        return false;
+      };
+
       const candidates = [];
+
+      // 1. PRIORITAS UTAMA: Periksa langsung koleksi transactions (sumber kebenaran nominal riil setelah revisi nota)
+      if (this.mode === 'admin') {
+        try {
+          const trSnap = await this.db.collection('transactions').get();
+          trSnap.forEach(doc => {
+            const d = doc.data();
+            const statusTransfer = (d.statusTransfer || '').toUpperCase();
+            if (statusTransfer === 'PAID') return; // Lewati yang sudah lunas
+
+            const noInvoice = String(d.invoiceNo || doc.id || '').replace(/\D/g, '');
+            const toko = (d.aliasName || d.customerName || '').toUpperCase();
+            const total = Number(d.grandTotal || 0) - Number(d.returnAmount || 0);
+
+            const amountDiff = Math.abs(total - amount);
+            const isAmountMatch = amountDiff <= 100;
+
+            if (isAmountMatch && isNameMatched(toko, cleanHint)) {
+              candidates.push({ noInvoice, toko, nominal: total, isLunas: false, docId: doc.id, fromTransaction: true });
+            }
+          });
+        } catch (trErr) {
+          console.warn('[MATCH TRANSACTIONS ERROR]:', trErr.message);
+        }
+      }
+
+      // Jika berhasil dicocokkan via transactions, lakukan sinkronisasi otomatis ke receivables agar sinkron permanen
+      if (candidates.length > 0) {
+        const bestMatch = candidates[0];
+        try {
+          if (this.mode === 'admin') {
+            const recSnap = await this.db.collection('receivables').where('noInvoice', '==', bestMatch.noInvoice).get();
+            recSnap.forEach(rDoc => {
+              if (Math.abs(Number(rDoc.data().nominal || 0) - bestMatch.nominal) > 100) {
+                rDoc.ref.update({ nominal: bestMatch.nominal });
+                console.log(`[AUTO-RESYNC RECEIVABLE] Memperbarui nominal piutang Faktur #${bestMatch.noInvoice} dari ${rDoc.data().nominal} menjadi ${bestMatch.nominal}`);
+              }
+            });
+          }
+        } catch (_) {}
+        return bestMatch;
+      }
+
+      // 2. PRIORITAS KEDUA: Periksa koleksi receivables (pencocokan piutang cadangan)
+      let snap;
+      if (this.mode === 'admin') {
+        snap = await this.db.collection('receivables').get();
+      } else if (this.mode === 'client') {
+        const { collection, getDocs } = this.clientSdk;
+        snap = await getDocs(collection(this.clientDb, 'receivables'));
+      } else {
+        return null;
+      }
+
       snap.forEach(doc => {
         const d = doc.data();
         const toko = (d.toko || d.customerName || '').toUpperCase();
@@ -419,24 +476,7 @@ class FirebaseAdapter {
 
         if (!isAmountMatch) return;
 
-        let nameMatch = false;
-        if (cleanHint && toko) {
-          const tokoInitials = getInitials(toko);
-          const hintInitials = getInitials(cleanHint);
-
-          if (cleanHint.includes(toko) || toko.includes(cleanHint)) {
-            nameMatch = true;
-          } else if (cleanHint === tokoInitials || hintInitials === cleanHint || tokoInitials === hintInitials) {
-            nameMatch = true;
-          } else {
-            const hintWords = cleanHint.split(/\s+/).filter(w => w.length >= 4 && !['CV', 'PT', 'TOKO'].includes(w));
-            if (hintWords.some(w => toko.includes(w))) {
-              nameMatch = true;
-            }
-          }
-        }
-
-        if (nameMatch) {
+        if (isNameMatched(toko, cleanHint)) {
           candidates.push({ noInvoice, toko, nominal, isLunas, docId: doc.id });
         }
       });

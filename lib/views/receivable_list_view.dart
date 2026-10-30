@@ -47,6 +47,24 @@ class _ReceivableListViewState extends State<ReceivableListView> {
   String _statusFilter = 'ALL'; // ALL, UNPAID, PAID
   String _selectedCustomerFilter = 'ALL'; // 'ALL' or specific customer name (e.g. 'AW FF')
   final Set<String> _expandedCustomers = {}; // Track expanded customer cards
+  bool _hasAutoHealed = false;
+
+  void _checkAndHealReceivables(List<Receivable> rawReceivables, Map<String, model_tr.Transaction> trMap) {
+    if (_hasAutoHealed) return;
+    _hasAutoHealed = true;
+    for (final r in rawReceivables) {
+      final cleanNo = r.noInvoice.replaceAll('#', '').trim();
+      final tr = trMap[cleanNo];
+      if (tr != null && tr.grandTotal > 0) {
+        final effNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
+        if ((r.nominal - effNominal).abs() > 10.0 && r.id.isNotEmpty) {
+          FirebaseFirestore.instance.collection('receivables').doc(r.id).update({
+            'nominal': effNominal,
+          }).catchError((e) => debugPrint('[AUTO-HEAL RECEIVABLE ERROR]: $e'));
+        }
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -592,6 +610,12 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     for (var tr in trProvider.transactions) {
       final cleanNo = tr.invoiceNo.toString().replaceAll('#', '').trim();
       trMap[cleanNo] = tr;
+    }
+
+    if (!_hasAutoHealed && provider.receivables.isNotEmpty && trMap.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndHealReceivables(provider.receivables, trMap);
+      });
     }
 
     final enrichedReceivables = provider.receivables.map((r) {

@@ -1112,10 +1112,20 @@ class FirebaseService {
     try {
       final invClean = invoiceNo.toString().replaceAll('#', '').trim();
       final snap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      final trDoc = await _db.collection('transactions').doc(invClean).get();
+      double? effNominal;
+      if (trDoc.exists) {
+        final tr = model_tr.Transaction.fromMap(trDoc.data()!, trDoc.id);
+        effNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
+      }
       for (var doc in snap.docs) {
-        await doc.reference.update({
+        final Map<String, dynamic> updateData = {
           'erpSyncDate': erpSyncDate != null ? Timestamp.fromDate(erpSyncDate) : null,
-        });
+        };
+        if (effNominal != null) {
+          updateData['nominal'] = effNominal;
+        }
+        await doc.reference.update(updateData);
       }
     } catch (e) {
       debugPrint("Error syncReceivableErpStatus: $e");
