@@ -45,6 +45,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
   final dateFormatter = DateFormat('dd-MM-yyyy');
   String _searchQuery = '';
   String _statusFilter = 'ALL'; // ALL, UNPAID, PAID
+  String _erpFilter = 'ALL'; // ALL, SUDAH_ERP, BELUM_ERP
   String _selectedCustomerFilter = 'ALL'; // 'ALL' or specific customer name (e.g. 'AW FF')
   final Set<String> _expandedCustomers = {}; // Track expanded customer cards
   bool _hasAutoHealed = false;
@@ -55,12 +56,20 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     for (final r in rawReceivables) {
       final cleanNo = r.noInvoice.replaceAll('#', '').trim();
       final tr = trMap[cleanNo];
-      if (tr != null && tr.grandTotal > 0) {
-        final effNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
-        if ((r.nominal - effNominal).abs() > 10.0 && r.id.isNotEmpty) {
-          FirebaseFirestore.instance.collection('receivables').doc(r.id).update({
-            'nominal': effNominal,
-          }).catchError((e) => debugPrint('[AUTO-HEAL RECEIVABLE ERROR]: $e'));
+      if (tr != null) {
+        final Map<String, dynamic> updates = {};
+        if (tr.grandTotal > 0) {
+          final effNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
+          if ((r.nominal - effNominal).abs() > 10.0) {
+            updates['nominal'] = effNominal;
+          }
+        }
+        if (tr.erpSyncDate != null && r.erpSyncDate == null) {
+          updates['erpSyncDate'] = tr.erpSyncDate;
+        }
+        if (updates.isNotEmpty && r.id.isNotEmpty) {
+          FirebaseFirestore.instance.collection('receivables').doc(r.id).update(updates)
+              .catchError((e) => debugPrint('[AUTO-HEAL RECEIVABLE ERROR]: $e'));
         }
       }
     }
@@ -625,6 +634,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
       DateTime? effTglKirim = r.tglKirim;
       double effNominal = r.nominal;
       bool effIsLunas = r.isLunas;
+      DateTime? effErpSyncDate = r.erpSyncDate ?? matchingTr?.erpSyncDate;
 
       if (matchingTr != null) {
         if (effTglKirim == null && matchingTr.status == 'DIKIRIM' && matchingTr.deliveryDate != null) {
@@ -647,8 +657,33 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         tglKirim: effTglKirim,
         nominal: effNominal,
         isLunas: effIsLunas,
+        erpSyncDate: effErpSyncDate,
       );
     }).toList();
+
+    // Summary totals for ERP and Status KPI cards
+    double totalSudahErp = 0.0;
+    int countSudahErp = 0;
+    double totalBelumErp = 0.0;
+    int countBelumErp = 0;
+    int unpaidCount = 0;
+    int paidCount = 0;
+
+    for (final r in enrichedReceivables) {
+      if (r.isLunas) {
+        paidCount++;
+      } else {
+        unpaidCount++;
+      }
+
+      if (r.erpSyncDate != null) {
+        totalSudahErp += r.effectiveNominal;
+        countSudahErp++;
+      } else {
+        totalBelumErp += r.effectiveNominal;
+        countBelumErp++;
+      }
+    }
 
     // Get list of unique customer names for filter dropdown
     final uniqueCustomers = enrichedReceivables
@@ -658,7 +693,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         .toList()
       ..sort();
 
-    // Raw filtered items by search & status & dropdown customer filter
+    // Raw filtered items by search & status & dropdown customer filter & ERP filter
     final filteredRaw = enrichedReceivables.where((r) {
       final query = _searchQuery.toLowerCase();
       final matchesSearch = r.toko.toLowerCase().contains(query) ||
@@ -669,8 +704,12 @@ class _ReceivableListViewState extends State<ReceivableListView> {
       final matchesCustomer = _selectedCustomerFilter == 'ALL' ||
           r.toko.trim().toLowerCase() == _selectedCustomerFilter.toLowerCase();
 
-      if (_statusFilter == 'UNPAID') return matchesSearch && matchesCustomer && !r.isLunas;
-      if (_statusFilter == 'PAID') return matchesSearch && matchesCustomer && r.isLunas;
+      if (_statusFilter == 'UNPAID' && r.isLunas) return false;
+      if (_statusFilter == 'PAID' && !r.isLunas) return false;
+
+      if (_erpFilter == 'SUDAH_ERP' && r.erpSyncDate == null) return false;
+      if (_erpFilter == 'BELUM_ERP' && r.erpSyncDate != null) return false;
+
       return matchesSearch && matchesCustomer;
     }).toList();
 
@@ -929,32 +968,90 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 180,
+                        width: 175,
                         child: _buildKpiCard(
                           title: 'Total Belum Lunas',
                           value: currencyFormatter.format(provider.totalUnpaid),
+                          subtitle: '$unpaidCount Invoice',
                           icon: Icons.pending_actions_rounded,
                           color: Colors.amberAccent,
+                          isSelected: _statusFilter == 'UNPAID',
+                          onTap: () {
+                            setState(() {
+                              _statusFilter = _statusFilter == 'UNPAID' ? 'ALL' : 'UNPAID';
+                            });
+                          },
                         ),
                       ),
                       const SizedBox(width: 10),
                       SizedBox(
-                        width: 180,
+                        width: 175,
                         child: _buildKpiCard(
                           title: 'Total Sudah Lunas',
                           value: currencyFormatter.format(provider.totalPaid),
+                          subtitle: '$paidCount Invoice',
                           icon: Icons.check_circle_outline_rounded,
                           color: Colors.greenAccent,
+                          isSelected: _statusFilter == 'PAID',
+                          onTap: () {
+                            setState(() {
+                              _statusFilter = _statusFilter == 'PAID' ? 'ALL' : 'PAID';
+                            });
+                          },
                         ),
                       ),
                       const SizedBox(width: 10),
                       SizedBox(
-                        width: 200,
+                        width: 175,
                         child: _buildKpiCard(
-                          title: 'Total Customer & Invoice',
-                          value: '${customerGroups.length} Toko (${provider.receivables.length} Inv)',
+                          title: 'Sudah ERP',
+                          value: currencyFormatter.format(totalSudahErp),
+                          subtitle: '$countSudahErp Invoice',
+                          icon: Icons.cloud_done_rounded,
+                          color: const Color(0xFF34D399),
+                          isSelected: _erpFilter == 'SUDAH_ERP',
+                          onTap: () {
+                            setState(() {
+                              _erpFilter = _erpFilter == 'SUDAH_ERP' ? 'ALL' : 'SUDAH_ERP';
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 175,
+                        child: _buildKpiCard(
+                          title: 'Belum ERP',
+                          value: currencyFormatter.format(totalBelumErp),
+                          subtitle: '$countBelumErp Invoice',
+                          icon: Icons.cloud_off_rounded,
+                          color: const Color(0xFFFB923C),
+                          isSelected: _erpFilter == 'BELUM_ERP',
+                          onTap: () {
+                            setState(() {
+                              _erpFilter = _erpFilter == 'BELUM_ERP' ? 'ALL' : 'BELUM_ERP';
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 195,
+                        child: _buildKpiCard(
+                          title: 'Total Toko & Invoice',
+                          value: '${customerGroups.length} Toko',
+                          subtitle: '${provider.receivables.length} Invoice Total',
                           icon: Icons.storefront_rounded,
                           color: const Color(0xFF38BDF8),
+                          isSelected: _statusFilter == 'ALL' && _erpFilter == 'ALL' && _selectedCustomerFilter == 'ALL' && _searchQuery.isEmpty,
+                          onTap: () {
+                            setState(() {
+                              _statusFilter = 'ALL';
+                              _erpFilter = 'ALL';
+                              _selectedCustomerFilter = 'ALL';
+                              _searchQuery = '';
+                            });
+                          },
                         ),
                       ),
                     ],
@@ -966,26 +1063,82 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                       child: _buildKpiCard(
                         title: 'Total Belum Lunas',
                         value: currencyFormatter.format(provider.totalUnpaid),
+                        subtitle: '$unpaidCount Invoice',
                         icon: Icons.pending_actions_rounded,
                         color: Colors.amberAccent,
+                        isSelected: _statusFilter == 'UNPAID',
+                        onTap: () {
+                          setState(() {
+                            _statusFilter = _statusFilter == 'UNPAID' ? 'ALL' : 'UNPAID';
+                          });
+                        },
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _buildKpiCard(
                         title: 'Total Sudah Lunas',
                         value: currencyFormatter.format(provider.totalPaid),
+                        subtitle: '$paidCount Invoice',
                         icon: Icons.check_circle_outline_rounded,
                         color: Colors.greenAccent,
+                        isSelected: _statusFilter == 'PAID',
+                        onTap: () {
+                          setState(() {
+                            _statusFilter = _statusFilter == 'PAID' ? 'ALL' : 'PAID';
+                          });
+                        },
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'Sudah ERP',
+                        value: currencyFormatter.format(totalSudahErp),
+                        subtitle: '$countSudahErp Invoice',
+                        icon: Icons.cloud_done_rounded,
+                        color: const Color(0xFF34D399),
+                        isSelected: _erpFilter == 'SUDAH_ERP',
+                        onTap: () {
+                          setState(() {
+                            _erpFilter = _erpFilter == 'SUDAH_ERP' ? 'ALL' : 'SUDAH_ERP';
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildKpiCard(
+                        title: 'Belum ERP',
+                        value: currencyFormatter.format(totalBelumErp),
+                        subtitle: '$countBelumErp Invoice',
+                        icon: Icons.cloud_off_rounded,
+                        color: const Color(0xFFFB923C),
+                        isSelected: _erpFilter == 'BELUM_ERP',
+                        onTap: () {
+                          setState(() {
+                            _erpFilter = _erpFilter == 'BELUM_ERP' ? 'ALL' : 'BELUM_ERP';
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _buildKpiCard(
                         title: 'Total Customer & Invoice',
-                        value: '${customerGroups.length} Customer (${provider.receivables.length} Invoice)',
+                        value: '${customerGroups.length} Customer',
+                        subtitle: '${provider.receivables.length} Invoice Total',
                         icon: Icons.storefront_rounded,
                         color: const Color(0xFF38BDF8),
+                        isSelected: _statusFilter == 'ALL' && _erpFilter == 'ALL' && _selectedCustomerFilter == 'ALL' && _searchQuery.isEmpty,
+                        onTap: () {
+                          setState(() {
+                            _statusFilter = 'ALL';
+                            _erpFilter = 'ALL';
+                            _selectedCustomerFilter = 'ALL';
+                            _searchQuery = '';
+                          });
+                        },
                       ),
                     ),
                   ],
@@ -1071,6 +1224,44 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                 ),
                               ),
                             ),
+                            if (_erpFilter != 'ALL') ...[
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () => setState(() => _erpFilter = 'ALL'),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (_erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C)).withOpacity(0.18),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _erpFilter == 'SUDAH_ERP' ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                                        size: 13,
+                                        color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _erpFilter == 'SUDAH_ERP' ? 'Sudah ERP' : 'Belum ERP',
+                                        style: TextStyle(
+                                          color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.close_rounded, size: 13, color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1144,6 +1335,44 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                           ),
                         ),
                       ),
+                      if (_erpFilter != 'ALL') ...[
+                        const SizedBox(width: 10),
+                        InkWell(
+                          onTap: () => setState(() => _erpFilter = 'ALL'),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: (_erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C)).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _erpFilter == 'SUDAH_ERP' ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                                  size: 15,
+                                  color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _erpFilter == 'SUDAH_ERP' ? 'Filter ERP: Sudah ERP' : 'Filter ERP: Belum ERP',
+                                  style: TextStyle(
+                                    color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(Icons.close_rounded, size: 14, color: _erpFilter == 'SUDAH_ERP' ? const Color(0xFF34D399) : const Color(0xFFFB923C)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
           ),
@@ -1945,34 +2174,96 @@ class _ReceivableListViewState extends State<ReceivableListView> {
     );
   }
 
-  Widget _buildKpiCard({required String title, required String value, required IconData icon, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+  Widget _buildKpiCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    String? subtitle,
+    VoidCallback? onTap,
+    bool isSelected = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : Colors.white.withOpacity(0.06),
+              width: isSelected ? 1.5 : 1.0,
             ),
-            child: Icon(icon, color: color, size: 22),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-              const SizedBox(height: 2),
-              Text(value, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(isSelected ? 0.25 : 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: isSelected ? color.withOpacity(0.85) : Colors.white.withOpacity(0.55),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
