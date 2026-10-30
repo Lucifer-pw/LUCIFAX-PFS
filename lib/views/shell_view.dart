@@ -152,6 +152,12 @@ class _ShellViewState extends State<ShellView> {
             continue;
           }
 
+          // Jangan trigger alert PO jika ini adalah pengeluaran (expense) atau bukan PO yang menghasilkan invoice
+          final invNo = chat.createdInvoiceNo;
+          if (chat.isExpense || chat.isTransferSlip || invNo == null || invNo.trim().isEmpty) {
+            continue;
+          }
+
           final rawInvoices = chat.createdInvoiceNo ?? '';
           final invoiceNos = rawInvoices
               .split(',')

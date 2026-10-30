@@ -2147,6 +2147,8 @@ Kirim besok pagi ya pak bc''';
                 const SizedBox(width: 8),
                 _buildFilterChip('processed', 'Sudah Jadi PO'),
                 const SizedBox(width: 8),
+                _buildFilterChip('expense', 'Pengeluaran / Biaya'),
+                const SizedBox(width: 8),
                 _buildFilterChip('dismissed', 'Diabaikan / Bukan Order'),
               ],
             ),
@@ -2174,6 +2176,20 @@ Kirim besok pagi ya pak bc''';
                   if (_selectedStatusFilter != 'all') {
                     if (_selectedStatusFilter == 'transfer') {
                       if (!chat.isTransferSlip && chat.messageType != 'TRANSFER_SLIP') return false;
+                    } else if (_selectedStatusFilter == 'expense') {
+                      if (!chat.isExpense) return false;
+                    } else if (_selectedStatusFilter == 'processed') {
+                      // Tab "Sudah Jadi PO" HANYA untuk pesanan order yang selesai diproses jadi Faktur
+                      if (chat.isExpense) return false;
+                      if (chat.isTransferSlip && !chat.isOrderDetected) return false;
+                      if (chat.status != 'processed') return false;
+                    } else if (_selectedStatusFilter == 'pending') {
+                      // Tab "Menunggu Diproses" untuk order & transfer pending (bukan pengeluaran)
+                      if (chat.isExpense) return false;
+                      if (chat.status != 'pending') return false;
+                    } else if (_selectedStatusFilter == 'dismissed') {
+                      if (chat.isExpense) return false;
+                      if (chat.status != 'dismissed') return false;
                     } else if (chat.status != _selectedStatusFilter) {
                       return false;
                     }
@@ -2191,21 +2207,37 @@ Kirim besok pagi ya pak bc''';
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline_rounded, color: const Color(0xFF64748B).withOpacity(0.5), size: 48),
-                        const SizedBox(height: 12),
-                        const Text('Belum ada chat pesanan masuk.', style: TextStyle(color: Color(0xFF94A3B8))),
-                        const SizedBox(height: 6),
-                        const Text('Chat WhatsApp yang masuk dari nomor terdaftar akan tampil di sini secara real-time.', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-                        const SizedBox(height: 14),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF38BDF8),
-                            side: const BorderSide(color: Color(0xFF38BDF8)),
-                          ),
-                          onPressed: _simulateIncomingChat,
-                          icon: const Icon(Icons.science_outlined, size: 16),
-                          label: const Text('Buat Simulasi Pesanan', style: TextStyle(fontSize: 12)),
+                        Icon(
+                          _selectedStatusFilter == 'expense' ? Icons.outbox_rounded : Icons.chat_bubble_outline_rounded,
+                          color: const Color(0xFF64748B).withOpacity(0.5),
+                          size: 48,
                         ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _selectedStatusFilter == 'expense'
+                              ? 'Belum ada bukti pengeluaran operasional.'
+                              : 'Belum ada chat pesanan masuk.',
+                          style: const TextStyle(color: Color(0xFF94A3B8)),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _selectedStatusFilter == 'expense'
+                              ? 'Bukti transfer biaya operasional (bongkar muat, bensin, solar) akan tampil di sini.'
+                              : 'Chat WhatsApp yang masuk dari nomor terdaftar akan tampil di sini secara real-time.',
+                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                        ),
+                        if (_selectedStatusFilter != 'expense') ...[
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF38BDF8),
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                            ),
+                            onPressed: _simulateIncomingChat,
+                            icon: const Icon(Icons.science_outlined, size: 16),
+                            label: const Text('Buat Simulasi Pesanan', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
                       ],
                     ),
                   );
@@ -2613,17 +2645,22 @@ Kirim besok pagi ya pak bc''';
   }
 
   Widget _buildFilterChip(String key, String label) {
-
     final isSelected = _selectedStatusFilter == key;
+    Color activeBg = const Color(0xFF0284C7);
+    Color activeBorder = const Color(0xFF38BDF8);
+    if (key == 'expense') {
+      activeBg = const Color(0xFFC2410C);
+      activeBorder = const Color(0xFFFB923C);
+    }
     return InkWell(
       onTap: () => setState(() => _selectedStatusFilter = key),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+          color: isSelected ? activeBg : const Color(0xFF0F172A),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
+          border: Border.all(color: isSelected ? activeBorder : const Color(0xFF334155)),
         ),
         child: Text(
           label,
