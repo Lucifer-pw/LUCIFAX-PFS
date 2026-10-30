@@ -438,7 +438,10 @@ async function startBaileys() {
         gatewayStatus = 'QR_READY';
         try {
           currentQrDataUrl = await qrcode.toDataURL(qr, { width: 320, margin: 2 });
-          console.log('[BAILEYS] QR Code baru siap di-scan.');
+          console.log('[BAILEYS] QR Code baru siap di-scan (bisa via web dashboard atau terminal di bawah):');
+          qrcode.toString(qr, { type: 'terminal', small: true }, (err, terminalQr) => {
+            if (!err && terminalQr) console.log(terminalQr);
+          });
           await firebaseAdapter.updateGatewayStatus({
             status: 'QR_READY',
             qrCode: currentQrDataUrl,
