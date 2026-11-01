@@ -318,6 +318,14 @@ service cloud.firestore {
 
 
     // ═══════════════════════════════════════════════════
+    // 31. MONTHLY_PHYSICAL_SNAPSHOTS — Arsip Kunci Stok Fisik Bulanan
+    // ═══════════════════════════════════════════════════
+    match /monthly_physical_snapshots/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+
+    // ═══════════════════════════════════════════════════
     // CATCH-ALL: Blokir collection lain
     // ═══════════════════════════════════════════════════
     match /{document=**} {
