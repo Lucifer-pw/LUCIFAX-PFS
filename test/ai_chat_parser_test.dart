@@ -1517,7 +1517,7 @@ Tambah beres 24s ...10 k
     expect(draft.customerId, 'C_NINE');
     expect(draft.customerName, 'NINE FF (ANISA APRILIANA)');
     expect(draft.isRevisionOrder, isTrue);
-    expect(draft.note, contains('[REVISI / ORDER SUSULAN DARI CHAT]'));
+    expect(draft.note, '');
     expect(draft.items.length, 1);
     expect(draft.items[0].productName, 'BRS MERAH 24 500G');
     expect(draft.items[0].qtyInput, 10.0);

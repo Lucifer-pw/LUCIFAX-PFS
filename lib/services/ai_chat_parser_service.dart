@@ -129,15 +129,8 @@ class AiChatParserService {
       ).hasMatch(block);
 
       // Note is strictly empty by default so user doesn't have to erase it manually.
-      // Only filled if a bonus rule applies or if it is a revision/susulan order.
-      String finalNote = (bonusNote != null && bonusNote.isNotEmpty) ? bonusNote : '';
-      if (isRevision) {
-        if (finalNote.isNotEmpty) {
-          finalNote = '[REVISI / ORDER SUSULAN DARI CHAT] | ' + finalNote;
-        } else {
-          finalNote = '[REVISI / ORDER SUSULAN DARI CHAT]';
-        }
-      }
+      // Only filled if a bonus rule applies (e.g. LG FF bonus note).
+      final String finalNote = (bonusNote != null && bonusNote.isNotEmpty) ? bonusNote : '';
 
       // Only add draft if items exist (do NOT create phantom POs for non-order/admin messages!)
       if (draftItems.isNotEmpty) {
