@@ -24,6 +24,7 @@ class IncomingPoChat {
   final double remainingAmount;
   final String? quotedInvoiceNo;
   final String? quotedOcrText;
+  final String? quotedImageUrl;
   final bool isForwarded;
   final bool isQuotedReply;
 
@@ -51,6 +52,7 @@ class IncomingPoChat {
     this.remainingAmount = 0.0,
     this.quotedInvoiceNo,
     this.quotedOcrText,
+    this.quotedImageUrl,
     this.isForwarded = false,
     this.isQuotedReply = false,
   });
@@ -101,6 +103,7 @@ class IncomingPoChat {
       remainingAmount: ((map['remainingAmount'] ?? tInfo?['remainingAmount'] ?? 0) as num).toDouble(),
       quotedInvoiceNo: map['quotedInvoiceNo']?.toString(),
       quotedOcrText: map['quotedOcrText']?.toString(),
+      quotedImageUrl: map['quotedImageUrl']?.toString(),
       isForwarded: map['isForwarded'] == true,
       isQuotedReply: map['isQuotedReply'] == true,
     );
@@ -130,6 +133,7 @@ class IncomingPoChat {
       'remainingAmount': remainingAmount,
       'quotedInvoiceNo': quotedInvoiceNo,
       'quotedOcrText': quotedOcrText,
+      'quotedImageUrl': quotedImageUrl,
       'isForwarded': isForwarded,
       'isQuotedReply': isQuotedReply,
     };
@@ -152,6 +156,7 @@ class IncomingPoChat {
     double? remainingAmount,
     String? quotedInvoiceNo,
     String? quotedOcrText,
+    String? quotedImageUrl,
     bool? isForwarded,
     bool? isQuotedReply,
   }) {
@@ -179,6 +184,7 @@ class IncomingPoChat {
       remainingAmount: remainingAmount ?? this.remainingAmount,
       quotedInvoiceNo: quotedInvoiceNo ?? this.quotedInvoiceNo,
       quotedOcrText: quotedOcrText ?? this.quotedOcrText,
+      quotedImageUrl: quotedImageUrl ?? this.quotedImageUrl,
       isForwarded: isForwarded ?? this.isForwarded,
       isQuotedReply: isQuotedReply ?? this.isQuotedReply,
     );

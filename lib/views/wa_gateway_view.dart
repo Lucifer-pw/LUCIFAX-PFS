@@ -3283,6 +3283,62 @@ Kirim besok pagi ya pak bc''';
             const SizedBox(height: 6),
           ],
 
+          // Quoted Image Preview (foto yang di-reply/tag)
+          if (chat.quotedImageUrl != null && chat.quotedImageUrl!.isNotEmpty && chat.status == 'pending') ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF475569).withOpacity(0.5)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Thumbnail foto
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Image.network(
+                      chat.quotedImageUrl!,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 60,
+                        height: 60,
+                        color: const Color(0xFF334155),
+                        child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 24),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Label
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.reply_rounded, color: Color(0xFF94A3B8), size: 12),
+                            SizedBox(width: 4),
+                            Text('Foto yang di-reply:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          chat.quotedInvoiceNo != null ? 'Invoice #${chat.quotedInvoiceNo}' : 'Foto tanpa invoice terdeteksi',
+                          style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+
           // Action Row / Wrap
           if (isMobile) ...[
             if (isProcessed && chat.createdInvoiceNo != null) ...[

@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.1.0'; // v3.1.0 - Forwarded & Quoted Reply bypass buffer
+const GATEWAY_VERSION = '3.2.0'; // v3.2.0 - Upload & tampilkan foto quoted di UI
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -238,6 +238,7 @@ async function flushMessageBuffer(bufferKey) {
     matchedInvoiceNo: buf.matchedInvoiceNo || (buf.transferInfo?.invoiceNo || null),
     quotedInvoiceNo: buf.quotedInvoiceNo || null,
     quotedOcrText: buf.quotedOcrText || '',
+    quotedImageUrl: buf.quotedImageUrl || null,
     caption: buf.caption || '',
     rawOcrText: buf.rawOcrText || '',
     messageCount: buf.texts.length,
@@ -683,6 +684,15 @@ async function startBaileys() {
                     }
                   }
                 }
+
+                // Upload foto quoted ke Firebase Storage untuk ditampilkan di UI
+                try {
+                  const qFilename = `quoted_${Date.now()}_${msgId || 'img'}.jpg`;
+                  quotedImageUrl = await firebaseAdapter.uploadReceiptImage(quotedBuffer, qFilename);
+                  console.log(`[QUOTED VISION UPLOAD] ✅ Foto yang di-tag diunggah: ${quotedImageUrl}`);
+                } catch (qUpErr) {
+                  console.warn(`[QUOTED VISION UPLOAD ERROR] Gagal upload foto quoted: ${qUpErr.message}`);
+                }
               }
             } catch (quotedDlErr) {
               console.warn(`[QUOTED VISION DOWNLOAD ERROR] Gagal download foto yang di-reply: ${quotedDlErr.message}`);
@@ -1001,6 +1011,7 @@ async function startBaileys() {
           matchedInvoiceNo: null,
           quotedInvoiceNo: quotedInvoiceNo || null,
           quotedOcrText: quotedOcrText || '',
+          quotedImageUrl: quotedImageUrl || null,
           isForwarded: isForwardedMessage,
           isQuotedReply: isQuotedReply,
           caption: rawCaption || '',
