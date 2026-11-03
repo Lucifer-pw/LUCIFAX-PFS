@@ -11,10 +11,12 @@ import '../models/ai_knowledge_rule.dart';
 import '../models/customer.dart';
 import '../models/transaction.dart' as model_tr;
 import '../providers/customer_provider.dart';
+import '../providers/transaction_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/firebase_service.dart';
 import '../services/ai_chat_parser_service.dart';
 import '../widgets/ai_chat_order_dialog.dart';
+import '../widgets/wa_revision_dialog.dart';
 
 class WaGatewayView extends StatefulWidget {
   const WaGatewayView({super.key});
@@ -81,6 +83,35 @@ class _WaGatewayViewState extends State<WaGatewayView> {
     if (chat.status == 'pending') {
       _firebaseService.updateIncomingPoChatStatus(chat.id, 'processed');
     }
+  }
+
+  void _showProcessRevisionDialog(IncomingPoChat chat) {
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final txProvider = Provider.of<TransactionProvider>(context, listen: false);
+
+    showProcessRevisionDialog(
+      context,
+      chat: chat,
+      customerProvider: customerProvider,
+      productProvider: productProvider,
+      txProvider: txProvider,
+      firebaseService: _firebaseService,
+      onSuccess: (invoiceNo, message) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.teal,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      },
+      onMakeNewPo: () {
+        _processSingleChatToPo(chat, isAuto: false);
+      },
+    );
   }
 
   bool _phonesMatch(String a, String b) {
@@ -283,11 +314,23 @@ class _WaGatewayViewState extends State<WaGatewayView> {
     }
   }
 
+  bool _isRevisionChat(String text) {
+    if (text.isEmpty) return false;
+    return RegExp(r'\b(revisi|susulan|tambahan?|tmbh|ralat|kurangi?|batalin?|ganti)\b', caseSensitive: false).hasMatch(text);
+  }
+
   void _checkAndAutoProcess(List<IncomingPoChat> chats, WaAutoPoSettings settings) {
     // 1. Auto-PO untuk pesanan teks (hanya jika autoPoEnabled aktif)
     if (settings.autoPoEnabled) {
       for (var chat in chats) {
         if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') continue;
+
+        // PENTING: Jika chat adalah REVISI / SUSULAN / TAMBAHAN, JANGAN auto-PO!
+        // Wajib menunggu tindakan manual admin untuk memilih invoice target atau membuat PO baru.
+        if (_isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!))) {
+          continue;
+        }
+
         if (chat.status == 'pending' && !_processingChatIds.contains(chat.id)) {
           _processingChatIds.add(chat.id);
           _processSingleChatToPo(chat, isAuto: true);
@@ -3184,16 +3227,29 @@ Kirim besok pagi ya pak bc''';
                     icon: const Icon(Icons.close_rounded, size: 14),
                     label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  if (_isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!))) ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _showProcessRevisionDialog(chat),
+                      icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 16),
+                      label: const Text('✏️ Proses Revisi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                     ),
-                    onPressed: () => _processSingleChatToPo(chat, isAuto: false),
-                    icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
-                    label: const Text('⚡ Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                  ),
+                  ] else ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _processSingleChatToPo(chat, isAuto: false),
+                      icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
+                      label: const Text('⚡ Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                  ],
                 ],
                 if (chat.status == 'dismissed') ...[
                   OutlinedButton.icon(
@@ -3276,16 +3332,29 @@ Kirim besok pagi ya pak bc''';
                         label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      if (_isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!))) ...[
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD97706),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _showProcessRevisionDialog(chat),
+                          icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 16),
+                          label: const Text('✏️ Proses Revisi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                         ),
-                        onPressed: () => _processSingleChatToPo(chat, isAuto: false),
-                        icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
-                        label: const Text('⚡ Langsung Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                      ),
+                      ] else ...[
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _processSingleChatToPo(chat, isAuto: false),
+                          icon: const Icon(Icons.bolt_rounded, color: Colors.white, size: 15),
+                          label: const Text('⚡ Langsung Buat PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                      ],
                       const SizedBox(width: 8),
                     ],
                     if (chat.status == 'dismissed') ...[
@@ -3380,11 +3449,11 @@ Kirim besok pagi ya pak bc''';
     } else {
       switch (chat.status) {
         case 'processed':
-          final bool isRevision = RegExp(r'\b(revisi|susulan|tambahan?|tmbh|ralat)\b', caseSensitive: false).hasMatch(chat.messageText);
+          final bool isRevision = _isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!));
           if (isRevision) {
             bg = const Color(0xFF78350F);
             fg = const Color(0xFFFBBF24);
-            label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} (SUSULAN / REVISI)' : 'SUSULAN / REVISI';
+            label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} (REVISI)' : 'REVISI SELESAI';
           } else {
             bg = const Color(0xFF065F46);
             fg = const Color(0xFF34D399);
@@ -3397,9 +3466,16 @@ Kirim besok pagi ya pak bc''';
           label = chat.dismissReason == 'BUKAN_ORDER' ? 'BUKAN ORDER' : 'DIABAIKAN';
           break;
         default:
-          bg = const Color(0xFF78350F);
-          fg = const Color(0xFFFBBF24);
-          label = 'PENDING';
+          final bool isRev = _isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!));
+          if (isRev) {
+            bg = const Color(0xFF78350F);
+            fg = const Color(0xFFFBBF24);
+            label = 'MENUNGGU KONFIRMASI REVISI';
+          } else {
+            bg = const Color(0xFF1E3A8A);
+            fg = const Color(0xFF93C5FD);
+            label = 'PENDING';
+          }
       }
     }
 
