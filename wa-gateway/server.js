@@ -235,6 +235,8 @@ async function flushMessageBuffer(bufferKey) {
     imageUrl: buf.imageUrl || null,
     transferInfo: buf.transferInfo || null,
     matchedInvoiceNo: buf.matchedInvoiceNo || (buf.transferInfo?.invoiceNo || null),
+    quotedInvoiceNo: buf.quotedInvoiceNo || null,
+    quotedOcrText: buf.quotedOcrText || '',
     caption: buf.caption || '',
     rawOcrText: buf.rawOcrText || '',
     messageCount: buf.texts.length,
@@ -602,6 +604,93 @@ async function startBaileys() {
         return; // Terlalu lama, lewati
       }
 
+      // =========================================================================
+      // TAHAP 2: QUOTED MESSAGE VISION - Tangkap foto yang di-reply/tag
+      // =========================================================================
+      let quotedInvoiceNo = null;
+      let quotedOcrText = '';
+      let quotedImageUrl = null;
+
+      try {
+        const ctxInfo = unwrapMessage(m.message)?.extendedTextMessage?.contextInfo
+          || m.message?.extendedTextMessage?.contextInfo
+          || unwrapMessage(m.message)?.imageMessage?.contextInfo
+          || m.message?.imageMessage?.contextInfo;
+
+        if (ctxInfo && ctxInfo.quotedMessage) {
+          const quotedMsg = unwrapMessage(ctxInfo.quotedMessage);
+          const hasQuotedImage = !!(quotedMsg.imageMessage);
+
+          if (hasQuotedImage) {
+            console.log(`[QUOTED VISION] 🔎 Terdeteksi reply/tag foto! Mencoba download gambar yang di-reply...`);
+
+            try {
+              // Reconstruct a minimal message object for downloadMediaMessage
+              const quotedMediaMsg = {
+                key: {
+                  remoteJid: m.key.remoteJid,
+                  id: ctxInfo.stanzaId || m.key.id,
+                  fromMe: false,
+                },
+                message: ctxInfo.quotedMessage,
+              };
+
+              const quotedBuffer = await downloadMediaMessage(
+                quotedMediaMsg,
+                'buffer',
+                {},
+                {
+                  logger: pino({ level: 'silent' }),
+                  reuploadRequest: currentSock?.updateMediaMessage,
+                }
+              );
+
+              if (quotedBuffer && quotedBuffer.length > 0) {
+                console.log(`[QUOTED VISION] 📸 Berhasil download foto yang di-tag (${Math.round(quotedBuffer.length / 1024)} KB). Menjalankan OCR...`);
+                const qOcr = await ocrEngine.recognizeImage(quotedBuffer);
+                quotedOcrText = (qOcr?.text || '').trim();
+
+                if (quotedOcrText.length > 0) {
+                  console.log(`[QUOTED VISION OCR] 📝 Hasil scan foto yang di-tag: "${quotedOcrText.substring(0, 100).replace(/\n/g, ' ')}..."`);
+
+                  // Ekstrak nomor invoice dari OCR teks (cari pattern "Invoice #123" atau "Detail Invoice #123")
+                  const invoiceMatch = quotedOcrText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i);
+                  if (invoiceMatch) {
+                    quotedInvoiceNo = invoiceMatch[1];
+                    console.log(`[QUOTED VISION] 🎯 Nomor invoice terdeteksi dari foto yang di-tag: #${quotedInvoiceNo}`);
+                  } else {
+                    // Fallback: cari pattern "#123" standalone
+                    const hashMatch = quotedOcrText.match(/#(\d{2,6})\b/);
+                    if (hashMatch) {
+                      quotedInvoiceNo = hashMatch[1];
+                      console.log(`[QUOTED VISION] 🎯 Nomor invoice (fallback hash) dari foto yang di-tag: #${quotedInvoiceNo}`);
+                    }
+                  }
+                }
+              }
+            } catch (quotedDlErr) {
+              console.warn(`[QUOTED VISION DOWNLOAD ERROR] Gagal download foto yang di-reply: ${quotedDlErr.message}`);
+            }
+          } else {
+            // Quoted message is text — check if it contains invoice number
+            const quotedText = ctxInfo.quotedMessage?.conversation
+              || ctxInfo.quotedMessage?.extendedTextMessage?.text
+              || '';
+            if (quotedText) {
+              const textInvMatch = quotedText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i)
+                || quotedText.match(/#(\d{2,6})\b/);
+              if (textInvMatch) {
+                quotedInvoiceNo = textInvMatch[1];
+                quotedOcrText = quotedText;
+                console.log(`[QUOTED TEXT] 🎯 Nomor invoice dari teks yang di-reply: #${quotedInvoiceNo}`);
+              }
+            }
+          }
+        }
+      } catch (quotedErr) {
+        console.warn('[QUOTED VISION ERROR]:', quotedErr.message);
+      }
+
       // Deteksi & download foto media jika ada
       const unwrap = unwrapMessage(m.message);
       const isImageMessage = !!(unwrap.imageMessage || m.message?.imageMessage);
@@ -878,6 +967,11 @@ async function startBaileys() {
         if (msgId) buf.messageIds.push(msgId);
         buf.isOrderDetected = buf.isOrderDetected || isOrderDetected;
         buf.lastReceivedAt = now;
+        // Preserve quotedInvoiceNo from first message that has it
+        if (!buf.quotedInvoiceNo && quotedInvoiceNo) {
+          buf.quotedInvoiceNo = quotedInvoiceNo;
+          buf.quotedOcrText = quotedOcrText;
+        }
         if (senderName && senderName !== 'Kontak WhatsApp') {
           buf.senderName = senderName;
         }
@@ -906,6 +1000,8 @@ async function startBaileys() {
           imageUrl,
           transferInfo: null,
           matchedInvoiceNo: null,
+          quotedInvoiceNo: quotedInvoiceNo || null,
+          quotedOcrText: quotedOcrText || '',
           caption: rawCaption,
           rawOcrText: ocrText,
           firstReceivedAt: now,

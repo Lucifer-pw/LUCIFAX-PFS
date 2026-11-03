@@ -3179,6 +3179,32 @@ Kirim besok pagi ya pak bc''';
           ),
           const SizedBox(height: 10),
 
+          // AI Vision Quoted Invoice Banner
+          if (chat.quotedInvoiceNo != null && chat.quotedInvoiceNo!.isNotEmpty && chat.status == 'pending') ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF10B981)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, color: Color(0xFF34D399), size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '🔎 AI Vision: Foto yang di-reply terdeteksi Invoice #${chat.quotedInvoiceNo}',
+                      style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+
           // Action Row / Wrap
           if (isMobile) ...[
             if (isProcessed && chat.createdInvoiceNo != null) ...[
@@ -3286,7 +3312,7 @@ Kirim besok pagi ya pak bc''';
               children: [
                 if (isProcessed && chat.createdInvoiceNo != null) ...[
                   () {
-                    final bool isRevision = RegExp(r'\b(revisi|susulan|tambahan?|tmbh|ralat)\b', caseSensitive: false).hasMatch(chat.messageText);
+                    final bool isRevision = _isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!));
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(

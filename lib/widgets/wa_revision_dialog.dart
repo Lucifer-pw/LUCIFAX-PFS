@@ -174,13 +174,33 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
       matches.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       _customerInvoices = matches;
 
-      // 3. Pre-select invoice: check if invoice number is mentioned in text (e.g. #691)
-      final invoiceMatch = RegExp(r'#?(\d{2,6})\b').firstMatch(widget.chat.messageText);
-      if (invoiceMatch != null) {
-        final numStr = invoiceMatch.group(1);
-        final found = _customerInvoices.where((t) => t.invoiceNo.toString() == numStr).toList();
+      // 3. Pre-select invoice: PRIORITAS dari AI Vision (quotedInvoiceNo dari foto yang di-tag)
+      if (widget.chat.quotedInvoiceNo != null && widget.chat.quotedInvoiceNo!.isNotEmpty) {
+        final qInvNo = widget.chat.quotedInvoiceNo!;
+        final found = _customerInvoices.where((t) => t.invoiceNo.toString() == qInvNo).toList();
         if (found.isNotEmpty) {
           _selectedInvoice = found.first;
+          debugPrint('[REVISION DIALOG] Auto-selected Invoice #$qInvNo dari AI Vision (foto yang di-tag)');
+        } else {
+          // Invoice dari Vision mungkin milik customer lain atau sudah dihapus, cari di semua transaksi
+          final allTxMatch = allTxs.where((t) => t.invoiceNo.toString() == qInvNo).toList();
+          if (allTxMatch.isNotEmpty) {
+            _customerInvoices.insert(0, allTxMatch.first);
+            _selectedInvoice = allTxMatch.first;
+            debugPrint('[REVISION DIALOG] Auto-selected Invoice #$qInvNo dari Vision (beda customer pool)');
+          }
+        }
+      }
+
+      // Fallback: check if invoice number is mentioned in chat text (e.g. #691)
+      if (_selectedInvoice == null) {
+        final invoiceMatch = RegExp(r'#?(\d{2,6})\b').firstMatch(widget.chat.messageText);
+        if (invoiceMatch != null) {
+          final numStr = invoiceMatch.group(1);
+          final found = _customerInvoices.where((t) => t.invoiceNo.toString() == numStr).toList();
+          if (found.isNotEmpty) {
+            _selectedInvoice = found.first;
+          }
         }
       }
 
@@ -524,6 +544,39 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // AI Vision Detection Banner (jika foto yang di-tag berhasil di-scan)
+                        if (widget.chat.quotedInvoiceNo != null && widget.chat.quotedInvoiceNo!.isNotEmpty) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF059669).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF10B981)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.auto_awesome, color: Color(0xFF34D399), size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('🔎 AI Vision: Foto yang Di-reply Berhasil Di-scan', style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Nomor Invoice terdeteksi dari screenshot: #${widget.chat.quotedInvoiceNo} (Invoice di bawah sudah otomatis terpilih)',
+                                        style: const TextStyle(color: Color(0xFF34D399), fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
 
                         // Section 1: Pemilihan Invoice Sasaran
                         const Text(

@@ -22,6 +22,8 @@ class IncomingPoChat {
   final String? matchedInvoiceNo;
   final bool isPartialPayment;
   final double remainingAmount;
+  final String? quotedInvoiceNo;
+  final String? quotedOcrText;
 
   IncomingPoChat({
     required this.id,
@@ -45,6 +47,8 @@ class IncomingPoChat {
     this.matchedInvoiceNo,
     this.isPartialPayment = false,
     this.remainingAmount = 0.0,
+    this.quotedInvoiceNo,
+    this.quotedOcrText,
   });
 
   bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || transferInfo != null;
@@ -91,6 +95,8 @@ class IncomingPoChat {
       matchedInvoiceNo: (map['matchedInvoiceNo'] ?? tInfo?['invoiceNo'])?.toString(),
       isPartialPayment: map['isPartialPayment'] == true || (tInfo?['isPartial'] == true),
       remainingAmount: ((map['remainingAmount'] ?? tInfo?['remainingAmount'] ?? 0) as num).toDouble(),
+      quotedInvoiceNo: map['quotedInvoiceNo']?.toString(),
+      quotedOcrText: map['quotedOcrText']?.toString(),
     );
   }
 
@@ -116,6 +122,8 @@ class IncomingPoChat {
       'matchedInvoiceNo': matchedInvoiceNo,
       'isPartialPayment': isPartialPayment,
       'remainingAmount': remainingAmount,
+      'quotedInvoiceNo': quotedInvoiceNo,
+      'quotedOcrText': quotedOcrText,
     };
   }
 
@@ -134,6 +142,8 @@ class IncomingPoChat {
     String? matchedInvoiceNo,
     bool? isPartialPayment,
     double? remainingAmount,
+    String? quotedInvoiceNo,
+    String? quotedOcrText,
   }) {
     return IncomingPoChat(
       id: id,
@@ -157,6 +167,8 @@ class IncomingPoChat {
       matchedInvoiceNo: matchedInvoiceNo ?? this.matchedInvoiceNo,
       isPartialPayment: isPartialPayment ?? this.isPartialPayment,
       remainingAmount: remainingAmount ?? this.remainingAmount,
+      quotedInvoiceNo: quotedInvoiceNo ?? this.quotedInvoiceNo,
+      quotedOcrText: quotedOcrText ?? this.quotedOcrText,
     );
   }
 }
