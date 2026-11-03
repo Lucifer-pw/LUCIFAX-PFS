@@ -1,4 +1,5 @@
 require('dotenv').config();
+const GATEWAY_VERSION = '3.1.0'; // v3.1.0 - Forwarded & Quoted Reply bypass buffer
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -1418,6 +1419,6 @@ app.get('/', (req, res) => {
 
 // Start Express server & Baileys
 app.listen(PORT, () => {
-  console.log(`[WA GATEWAY SERVER] Berjalan di http://localhost:${PORT}`);
+  console.log(`[WA GATEWAY SERVER] 🚀 v${GATEWAY_VERSION} | Berjalan di http://localhost:${PORT}`);
   startBaileys();
 });
