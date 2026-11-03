@@ -1474,4 +1474,54 @@ Krm bsk pg
     expect(draft.items[4].qtyUnit, 'karton');
     expect(draft.items[4].qtyPcs, 30.0);
   });
+  test('Chat with Revisi / Tambah (Pak BC NINE FF GKJ) flags draft as isRevisionOrder and populates revision note', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'BRS MERAH 24 500G', price: 36691, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'P02', name: 'BRS COKLAT 24S 500 G', price: 30688, stock: 100, isiKarton: 15, sizeGrams: 500),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'C_NINE',
+        customerName: 'NINE FF (ANISA APRILIANA)',
+        aliasName: 'NINE FF',
+        address: '',
+        city: 'YOGYAKARTA',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08122589564',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'NINE FF GKJ', mappedValue: 'NINE FF', targetId: 'C_NINE', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'unit', keyword: 'k', mappedValue: '1 Karton', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+Revisi tuk NINE FF GKJ...
+Tambah beres 24s ...10 k
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'C_NINE');
+    expect(draft.customerName, 'NINE FF (ANISA APRILIANA)');
+    expect(draft.isRevisionOrder, isTrue);
+    expect(draft.note, contains('[REVISI / ORDER SUSULAN DARI CHAT]'));
+    expect(draft.items.length, 1);
+    expect(draft.items[0].productName, 'BRS MERAH 24 500G');
+    expect(draft.items[0].qtyInput, 10.0);
+    expect(draft.items[0].qtyUnit, 'karton');
+    expect(draft.items[0].qtyPcs, 150.0);
+  });
 }

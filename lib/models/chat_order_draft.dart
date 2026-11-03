@@ -50,6 +50,7 @@ class ChatOrderDraft {
   List<ChatOrderItemDraft> items;
   String rawChatBlock;
   String note;
+  bool isRevisionOrder;
 
   ChatOrderDraft({
     required this.customerRawName,
@@ -61,6 +62,7 @@ class ChatOrderDraft {
     required this.items,
     required this.rawChatBlock,
     this.note = '',
+    this.isRevisionOrder = false,
   });
 
   double get grandTotal => items.fold(0.0, (sum, item) => sum + item.subtotal);

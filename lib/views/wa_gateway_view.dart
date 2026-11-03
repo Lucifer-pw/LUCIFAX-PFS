@@ -3229,24 +3229,29 @@ Kirim besok pagi ya pak bc''';
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 if (isProcessed && chat.createdInvoiceNo != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF064E3B).withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF059669)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 15),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Invoice #${chat.createdInvoiceNo} (statusDikirim: PENDING, statusTransfer: UNPAID, ERP: kosong)',
-                          style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
+                  () {
+                    final bool isRevision = RegExp(r'\b(revisi|susulan|tambahan?|tmbh|ralat)\b', caseSensitive: false).hasMatch(chat.messageText);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isRevision ? const Color(0xFF78350F).withOpacity(0.4) : const Color(0xFF064E3B).withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: isRevision ? const Color(0xFFD97706) : const Color(0xFF059669)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(isRevision ? Icons.edit_note_rounded : Icons.check_circle_rounded, color: isRevision ? const Color(0xFFFBBF24) : const Color(0xFF34D399), size: 15),
+                          const SizedBox(width: 6),
+                          Text(
+                            isRevision
+                                ? 'Invoice #${chat.createdInvoiceNo} [PO REVISI / SUSULAN] (status: PENDING)'
+                                : 'Invoice #${chat.createdInvoiceNo} (statusDikirim: PENDING, statusTransfer: UNPAID, ERP: kosong)',
+                            style: TextStyle(color: isRevision ? const Color(0xFFFDE68A) : const Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    );
+                  }(),
                 ] else if (chat.status == 'dismissed') ...[
                   Text(
                     chat.dismissReason == 'BUKAN_ORDER' ? '⚠️ Bukan format pesanan barang' : 'Diabaikan secara manual',
@@ -3375,9 +3380,16 @@ Kirim besok pagi ya pak bc''';
     } else {
       switch (chat.status) {
         case 'processed':
-          bg = const Color(0xFF065F46);
-          fg = const Color(0xFF34D399);
-          label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} SELESAI' : 'SELESAI PO';
+          final bool isRevision = RegExp(r'\b(revisi|susulan|tambahan?|tmbh|ralat)\b', caseSensitive: false).hasMatch(chat.messageText);
+          if (isRevision) {
+            bg = const Color(0xFF78350F);
+            fg = const Color(0xFFFBBF24);
+            label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} (SUSULAN / REVISI)' : 'SUSULAN / REVISI';
+          } else {
+            bg = const Color(0xFF065F46);
+            fg = const Color(0xFF34D399);
+            label = chat.createdInvoiceNo != null ? 'PO #${chat.createdInvoiceNo} SELESAI' : 'SELESAI PO';
+          }
           break;
         case 'dismissed':
           bg = const Color(0xFF334155);

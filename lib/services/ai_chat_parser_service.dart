@@ -122,9 +122,22 @@ class AiChatParserService {
         products: products,
       );
 
+      // Detect if this block is a revision / addition order
+      final bool isRevision = RegExp(
+        r'\b(revisi|susulan|tambahan?|tmbh|ralat)\b',
+        caseSensitive: false,
+      ).hasMatch(block);
+
       // Note is strictly empty by default so user doesn't have to erase it manually.
-      // Only filled if a bonus rule applies (e.g. LG FF bonus note).
-      final String finalNote = (bonusNote != null && bonusNote.isNotEmpty) ? bonusNote : '';
+      // Only filled if a bonus rule applies or if it is a revision/susulan order.
+      String finalNote = (bonusNote != null && bonusNote.isNotEmpty) ? bonusNote : '';
+      if (isRevision) {
+        if (finalNote.isNotEmpty) {
+          finalNote = '[REVISI / ORDER SUSULAN DARI CHAT] | ' + finalNote;
+        } else {
+          finalNote = '[REVISI / ORDER SUSULAN DARI CHAT]';
+        }
+      }
 
       // Only add draft if items exist (do NOT create phantom POs for non-order/admin messages!)
       if (draftItems.isNotEmpty) {
@@ -140,6 +153,7 @@ class AiChatParserService {
           items: draftItems,
           rawChatBlock: block,
           note: finalNote,
+          isRevisionOrder: isRevision,
         ));
       }
     }
@@ -903,6 +917,16 @@ class AiChatParserService {
       productText = productText.substring(5).trim();
     } else if (productText.toLowerCase().startsWith('fv ')) {
       productText = productText.substring(3).trim();
+    }
+
+    // Strip leading revision/addition action words like "tambah ", "tmbh ", "revisi "
+    final lowerP = productText.toLowerCase();
+    if (lowerP.startsWith('tambah ')) {
+      productText = productText.substring(7).trim();
+    } else if (lowerP.startsWith('tmbh ')) {
+      productText = productText.substring(5).trim();
+    } else if (lowerP.startsWith('revisi ')) {
+      productText = productText.substring(7).trim();
     }
 
     Product? matchedProduct;
