@@ -1390,4 +1390,88 @@ Beres merah 20 k
     expect(drafts[3].customerId, 'G001');
     expect(drafts[3].items.length, 1);
   });
+  test('User AW FF order: 2 BALL parses to 50 roll, and FIVA BERES ISI 7 parses to BRS COKLAT 7S', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'P01', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 45000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+      Product(id: 'P02', name: 'ROLLADE AYAM ROLL 400 G', price: 24797, stock: 100, isiKarton: 50, sizeGrams: 400),
+      Product(id: 'P03', name: 'BRS MERAH 24S 500G', price: 34549, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'P04', name: 'BRS COKLAT 24S 2 500G', price: 28234, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'P05', name: 'BRS COKLAT 13S 2 500G', price: 27962, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'P06', name: 'BRS COKLAT 7S 2 500G', price: 27500, stock: 100, isiKarton: 15, sizeGrams: 500),
+    ];
+
+    final customers = [
+      Customer(
+        id: 'H002',
+        customerName: 'AW FF (AW FROZEN FOOD)',
+        aliasName: 'AW FF',
+        address: 'SEMARANG',
+        city: 'SEMARANG',
+        province: 'JAWA TENGAH',
+        country: 'INDONESIA',
+        phone: '08122589564',
+        ktpNumber: '',
+      ),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'unit', keyword: 'ball', mappedValue: '25 pack', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'unit', keyword: 'karton', mappedValue: '1 Karton', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+FIVA ROLADE 1 KG AYAM -> 25 KARTON
+FIVA ROLADE AYAM ROLL -> 2 BALL
+FIVA BERES MERAH ISI 24 -> 15 KARTON
+FIVA BERES ISI 7 -> 2 KARTON
+FIVA BERES ISI 13 -> 2 KARTON
+Po aw semarang
+Krm bsk pg
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.length, 1);
+    final draft = drafts.first;
+    expect(draft.customerId, 'H002');
+    expect(draft.customerName, 'AW FF (AW FROZEN FOOD)');
+    expect(draft.city, 'SEMARANG');
+    expect(draft.items.length, 5);
+
+    // Item 1: ROLADE 1 KG -> 25 Karton = 250 pcs
+    expect(draft.items[0].productName, 'ROLLADE AYAM 1000 G ( MBG )');
+    expect(draft.items[0].qtyInput, 25.0);
+    expect(draft.items[0].qtyUnit, 'karton');
+    expect(draft.items[0].qtyPcs, 250.0);
+
+    // Item 2: ROLADE AYAM ROLL -> 2 BALL = 50 roll = 1.0 Ktn
+    expect(draft.items[1].productName, 'ROLLADE AYAM ROLL 400 G');
+    expect(draft.items[1].qtyInput, 50.0);
+    expect(draft.items[1].qtyUnit, 'roll');
+    expect(draft.items[1].qtyPcs, 50.0);
+
+    // Item 3: BRS MERAH 24 -> 15 Karton = 225 pcs
+    expect(draft.items[2].productName, 'BRS MERAH 24S 500G');
+    expect(draft.items[2].qtyInput, 15.0);
+    expect(draft.items[2].qtyUnit, 'karton');
+    expect(draft.items[2].qtyPcs, 225.0);
+
+    // Item 4: BRS ISI 7 -> BRS COKLAT 7S 2 500G, 2 Karton = 30 pcs (NEVER 24S)
+    expect(draft.items[3].productName, 'BRS COKLAT 7S 2 500G');
+    expect(draft.items[3].qtyInput, 2.0);
+    expect(draft.items[3].qtyUnit, 'karton');
+    expect(draft.items[3].qtyPcs, 30.0);
+
+    // Item 5: BRS ISI 13 -> BRS COKLAT 13S 2 500G, 2 Karton = 30 pcs
+    expect(draft.items[4].productName, 'BRS COKLAT 13S 2 500G');
+    expect(draft.items[4].qtyInput, 2.0);
+    expect(draft.items[4].qtyUnit, 'karton');
+    expect(draft.items[4].qtyPcs, 30.0);
+  });
 }

@@ -892,11 +892,11 @@ class AiChatParserService {
     String productText = qtyInfo.cleanedText;
 
     // Clean trailing dots, colons, dashes
-    productText = productText.replaceAll(RegExp(r'[\.\:\=\,\-]+$'), '').trim();
+    productText = productText.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
 
     // Clean intermediate / trailing packaging notes like "= 2 ball", ": 2 bal", "= 2 dus", "100 ball", "35 ball", "300 pack"
     productText = productText.replaceAll(RegExp(r'[:=\-\s]*\b\d+[\s\.\-]*(bal|ball|dus|box|pack|pak|ktn|karton|roll|rol|pcs|pc)\b', caseSensitive: false), '').trim();
-    productText = productText.replaceAll(RegExp(r'[\.\:\=\,\-]+$'), '').trim();
+    productText = productText.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
 
     // Remove brand "fiva " or "fv " if present at the start
     if (productText.toLowerCase().startsWith('fiva ')) {
@@ -944,7 +944,7 @@ class AiChatParserService {
         final pTextLower = productText.toLowerCase();
         bool isMatch = pTextLower == rKw || pTextLower.contains(rKw) || rKw.contains(pTextLower);
         if (!isMatch) {
-          final rTokens = rKw.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+          final rTokens = rKw.split(RegExp(r'\s+')).where((w) => w.length >= 2 || RegExp(r'^\d+$').hasMatch(w)).toList();
           if (rTokens.length >= 2) {
             isMatch = rTokens.every((t) => pTextLower.contains(t));
           }
@@ -1071,11 +1071,20 @@ class AiChatParserService {
       qtyPcs = qtyInfo.qty * isiKarton;
     }
 
+    String finalUnit = qtyInfo.unit;
+    if (finalUnit == 'pack') {
+      final pName = matchedProduct.name.toLowerCase();
+      final lineLower = rawLine.toLowerCase();
+      if (lineLower.contains('roll') || lineLower.contains('rol') || pName.contains('roll') || pName.contains('rol')) {
+        finalUnit = 'roll';
+      }
+    }
+
     return ChatOrderItemDraft(
       productId: matchedProduct.id,
       productName: matchedProduct.name,
       rawText: rawLine,
-      qtyUnit: qtyInfo.unit,
+      qtyUnit: finalUnit,
       qtyInput: qtyInfo.qty,
       qtyPcs: qtyPcs,
       price: price,
@@ -1113,71 +1122,117 @@ class AiChatParserService {
     return double.tryParse(s) ?? 1.0;
   }
 
+  /// Resolves unit and quantity multiplier based on AI Knowledge unit rules or standard defaults
+  _ResolvedUnitMultiplier _resolveUnitRule(String rawUnitWord, List<AiKnowledgeRule> unitRules) {
+    final cleanWord = rawUnitWord.trim().toLowerCase();
+
+    // 1. Check unitRules from AI Knowledge (priority)
+    for (var rule in unitRules) {
+      if (rule.keyword.trim().toLowerCase() == cleanWord) {
+        final val = rule.mappedValue.trim().toLowerCase();
+        // Parse "25 pack", "1 karton", "25", "pack", etc.
+        final match = RegExp(
+          r'^(\d+([.,]\d+)*)?\s*(karton|ktn|dus|box|k\b|roll|rol|pack|pak|pcs|pc\b|bks|biji)?',
+          caseSensitive: false,
+        ).firstMatch(val);
+
+        double mult = 1.0;
+        if (match != null && match.group(1) != null && match.group(1)!.isNotEmpty) {
+          mult = _parseIndonesianNumber(match.group(1)!);
+        }
+
+        String baseUnit = 'pack';
+        final unitPart = (match?.group(3) ?? val).toLowerCase();
+        if (unitPart.contains('karton') ||
+            unitPart.contains('ktn') ||
+            unitPart.contains('dus') ||
+            unitPart.contains('box') ||
+            unitPart == 'k') {
+          baseUnit = 'karton';
+        } else if (unitPart.contains('roll') || unitPart.contains('rol')) {
+          baseUnit = 'roll';
+        } else {
+          baseUnit = 'pack';
+        }
+        return _ResolvedUnitMultiplier(multiplier: mult, baseUnit: baseUnit, matchedRule: true);
+      }
+    }
+
+    // 2. Built-in standard defaults fallback
+    if (cleanWord == 'ball' || cleanWord == 'bal') {
+      return const _ResolvedUnitMultiplier(multiplier: 25.0, baseUnit: 'pack', matchedRule: true);
+    } else if (cleanWord.contains('roll') || cleanWord.contains('rol')) {
+      return const _ResolvedUnitMultiplier(multiplier: 1.0, baseUnit: 'roll', matchedRule: true);
+    } else if (cleanWord.contains('karton') ||
+        cleanWord.contains('ktn') ||
+        cleanWord == 'k' ||
+        cleanWord.contains('dus') ||
+        cleanWord.contains('box')) {
+      return const _ResolvedUnitMultiplier(multiplier: 1.0, baseUnit: 'karton', matchedRule: true);
+    } else if (cleanWord.contains('pack') ||
+        cleanWord.contains('pak') ||
+        cleanWord.contains('pcs') ||
+        cleanWord == 'pc' ||
+        cleanWord.contains('bks') ||
+        cleanWord.contains('biji')) {
+      return const _ResolvedUnitMultiplier(multiplier: 1.0, baseUnit: 'pack', matchedRule: true);
+    }
+
+    return const _ResolvedUnitMultiplier(multiplier: 1.0, baseUnit: 'pack', matchedRule: false);
+  }
+
   /// Extracts quantity and unit from line, returning cleaned product text
   _QtyUnitResolution _extractQuantityAndUnit(String line, List<AiKnowledgeRule> unitRules) {
     double qty = 1.0;
     String unit = 'pack';
     String cleaned = line;
 
-    // Pattern 1: Colon format with optional explicit unit:
-    // e.g. ": 35 karton", ": 200 pc", ": 200 pcs", ": 10 roll", or ratio ": 1", ": 2"
-    final colonMatch = RegExp(
-      r':\s*(\d+([.,]\d+)*)\s*(karton|ktn|k\b|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji)?',
+    // Pattern 1: Separator format with optional explicit unit:
+    // e.g. "-> 25 KARTON", "-> 2 BALL", ": 35 karton", ": 2", "= 2 ball", "- 2 ball"
+    final separatorMatch = RegExp(
+      r'(\s*(?:->|-->|=>|:|=)\s*|\s+-\s+)(\d+([.,]\d+)*)\s*([a-zA-Z]+)?',
       caseSensitive: false,
     ).firstMatch(line);
 
-    if (colonMatch != null) {
-      qty = _parseIndonesianNumber(colonMatch.group(1) ?? '1');
-      final matchedUnitStr = (colonMatch.group(3) ?? '').toLowerCase();
+    if (separatorMatch != null) {
+      final rawQty = _parseIndonesianNumber(separatorMatch.group(2) ?? '1');
+      final matchedUnitStr = (separatorMatch.group(4) ?? '').toLowerCase().trim();
 
-      if (matchedUnitStr.contains('roll') || matchedUnitStr.contains('rol')) {
-        unit = 'roll';
-      } else if (matchedUnitStr.contains('pack') ||
-          matchedUnitStr.contains('pak') ||
-          matchedUnitStr.contains('pcs') ||
-          matchedUnitStr == 'pc' ||
-          matchedUnitStr.contains('bks') ||
-          matchedUnitStr.contains('biji')) {
-        unit = 'pack';
+      if (matchedUnitStr.isNotEmpty) {
+        final res = _resolveUnitRule(matchedUnitStr, unitRules);
+        qty = rawQty * res.multiplier;
+        unit = res.baseUnit;
       } else {
-        // Defaults to karton if unit is karton/ktn/k/dus/box OR no unit was specified (ratio : 1, : 2)
+        // Defaults to karton if no unit was specified with separator (ratio : 1, : 2, -> 2)
+        qty = rawQty;
         unit = 'karton';
       }
 
-      cleaned = line.replaceAll(colonMatch.group(0)!, '').trim();
-      // Strip any residual unit words if left over at the end
-      cleaned = cleaned.replaceAll(RegExp(r'\b(karton|ktn|k|pack|pak|pcs|pc|roll|rol)\b', caseSensitive: false), '').trim();
+      cleaned = (line.substring(0, separatorMatch.start) + line.substring(separatorMatch.end)).trim();
+      cleaned = cleaned.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
-    // Pattern 2: "35 k" / "40 K..." / "40 ktn" / "10 karton" / "5 dus"
-    final kartonMatch = RegExp(r'(\d+([.,]\d+)*)\s*(k\b|k\.+|ktn|karton|dus|box)', caseSensitive: false).firstMatch(line);
-    if (kartonMatch != null) {
-      qty = _parseIndonesianNumber(kartonMatch.group(1) ?? '1');
-      unit = 'karton';
-      cleaned = line.replaceAll(kartonMatch.group(0)!, '').trim();
+    // Pattern 2: Explicit unit without separator:
+    // e.g. "35 k", "40 ktn", "10 karton", "5 dus", "11 roll", "121 pack", "2 ball"
+    final explicitUnitMatch = RegExp(
+      r'(\d+([.,]\d+)*)\s*(karton|ktn|k\b|k\.+|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji|ball|bal\b)',
+      caseSensitive: false,
+    ).firstMatch(line);
+
+    if (explicitUnitMatch != null) {
+      final rawQty = _parseIndonesianNumber(explicitUnitMatch.group(1) ?? '1');
+      final matchedUnitStr = (explicitUnitMatch.group(3) ?? '').toLowerCase().trim();
+      final res = _resolveUnitRule(matchedUnitStr, unitRules);
+      qty = rawQty * res.multiplier;
+      unit = res.baseUnit;
+
+      cleaned = (line.substring(0, explicitUnitMatch.start) + line.substring(explicitUnitMatch.end)).trim();
+      cleaned = cleaned.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
 
-    // Pattern 3: "11 ROLL" / "325 roll" / "2.500 roll"
-    final rollMatch = RegExp(r'(\d+([.,]\d+)*)\s*(roll|rol)', caseSensitive: false).firstMatch(line);
-    if (rollMatch != null) {
-      qty = _parseIndonesianNumber(rollMatch.group(1) ?? '1');
-      unit = 'roll';
-      cleaned = line.replaceAll(rollMatch.group(0)!, '').trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
-    }
-
-    // Pattern 4: "121 pack" / "45 pack" / "10 pcs" / "200 pc" / "10 bks"
-    final packMatch = RegExp(r'(\d+([.,]\d+)*)\s*(pack|pak|pcs|pc\b|bks|biji)', caseSensitive: false).firstMatch(line);
-    if (packMatch != null) {
-      qty = _parseIndonesianNumber(packMatch.group(1) ?? '1');
-      unit = 'pack';
-      cleaned = line.replaceAll(packMatch.group(0)!, '').trim();
-      return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
-    }
-
-    // Pattern 5: Number at the end of line like "Rolade sapi 1000g 35"
+    // Pattern 3: Number at the end of line like "Rolade sapi 1000g 35"
     final endNumberMatch = RegExp(r'\b(\d+([.,]\d+)*)$').firstMatch(line);
     if (endNumberMatch != null) {
       qty = _parseIndonesianNumber(endNumberMatch.group(1) ?? '1');
@@ -1193,12 +1248,10 @@ class AiChatParserService {
           lowerCleaned.endsWith('biji')) {
         unit = 'pack';
       } else {
-        // Sanity Check: If bulk number > 50 without explicit unit word ("karton/ktn/dus"),
-        // it is almost certainly pack/pcs (e.g. 150 pack), NOT 150 karton (which would be 1.5 tons!).
         if (qty > 50) {
           unit = 'pack';
         } else {
-          unit = 'karton'; // Default to karton for reasonable bulk order numbers (1..50)
+          unit = 'karton';
         }
       }
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
@@ -1231,7 +1284,7 @@ class AiChatParserService {
     }
 
     // 2. Tokenize with domain awareness
-    final qTokens = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    final qTokens = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2 || RegExp(r'^\d+$').hasMatch(w)).toList();
     final bool queryHasRoll = qTokens.contains('roll') || qTokens.contains('rol');
     final bool queryHasLoyang = qTokens.contains('loyang') || qTokens.contains('lyg');
     final bool queryHas1000 = qTokens.contains('1000') ||
@@ -1361,6 +1414,19 @@ class AiChatParserService {
         score += 30;
       }
 
+      // Penalty for size conflict (avoid matching 24 when 7 or 13 was requested, etc.)
+      final bool hHas24 = hName.contains('24') || hTokens.contains('24s') || hTokens.contains('24');
+      final bool hHas13 = hName.contains('13') || hTokens.contains('13s') || hTokens.contains('13');
+      final bool hHas7 = hName.contains('7') || hTokens.contains('7s') || hTokens.contains('7');
+
+      if (queryHas7 && !queryHas24 && !queryHas13) {
+        if (hHas24 || hHas13) score -= 35;
+      } else if (queryHas13 && !queryHas24 && !queryHas7) {
+        if (hHas24 || hHas7) score -= 35;
+      } else if (queryHas24 && !queryHas13 && !queryHas7) {
+        if (hHas13 || hHas7) score -= 35;
+      }
+
       // D. "ROLL" variant vs 1000g / Non-Roll
       // Crucial: check isolated word tokens / boundaries, NEVER hName.contains('roll') because "rollade" contains "roll"!
       final bool hIsRoll = hTokens.contains('roll') ||
@@ -1457,7 +1523,7 @@ class AiChatParserService {
 
     final targetName = targetProd.name.toLowerCase();
     final targetClean = targetName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
-    final targetWords = targetClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+    final targetWords = targetClean.split(RegExp(r'\s+')).where((w) => w.length >= 2 || RegExp(r'^\d+$').hasMatch(w)).toSet();
 
     final bool isBeres = targetWords.contains('brs') || targetWords.contains('beres');
     final bool isMerah = targetWords.contains('merah');
@@ -1473,7 +1539,7 @@ class AiChatParserService {
     for (var h in historyList) {
       final hName = h.productName.toLowerCase();
       final hClean = hName.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
-      final hWords = hClean.split(RegExp(r'\s+')).where((w) => w.length >= 2).toSet();
+      final hWords = hClean.split(RegExp(r'\s+')).where((w) => w.length >= 2 || RegExp(r'^\d+$').hasMatch(w)).toSet();
 
       // Guard 1: Beres must match Beres
       final bool hIsBeres = hWords.contains('brs') || hWords.contains('beres');
@@ -1553,7 +1619,7 @@ class AiChatParserService {
     }
 
     // 2. Score based on whole-word matching and type bonuses
-    final qWords = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2).toList();
+    final qWords = cleanQ.split(RegExp(r'\s+')).where((w) => w.length >= 2 || RegExp(r'^\d+$').hasMatch(w)).toList();
     final bool queryHasRoll = qWords.contains('roll') || qWords.contains('rol');
     final bool queryHasLoyang = qWords.contains('loyang') || qWords.contains('lyg');
     final bool queryHas1000 = qWords.contains('1000') ||
@@ -1684,6 +1750,19 @@ class AiChatParserService {
       }
       if (queryHas215 && (pName.contains('215') || pWords.contains('215g') || pWords.contains('215gr'))) {
         score += 30;
+      }
+
+      // Penalty for size conflict (avoid matching 24 when 7 or 13 was requested, etc.)
+      final bool pHas24 = pName.contains('24') || pWords.contains('24s') || pWords.contains('24');
+      final bool pHas13 = pName.contains('13') || pWords.contains('13s') || pWords.contains('13');
+      final bool pHas7 = pName.contains('7') || pWords.contains('7s') || pWords.contains('7');
+
+      if (queryHas7 && !queryHas24 && !queryHas13) {
+        if (pHas24 || pHas13) score -= 35;
+      } else if (queryHas13 && !queryHas24 && !queryHas7) {
+        if (pHas24 || pHas7) score -= 35;
+      } else if (queryHas24 && !queryHas13 && !queryHas7) {
+        if (pHas13 || pHas7) score -= 35;
       }
 
       // D. "ROLL" variant vs 1000g / Non-Roll
@@ -1992,6 +2071,18 @@ class _CustomerResolution {
     required this.rawName,
     required this.headerLineCount,
     this.customerLineIndex,
+  });
+}
+
+class _ResolvedUnitMultiplier {
+  final double multiplier;
+  final String baseUnit; // 'karton', 'pack', 'roll'
+  final bool matchedRule;
+
+  const _ResolvedUnitMultiplier({
+    required this.multiplier,
+    required this.baseUnit,
+    this.matchedRule = false,
   });
 }
 
