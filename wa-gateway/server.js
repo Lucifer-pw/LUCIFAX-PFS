@@ -605,6 +605,24 @@ async function startBaileys() {
       }
 
       // =========================================================================
+      // DETEKSI TIPE PESAN: Forwarded vs Quoted Reply vs Biasa
+      // =========================================================================
+      const allCtxInfo = unwrapMessage(m.message)?.extendedTextMessage?.contextInfo
+        || m.message?.extendedTextMessage?.contextInfo
+        || unwrapMessage(m.message)?.imageMessage?.contextInfo
+        || m.message?.imageMessage?.contextInfo;
+
+      const isForwardedMessage = !!(allCtxInfo?.isForwarded || allCtxInfo?.forwardingScore > 0);
+      const isQuotedReply = !!(allCtxInfo?.quotedMessage);
+
+      if (isForwardedMessage) {
+        console.log(`[MSG TYPE] ↪️ Pesan FORWARDED (diteruskan) terdeteksi.`);
+      }
+      if (isQuotedReply) {
+        console.log(`[MSG TYPE] 💬 Pesan REPLY/QUOTE terdeteksi.`);
+      }
+
+      // =========================================================================
       // TAHAP 2: QUOTED MESSAGE VISION - Tangkap foto yang di-reply/tag
       // =========================================================================
       let quotedInvoiceNo = null;
@@ -612,10 +630,7 @@ async function startBaileys() {
       let quotedImageUrl = null;
 
       try {
-        const ctxInfo = unwrapMessage(m.message)?.extendedTextMessage?.contextInfo
-          || m.message?.extendedTextMessage?.contextInfo
-          || unwrapMessage(m.message)?.imageMessage?.contextInfo
-          || m.message?.imageMessage?.contextInfo;
+        const ctxInfo = allCtxInfo;
 
         if (ctxInfo && ctxInfo.quotedMessage) {
           const quotedMsg = unwrapMessage(ctxInfo.quotedMessage);
@@ -934,6 +949,75 @@ async function startBaileys() {
 
         await firebaseAdapter.saveIncomingChat(slipPayload);
         return; // Selesai! Langsung keluar agar tidak masuk buffer chat teks pesanan
+      }
+
+      // =========================================================================
+      // KHUSUS FORWARDED & QUOTED REPLY: BYPASS BUFFER & KIRIM TERPISAH
+      // Forwarded message = 1 PO dari 1 toko (sudah lengkap dalam 1 bubble)
+      // Quoted reply = revisi/balasan ke invoice foto (harus jadi dokumen sendiri)
+      // TIDAK BOLEH digabung dengan pesan lain dalam buffer!
+      // =========================================================================
+      if (isForwardedMessage || isQuotedReply) {
+        // Flush buffer lama dari sender ini dulu (kalau ada pesan biasa sebelumnya)
+        const existingBufKey = senderPhone || rawJidDigits || remoteJid;
+        if (pendingMessageBuffers.has(existingBufKey)) {
+          console.log(`[BUFFER FLUSH BEFORE BYPASS] 🔄 Flush buffer lama dari ${senderName} sebelum simpan pesan forwarded/quoted terpisah.`);
+          await flushMessageBuffer(existingBufKey);
+        }
+
+        const lower = cleanText.toLowerCase();
+        const isOrderDetected =
+          lower.includes('karton') ||
+          lower.includes('ktn') ||
+          lower.includes('dus') ||
+          lower.includes('box') ||
+          lower.includes('roll') ||
+          lower.includes('pack') ||
+          lower.includes('pcs') ||
+          lower.includes('beres') ||
+          lower.includes('rolade') ||
+          lower.includes('kornet') ||
+          lower.includes('fiva') ||
+          lower.includes('order') ||
+          lower.includes('po') ||
+          lower.includes('kirim');
+
+        const bypassType = isQuotedReply ? 'QUOTED_REPLY' : 'FORWARDED';
+        const msgType = isQuotedReply ? 'QUOTED_REPLY' : (isOrderDetected ? 'ORDER_PO' : 'CASUAL_CHAT');
+
+        console.log(`[${bypassType} BYPASS] 🚀 Pesan ${bypassType} dari ${senderName} (+${senderPhone}) dikirim langsung ke Firestore (bypass buffer). Teks: "${cleanText.substring(0, 60)}..."`);
+
+        const bypassPayload = {
+          senderJid: remoteJid,
+          senderPhone,
+          senderName,
+          messageText: cleanText,
+          isOrderDetected: isQuotedReply ? false : isOrderDetected,
+          messageType: msgType,
+          hasImage: !!isImageMessage,
+          imageUrl: imageUrl || null,
+          transferInfo: null,
+          matchedInvoiceNo: null,
+          quotedInvoiceNo: quotedInvoiceNo || null,
+          quotedOcrText: quotedOcrText || '',
+          isForwarded: isForwardedMessage,
+          isQuotedReply: isQuotedReply,
+          caption: rawCaption || '',
+          rawOcrText: ocrText || '',
+          messageCount: 1,
+          messageId: msgId || '',
+          messageIds: msgId ? [msgId] : [],
+          receivedAt: new Date(msgTimeMs)
+        };
+
+        recentChats.unshift({
+          ...bypassPayload,
+          receivedAt: new Date()
+        });
+        if (recentChats.length > 20) recentChats.pop();
+
+        await firebaseAdapter.saveIncomingChat(bypassPayload);
+        return; // Selesai! Langsung keluar agar tidak masuk buffer
       }
 
       // =========================================================================

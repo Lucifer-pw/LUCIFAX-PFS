@@ -2767,6 +2767,45 @@ Kirim besok pagi ya pak bc''';
                     ),
                     const SizedBox(width: 6),
                     Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                    // Badge tipe pesan: Forwarded / Quoted Reply
+                    if (chat.isForwarded) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.forward_rounded, color: Color(0xFFA5B4FC), size: 10),
+                            SizedBox(width: 3),
+                            Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 9, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (chat.isQuotedReply) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD97706).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.reply_rounded, color: Color(0xFFFDE68A), size: 10),
+                            SizedBox(width: 3),
+                            Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 9, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -3147,6 +3186,45 @@ Kirim besok pagi ya pak bc''';
                     ),
                     const SizedBox(width: 6),
                     Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                    // Badge tipe pesan: Forwarded / Quoted Reply
+                    if (chat.isForwarded) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.forward_rounded, color: Color(0xFFA5B4FC), size: 10),
+                            SizedBox(width: 3),
+                            Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 9, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (chat.isQuotedReply) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD97706).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.reply_rounded, color: Color(0xFFFDE68A), size: 10),
+                            SizedBox(width: 3),
+                            Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 9, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
