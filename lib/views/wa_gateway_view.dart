@@ -11,12 +11,35 @@ import '../models/ai_knowledge_rule.dart';
 import '../models/customer.dart';
 import '../models/transaction.dart' as model_tr;
 import '../providers/customer_provider.dart';
+import '../providers/receivable_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/firebase_service.dart';
 import '../services/ai_chat_parser_service.dart';
 import '../widgets/ai_chat_order_dialog.dart';
 import '../widgets/wa_revision_dialog.dart';
+
+class _InvoiceLinkCandidate {
+  final String invoiceNo;
+  final String customerName;
+  final String? city;
+  final double totalAmount;
+  final double remainingAmount;
+  final bool isUnpaid;
+  final DateTime? date;
+  final bool isExactMatch;
+
+  _InvoiceLinkCandidate({
+    required this.invoiceNo,
+    required this.customerName,
+    this.city,
+    required this.totalAmount,
+    required this.remainingAmount,
+    required this.isUnpaid,
+    this.date,
+    this.isExactMatch = false,
+  });
+}
 
 class WaGatewayView extends StatefulWidget {
   const WaGatewayView({super.key});
@@ -32,6 +55,11 @@ class _WaGatewayViewState extends State<WaGatewayView> {
   void initState() {
     super.initState();
     _loadHidePhonePreference();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        Provider.of<ReceivableProvider>(context, listen: false).fetchReceivables();
+      } catch (_) {}
+    });
   }
 
   Future<void> _loadHidePhonePreference() async {
@@ -2314,11 +2342,13 @@ Kirim besok pagi ya pak bc''';
 
     try {
       final trDoc = await FirebaseFirestore.instance.collection('transactions').doc(invClean).get();
-      if (!trDoc.exists) {
+      final recSnap = await FirebaseFirestore.instance.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+
+      if (!trDoc.exists && recSnap.docs.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Faktur #$invClean tidak ditemukan di database.'),
+              content: Text('Faktur #$invClean tidak ditemukan di database transaksi maupun piutang.'),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -2326,13 +2356,18 @@ Kirim besok pagi ya pak bc''';
         return;
       }
 
-      final trData = trDoc.data() ?? {};
-      final String custName = (trData['aliasName'] != null && trData['aliasName'].toString().isNotEmpty)
-          ? trData['aliasName'].toString()
-          : (trData['customerName'] ?? 'Pelanggan').toString();
+      final trData = trDoc.exists ? (trDoc.data() ?? {}) : <String, dynamic>{};
+      String custName = '';
+      if (trDoc.exists) {
+        custName = (trData['aliasName'] != null && trData['aliasName'].toString().isNotEmpty)
+            ? trData['aliasName'].toString()
+            : (trData['customerName'] ?? 'Pelanggan').toString();
+      }
+      if (custName.isEmpty && recSnap.docs.isNotEmpty) {
+        custName = (recSnap.docs.first.data()['toko'] ?? 'Pelanggan').toString();
+      }
 
       // 1. Ambil data piutang untuk perhitungan cicilan vs lunas
-      final recSnap = await FirebaseFirestore.instance.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
       double effectiveNominal = ((trData['grandTotal'] ?? 0) as num).toDouble();
       double currentPaid = 0.0;
       DocumentReference? targetRecRef;
@@ -2381,21 +2416,23 @@ Kirim besok pagi ya pak bc''';
         });
       }
 
-      // 3. Update koleksi transactions
-      await FirebaseFirestore.instance.collection('transactions').doc(invClean).update({
-        'statusTransfer': willBeLunas ? 'PAID' : 'PARTIAL',
-        if (willBeLunas) 'transferDate': Timestamp.now(),
-        if (chat.imageUrl != null) 'transferReceiptUrl': chat.imageUrl,
-        'transferBankDetails': {
-          if (chat.transferInfo != null) ...chat.transferInfo!,
-          'isPartial': !willBeLunas,
-          'remaining': remainingAfter,
-          'totalPaid': newPaidAmount,
-          'totalTagihan': effectiveNominal,
-          'settledAt': DateTime.now().toIso8601String(),
-          'settleSource': 'WA_GATEWAY_MANUAL_LINK',
-        },
-      });
+      // 3. Update koleksi transactions jika dokumen transaksi ada
+      if (trDoc.exists) {
+        await FirebaseFirestore.instance.collection('transactions').doc(invClean).update({
+          'statusTransfer': willBeLunas ? 'PAID' : 'PARTIAL',
+          if (willBeLunas) 'transferDate': Timestamp.now(),
+          if (chat.imageUrl != null) 'transferReceiptUrl': chat.imageUrl,
+          'transferBankDetails': {
+            if (chat.transferInfo != null) ...chat.transferInfo!,
+            'isPartial': !willBeLunas,
+            'remaining': remainingAfter,
+            'totalPaid': newPaidAmount,
+            'totalTagihan': effectiveNominal,
+            'settledAt': DateTime.now().toIso8601String(),
+            'settleSource': 'WA_GATEWAY_MANUAL_LINK',
+          },
+        });
+      }
 
       // 4. Update koleksi incoming_po_chats
       await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
@@ -2497,6 +2534,13 @@ Kirim besok pagi ya pak bc''';
         : (chat.transferInfo?['customerHint'] ?? '').toString();
     final searchCtrl = TextEditingController(text: initialQuery);
     String selectedInv = chat.matchedInvoiceNo ?? '';
+    final double targetAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
+
+    // Trigger sinkronisasi piutang agar data selalu terbaru
+    final recProvider = Provider.of<ReceivableProvider>(context, listen: false);
+    recProvider.fetchReceivables();
+
+    final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
     await showDialog(
       context: context,
@@ -2506,7 +2550,7 @@ Kirim besok pagi ya pak bc''';
             backgroundColor: const Color(0xFF0F172A),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Container(
-              constraints: const BoxConstraints(maxWidth: 550, maxHeight: 600),
+              constraints: const BoxConstraints(maxWidth: 580, maxHeight: 650),
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2545,7 +2589,7 @@ Kirim besok pagi ya pak bc''';
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Bank: ${chat.transferInfo?['bank'] ?? '-'} | Nominal: Rp ${((chat.transferInfo?['amount'] as num?) ?? 0).toStringAsFixed(0)}',
+                                  'Bank: ${chat.transferInfo?['bank'] ?? '-'} | Nominal: ${currencyFormatter.format(targetAmount)}',
                                   style: const TextStyle(color: Color(0xFF6EE7B7), fontWeight: FontWeight.bold, fontSize: 12),
                                 ),
                                 if ((chat.transferInfo?['berita'] ?? '').toString().isNotEmpty)
@@ -2566,10 +2610,19 @@ Kirim besok pagi ya pak bc''';
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Cari Nomor Faktur / Nama Toko',
-                      hintText: 'e.g. 683 atau Maju Market',
+                      hintText: 'e.g. 638 atau AW FF',
                       labelStyle: const TextStyle(color: Color(0xFF38BDF8)),
                       hintStyle: const TextStyle(color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8)),
+                      suffixIcon: searchCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.white60, size: 18),
+                              onPressed: () {
+                                searchCtrl.clear();
+                                setDialogState(() {});
+                              },
+                            )
+                          : null,
                       filled: true,
                       fillColor: const Color(0xFF1E293B),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
@@ -2580,67 +2633,152 @@ Kirim besok pagi ya pak bc''';
                   const Text('Pilih faktur tertunggak untuk dilunasi:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance.collection('transactions').orderBy('date', descending: true).limit(30).snapshots(),
-                      builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
+                    child: Consumer2<ReceivableProvider, TransactionProvider>(
+                      builder: (context, recProv, trProv, _) {
+                        final Map<String, _InvoiceLinkCandidate> candidateMap = {};
+
+                        // 1. Ambil seluruh data Kartu Piutang (mencakup faktur lama & baru dari semua bulan)
+                        for (final r in recProv.receivables) {
+                          final cleanNo = r.noInvoice.replaceAll('#', '').trim();
+                          if (cleanNo.isEmpty) continue;
+                          final rem = r.isLunas ? 0.0 : r.remainingAmount;
+                          final isExact = targetAmount > 0 &&
+                              (((r.nominal - targetAmount).abs() <= 100) || ((rem - targetAmount).abs() <= 100));
+                          candidateMap[cleanNo] = _InvoiceLinkCandidate(
+                            invoiceNo: cleanNo,
+                            customerName: r.toko,
+                            city: r.kota,
+                            totalAmount: r.nominal,
+                            remainingAmount: rem,
+                            isUnpaid: !r.isLunas,
+                            date: r.tglKirim,
+                            isExactMatch: isExact,
+                          );
+                        }
+
+                        // 2. Lengkapi dari daftar transaksi (faktur yang baru dibuat atau belum ada di piutang)
+                        for (final t in trProv.transactions) {
+                          final cleanNo = t.invoiceNo.replaceAll('#', '').trim();
+                          if (cleanNo.isEmpty) continue;
+                          if (!candidateMap.containsKey(cleanNo)) {
+                            final netTotal = (t.grandTotal - t.returnAmount).clamp(0.0, double.infinity);
+                            final isUnpaid = t.statusTransfer != 'PAID';
+                            final isExact = targetAmount > 0 && ((netTotal - targetAmount).abs() <= 100);
+                            candidateMap[cleanNo] = _InvoiceLinkCandidate(
+                              invoiceNo: cleanNo,
+                              customerName: (t.aliasName.isNotEmpty ? t.aliasName : t.customerName).trim(),
+                              city: t.city,
+                              totalAmount: netTotal,
+                              remainingAmount: isUnpaid ? netTotal : 0.0,
+                              isUnpaid: isUnpaid,
+                              date: t.deliveryDate ?? t.date,
+                              isExactMatch: isExact,
+                            );
+                          }
+                        }
+
+                        if (recProv.isLoading && candidateMap.isEmpty) {
                           return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
                         }
-                        final docs = snap.data?.docs ?? [];
+
                         final q = searchCtrl.text.trim().toLowerCase();
-                        final filteredDocs = docs.where((d) {
-                          final data = d.data() as Map<String, dynamic>;
-                          final inv = (data['invoiceNo'] ?? d.id).toString().toLowerCase();
-                          final cust = (data['customerName'] ?? '').toString().toLowerCase();
-                          final alias = (data['aliasName'] ?? '').toString().toLowerCase();
-                          if (q.isNotEmpty) {
-                            return inv.contains(q) || cust.contains(q) || alias.contains(q);
-                          }
-                          return true;
+                        final filtered = candidateMap.values.where((c) {
+                          if (q.isEmpty) return true;
+                          return c.invoiceNo.toLowerCase().contains(q) ||
+                              c.customerName.toLowerCase().contains(q) ||
+                              (c.city != null && c.city!.toLowerCase().contains(q));
                         }).toList();
 
-                        // Utamakan faktur BELUM LUNAS (UNPAID) di urutan paling atas
-                        filteredDocs.sort((a, b) {
-                          final da = a.data() as Map<String, dynamic>;
-                          final db = b.data() as Map<String, dynamic>;
-                          final aUnpaid = (da['statusTransfer'] ?? 'UNPAID') == 'UNPAID' ? 0 : 1;
-                          final bUnpaid = (db['statusTransfer'] ?? 'UNPAID') == 'UNPAID' ? 0 : 1;
-                          return aUnpaid.compareTo(bUnpaid);
+                        // Urutkan:
+                        // 1. Nominal Cocok Tepat (Exact Match) paling atas
+                        // 2. Faktur Belum Lunas (Unpaid) diutamakan
+                        // 3. Tanggal / Nomor Faktur terbaru
+                        filtered.sort((a, b) {
+                          if (a.isExactMatch && !b.isExactMatch) return -1;
+                          if (!a.isExactMatch && b.isExactMatch) return 1;
+
+                          if (a.isUnpaid && !b.isUnpaid) return -1;
+                          if (!a.isUnpaid && b.isUnpaid) return 1;
+
+                          if (a.date != null && b.date != null) {
+                            final cmp = b.date!.compareTo(a.date!);
+                            if (cmp != 0) return cmp;
+                          }
+                          final intNoA = int.tryParse(a.invoiceNo) ?? 0;
+                          final intNoB = int.tryParse(b.invoiceNo) ?? 0;
+                          if (intNoA != intNoB) {
+                            return intNoB.compareTo(intNoA);
+                          }
+                          return b.invoiceNo.compareTo(a.invoiceNo);
                         });
 
-                        if (filteredDocs.isEmpty) {
-                          return const Center(child: Text('Tidak ada faktur yang cocok.', style: TextStyle(color: Color(0xFF64748B))));
+                        // Auto-select match terbaik jika belum dipilih dan cocok tepat
+                        if (selectedInv.isEmpty && filtered.isNotEmpty && filtered.first.isExactMatch) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (selectedInv.isEmpty && dialogCtx.mounted) {
+                              setDialogState(() {
+                                selectedInv = filtered.first.invoiceNo;
+                              });
+                            }
+                          });
+                        }
+
+                        if (filtered.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.search_off_rounded, color: Color(0xFF64748B), size: 40),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    q.isNotEmpty
+                                        ? 'Tidak ada faktur yang cocok dengan "$q".'
+                                        : 'Tidak ada faktur piutang yang ditemukan.',
+                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
                         }
 
                         return ListView.separated(
-                          itemCount: filteredDocs.length,
+                          itemCount: filtered.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 6),
                           itemBuilder: (ctx, i) {
-                            final doc = filteredDocs[i];
-                            final data = doc.data() as Map<String, dynamic>;
-                            final invNo = (data['invoiceNo'] ?? doc.id).toString();
-                            final cust = (data['aliasName'] != null && data['aliasName'].toString().isNotEmpty)
-                                ? data['aliasName'].toString()
-                                : (data['customerName'] ?? 'Pelanggan').toString();
-                            final total = (data['grandTotal'] as num?)?.toDouble() ?? 0.0;
-                            final isUnpaid = (data['statusTransfer'] ?? 'UNPAID') == 'UNPAID';
-                            final isSel = selectedInv == invNo;
+                            final cand = filtered[i];
+                            final isSel = selectedInv == cand.invoiceNo;
+                            final isExact = cand.isExactMatch;
 
                             return InkWell(
-                              onTap: () => setDialogState(() => selectedInv = invNo),
+                              onTap: () => setDialogState(() => selectedInv = cand.invoiceNo),
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: isSel ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF1E293B),
+                                  color: isSel
+                                      ? const Color(0xFF0284C7).withOpacity(0.25)
+                                      : (isExact ? const Color(0xFF064E3B).withOpacity(0.35) : const Color(0xFF1E293B)),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: isSel ? const Color(0xFF38BDF8) : (isUnpaid ? Colors.amber.withOpacity(0.3) : const Color(0xFF334155))),
+                                  border: Border.all(
+                                    color: isSel
+                                        ? const Color(0xFF38BDF8)
+                                        : (isExact
+                                            ? const Color(0xFF10B981)
+                                            : (cand.isUnpaid ? Colors.amber.withOpacity(0.3) : const Color(0xFF334155))),
+                                    width: isExact ? 1.5 : 1.0,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
                                     Icon(
                                       isSel ? Icons.radio_button_checked : Icons.radio_button_off,
-                                      color: isSel ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                      color: isSel
+                                          ? const Color(0xFF38BDF8)
+                                          : (isExact ? const Color(0xFF10B981) : const Color(0xFF64748B)),
                                       size: 18,
                                     ),
                                     const SizedBox(width: 10),
@@ -2648,8 +2786,46 @@ Kirim besok pagi ya pak bc''';
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text('Faktur #$invNo - $cust', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                          Text('Total: Rp ${total.toStringAsFixed(0)} | Status: ${isUnpaid ? "Belum Lunas (UNPAID)" : "Lunas (PAID)"}', style: TextStyle(color: isUnpaid ? Colors.amber : const Color(0xFF34D399), fontSize: 11)),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  'Faktur #${cand.invoiceNo} - ${cand.customerName}${cand.city != null && cand.city!.isNotEmpty ? " (${cand.city})" : ""}',
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              if (isExact)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF059669),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.stars_rounded, color: Colors.white, size: 12),
+                                                      SizedBox(width: 4),
+                                                      Text('NOMINAL COCOK', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            'Total: ${currencyFormatter.format(cand.totalAmount)}'
+                                            '${cand.remainingAmount > 0 && cand.remainingAmount < cand.totalAmount ? " (Sisa: ${currencyFormatter.format(cand.remainingAmount)})" : ""}'
+                                            '${cand.date != null ? " • Tgl: ${DateFormat('dd-MM-yyyy').format(cand.date!)}" : ""}'
+                                            ' | Status: ${cand.isUnpaid ? "Belum Lunas (UNPAID)" : "Lunas (PAID)"}',
+                                            style: TextStyle(
+                                              color: isExact
+                                                  ? const Color(0xFF6EE7B7)
+                                                  : (cand.isUnpaid ? Colors.amber : const Color(0xFF34D399)),
+                                              fontSize: 11,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),

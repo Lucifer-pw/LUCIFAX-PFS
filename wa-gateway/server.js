@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.0'; // v3.3.0 - Murni Strict Whitelist & Anti-False-Positive Transfer Chat
+const GATEWAY_VERSION = '3.3.1'; // v3.3.1 - Refined bank slip matching & robust invoice linking
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
