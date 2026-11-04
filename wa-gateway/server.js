@@ -174,6 +174,8 @@ let whitelistNumbers = new Set(
 );
 let whitelistContactsList = []; // [{ name: 'ROGUE', phone: '6287789733632' }]
 let whitelistLids = new Set(); // Set of LID digits e.g. '33668835856433'
+let disabledNumbers = new Set(); // Set of numbers turned OFF in settings
+let disabledLids = new Set(); // Set of WhatsApp LIDs belonging to OFF numbers
 let lidToPhoneMap = new Map(); // '33668835856433' -> '6287789733632'
 let phoneToLidMap = new Map(); // '6287789733632' -> '33668835856433'
 let autoPoEnabled = false;
@@ -322,21 +324,36 @@ firebaseAdapter.listenToSettings((settings) => {
         .map(s => cleanPhone(s))
         .filter(Boolean)
     );
+    const newDisabledNumbers = new Set();
+    const newDisabledLids = new Set();
 
     settings.whitelistContacts.forEach(it => {
       const isEnabled = it.enabled !== false && it.enabled !== 'false';
-      if (!isEnabled) {
-        return; // Lewati kontak yang dimatikan (OFF)
-      }
       const c = cleanPhone(it.phone || it.number);
       const name = (it.name || '').trim();
-      if (c) {
-        newNumbers.add(c);
-        whitelistContactsList.push({ name, phone: c });
+      if (!c) return;
+
+      if (!isEnabled) {
+        newDisabledNumbers.add(c);
+        if (phoneToLidMap.has(c)) {
+          const mappedLid = phoneToLidMap.get(c);
+          whitelistLids.delete(mappedLid);
+          newDisabledLids.add(mappedLid);
+        }
+        return;
+      }
+
+      newNumbers.add(c);
+      whitelistContactsList.push({ name, phone: c });
+      if (phoneToLidMap.has(c)) {
+        const mappedLid = phoneToLidMap.get(c);
+        whitelistLids.add(mappedLid);
       }
     });
 
     whitelistNumbers = newNumbers;
+    disabledNumbers = newDisabledNumbers;
+    disabledLids = newDisabledLids;
   } else if (Array.isArray(settings.whitelistNumbers)) {
     whitelistContactsList = [];
     const newNumbers = new Set(
@@ -345,6 +362,8 @@ firebaseAdapter.listenToSettings((settings) => {
         .map(s => cleanPhone(s))
         .filter(Boolean)
     );
+    disabledNumbers.clear();
+    disabledLids.clear();
 
     settings.whitelistNumbers.forEach(n => {
       const c = cleanPhone(n);
@@ -853,6 +872,19 @@ async function startBaileys() {
         senderPhone = rawJidDigits;
       }
 
+      // 1. CEK KHUSUS STATUS OFF: Jika nomor atau WhatsApp LID ini dimatikan (OFF), LANGSUNG BLOKIR!
+      const isSenderDisabled =
+        (senderPhone && Array.from(disabledNumbers).some(dn => senderPhone.endsWith(dn) || dn.endsWith(senderPhone) || senderPhone === dn)) ||
+        (rawJidDigits && disabledLids.has(rawJidDigits)) ||
+        (isLid && lidToPhoneMap.has(rawJidDigits) && Array.from(disabledNumbers).some(dn => lidToPhoneMap.get(rawJidDigits).endsWith(dn) || dn.endsWith(lidToPhoneMap.get(rawJidDigits))));
+
+      if (isSenderDisabled) {
+        if (!isHistorySync) {
+          console.log(`[STRICT FILTER BLOCKED] ⛔ Pesan dari ${senderName} (+${senderPhone || rawJidDigits}) diblokir seketika karena status kontak sedang DIMATIKAN (OFF).`);
+        }
+        return;
+      }
+
       // STRICT WHITELIST CHECK
       if (strictWhitelistOnly && whitelistNumbers.size > 0) {
         let isAllowed = false;
@@ -865,19 +897,27 @@ async function startBaileys() {
         }
 
         if (!isAllowed && rawJidDigits && whitelistLids.has(rawJidDigits)) {
-          isAllowed = true;
           if (lidToPhoneMap.has(rawJidDigits)) {
-            senderPhone = lidToPhoneMap.get(rawJidDigits);
+            const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
+            if (Array.from(whitelistNumbers).some(wn => cleanPhone(wn) === mappedPhone || mappedPhone.endsWith(cleanPhone(wn)))) {
+              isAllowed = true;
+              senderPhone = mappedPhone;
+            } else {
+              isAllowed = false;
+            }
           }
         }
 
         if (!isAllowed && matchedContact) {
-          isAllowed = true;
+          const mcPhone = cleanPhone(matchedContact.phone);
+          if (Array.from(whitelistNumbers).some(wn => cleanPhone(wn) === mcPhone || mcPhone.endsWith(cleanPhone(wn)))) {
+            isAllowed = true;
+          }
         }
 
         if (!isAllowed) {
           if (!isHistorySync) {
-            console.log(`[STRICT FILTER BLOCKED] Pesan dari ${senderName} (+${senderPhone}) diblokir karena nomor tidak terdaftar.`);
+            console.log(`[STRICT FILTER BLOCKED] Pesan dari ${senderName} (+${senderPhone || rawJidDigits}) diblokir karena nomor tidak terdaftar.`);
           }
           return;
         }
