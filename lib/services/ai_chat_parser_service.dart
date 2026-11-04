@@ -892,6 +892,11 @@ class AiChatParserService {
     cleanLine = cleanLine.replaceAll(RegExp(r'^\d+[\.\)]\s*'), '');
     cleanLine = cleanLine.replaceAll(RegExp(r'^[-\*\•]\s*'), '');
 
+    // Baris tanpa huruf (misal: "22.070.725") adalah nominal/angka, bukan produk!
+    if (!RegExp(r'[a-zA-Z]').hasMatch(cleanLine)) {
+      return null;
+    }
+
     // Extract quantity and unit
     _QtyUnitResolution qtyInfo = _extractQuantityAndUnit(cleanLine, unitRules);
 
@@ -920,6 +925,11 @@ class AiChatParserService {
       productText = productText.substring(5).trim();
     } else if (lowerP.startsWith('revisi ')) {
       productText = productText.substring(7).trim();
+    }
+
+    // Nama produk wajib memiliki minimal 2 karakter dan mengandung huruf
+    if (productText.length < 2 || !RegExp(r'[a-zA-Z]').hasMatch(productText)) {
+      return null;
     }
 
     Product? matchedProduct;
@@ -1995,7 +2005,12 @@ class AiChatParserService {
         lower.contains('bsk pg') ||
         lower.startsWith('titip ') ||
         lower.startsWith('faktur ') ||
-        lower.startsWith('nota ');
+        lower.startsWith('nota ') ||
+        lower.contains('transfer') ||
+        lower.contains('udah tf') ||
+        lower.contains('sudah tf') ||
+        lower.contains('tolong diinput') ||
+        lower.contains('minta tolong');
   }
 
   bool _isIgnoredLine(String line) {
@@ -2014,6 +2029,10 @@ class AiChatParserService {
         lower.startsWith('sabtu') ||
         lower.startsWith('minggu') ||
         lower.startsWith('diteruskan') ||
+        lower == 'mas' ||
+        lower.startsWith('mas ') ||
+        lower.contains('makasih') ||
+        lower.contains('terimakasih') ||
         RegExp(r'^\[?\d{1,2}[\.:]\d{2}\]?$').hasMatch(lower); // timestamp e.g. 17.04 or 07.30
   }
 

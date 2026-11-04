@@ -325,6 +325,12 @@ class _WaGatewayViewState extends State<WaGatewayView> {
       for (var chat in chats) {
         if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') continue;
 
+        // PENTING: Auto-PO HANYA memproses pesan yang benar-benar terdeteksi sebagai ORDER_PO!
+        // Jangan auto-proses CASUAL_CHAT, konfirmasi transfer/bayar, atau obrolan santai!
+        if (!chat.isOrderDetected && chat.messageType != 'ORDER_PO') {
+          continue;
+        }
+
         // PENTING: Jika chat adalah REVISI / SUSULAN / TAMBAHAN, JANGAN auto-PO!
         // Wajib menunggu tindakan manual admin untuk memilih invoice target atau membuat PO baru.
         if (_isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!))) {

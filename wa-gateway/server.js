@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.2.0'; // v3.2.0 - Upload & tampilkan foto quoted di UI
+const GATEWAY_VERSION = '3.3.0'; // v3.3.0 - Murni Strict Whitelist & Anti-False-Positive Transfer Chat
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -332,7 +332,7 @@ firebaseAdapter.listenToSettings((settings) => {
     });
 
     whitelistNumbers = newNumbers;
-  } else if (Array.isArray(settings.whitelistNumbers) && !settings.additionalWhitelist) {
+  } else if (Array.isArray(settings.whitelistNumbers)) {
     whitelistContactsList = [];
     const newNumbers = new Set(
       (process.env.TARGET_PHONE_NUMBERS || '')
@@ -350,13 +350,6 @@ firebaseAdapter.listenToSettings((settings) => {
     });
 
     whitelistNumbers = newNumbers;
-  }
-
-  if (Array.isArray(settings.additionalWhitelist)) {
-    settings.additionalWhitelist.forEach(n => {
-      const c = cleanPhone(n);
-      if (c) whitelistNumbers.add(c);
-    });
   }
 
   console.log(`[SETTINGS SYNC] Strict Whitelist: ${strictWhitelistOnly}, Auto-PO: ${autoPoEnabled}, Total Terdaftar: ${whitelistNumbers.size} nomor.`);

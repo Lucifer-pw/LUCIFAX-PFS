@@ -355,28 +355,12 @@ class FirebaseAdapter {
           onSettings(doc.data());
         }
       });
-      this.db.collection('wa_contacts').onSnapshot(snap => {
-        const numbers = [];
-        snap.forEach(d => {
-          const p = (d.data().phone || '').replace(/\D/g, '');
-          if (p) numbers.push(p);
-        });
-        onSettings({ additionalWhitelist: numbers });
-      });
     } else if (this.mode === 'client') {
-      const { doc, collection, onSnapshot } = this.clientSdk;
+      const { doc, onSnapshot } = this.clientSdk;
       onSnapshot(doc(this.clientDb, 'app_settings', 'wa_auto_po_settings'), snap => {
         if (snap && snap.exists()) {
           onSettings(snap.data());
         }
-      });
-      onSnapshot(collection(this.clientDb, 'wa_contacts'), snap => {
-        const numbers = [];
-        snap.forEach(d => {
-          const p = (d.data().phone || '').replace(/\D/g, '');
-          if (p) numbers.push(p);
-        });
-        onSettings({ additionalWhitelist: numbers });
       });
     }
   }

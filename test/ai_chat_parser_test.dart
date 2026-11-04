@@ -1524,4 +1524,34 @@ Tambah beres 24s ...10 k
     expect(draft.items[0].qtyUnit, 'karton');
     expect(draft.items[0].qtyPcs, 150.0);
   });
+
+  test('Payment / transfer notification chat (e.g. AW Frozen 22.070.725) produces 0 drafts and never creates a phantom PO', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'BRS-13', name: 'BRS COKLAT 13S 500 G', price: 30688, stock: 100, isiKarton: 15, sizeGrams: 500),
+    ];
+    final customers = [
+      Customer(id: 'H002', customerName: 'AW FROZEN FOOD', aliasName: 'AW FF', address: '', city: 'SEMARANG', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'aw frozen', mappedValue: 'AW FROZEN FOOD', targetId: 'H002', createdAt: DateTime.now()),
+    ];
+
+    final chatText = '''
+mas
+yang aw frozen minta tolong diinput ya
+udah transfer kemarin
+22.070.725
+oke makasih mas
+''';
+
+    final drafts = await parser.parseChatOrders(
+      rawChat: chatText,
+      products: products,
+      customers: customers,
+      rules: rules,
+    );
+
+    expect(drafts.isEmpty, isTrue, reason: 'Pesan konfirmasi transfer dana tidak boleh menghasilkan draft pesanan!');
+  });
 }
