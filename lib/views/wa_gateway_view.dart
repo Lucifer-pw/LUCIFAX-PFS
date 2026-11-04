@@ -2336,6 +2336,67 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
+  DateTime _extractTransferDateTime(IncomingPoChat chat) {
+    final rawDate = (chat.transferInfo?['rawDate'] ?? '').toString().trim();
+    final rawOcr = (chat.transferInfo?['rawOcrText'] ?? chat.quotedOcrText ?? '').toString();
+    final combined = '$rawDate\n$rawOcr';
+
+    // 1. Time matcher: "18:05:55" or "15:50:16" or "18:05"
+    int hr = 12, min = 0, sec = 0;
+    final timeMatch = RegExp(
+            r'(?:Jam|Pukul|Waktu|Time)?\s*[:=]?\s*([0-2]?[0-9])[:.]([0-5][0-9])(?:[:.]([0-5][0-9]))?',
+            caseSensitive: false)
+        .firstMatch(combined);
+    if (timeMatch != null) {
+      hr = int.tryParse(timeMatch.group(1)!) ?? 12;
+      min = int.tryParse(timeMatch.group(2)!) ?? 0;
+      if (timeMatch.group(3) != null) {
+        sec = int.tryParse(timeMatch.group(3)!) ?? 0;
+      }
+    }
+
+    // 2. Format DD/MM/YYYY or DD-MM-YYYY (e.g. "03/11/2026")
+    final dmyMatch = RegExp(
+            r'(?:Tanggal|Tgl|Date)?\s*[:=]?\s*([0-3]?[0-9])[\/\-\.]([0-1]?[0-9])[\/\-\.]([0-9]{2,4})',
+            caseSensitive: false)
+        .firstMatch(combined);
+    if (dmyMatch != null) {
+      final d = int.tryParse(dmyMatch.group(1)!) ?? 1;
+      final m = int.tryParse(dmyMatch.group(2)!) ?? 1;
+      var y = int.tryParse(dmyMatch.group(3)!) ?? DateTime.now().year;
+      if (y < 100) y += 2000;
+      return DateTime(y, m, d, hr, min, sec);
+    }
+
+    // 3. Format "30 Okt 2026" or "3 November 2026"
+    final months = {
+      'jan': 1, 'januari': 1, 'january': 1,
+      'feb': 2, 'februari': 2, 'february': 2,
+      'mar': 3, 'maret': 3, 'march': 3,
+      'apr': 4, 'april': 4,
+      'mei': 5, 'may': 5,
+      'jun': 6, 'juni': 6, 'june': 6,
+      'jul': 7, 'juli': 7, 'july': 7,
+      'agu': 8, 'agust': 8, 'agustus': 8, 'aug': 8, 'august': 8,
+      'sep': 9, 'september': 9,
+      'okt': 10, 'oktober': 10, 'oct': 10, 'october': 10,
+      'nop': 11, 'nov': 11, 'november': 11,
+      'des': 12, 'desember': 12, 'dec': 12, 'december': 12,
+    };
+
+    final textMonthMatch = RegExp(r'([0-3]?[0-9])\s+([A-Za-z]{3,9})\s+([0-9]{2,4})').firstMatch(combined);
+    if (textMonthMatch != null) {
+      final d = int.tryParse(textMonthMatch.group(1)!) ?? 1;
+      final mStr = textMonthMatch.group(2)!.toLowerCase();
+      final m = months[mStr] ?? (mStr.length >= 3 ? months[mStr.substring(0, 3)] : null) ?? 1;
+      var y = int.tryParse(textMonthMatch.group(3)!) ?? DateTime.now().year;
+      if (y < 100) y += 2000;
+      return DateTime(y, m, d, hr, min, sec);
+    }
+
+    return chat.receivedAt;
+  }
+
   Future<void> _confirmTransferPayment(IncomingPoChat chat, String invoiceNo) async {
     final invClean = invoiceNo.replaceAll('#', '').trim();
     if (invClean.isEmpty) return;
@@ -2385,6 +2446,7 @@ Kirim besok pagi ya pak bc''';
         }
       }
 
+      final transferDateTime = _extractTransferDateTime(chat);
       final double payAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
       final double effectivePay = payAmount > 0 ? payAmount : (effectiveNominal - currentPaid);
       final double newPaidAmount = currentPaid + effectivePay;
@@ -2397,7 +2459,7 @@ Kirim besok pagi ya pak bc''';
       final paymentItem = {
         'id': 'pay_${DateTime.now().millisecondsSinceEpoch}',
         'amount': effectivePay,
-        'date': Timestamp.now(),
+        'date': Timestamp.fromDate(transferDateTime),
         'note': willBeLunas
             ? 'Pelunasan manual via WA Gateway ($bankName)'
             : 'Cicilan manual via WA Gateway ($bankName) - Sisa ${currencyFormatter.format(remainingAfter)}',
@@ -2420,7 +2482,7 @@ Kirim besok pagi ya pak bc''';
       if (trDoc.exists) {
         await FirebaseFirestore.instance.collection('transactions').doc(invClean).update({
           'statusTransfer': willBeLunas ? 'PAID' : 'PARTIAL',
-          if (willBeLunas) 'transferDate': Timestamp.now(),
+          if (willBeLunas) 'transferDate': Timestamp.fromDate(transferDateTime),
           if (chat.imageUrl != null) 'transferReceiptUrl': chat.imageUrl,
           'transferBankDetails': {
             if (chat.transferInfo != null) ...chat.transferInfo!,
@@ -2428,6 +2490,7 @@ Kirim besok pagi ya pak bc''';
             'remaining': remainingAfter,
             'totalPaid': newPaidAmount,
             'totalTagihan': effectiveNominal,
+            'transferDate': transferDateTime.toIso8601String(),
             'settledAt': DateTime.now().toIso8601String(),
             'settleSource': 'WA_GATEWAY_MANUAL_LINK',
           },

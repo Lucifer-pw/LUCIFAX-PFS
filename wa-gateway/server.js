@@ -901,6 +901,9 @@ async function startBaileys() {
               imageUrl: imageUrl,
               berita: bankResult.berita,
               refNo: bankResult.refNo,
+              rawDate: bankResult.rawDate,
+              rawOcrText: ocrText,
+              receivedAt: new Date(msgTimeMs),
               senderName: bankResult.matchedToko || senderName
             });
             if (settleRes) {

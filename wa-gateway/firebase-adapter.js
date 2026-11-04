@@ -475,12 +475,61 @@ class FirebaseAdapter {
     }
   }
 
+  parseSlipDateTime(rawDate, rawOcr, fallbackDate) {
+    const text = ((rawDate || '') + '\n' + (rawOcr || '')).trim();
+
+    const months = {
+      'jan': 0, 'januari': 0, 'january': 0,
+      'feb': 1, 'februari': 1, 'february': 1,
+      'mar': 2, 'maret': 2, 'march': 2,
+      'apr': 3, 'april': 3,
+      'mei': 4, 'may': 4,
+      'jun': 5, 'juni': 5, 'june': 5,
+      'jul': 6, 'juli': 6, 'july': 6,
+      'agu': 7, 'agust': 7, 'agustus': 7, 'aug': 7, 'august': 7,
+      'sep': 8, 'september': 8,
+      'okt': 9, 'oktober': 9, 'oct': 9, 'october': 9,
+      'nop': 10, 'nov': 10, 'november': 10,
+      'des': 11, 'desember': 11, 'dec': 11, 'december': 11
+    };
+
+    let hr = 12, min = 0, sec = 0;
+    const timeMatch = text.match(/(?:Jam|Pukul|Waktu|Time)?\s*[:=]?\s*([0-2]?[0-9])[:.]([0-5][0-9])(?:[:.]([0-5][0-9]))?/i);
+    if (timeMatch) {
+      hr = parseInt(timeMatch[1], 10);
+      min = parseInt(timeMatch[2], 10);
+      if (timeMatch[3]) sec = parseInt(timeMatch[3], 10);
+    }
+
+    const dmyMatch = text.match(/(?:Tanggal|Tgl|Date)?\s*[:=]?\s*([0-3]?[0-9])[\/\-\.]([0-1]?[0-9])[\/\-\.]([0-9]{2,4})/i);
+    if (dmyMatch) {
+      const d = parseInt(dmyMatch[1], 10);
+      const m = parseInt(dmyMatch[2], 10) - 1;
+      let y = parseInt(dmyMatch[3], 10);
+      if (y < 100) y += 2000;
+      return new Date(y, m, d, hr, min, sec);
+    }
+
+    const textMonthMatch = text.match(/([0-3]?[0-9])\s+([A-Za-z]{3,9})\s+([0-9]{2,4})/i);
+    if (textMonthMatch) {
+      const d = parseInt(textMonthMatch[1], 10);
+      const mStr = textMonthMatch[2].toLowerCase();
+      const m = months[mStr] !== undefined ? months[mStr] : (months[mStr.substring(0, 3)] !== undefined ? months[mStr.substring(0, 3)] : 0);
+      let y = parseInt(textMonthMatch[3], 10);
+      if (y < 100) y += 2000;
+      return new Date(y, m, d, hr, min, sec);
+    }
+
+    return fallbackDate || new Date();
+  }
+
   async settleInvoicePayment(invoiceNo, paymentData = {}) {
     const invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
     if (!invClean) return { success: false };
 
     try {
       console.log(`[AUTO-SETTLE] Memproses pembayaran otomatis Faktur #${invClean}...`);
+      const transferDate = this.parseSlipDateTime(paymentData.rawDate, paymentData.rawOcrText, paymentData.receivedAt);
       const payAmount = Number(paymentData.amount) || 0;
       let effectiveNominal = 0;
       let newPaidAmount = payAmount;
@@ -505,7 +554,7 @@ class FirebaseAdapter {
             payments.push({
               id: `pay_${Date.now()}`,
               amount: payAmount > 0 ? payAmount : effectiveNominal,
-              date: new Date(),
+              date: transferDate,
               method: paymentData.bank ? `Transfer ${paymentData.bank}` : 'TRANSFER',
               notes: willBeLunas
                 ? `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`
@@ -540,7 +589,7 @@ class FirebaseAdapter {
             payments.push({
               id: `pay_${Date.now()}`,
               amount: payAmount > 0 ? payAmount : effectiveNominal,
-              date: new Date(),
+              date: transferDate,
               method: paymentData.bank ? `Transfer ${paymentData.bank}` : 'TRANSFER',
               notes: willBeLunas
                 ? `Pelunasan otomatis via WhatsApp Gateway (${paymentData.bank || 'Transfer'})`
@@ -581,7 +630,7 @@ class FirebaseAdapter {
       // 2. Update transactions collection
       const updateData = {
         statusTransfer: willBeLunas ? 'PAID' : 'PARTIAL',
-        transferDate: new Date(),
+        transferDate: transferDate,
         transferReceiptUrl: paymentData.imageUrl || null,
         transferBankDetails: {
           bank: paymentData.bank || '',
@@ -589,6 +638,7 @@ class FirebaseAdapter {
           berita: paymentData.berita || '',
           refNo: paymentData.refNo || '',
           senderName: paymentData.senderName || '',
+          transferDate: transferDate.toISOString(),
           settledAt: new Date().toISOString(),
           settleSource: 'WA_GATEWAY_AUTO_SETTLE',
           isPartial: !willBeLunas,
