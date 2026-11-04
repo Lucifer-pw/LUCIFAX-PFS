@@ -11,8 +11,31 @@ function parseBankReceipt(rawText) {
   const clean = rawText.replace(/\r\n/g, '\n');
   const upper = clean.toUpperCase();
 
+  // 1. Dokumen Pesanan / Order / Invoice / Surat Jalan / PO: JANGAN DIKIRA STRUK TRANSFER!
+  const isOrderDocument =
+    upper.includes('ORDER#') ||
+    upper.includes('ORDER NUMBER') ||
+    upper.includes('PURCHASE ORDER') ||
+    upper.includes('DELIVERY ORDER') ||
+    upper.includes('SALES ORDER') ||
+    upper.includes('SURAT JALAN') ||
+    upper.includes('SHIPPING ADDRESS') ||
+    upper.includes('CUSTOMER ADDRESS') ||
+    upper.includes('SALES PERSON') ||
+    upper.includes('PAYMENT TERM') ||
+    (upper.includes('DESCRIPTION') && upper.includes('QUANTITY')) ||
+    (upper.includes('UNIT PRICE') && upper.includes('PRICE'));
+
+  if (isOrderDocument) {
+    return {
+      isBankSlip: false,
+      isOrderDocument: true,
+      rawOcrText: clean
+    };
+  }
+
   // Bank name indicators
-  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051') || upper.includes('M-TRANSFER') || upper.includes('M-BCA') || upper.includes('M TRANSFER');
+  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051') || upper.includes('M-TRANSFER') || upper.includes('M-BCA') || upper.includes('M TRANSFER') || upper.includes('2306039099');
   const isMandiri = upper.includes('MANDIRI') || upper.includes('LIVIN');
   const isBri = upper.includes('BRI') || upper.includes('BRIMO');
   const isBni = upper.includes('BNI') || upper.includes('WONDR');
@@ -34,9 +57,6 @@ function parseBankReceipt(rawText) {
     'REKENING TUJUAN',
     'NAMA PENERIMA',
     'DETAIL TRANSAKSI',
-    'FIVA SEJAHTERA',
-    'FIVA SEJAHTE',
-    'PUTRA FIVA',
     '2306039099', // Rekening BCA PT Putra Fiva Sejahtera
     'TRSF E-BANKING',
     'TITIP INV',
@@ -50,6 +70,11 @@ function parseBankReceipt(rawText) {
   let keywordHits = 0;
   for (const kw of receiptKeywords) {
     if (upper.includes(kw)) keywordHits++;
+  }
+
+  // PT Fiva identity counts at most 1 hit (prevent duplicate matching)
+  if (upper.includes('PUTRA FIVA') || upper.includes('FIVA SEJAHTERA')) {
+    keywordHits++;
   }
 
   // Must hit at least 2 bank receipt indicators or 1 strong indicator with bank context
@@ -178,7 +203,7 @@ function parseBankReceipt(rawText) {
   else if (upper.includes('ANNISA') || upper.includes('ANIZA')) customerHint = 'ANIZA FF';
   else if (upper.includes('PARIS')) customerHint = 'PARIS FOOD';
   else if (upper.includes('HANA MAKMUR')) customerHint = 'HANA MAKMUR';
-  else if (upper.includes('AW FF') || upper.includes('AW')) customerHint = 'AW FF';
+  else if (upper.includes('AW FF') || /\bAW\b/.test(upper)) customerHint = 'AW FF';
 
   // Extract Recipient if available (e.g. "Ke 8175683107\nARSANDY VIDYA GUPTA PRAD")
   let recipient = '';
@@ -220,6 +245,14 @@ function parseBankReceipt(rawText) {
     clean.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
   if (dateMatch) {
     rawDate = dateMatch[1].trim();
+  }
+
+  // Validasi Mutlak: Struk transfer bank HARUS memiliki nominal > 0
+  if (amount <= 0) {
+    return {
+      isBankSlip: false,
+      rawOcrText: clean
+    };
   }
 
   return {

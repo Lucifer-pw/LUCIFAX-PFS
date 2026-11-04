@@ -785,10 +785,16 @@ async function startBaileys() {
 
       if (!cleanText || cleanText.length === 0) {
         if (isImageMessage && !bankResult.isBankSlip) {
-          cleanText = '[FOTO NON-STRUK]';
+          if (ocrText && ocrText.length > 0) {
+            cleanText = ocrText;
+          } else {
+            cleanText = '[FOTO NON-STRUK]';
+          }
         } else {
           return;
         }
+      } else if (isImageMessage && !bankResult.isBankSlip && ocrText && ocrText.length > 0) {
+        cleanText = `${rawCaption}\n${ocrText}`;
       }
 
       const remoteJid = m.key.remoteJid || '';
@@ -974,6 +980,7 @@ async function startBaileys() {
 
         const lower = cleanText.toLowerCase();
         const isOrderDetected =
+          (bankResult && bankResult.isOrderDocument) ||
           lower.includes('karton') ||
           lower.includes('ktn') ||
           lower.includes('dus') ||
@@ -1033,6 +1040,7 @@ async function startBaileys() {
       // =========================================================================
       const lower = cleanText.toLowerCase();
       const isOrderDetected =
+        (bankResult && bankResult.isOrderDocument) ||
         lower.includes('karton') ||
         lower.includes('ktn') ||
         lower.includes('dus') ||
