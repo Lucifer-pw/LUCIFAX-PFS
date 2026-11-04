@@ -550,16 +550,21 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                 if (phone.isEmpty) return;
 
                                 try {
-                                  final updatedContacts = List<Map<String, String>>.from(localSettings.whitelistContacts);
+                                  final updatedContacts = List<Map<String, String>>.from(
+                                    localSettings.whitelistContacts.map((c) => Map<String, String>.from(c)),
+                                  );
                                   if (isEditing) {
+                                    final currentEnabled = updatedContacts[editingIndex!]['enabled'] ?? 'true';
                                     updatedContacts[editingIndex!] = {
                                       'name': name.isNotEmpty ? name : 'Kontak WA',
                                       'phone': phone,
+                                      'enabled': currentEnabled,
                                     };
                                   } else {
                                     updatedContacts.add({
                                       'name': name.isNotEmpty ? name : 'Kontak WA',
                                       'phone': phone,
+                                      'enabled': 'true',
                                     });
                                   }
 
@@ -635,13 +640,20 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                             itemBuilder: (cCtx, idx) {
                               final item = contacts[idx];
                               final isCurrentEdit = editingIndex == idx;
+                              final isEnabled = item['enabled'] != 'false';
 
                               return Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: isCurrentEdit ? const Color(0xFF0284C7).withOpacity(0.15) : const Color(0xFF0F172A),
+                                  color: isCurrentEdit
+                                      ? const Color(0xFF0284C7).withOpacity(0.15)
+                                      : (isEnabled ? const Color(0xFF0F172A) : const Color(0xFF1E293B).withOpacity(0.5)),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: isCurrentEdit ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
+                                  border: Border.all(
+                                    color: isCurrentEdit
+                                        ? const Color(0xFF38BDF8)
+                                        : (isEnabled ? const Color(0xFF334155) : const Color(0xFF475569).withOpacity(0.3)),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -649,26 +661,110 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                     Expanded(
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.phone_android_rounded, color: Color(0xFF38BDF8), size: 18),
+                                          Icon(
+                                            Icons.phone_android_rounded,
+                                            color: isEnabled ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                            size: 18,
+                                          ),
                                           const SizedBox(width: 10),
                                           Flexible(
                                             child: Text(
                                               item['name'] ?? '',
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                              style: TextStyle(
+                                                color: isEnabled ? Colors.white : const Color(0xFF94A3B8),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                decoration: isEnabled ? TextDecoration.none : TextDecoration.lineThrough,
+                                              ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
                                             '(+${_maskPhone(item['phone'])})',
-                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                            style: TextStyle(
+                                              color: isEnabled ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                              fontSize: 12,
+                                            ),
                                           ),
+                                          if (!isEnabled) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                                              ),
+                                              child: const Text('OFF', style: TextStyle(color: Colors.redAccent, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        // ON / OFF Toggle Pill
+                                        Tooltip(
+                                          message: isEnabled ? 'Klik untuk NONAKTIFKAN pesan dari nomor ini' : 'Klik untuk AKTIFKAN pesan dari nomor ini',
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(16),
+                                            onTap: () async {
+                                              try {
+                                                final updatedContacts = List<Map<String, String>>.from(
+                                                  localSettings.whitelistContacts.map((c) => Map<String, String>.from(c)),
+                                                );
+                                                updatedContacts[idx]['enabled'] = isEnabled ? 'false' : 'true';
+
+                                                final updated = localSettings.copyWith(whitelistContacts: updatedContacts);
+                                                await _firebaseService.saveWaAutoPoSettings(updated);
+
+                                                setDialogState(() {
+                                                  localSettings = updated;
+                                                });
+                                              } catch (e) {
+                                                debugPrint('Gagal toggle kontak whitelist: $e');
+                                              }
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              margin: const EdgeInsets.only(right: 6),
+                                              decoration: BoxDecoration(
+                                                color: isEnabled
+                                                    ? const Color(0xFF065F46).withOpacity(0.4)
+                                                    : const Color(0xFF334155).withOpacity(0.5),
+                                                borderRadius: BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: isEnabled ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    width: 7,
+                                                    height: 7,
+                                                    decoration: BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      color: isEnabled ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    isEnabled ? 'ON' : 'OFF',
+                                                    style: TextStyle(
+                                                      color: isEnabled ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                         // Edit Button
                                         IconButton(
                                           icon: const Icon(Icons.edit_rounded, color: Color(0xFF38BDF8), size: 18),
@@ -3660,6 +3756,141 @@ Kirim besok pagi ya pak bc''';
               ),
             ),
             const SizedBox(height: 6),
+          ],
+
+          // Direct Image & OCR Preview (Foto Dokumen / Lampiran Asli Chat)
+          if (!chat.isQuotedReply &&
+              ((chat.hasImage && chat.imageUrl != null && chat.imageUrl!.isNotEmpty) ||
+                  (chat.rawOcrText != null && chat.rawOcrText!.trim().isNotEmpty))) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Thumbnail foto (dengan zoom modal interactive viewer)
+                      if (chat.imageUrl != null && chat.imageUrl!.isNotEmpty) ...[
+                        InkWell(
+                          onTap: () => _showReceiptImageDialog(
+                            context,
+                            chat.imageUrl!,
+                            'Foto Lampiran Dokumen',
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.network(
+                                  chat.imageUrl!,
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 80,
+                                    height: 80,
+                                    color: const Color(0xFF334155),
+                                    child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 28),
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.25),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.zoom_in_rounded, color: Colors.white, size: 24),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      // Label & info lampiran
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.image_outlined, color: Color(0xFF38BDF8), size: 14),
+                                const SizedBox(width: 5),
+                                const Text(
+                                  'Foto Dokumen / Lampiran Chat',
+                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                const Spacer(),
+                                if (chat.imageUrl != null && chat.imageUrl!.isNotEmpty)
+                                  const Text(
+                                    '🔍 Klik foto untuk zoom',
+                                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              chat.caption != null && chat.caption!.isNotEmpty
+                                  ? 'Caption: "${chat.caption}"'
+                                  : 'Foto berhasil dipindai oleh AI Vision OCR',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Kotak Hasil Scan OCR Lengkap
+                  if (chat.rawOcrText != null && chat.rawOcrText!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.document_scanner_rounded, size: 12, color: Color(0xFF38BDF8)),
+                              SizedBox(width: 5),
+                              Text(
+                                'Teks Terbaca dari Scan Foto (OCR):',
+                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                              Spacer(),
+                              Text('AI Vision OCR', style: TextStyle(color: Color(0xFF64748B), fontSize: 9)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            chat.rawOcrText!.trim(),
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontFamily: 'monospace', height: 1.35),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
           ],
 
           // Quoted Image & OCR Preview (foto yang di-reply/tag)

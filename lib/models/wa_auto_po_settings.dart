@@ -26,10 +26,16 @@ class WaAutoPoSettings {
       if (it is Map) {
         final phone = (it['phone'] ?? '').toString().trim();
         final name = (it['name'] ?? '').toString().trim();
+        final enabled = (it['enabled'] ?? 'true').toString();
+        final isEnabled = enabled != 'false';
         if (phone.isNotEmpty) {
           final clean = phone.replaceAll(RegExp(r'\D'), '');
-          contacts.add({'phone': phone, 'name': name.isNotEmpty ? name : 'Kontak WA'});
-          if (clean.isNotEmpty && !numbers.contains(clean)) {
+          contacts.add({
+            'phone': phone,
+            'name': name.isNotEmpty ? name : 'Kontak WA',
+            'enabled': isEnabled ? 'true' : 'false',
+          });
+          if (isEnabled && clean.isNotEmpty && !numbers.contains(clean)) {
             numbers.add(clean);
           }
         }
@@ -77,7 +83,12 @@ class WaAutoPoSettings {
   }) {
     final newContacts = whitelistContacts ?? this.whitelistContacts;
     final newNumbers = whitelistNumbers ?? (whitelistContacts != null
-        ? newContacts.map((c) => (c['phone'] ?? '').replaceAll(RegExp(r'\D'), '')).where((s) => s.isNotEmpty).toSet().toList()
+        ? newContacts
+            .where((c) => c['enabled'] != 'false')
+            .map((c) => (c['phone'] ?? '').replaceAll(RegExp(r'\D'), ''))
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList()
         : this.whitelistNumbers);
 
     return WaAutoPoSettings(

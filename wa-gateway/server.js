@@ -323,6 +323,10 @@ firebaseAdapter.listenToSettings((settings) => {
     );
 
     settings.whitelistContacts.forEach(it => {
+      const isEnabled = it.enabled !== false && it.enabled !== 'false';
+      if (!isEnabled) {
+        return; // Lewati kontak yang dimatikan (OFF)
+      }
       const c = cleanPhone(it.phone || it.number);
       const name = (it.name || '').trim();
       if (c) {

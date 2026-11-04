@@ -27,6 +27,7 @@ class IncomingPoChat {
   final String? quotedImageUrl;
   final bool isForwarded;
   final bool isQuotedReply;
+  final String? rawOcrText;
 
   IncomingPoChat({
     required this.id,
@@ -55,6 +56,7 @@ class IncomingPoChat {
     this.quotedImageUrl,
     this.isForwarded = false,
     this.isQuotedReply = false,
+    this.rawOcrText,
   });
 
   bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || transferInfo != null;
@@ -106,6 +108,7 @@ class IncomingPoChat {
       quotedImageUrl: map['quotedImageUrl']?.toString(),
       isForwarded: map['isForwarded'] == true,
       isQuotedReply: map['isQuotedReply'] == true,
+      rawOcrText: (map['rawOcrText'] ?? tInfo?['rawOcrText'] ?? map['quotedOcrText'])?.toString(),
     );
   }
 
@@ -136,6 +139,7 @@ class IncomingPoChat {
       'quotedImageUrl': quotedImageUrl,
       'isForwarded': isForwarded,
       'isQuotedReply': isQuotedReply,
+      'rawOcrText': rawOcrText,
     };
   }
 
@@ -159,6 +163,7 @@ class IncomingPoChat {
     String? quotedImageUrl,
     bool? isForwarded,
     bool? isQuotedReply,
+    String? rawOcrText,
   }) {
     return IncomingPoChat(
       id: id,
@@ -187,6 +192,7 @@ class IncomingPoChat {
       quotedImageUrl: quotedImageUrl ?? this.quotedImageUrl,
       isForwarded: isForwarded ?? this.isForwarded,
       isQuotedReply: isQuotedReply ?? this.isQuotedReply,
+      rawOcrText: rawOcrText ?? this.rawOcrText,
     );
   }
 }
