@@ -49,7 +49,7 @@ class WaGatewayView extends StatefulWidget {
 }
 
 class _WaGatewayViewState extends State<WaGatewayView> {
-  bool _hidePhoneNumbers = false;
+  bool _hidePhoneNumbers = true;
 
   @override
   void initState() {
@@ -67,7 +67,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
       final prefs = await SharedPreferences.getInstance();
       if (mounted) {
         setState(() {
-          _hidePhoneNumbers = prefs.getBool('pref_hide_wa_phone_numbers') ?? false;
+          _hidePhoneNumbers = prefs.getBool('pref_hide_wa_phone_numbers') ?? true;
         });
       }
     } catch (_) {}
@@ -2976,6 +2976,45 @@ Kirim besok pagi ya pak bc''';
     final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     final formattedAmount = currencyFormatter.format(amount);
 
+    // Ekstraksi data lengkap dari struk transfer / OCR
+    final String rawDate = (chat.transferInfo?['rawDate'] ?? '').toString().trim();
+    final DateTime transferDt = _extractTransferDateTime(chat);
+    final String formattedTransferDate = DateFormat('dd-MM-yyyy').format(transferDt);
+    final String rawOcr = (chat.transferInfo?['rawOcrText'] ?? chat.quotedOcrText ?? '').toString();
+
+    // Ekstrak jam transaksi dari OCR jika ada
+    final timeMatch = RegExp(
+      r'(?:Jam|Pukul|Waktu|Time)?\s*[:=]?\s*([0-2]?[0-9][:.][0-5][0-9](?:[:.][0-5][0-9])?)\s*(?:WIB|WITA|WIT)?',
+      caseSensitive: false,
+    ).firstMatch(rawOcr);
+    final String timeStr = timeMatch != null ? timeMatch.group(1)! : '';
+
+    final String displayTransferDate = rawDate.isNotEmpty
+        ? (timeStr.isNotEmpty ? '$rawDate • Jam $timeStr WIB' : rawDate)
+        : (timeStr.isNotEmpty ? '$formattedTransferDate • Jam $timeStr WIB' : formattedTransferDate);
+
+    // Ekstrak rekening tujuan dari OCR jika ada
+    final targetAccMatch = RegExp(
+      r'(?:Tujuan Transfer|Rekening Tujuan|Ke Rekening)\s*[:=]?\s*([0-9]{8,16})',
+      caseSensitive: false,
+    ).firstMatch(rawOcr);
+    final String targetAcc = targetAccMatch != null ? targetAccMatch.group(1)! : '';
+
+    // Ekstrak pengirim struk jika ada
+    final senderMatch = RegExp(
+      r'(?:Pengirim|Dari Rekening|Nama Pengirim)\s*[:=]?\s*([A-Za-z0-9\s.,]+)',
+      caseSensitive: false,
+    ).firstMatch(rawOcr);
+    String senderFromSlip = '';
+    if (senderMatch != null) {
+      final s = senderMatch.group(1)!.trim();
+      if (!s.toUpperCase().contains('DETAIL') && !s.toUpperCase().contains('TRANSAKSI') && s.length <= 40) {
+        senderFromSlip = s;
+      }
+    }
+
+    final bool isSuccessInSlip = rawOcr.toUpperCase().contains('BERHASIL') || rawOcr.toUpperCase().contains('SUCCESS');
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -3145,9 +3184,54 @@ Kirim besok pagi ya pak bc''';
                               fontSize: 16,
                             ),
                           ),
+                          if (isSuccessInSlip) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF064E3B).withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF059669).withOpacity(0.5)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 10),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'BERHASIL',
+                                    style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 9, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
+
+                      // TANGGAL & JAM TRANSFER DARI STRUK (SANGAT JELAS)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.event_available_rounded, color: Color(0xFF38BDF8), size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Tanggal Transfer: $displayTransferDate',
+                              style: const TextStyle(color: Color(0xFF7DD3FC), fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+
                       if (isExpense) ...[
                         Row(
                           children: [
@@ -3200,11 +3284,17 @@ Kirim besok pagi ya pak bc''';
                         ),
                         const SizedBox(height: 4),
                       ],
-                      if (recipient.isNotEmpty) ...[
-                        Text('Penerima: $recipient', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                      if (customerHint.isNotEmpty || senderFromSlip.isNotEmpty) ...[
+                        Text(
+                          'Pengirim: ${customerHint.isNotEmpty ? customerHint : senderFromSlip}',
+                          style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 11, fontWeight: FontWeight.w500),
+                        ),
                       ],
-                      if (customerHint.isNotEmpty) ...[
-                        Text('Pengirim/Toko: $customerHint', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                      if (targetAcc.isNotEmpty || recipient.isNotEmpty) ...[
+                        Text(
+                          'Tujuan: ${targetAcc.isNotEmpty ? "$targetAcc " : ""}(${recipient.isNotEmpty ? recipient : "PUTRA FIVA SEJAHTERA PT"})',
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
                       ],
                       if (berita.isNotEmpty) ...[
                         Text('Berita Transfer: "$berita"', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
@@ -3215,6 +3305,50 @@ Kirim besok pagi ya pak bc''';
                       if (chat.caption != null && chat.caption!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text('Catatan Pengirim: "${chat.caption}"', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontStyle: FontStyle.italic)),
+                      ],
+
+                      // KOTAK TEKS LENGKAP HASIL SCAN FOTO (OCR VIEWER)
+                      if (rawOcr.trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.document_scanner_rounded, color: Color(0xFF38BDF8), size: 13),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'Teks Terbaca dari Scan Struk (OCR):',
+                                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                  Spacer(),
+                                  Text(
+                                    'AI Vision OCR',
+                                    style: TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              SelectableText(
+                                rawOcr.trim(),
+                                style: const TextStyle(
+                                  color: Color(0xFFCBD5E1),
+                                  fontSize: 10,
+                                  fontFamily: 'monospace',
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ],
                   ),
