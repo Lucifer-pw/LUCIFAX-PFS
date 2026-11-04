@@ -1,6 +1,6 @@
 {
   "name": "lucifax-wa-gateway",
-  "version": "1.0.0",
+  "version": "3.3.1",
   "description": "WhatsApp Multi-Device Gateway for Lucifax PFS AI PO Scanner",
   "main": "server.js",
   "type": "commonjs",
