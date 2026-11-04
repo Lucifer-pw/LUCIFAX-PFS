@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.1'; // v3.3.1 - Refined bank slip matching & robust invoice linking
+const GATEWAY_VERSION = '3.3.2'; // v3.3.2 - Whitelist ON/OFF toggles, factory delivery order detection, refined OCR & bank slip parser
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -114,6 +114,7 @@ function getDeviceDetails() {
   }
 
   return {
+    gatewayVersion: GATEWAY_VERSION,
     brand: brand ? brand.toUpperCase() : (isWindows ? 'PC/Laptop' : 'Android'),
     model: model || (isWindows ? os.hostname() : 'Termux'),
     fullModelName: fullModelName.trim(),

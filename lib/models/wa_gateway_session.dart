@@ -40,6 +40,7 @@ class WaGatewaySession {
   }
 
   // Rincian Spesifikasi Perangkat
+  String? get gatewayVersion => (deviceDetails?['gatewayVersion'] as String?) ?? (deviceDetails?['version'] as String?);
   String? get brand => deviceDetails?['brand'] as String?;
   String? get model => deviceDetails?['model'] as String?;
   String? get fullModelName => (deviceDetails?['fullModelName'] as String?) ?? deviceName;

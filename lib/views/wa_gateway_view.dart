@@ -1558,6 +1558,32 @@ Kirim besok pagi ya pak bc''';
                             ],
                           ),
 
+                          // Versi Engine Gateway
+                          if (session.gatewayVersion != null && session.gatewayVersion!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 85,
+                                  child: Text('Versi Engine', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                ),
+                                const Text(': ', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0284C7).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                  ),
+                                  child: Text(
+                                    'v${session.gatewayVersion}',
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
                           // 2. Sistem Operasi (Android / Windows)
                           if (session.osVersion != null && session.osVersion!.isNotEmpty) ...[
                             const SizedBox(height: 4),
