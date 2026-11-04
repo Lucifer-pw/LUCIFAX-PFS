@@ -231,6 +231,62 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
     }
   }
 
+  void _showZoomImageDialog(BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 750),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text('Gagal memuat gambar.', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   List<Map<String, dynamic>> _calculateDiff() {
     if (_selectedInvoice == null || _draft == null) return [];
 
@@ -546,32 +602,139 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                         const SizedBox(height: 16),
 
                         // AI Vision Detection Banner (jika foto yang di-tag berhasil di-scan)
-                        if (widget.chat.quotedInvoiceNo != null && widget.chat.quotedInvoiceNo!.isNotEmpty) ...[
+                        if ((widget.chat.quotedInvoiceNo != null && widget.chat.quotedInvoiceNo!.isNotEmpty) ||
+                            (widget.chat.quotedImageUrl != null && widget.chat.quotedImageUrl!.isNotEmpty) ||
+                            (widget.chat.quotedOcrText != null && widget.chat.quotedOcrText!.trim().isNotEmpty)) ...[
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: const Color(0xFF059669).withOpacity(0.12),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: const Color(0xFF10B981)),
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.auto_awesome, color: Color(0xFF34D399), size: 18),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('🔎 AI Vision: Foto yang Di-reply Berhasil Di-scan', style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 11, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Nomor Invoice terdeteksi dari screenshot: #${widget.chat.quotedInvoiceNo} (Invoice di bawah sudah otomatis terpilih)',
-                                        style: const TextStyle(color: Color(0xFF34D399), fontSize: 11),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (widget.chat.quotedImageUrl != null && widget.chat.quotedImageUrl!.isNotEmpty) ...[
+                                      InkWell(
+                                        onTap: () => _showZoomImageDialog(
+                                          context,
+                                          widget.chat.quotedImageUrl!,
+                                          widget.chat.quotedInvoiceNo != null
+                                              ? 'Foto yang Di-reply (Invoice #${widget.chat.quotedInvoiceNo})'
+                                              : 'Foto yang Di-reply',
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Image.network(
+                                                widget.chat.quotedImageUrl!,
+                                                width: 70,
+                                                height: 70,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => Container(
+                                                  width: 70,
+                                                  height: 70,
+                                                  color: const Color(0xFF334155),
+                                                  child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 24),
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned.fill(
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withOpacity(0.25),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: const Center(
+                                                  child: Icon(Icons.zoom_in_rounded, color: Colors.white, size: 22),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
+                                      const SizedBox(width: 10),
                                     ],
-                                  ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.auto_awesome, color: Color(0xFF34D399), size: 16),
+                                              const SizedBox(width: 6),
+                                              const Text(
+                                                'AI Vision: Foto yang Di-reply Berhasil Di-scan',
+                                                style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 12, fontWeight: FontWeight.bold),
+                                              ),
+                                              const Spacer(),
+                                              if (widget.chat.quotedImageUrl != null && widget.chat.quotedImageUrl!.isNotEmpty)
+                                                const Text('🔍 Klik foto untuk zoom', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600)),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          if (widget.chat.quotedInvoiceNo != null) ...[
+                                            Text(
+                                              'Nomor Invoice terdeteksi dari screenshot: #${widget.chat.quotedInvoiceNo} (Otomatis terpilih di bawah)',
+                                              style: const TextStyle(color: Color(0xFF34D399), fontSize: 11, fontWeight: FontWeight.bold),
+                                            ),
+                                          ] else ...[
+                                            const Text(
+                                              'Foto terlampir pada balasan chat.',
+                                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
+
+                                // OCR Text Box if available
+                                if (widget.chat.quotedOcrText != null && widget.chat.quotedOcrText!.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A).withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Row(
+                                          children: [
+                                            Icon(Icons.document_scanner_rounded, color: Color(0xFF38BDF8), size: 12),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Teks Terbaca dari Scan Foto (OCR):',
+                                              style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        SelectableText(
+                                          widget.chat.quotedOcrText!.trim(),
+                                          style: const TextStyle(
+                                            color: Color(0xFFE2E8F0),
+                                            fontSize: 10.5,
+                                            fontFamily: 'monospace',
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

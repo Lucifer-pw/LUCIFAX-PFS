@@ -2472,7 +2472,7 @@ Kirim besok pagi ya pak bc''';
                         return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
                       },
                       errorBuilder: (_, __, ___) => const Center(
-                        child: Text('Gagal memuat gambar bukti transfer.', style: TextStyle(color: Colors.redAccent)),
+                        child: Text('Gagal memuat gambar.', style: TextStyle(color: Colors.redAccent)),
                       ),
                     ),
                   ),
@@ -3283,56 +3283,157 @@ Kirim besok pagi ya pak bc''';
             const SizedBox(height: 6),
           ],
 
-          // Quoted Image Preview (foto yang di-reply/tag)
-          if (chat.quotedImageUrl != null && chat.quotedImageUrl!.isNotEmpty && chat.status == 'pending') ...[
+          // Quoted Image & OCR Preview (foto yang di-reply/tag)
+          if ((chat.quotedImageUrl != null && chat.quotedImageUrl!.isNotEmpty) ||
+              (chat.quotedOcrText != null && chat.quotedOcrText!.trim().isNotEmpty)) ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0xFF475569).withOpacity(0.5)),
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Thumbnail foto
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image.network(
-                      chat.quotedImageUrl!,
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 60,
-                        height: 60,
-                        color: const Color(0xFF334155),
-                        child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 24),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Label
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Thumbnail foto (dengan zoom modal interactive viewer)
+                      if (chat.quotedImageUrl != null && chat.quotedImageUrl!.isNotEmpty) ...[
+                        InkWell(
+                          onTap: () => _showReceiptImageDialog(
+                            context,
+                            chat.quotedImageUrl!,
+                            chat.quotedInvoiceNo != null
+                                ? 'Foto yang Di-reply (Invoice #${chat.quotedInvoiceNo})'
+                                : 'Foto yang Di-reply',
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.network(
+                                  chat.quotedImageUrl!,
+                                  width: 75,
+                                  height: 75,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 75,
+                                    height: 75,
+                                    color: const Color(0xFF334155),
+                                    child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 28),
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.25),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.zoom_in_rounded, color: Colors.white, size: 24),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
+                      // Label & info invoice
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.reply_rounded, color: Color(0xFF94A3B8), size: 12),
-                            SizedBox(width: 4),
-                            Text('Foto yang di-reply:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                            Row(
+                              children: [
+                                const Icon(Icons.reply_rounded, color: Color(0xFF94A3B8), size: 13),
+                                const SizedBox(width: 4),
+                                const Text('Foto yang di-reply / di-tag:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                const Spacer(),
+                                if (chat.quotedImageUrl != null && chat.quotedImageUrl!.isNotEmpty)
+                                  const Text('🔍 Klik foto untuk zoom', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              chat.quotedInvoiceNo != null
+                                  ? 'Invoice #${chat.quotedInvoiceNo}'
+                                  : 'Foto lampiran (tanpa nomor invoice)',
+                              style: TextStyle(
+                                color: chat.quotedInvoiceNo != null ? const Color(0xFFFDE68A) : const Color(0xFFCBD5E1),
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (chat.quotedInvoiceNo != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Terdeteksi dari OCR gambar di samping',
+                                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10),
+                              ),
+                            ],
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          chat.quotedInvoiceNo != null ? 'Invoice #${chat.quotedInvoiceNo}' : 'Foto tanpa invoice terdeteksi',
-                          style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+
+                  // Data teks / kalimat hasil scan foto (OCR)
+                  if (chat.quotedOcrText != null && chat.quotedOcrText!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.document_scanner_rounded, color: Color(0xFF38BDF8), size: 13),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Teks Terbaca dari Scan Foto (OCR):',
+                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0284C7).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                ),
+                                child: const Text(
+                                  'AI Vision OCR',
+                                  style: TextStyle(color: Color(0xFF7DD3FC), fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            chat.quotedOcrText!.trim(),
+                            style: const TextStyle(
+                              color: Color(0xFFE2E8F0),
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
