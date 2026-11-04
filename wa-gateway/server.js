@@ -965,6 +965,57 @@ async function startBaileys() {
       }
 
       // =========================================================================
+      // KHUSUS DOKUMEN BARANG DATANG / SURAT JALAN PABRIK KE FIVA:
+      // Penerima adalah PT Putra Fiva Sejahtera (Gudang Solo).
+      // Ini adalah STOK MASUK / PENERIMAAN BARANG, BUKAN PO PENJUALAN KE PELANGGAN!
+      // JANGAN PERNAH dibuatkan Faktur Penjualan otomatis oleh Auto-PO!
+      // =========================================================================
+      const upperOcr = (ocrText || '').toUpperCase();
+      const isBarangDatang =
+        (upperOcr.includes('SHIPPING ADDRESS') || upperOcr.includes('CUSTOMER ADDRESS') || upperOcr.includes('DELIVERY ORDER') || upperOcr.includes('SURAT JALAN') || upperOcr.includes('ORDER#')) &&
+        (upperOcr.includes('PUTRA FIVA') || upperOcr.includes('FIVA SEJAHTERA') || upperOcr.includes('JOKO SETIAWAN'));
+
+      if (isBarangDatang) {
+        console.log(`[BARANG DATANG] 📦 Terdeteksi Dokumen Penerimaan Barang Datang / Surat Jalan Pabrik ke Fiva! (Bukan PO Penjualan)`);
+        if (imageBuffer && !imageUrl) {
+          try {
+            const filename = `surat_jalan_${Date.now()}_${msgId || 'img'}.jpg`;
+            imageUrl = await firebaseAdapter.uploadReceiptImage(imageBuffer, filename);
+          } catch (_) {}
+        }
+
+        const bdPayload = {
+          senderJid: remoteJid,
+          senderPhone,
+          senderName,
+          messageText: cleanText,
+          isOrderDetected: false,
+          messageType: 'BARANG_DATANG',
+          hasImage: true,
+          imageUrl: imageUrl || null,
+          transferInfo: null,
+          matchedInvoiceNo: null,
+          status: 'dismissed', // Tidak diproses oleh Auto-PO
+          dismissReason: 'BARANG_DATANG',
+          caption: rawCaption || '',
+          rawOcrText: ocrText || '',
+          messageCount: 1,
+          messageId: msgId || '',
+          messageIds: msgId ? [msgId] : [],
+          receivedAt: new Date(msgTimeMs)
+        };
+
+        recentChats.unshift({
+          ...bdPayload,
+          receivedAt: new Date()
+        });
+        if (recentChats.length > 20) recentChats.pop();
+
+        await firebaseAdapter.saveIncomingChat(bdPayload);
+        return; // Selesai!
+      }
+
+      // =========================================================================
       // KHUSUS FORWARDED & QUOTED REPLY: BYPASS BUFFER & KIRIM TERPISAH
       // Forwarded message = 1 PO dari 1 toko (sudah lengkap dalam 1 bubble)
       // Quoted reply = revisi/balasan ke invoice foto (harus jadi dokumen sendiri)

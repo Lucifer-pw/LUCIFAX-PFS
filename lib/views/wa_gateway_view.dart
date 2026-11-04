@@ -351,7 +351,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
     // 1. Auto-PO untuk pesanan teks (hanya jika autoPoEnabled aktif)
     if (settings.autoPoEnabled) {
       for (var chat in chats) {
-        if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') continue;
+        if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP' || chat.messageType == 'BARANG_DATANG') continue;
 
         // PENTING: Auto-PO HANYA memproses pesan yang benar-benar terdeteksi sebagai ORDER_PO!
         // Jangan auto-proses CASUAL_CHAT, konfirmasi transfer/bayar, atau obrolan santai!
@@ -4101,9 +4101,15 @@ Kirim besok pagi ya pak bc''';
           }
           break;
         case 'dismissed':
-          bg = const Color(0xFF334155);
-          fg = const Color(0xFF94A3B8);
-          label = chat.dismissReason == 'BUKAN_ORDER' ? 'BUKAN ORDER' : 'DIABAIKAN';
+          if (chat.messageType == 'BARANG_DATANG' || chat.dismissReason == 'BARANG_DATANG') {
+            bg = const Color(0xFF0F766E);
+            fg = const Color(0xFF5EEAD4);
+            label = 'BARANG DATANG (PABRIK)';
+          } else {
+            bg = const Color(0xFF334155);
+            fg = const Color(0xFF94A3B8);
+            label = chat.dismissReason == 'BUKAN_ORDER' ? 'BUKAN ORDER' : 'DIABAIKAN';
+          }
           break;
         default:
           final bool isRev = _isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!));
