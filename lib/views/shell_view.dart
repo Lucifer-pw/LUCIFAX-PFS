@@ -51,7 +51,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.255';
+  String _appVersion = '3.3.256';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
@@ -393,13 +393,13 @@ class _ShellViewState extends State<ShellView> {
         });
       } else if (mounted) {
         setState(() {
-          _appVersion = '3.3.255';
+          _appVersion = '3.3.256';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '3.3.255';
+          _appVersion = '3.3.256';
         });
       }
     }
@@ -928,7 +928,9 @@ class _ShellViewState extends State<ShellView> {
         elevation: 0,
         titleSpacing: isMobile ? 4 : null,
         title: Text(
-          navItems[_currentIndex]['title'],
+          isMobile && navItems[_currentIndex]['title'] == 'WA Gateway Auto-PO'
+              ? 'WA Gateway'
+              : navItems[_currentIndex]['title'],
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(

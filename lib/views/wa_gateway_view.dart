@@ -1000,46 +1000,49 @@ Kirim besok pagi ya pak bc''';
                         ],
                       ),
                       const SizedBox(height: 10),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            OutlinedButton.icon(
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF38BDF8),
                                 side: const BorderSide(color: Color(0xFF38BDF8)),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               onPressed: () => _showManageWhitelistDialog(context, settings),
-                              icon: const Icon(Icons.contacts_rounded, size: 14),
-                              label: Text('📋 Whitelist (${settings.whitelistContacts.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              icon: const Icon(Icons.contacts_rounded, size: 13),
+                              label: Text('Whitelist (${settings.whitelistContacts.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.tealAccent,
                                 side: const BorderSide(color: Colors.teal),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               onPressed: _simulateIncomingChat,
-                              icon: const Icon(Icons.science_outlined, size: 14),
-                              label: const Text('🧪 Tes Chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              icon: const Icon(Icons.science_outlined, size: 13),
+                              label: const Text('Tes Chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF0284C7),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               onPressed: () => showAiChatOrderDialog(context),
-                              icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 14),
-                              label: const Text('Buka AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                              icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 13),
+                              label: const Text('AI Scanner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
                   )
@@ -1150,11 +1153,12 @@ Kirim besok pagi ya pak bc''';
                                     ],
                                   ),
                                 ),
-                                SizedBox(
-                                  height: 28,
+                                Transform.scale(
+                                  scale: 0.82,
                                   child: Switch(
                                     value: settings.autoPoEnabled,
                                     activeColor: Colors.tealAccent,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                     onChanged: (val) async {
                                       final updated = settings.copyWith(autoPoEnabled: val);
                                       await _firebaseService.saveWaAutoPoSettings(updated);
@@ -1182,11 +1186,12 @@ Kirim besok pagi ya pak bc''';
                                     ),
                                   ),
                                 ),
-                                SizedBox(
-                                  height: 28,
+                                Transform.scale(
+                                  scale: 0.82,
                                   child: Switch(
                                     value: settings.autoSettleTransferSlips,
                                     activeColor: const Color(0xFF34D399),
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                     onChanged: (val) async {
                                       final updated = settings.copyWith(autoSettleTransferSlips: val);
                                       await _firebaseService.saveWaAutoPoSettings(updated);
@@ -1434,34 +1439,84 @@ Kirim besok pagi ya pak bc''';
         Widget content = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 20),
-                    const SizedBox(width: 8),
-                    const Text('Status Perangkat WA', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                    if (session.deviceName != null && session.deviceName!.isNotEmpty) ...[
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 18),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
-                        ),
+                      const Expanded(
                         child: Text(
-                          session.formattedDeviceName,
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                          'Status Perangkat WA',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      _buildStatusBadge(session),
                     ],
+                  ),
+                  if (session.deviceName != null && session.deviceName!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            session.devicePlatform == 'win32'
+                                ? Icons.laptop_mac_rounded
+                                : (session.devicePlatform == 'android' ? Icons.smartphone_rounded : Icons.dns_rounded),
+                            size: 13,
+                            color: const Color(0xFF38BDF8),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            session.formattedDeviceName,
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
-                _buildStatusBadge(session),
-              ],
-            ),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.phonelink_ring_rounded, color: Color(0xFF38BDF8), size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Status Perangkat WA', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                      if (session.deviceName != null && session.deviceName!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                          ),
+                          child: Text(
+                            session.formattedDeviceName,
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  _buildStatusBadge(session),
+                ],
+              ),
             const SizedBox(height: 16),
 
             if (isConnected) ...[
@@ -1690,33 +1745,33 @@ Kirim besok pagi ya pak bc''';
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF38BDF8),
                         side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: EdgeInsets.symmetric(vertical: isMobile ? 10 : 12, horizontal: isMobile ? 2 : 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: () => _firebaseService.sendWaGatewayCommand('RESTART'),
-                      icon: const Icon(Icons.refresh_rounded, size: 16),
-                      label: const Text('Restart'),
+                      icon: Icon(Icons.refresh_rounded, size: isMobile ? 14 : 16),
+                      label: Text('Restart', style: TextStyle(fontSize: isMobile ? 11 : 12)),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D9488),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: EdgeInsets.symmetric(vertical: isMobile ? 10 : 12, horizontal: isMobile ? 2 : 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: _showSwitchDeviceDialog,
-                      icon: const Icon(Icons.swap_horiz_rounded, color: Colors.white, size: 16),
-                      label: const Text('Alihkan HP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      icon: Icon(Icons.swap_horiz_rounded, color: Colors.white, size: isMobile ? 14 : 16),
+                      label: Text('Alihkan HP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 12)),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.redAccent.shade700,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: EdgeInsets.symmetric(vertical: isMobile ? 10 : 12, horizontal: isMobile ? 2 : 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: () async {
@@ -1740,8 +1795,8 @@ Kirim besok pagi ya pak bc''';
                           await _firebaseService.sendWaGatewayCommand('LOGOUT');
                         }
                       },
-                      icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 16),
-                      label: const Text('Logout WA', style: TextStyle(color: Colors.white)),
+                      icon: Icon(Icons.logout_rounded, color: Colors.white, size: isMobile ? 14 : 16),
+                      label: Text('Logout WA', style: TextStyle(color: Colors.white, fontSize: isMobile ? 11 : 12)),
                     ),
                   ),
                 ],
@@ -3152,83 +3207,150 @@ Kirim besok pagi ya pak bc''';
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
+          // ── SENDER HEADER ──
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
                     CircleAvatar(
-                      radius: 14,
+                      radius: 13,
                       backgroundColor: const Color(0xFF059669).withOpacity(0.2),
-                      child: const Icon(Icons.account_balance_rounded, color: Color(0xFF34D399), size: 16),
+                      child: const Icon(Icons.account_balance_rounded, color: Color(0xFF34D399), size: 15),
                     ),
                     const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        chat.senderName,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                        overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  chat.senderName,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (chat.isForwarded) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF6366F1).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
+                                  ),
+                                  child: const Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                              if (chat.isQuotedReply) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD97706).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+                                  ),
+                                  child: const Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-                    // Badge tipe pesan: Forwarded / Quoted Reply
-                    if (chat.isForwarded) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.forward_rounded, color: Color(0xFFA5B4FC), size: 10),
-                            SizedBox(width: 3),
-                            Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 9, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (chat.isQuotedReply) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.reply_rounded, color: Color(0xFFFDE68A), size: 10),
-                            SizedBox(width: 3),
-                            Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 9, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
+                    _buildChatStatusBadge(chat),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
-                  const SizedBox(width: 6),
-                  _buildChatStatusBadge(chat),
-                ],
-              ),
-            ],
-          ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                ),
+              ],
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: const Color(0xFF059669).withOpacity(0.2),
+                        child: const Icon(Icons.account_balance_rounded, color: Color(0xFF34D399), size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          chat.senderName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                      if (chat.isForwarded) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.forward_rounded, color: Color(0xFFA5B4FC), size: 10),
+                              SizedBox(width: 3),
+                              Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 9, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (chat.isQuotedReply) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD97706).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.reply_rounded, color: Color(0xFFFDE68A), size: 10),
+                              SizedBox(width: 3),
+                              Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 9, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                    const SizedBox(width: 6),
+                    _buildChatStatusBadge(chat),
+                  ],
+                ),
+              ],
+            ),
           const SizedBox(height: 12),
 
-          // Transfer Slip Content Box
+          // ── TRANSFER SLIP CONTENT BOX ──
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -3237,250 +3359,289 @@ Kirim besok pagi ya pak bc''';
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
             ),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Thumbnail Image if available
-                if (chat.hasImage && chat.imageUrl != null && chat.imageUrl!.isNotEmpty) ...[
-                  InkWell(
-                    onTap: () => _showReceiptImageDialog(context, chat.imageUrl!, 'Bukti Transfer $bank ($formattedAmount)'),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.network(
-                            chat.imageUrl!,
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 80,
-                              height: 80,
-                              color: const Color(0xFF334155),
-                              child: const Icon(Icons.broken_image_rounded, color: Color(0xFF64748B)),
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.2),
+                // 1. Top Section: Thumbnail + Bank + Nominal + Target Faktur
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (chat.hasImage && chat.imageUrl != null && chat.imageUrl!.isNotEmpty) ...[
+                      InkWell(
+                        onTap: () => _showReceiptImageDialog(context, chat.imageUrl!, 'Bukti Transfer $bank ($formattedAmount)'),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
                               borderRadius: BorderRadius.circular(6),
+                              child: Image.network(
+                                chat.imageUrl!,
+                                width: isMobile ? 68 : 80,
+                                height: isMobile ? 68 : 80,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: isMobile ? 68 : 80,
+                                  height: isMobile ? 68 : 80,
+                                  color: const Color(0xFF334155),
+                                  child: const Icon(Icons.broken_image_rounded, color: Color(0xFF64748B)),
+                                ),
+                              ),
                             ),
-                            child: const Center(
-                              child: Icon(Icons.zoom_in_rounded, color: Colors.white, size: 24),
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.zoom_in_rounded, color: Colors.white, size: 22),
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0284C7).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
+                                ),
+                                child: Text(
+                                  bank,
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              Text(
+                                formattedAmount,
+                                style: const TextStyle(
+                                  color: Color(0xFF34D399),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              if (isSuccessInSlip)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF064E3B).withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF059669).withOpacity(0.5)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 10),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'BERHASIL',
+                                        style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          if (isExpense) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.outbox_rounded, color: Color(0xFFFB923C), size: 14),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'Pengeluaran Operasional (${chat.expenseCategory?.replaceAll('_', ' ') ?? 'BIAYA'})',
+                                    style: const TextStyle(color: Color(0xFFFB923C), fontSize: 11, fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ] else if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.receipt_long_rounded, color: Color(0xFFF59E0B), size: 14),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'Target Faktur: #${chat.matchedInvoiceNo}',
+                                    style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (chat.transferInfo?['alreadyPaid'] == true) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                                    ),
+                                    child: const Text(
+                                      'SUDAH PERNAH LUNAS',
+                                      style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ] else ...[
+                            const Row(
+                              children: [
+                                Icon(Icons.help_outline_rounded, color: Color(0xFF38BDF8), size: 14),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'Target Belum Ditentukan (Perlu Tautkan)',
+                                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontStyle: FontStyle.italic),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // 2. Full Width Tanggal & Jam Transfer Box
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.event_available_rounded, color: Color(0xFF38BDF8), size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Tanggal Transfer: $displayTransferDate',
+                          style: const TextStyle(color: Color(0xFF7DD3FC), fontSize: 11, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 3. Full Width Slip Details (Pengirim, Tujuan, Berita, No Ref)
+                const SizedBox(height: 6),
+                if (customerHint.isNotEmpty || senderFromSlip.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      'Pengirim: ${customerHint.isNotEmpty ? customerHint : senderFromSlip}',
+                      style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+                if (targetAcc.isNotEmpty || recipient.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      'Tujuan: ${targetAcc.isNotEmpty ? "$targetAcc " : ""}(${recipient.isNotEmpty ? recipient : "PUTRA FIVA SEJAHTERA PT"})',
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                    ),
+                  ),
+                ],
+                if (berita.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text('Berita Transfer: "$berita"', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
+                  ),
+                ],
+                if (refNumber.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text('No. Ref: $refNumber', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                  ),
+                ],
+                if (chat.caption != null && chat.caption!.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text('Catatan Pengirim: "${chat.caption}"', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontStyle: FontStyle.italic)),
+                  ),
+                ],
+
+                // 4. Full Width Kotak Hasil Scan Struk (OCR Reader)
+                if (rawOcr.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.document_scanner_rounded, color: Color(0xFF38BDF8), size: 13),
+                            const SizedBox(width: 5),
+                            const Expanded(
+                              child: Text(
+                                'Teks Terbaca dari Scan Struk (OCR):',
+                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF334155)),
+                              ),
+                              child: const Text(
+                                'AI Vision OCR',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          rawOcr.trim(),
+                          style: const TextStyle(
+                            color: Color(0xFFCBD5E1),
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                            height: 1.35,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
                 ],
-                // Info details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0284C7).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
-                            ),
-                            child: Text(
-                              bank,
-                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            formattedAmount,
-                            style: const TextStyle(
-                              color: Color(0xFF34D399),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          if (isSuccessInSlip) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF064E3B).withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFF059669).withOpacity(0.5)),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 10),
-                                  SizedBox(width: 3),
-                                  Text(
-                                    'BERHASIL',
-                                    style: TextStyle(color: Color(0xFF6EE7B7), fontSize: 9, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-
-                      // TANGGAL & JAM TRANSFER DARI STRUK (SANGAT JELAS)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(5),
-                          border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.event_available_rounded, color: Color(0xFF38BDF8), size: 14),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Tanggal Transfer: $displayTransferDate',
-                              style: const TextStyle(color: Color(0xFF7DD3FC), fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      if (isExpense) ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.outbox_rounded, color: Color(0xFFFB923C), size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Pengeluaran Operasional (${chat.expenseCategory?.replaceAll('_', ' ') ?? 'BIAYA'})',
-                              style: const TextStyle(color: Color(0xFFFB923C), fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                      ] else if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty) ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.receipt_long_rounded, color: Color(0xFFF59E0B), size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Target Faktur: #${chat.matchedInvoiceNo}',
-                              style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                            if (chat.transferInfo?['alreadyPaid'] == true) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.amber.withOpacity(0.5)),
-                                ),
-                                child: const Text(
-                                  'SUDAH PERNAH LUNAS',
-                                  style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                      ] else ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.help_outline_rounded, color: Color(0xFF38BDF8), size: 14),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Target Belum Ditentukan (Perlu Tautkan Manual)',
-                              style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontStyle: FontStyle.italic),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                      ],
-                      if (customerHint.isNotEmpty || senderFromSlip.isNotEmpty) ...[
-                        Text(
-                          'Pengirim: ${customerHint.isNotEmpty ? customerHint : senderFromSlip}',
-                          style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 11, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                      if (targetAcc.isNotEmpty || recipient.isNotEmpty) ...[
-                        Text(
-                          'Tujuan: ${targetAcc.isNotEmpty ? "$targetAcc " : ""}(${recipient.isNotEmpty ? recipient : "PUTRA FIVA SEJAHTERA PT"})',
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                        ),
-                      ],
-                      if (berita.isNotEmpty) ...[
-                        Text('Berita Transfer: "$berita"', style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11)),
-                      ],
-                      if (refNumber.isNotEmpty) ...[
-                        Text('No. Ref: $refNumber', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
-                      ],
-                      if (chat.caption != null && chat.caption!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text('Catatan Pengirim: "${chat.caption}"', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontStyle: FontStyle.italic)),
-                      ],
-
-                      // KOTAK TEKS LENGKAP HASIL SCAN FOTO (OCR VIEWER)
-                      if (rawOcr.trim().isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFF334155)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Row(
-                                children: [
-                                  Icon(Icons.document_scanner_rounded, color: Color(0xFF38BDF8), size: 13),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    'Teks Terbaca dari Scan Struk (OCR):',
-                                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
-                                  ),
-                                  Spacer(),
-                                  Text(
-                                    'AI Vision OCR',
-                                    style: TextStyle(color: Color(0xFF64748B), fontSize: 9),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              SelectableText(
-                                rawOcr.trim(),
-                                style: const TextStyle(
-                                  color: Color(0xFFCBD5E1),
-                                  fontSize: 10,
-                                  fontFamily: 'monospace',
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // Action Row for Transfer Slip
+          // ── ACTION BUTTONS ──
           if (isProcessed) ...[
             if (isExpense) ...[
               Container(
@@ -3498,7 +3659,7 @@ Kirim besok pagi ya pak bc''';
                     Expanded(
                       child: Text(
                         'Bukti Pengeluaran Diarsipkan (${chat.expenseCategory?.replaceAll('_', ' ') ?? 'BIAYA'} - $formattedAmount)',
-                        style: const TextStyle(color: Color(0xFFFDBA74), fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Color(0xFFFDBA74), fontSize: 11.5, fontWeight: FontWeight.bold),
                       ),
                     ),
                     IconButton(
@@ -3525,7 +3686,7 @@ Kirim besok pagi ya pak bc''';
                     Expanded(
                       child: Text(
                         'Pembayaran Cicilan Diterapkan (Faktur #${chat.matchedInvoiceNo ?? '-'}) - Sisa Piutang: ${currencyFormatter.format(chat.remainingAmount)}',
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold),
                       ),
                     ),
                     IconButton(
@@ -3552,7 +3713,7 @@ Kirim besok pagi ya pak bc''';
                     Expanded(
                       child: Text(
                         'Pembayaran Telah Diterapkan (Faktur #${chat.matchedInvoiceNo ?? '-'}) - STATUS: LUNAS',
-                        style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11.5, fontWeight: FontWeight.bold),
                       ),
                     ),
                     IconButton(
@@ -3565,71 +3726,67 @@ Kirim besok pagi ya pak bc''';
               ),
             ],
           ] else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isExpense) ...[
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFC2410C),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () => FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
-                          'status': 'processed',
-                          'processedAt': FieldValue.serverTimestamp(),
-                        }),
-                        icon: const Icon(Icons.archive_outlined, color: Colors.white, size: 16),
-                        label: const Text(
-                          'Arsipkan Pengeluaran',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ] else if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty && chat.transferInfo?['alreadyPaid'] != true) ...[
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () => _confirmTransferPayment(chat, chat.matchedInvoiceNo!),
-                        icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
-                        label: Text(
-                          'Tandai Faktur #${chat.matchedInvoiceNo} Lunas',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF38BDF8),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      onPressed: () => _showLinkToInvoiceDialog(context, chat),
-                      icon: const Icon(Icons.link_rounded, size: 16),
-                      label: Text(
-                        chat.matchedInvoiceNo != null ? 'Tautkan ke Faktur Lain' : 'Tautkan ke Faktur',
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                if (isExpense) ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFC2410C),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF64748B),
-                        side: const BorderSide(color: Color(0xFF334155)),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed'),
-                      icon: const Icon(Icons.close_rounded, size: 14),
-                      label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
+                    onPressed: () => FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
+                      'status': 'processed',
+                      'processedAt': FieldValue.serverTimestamp(),
+                    }),
+                    icon: const Icon(Icons.archive_outlined, color: Colors.white, size: 15),
+                    label: const Text(
+                      'Arsipkan Pengeluaran',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
                     ),
-                  ],
+                  ),
+                ] else if (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty && chat.transferInfo?['alreadyPaid'] != true) ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF059669),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _confirmTransferPayment(chat, chat.matchedInvoiceNo!),
+                    icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 15),
+                    label: Text(
+                      'Tandai Faktur #${chat.matchedInvoiceNo} Lunas',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                    ),
+                  ),
+                ],
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF38BDF8),
+                    side: const BorderSide(color: Color(0xFF38BDF8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _showLinkToInvoiceDialog(context, chat),
+                  icon: const Icon(Icons.link_rounded, size: 15),
+                  label: Text(
+                    chat.matchedInvoiceNo != null ? 'Tautkan ke Faktur Lain' : 'Tautkan ke Faktur',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64748B),
+                    side: const BorderSide(color: Color(0xFF334155)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed'),
+                  icon: const Icon(Icons.close_rounded, size: 14),
+                  label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFF64748B), size: 18),
@@ -3666,80 +3823,146 @@ Kirim besok pagi ya pak bc''';
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
                     CircleAvatar(
-                      radius: 14,
+                      radius: 13,
                       backgroundColor: const Color(0xFF0284C7).withOpacity(0.2),
-                      child: const Icon(Icons.person, color: Color(0xFF38BDF8), size: 16),
+                      child: const Icon(Icons.person, color: Color(0xFF38BDF8), size: 15),
                     ),
                     const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        chat.senderName,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                        overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  chat.senderName,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (chat.isForwarded) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF6366F1).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
+                                  ),
+                                  child: const Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                              if (chat.isQuotedReply) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD97706).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+                                  ),
+                                  child: const Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-                    // Badge tipe pesan: Forwarded / Quoted Reply
-                    if (chat.isForwarded) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.forward_rounded, color: Color(0xFFA5B4FC), size: 10),
-                            SizedBox(width: 3),
-                            Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 9, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (chat.isQuotedReply) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD97706).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.reply_rounded, color: Color(0xFFFDE68A), size: 10),
-                            SizedBox(width: 3),
-                            Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 9, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
+                    _buildChatStatusBadge(chat),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
-                  const SizedBox(width: 6),
-                  _buildChatStatusBadge(chat),
-                ],
-              ),
-            ],
-          ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                ),
+              ],
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: const Color(0xFF0284C7).withOpacity(0.2),
+                        child: const Icon(Icons.person, color: Color(0xFF38BDF8), size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          chat.senderName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('(+${_maskPhone(chat.senderPhone)})', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                      if (chat.isForwarded) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.forward_rounded, color: Color(0xFFA5B4FC), size: 10),
+                              SizedBox(width: 3),
+                              Text('Diteruskan', style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 9, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (chat.isQuotedReply) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD97706).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.reply_rounded, color: Color(0xFFFDE68A), size: 10),
+                              SizedBox(width: 3),
+                              Text('Reply', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 9, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(dateStr, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                    const SizedBox(width: 6),
+                    _buildChatStatusBadge(chat),
+                  ],
+                ),
+              ],
+            ),
           const SizedBox(height: 10),
 
           // Message snippet
@@ -3849,15 +4072,22 @@ Kirim besok pagi ya pak bc''';
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                const Icon(Icons.image_outlined, color: Color(0xFF38BDF8), size: 14),
-                                const SizedBox(width: 5),
-                                const Text(
-                                  'Foto Dokumen / Lampiran Chat',
-                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.image_outlined, color: Color(0xFF38BDF8), size: 14),
+                                    SizedBox(width: 5),
+                                    Text(
+                                      'Foto Dokumen',
+                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
                                 ),
-                                const Spacer(),
                                 if (chat.imageUrl != null && chat.imageUrl!.isNotEmpty)
                                   const Text(
                                     '🔍 Klik foto untuk zoom',
@@ -3892,16 +4122,26 @@ Kirim besok pagi ya pak bc''';
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.document_scanner_rounded, size: 12, color: Color(0xFF38BDF8)),
-                              SizedBox(width: 5),
-                              Text(
-                                'Teks Terbaca dari Scan Foto (OCR):',
-                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                              const Icon(Icons.document_scanner_rounded, size: 12, color: Color(0xFF38BDF8)),
+                              const SizedBox(width: 5),
+                              const Expanded(
+                                child: Text(
+                                  'Teks Terbaca dari Scan Foto (OCR):',
+                                  style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              Spacer(),
-                              Text('AI Vision OCR', style: TextStyle(color: Color(0xFF64748B), fontSize: 9)),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: const Color(0xFF334155)),
+                                ),
+                                child: const Text('AI Vision OCR', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.w600)),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 6),
@@ -3985,12 +4225,19 @@ Kirim besok pagi ya pak bc''';
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                const Icon(Icons.reply_rounded, color: Color(0xFF94A3B8), size: 13),
-                                const SizedBox(width: 4),
-                                const Text('Foto yang di-reply / di-tag:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                                const Spacer(),
+                                const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.reply_rounded, color: Color(0xFF94A3B8), size: 13),
+                                    SizedBox(width: 4),
+                                    Text('Foto di-reply', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                  ],
+                                ),
                                 if (chat.quotedImageUrl != null && chat.quotedImageUrl!.isNotEmpty)
                                   const Text('🔍 Klik foto untuk zoom', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600)),
                               ],
