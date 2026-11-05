@@ -2780,6 +2780,39 @@ Kirim besok pagi ya pak bc''';
     );
   }
 
+  Widget _buildCachedThumbnail({
+    required String imageUrl,
+    required double width,
+    required double height,
+    BoxFit fit = BoxFit.cover,
+    double iconSize = 24,
+  }) {
+    final mem = KtpCacheManager.peekMemoryCache(imageUrl);
+    if (mem != null) {
+      return Image.memory(mem, width: width, height: height, fit: fit);
+    }
+    return FutureBuilder<KtpCacheResult?>(
+      future: KtpCacheManager.getOrFetchKtpImage(customerId: 'receipt', imageUrl: imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          return Image.memory(snapshot.data!.bytes, width: width, height: height, fit: fit);
+        }
+        return Image.network(
+          imageUrl,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: (_, __, ___) => Container(
+            width: width,
+            height: height,
+            color: const Color(0xFF334155),
+            child: Icon(Icons.broken_image_rounded, color: const Color(0xFF64748B), size: iconSize),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showLinkToInvoiceDialog(BuildContext context, IncomingPoChat chat) async {
     final initialQuery = (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty)
         ? chat.matchedInvoiceNo!
@@ -3386,17 +3419,10 @@ Kirim besok pagi ya pak bc''';
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(6),
-                              child: Image.network(
-                                chat.imageUrl!,
+                              child: _buildCachedThumbnail(
+                                imageUrl: chat.imageUrl!,
                                 width: isMobile ? 68 : 80,
                                 height: isMobile ? 68 : 80,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: isMobile ? 68 : 80,
-                                  height: isMobile ? 68 : 80,
-                                  color: const Color(0xFF334155),
-                                  child: const Icon(Icons.broken_image_rounded, color: Color(0xFF64748B)),
-                                ),
                               ),
                             ),
                             Positioned.fill(
@@ -4050,17 +4076,11 @@ Kirim besok pagi ya pak bc''';
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
-                                child: Image.network(
-                                  chat.imageUrl!,
+                                child: _buildCachedThumbnail(
+                                  imageUrl: chat.imageUrl!,
                                   width: 80,
                                   height: 80,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 80,
-                                    height: 80,
-                                    color: const Color(0xFF334155),
-                                    child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 28),
-                                  ),
+                                  iconSize: 28,
                                 ),
                               ),
                               Positioned.fill(
@@ -4203,17 +4223,11 @@ Kirim besok pagi ya pak bc''';
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
-                                child: Image.network(
-                                  chat.quotedImageUrl!,
+                                child: _buildCachedThumbnail(
+                                  imageUrl: chat.quotedImageUrl!,
                                   width: 75,
                                   height: 75,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 75,
-                                    height: 75,
-                                    color: const Color(0xFF334155),
-                                    child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 28),
-                                  ),
+                                  iconSize: 28,
                                 ),
                               ),
                               Positioned.fill(

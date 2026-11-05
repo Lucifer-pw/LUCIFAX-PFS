@@ -274,6 +274,7 @@ class FirebaseAdapter {
         await file.save(buffer, {
           metadata: {
             contentType: 'image/jpeg',
+            cacheControl: 'public, max-age=31536000',
             metadata: {
               firebaseStorageDownloadTokens: token
             }

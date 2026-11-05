@@ -11,6 +11,7 @@ import '../providers/product_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../services/firebase_service.dart';
 import '../services/ai_chat_parser_service.dart';
+import '../services/ktp_cache_service.dart';
 
 void showProcessRevisionDialog(
   BuildContext context, {
@@ -266,16 +267,32 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                   child: InteractiveViewer(
                     minScale: 0.5,
                     maxScale: 4.0,
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                    child: Builder(
+                      builder: (context) {
+                        final memBytes = KtpCacheManager.peekMemoryCache(imageUrl);
+                        if (memBytes != null) {
+                          return Image.memory(memBytes, fit: BoxFit.contain);
+                        }
+                        return FutureBuilder<KtpCacheResult?>(
+                          future: KtpCacheManager.getOrFetchKtpImage(customerId: 'receipt', imageUrl: imageUrl),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data != null) {
+                              return Image.memory(snapshot.data!.bytes, fit: BoxFit.contain);
+                            }
+                            return Image.network(
+                              imageUrl,
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                              },
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Text('Gagal memuat gambar.', style: TextStyle(color: Colors.redAccent)),
+                              ),
+                            );
+                          },
+                        );
                       },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Text('Gagal memuat gambar.', style: TextStyle(color: Colors.redAccent)),
-                      ),
                     ),
                   ),
                 ),
@@ -633,17 +650,34 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                                           children: [
                                             ClipRRect(
                                               borderRadius: BorderRadius.circular(6),
-                                              child: Image.network(
-                                                widget.chat.quotedImageUrl!,
-                                                width: 70,
-                                                height: 70,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => Container(
-                                                  width: 70,
-                                                  height: 70,
-                                                  color: const Color(0xFF334155),
-                                                  child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 24),
-                                                ),
+                                              child: Builder(
+                                                builder: (context) {
+                                                  final qUrl = widget.chat.quotedImageUrl!;
+                                                  final mem = KtpCacheManager.peekMemoryCache(qUrl);
+                                                  if (mem != null) {
+                                                    return Image.memory(mem, width: 70, height: 70, fit: BoxFit.cover);
+                                                  }
+                                                  return FutureBuilder<KtpCacheResult?>(
+                                                    future: KtpCacheManager.getOrFetchKtpImage(customerId: 'receipt', imageUrl: qUrl),
+                                                    builder: (context, snapshot) {
+                                                      if (snapshot.hasData && snapshot.data != null) {
+                                                        return Image.memory(snapshot.data!.bytes, width: 70, height: 70, fit: BoxFit.cover);
+                                                      }
+                                                      return Image.network(
+                                                        qUrl,
+                                                        width: 70,
+                                                        height: 70,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __, ___) => Container(
+                                                          width: 70,
+                                                          height: 70,
+                                                          color: const Color(0xFF334155),
+                                                          child: const Icon(Icons.broken_image, color: Color(0xFF64748B), size: 24),
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                },
                                               ),
                                             ),
                                             Positioned.fill(

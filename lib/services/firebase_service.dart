@@ -492,6 +492,7 @@ class FirebaseService {
     final ref = _storage.ref().child(objectPath);
     final metadata = SettableMetadata(
       contentType: 'image/jpeg',
+      cacheControl: 'public, max-age=31536000',
       customMetadata: {
         'customerId': customerId,
         'uploadedAt': DateTime.now().toIso8601String(),
