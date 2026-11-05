@@ -27,11 +27,20 @@ class KtpCacheManager {
     return hash.toRadixString(16).replaceAll('-', 'n');
   }
 
-  /// Get permanent documents storage directory on Android/Desktop so OS never auto-cleans it
+  /// Get permanent storage directory on Android/Desktop so OS never auto-cleans it
+  /// On Android, uses getExternalStorageDirectory() so it appears in:
+  /// Penyimpanan internal > Android > data > com.lucifax.Lucifax_PFS > files > ktp_photos
   static Future<Directory> getKtpCacheDir() async {
-    Directory baseDir;
+    Directory? baseDir;
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        baseDir = await getExternalStorageDirectory();
+      } catch (e) {
+        debugPrint('Notice accessing external storage dir: $e');
+      }
+    }
     try {
-      baseDir = await getApplicationDocumentsDirectory();
+      baseDir ??= await getApplicationDocumentsDirectory();
     } catch (_) {
       baseDir = await getTemporaryDirectory();
     }
@@ -76,20 +85,40 @@ class KtpCacheManager {
         }
       }
 
-      // Check legacy temp directory if exists to migrate smoothly
+      // Check legacy directories if exists to migrate smoothly
       try {
-        final tempDir = await getTemporaryDirectory();
-        final legacyFile = File('${tempDir.path}/ktp/KTP_${cleanId}_$hash.jpg');
-        if (await legacyFile.exists()) {
-          final bytes = await legacyFile.readAsBytes();
-          if (bytes.isNotEmpty) {
-            await cacheFile.writeAsBytes(bytes);
-            _memCache[imageUrl] = bytes;
-            return KtpCacheResult(
-              bytes: bytes,
-              isFromCache: true,
-              localFilePath: cacheFile.path,
-            );
+        final legacyDirs = <Directory>[];
+        try {
+          final extCache = await getExternalCacheDirectories();
+          if (extCache != null && extCache.isNotEmpty) {
+            legacyDirs.add(Directory('${extCache.first.path}/ktp'));
+          }
+        } catch (_) {}
+        try {
+          final tempDir = await getTemporaryDirectory();
+          legacyDirs.add(Directory('${tempDir.path}/ktp'));
+          legacyDirs.add(Directory('${tempDir.path}/ktp_photos'));
+        } catch (_) {}
+        try {
+          final docDir = await getApplicationDocumentsDirectory();
+          legacyDirs.add(Directory('${docDir.path}/ktp_photos'));
+        } catch (_) {}
+
+        for (final dir in legacyDirs) {
+          if (await dir.exists()) {
+            final legacyFile = File('${dir.path}/KTP_${cleanId}_$hash.jpg');
+            if (await legacyFile.exists()) {
+              final bytes = await legacyFile.readAsBytes();
+              if (bytes.isNotEmpty) {
+                await cacheFile.writeAsBytes(bytes);
+                _memCache[imageUrl] = bytes;
+                return KtpCacheResult(
+                  bytes: bytes,
+                  isFromCache: true,
+                  localFilePath: cacheFile.path,
+                );
+              }
+            }
           }
         }
       } catch (_) {}
