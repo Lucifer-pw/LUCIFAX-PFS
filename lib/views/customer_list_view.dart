@@ -589,13 +589,14 @@ class _CustomerListViewState extends State<CustomerListView> {
   }
 
   void _showKtpPreviewDialog(Customer customer) {
+    final initialCachedBytes = KtpCacheManager.peekMemoryCache(customer.ktpImageUrl);
     bool isDownloading = false;
-    Uint8List? imageBytes;
-    bool isLoadingImage = true;
-    bool isFromCache = false;
+    Uint8List? imageBytes = initialCachedBytes;
+    bool isLoadingImage = initialCachedBytes == null && customer.ktpImageUrl.isNotEmpty;
+    bool isFromCache = initialCachedBytes != null;
     String? localPath;
     String? errorMessage;
-    bool hasInitiatedLoad = false;
+    bool hasInitiatedLoad = initialCachedBytes != null;
 
     if (customer.ktpImageUrl.isEmpty) {
       isLoadingImage = false;

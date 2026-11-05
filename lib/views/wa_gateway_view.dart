@@ -18,6 +18,7 @@ import '../services/firebase_service.dart';
 import '../services/ai_chat_parser_service.dart';
 import '../widgets/ai_chat_order_dialog.dart';
 import '../widgets/wa_revision_dialog.dart';
+import '../services/ktp_cache_service.dart';
 
 class _InvoiceLinkCandidate {
   final String invoiceNo;
@@ -2747,16 +2748,27 @@ Kirim besok pagi ya pak bc''';
                   child: InteractiveViewer(
                     minScale: 0.5,
                     maxScale: 4.0,
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                    child: Builder(
+                      builder: (context) {
+                        final memBytes = KtpCacheManager.peekMemoryCache(imageUrl);
+                        if (memBytes != null) {
+                          return Image.memory(memBytes, fit: BoxFit.contain);
+                        }
+                        return Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) {
+                              KtpCacheManager.getOrFetchKtpImage(customerId: 'receipt', imageUrl: imageUrl).catchError((_) {});
+                              return child;
+                            }
+                            return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                          },
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Text('Gagal memuat gambar.', style: TextStyle(color: Colors.redAccent)),
+                          ),
+                        );
                       },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Text('Gagal memuat gambar.', style: TextStyle(color: Colors.redAccent)),
-                      ),
                     ),
                   ),
                 ),

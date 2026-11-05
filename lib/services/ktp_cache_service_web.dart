@@ -10,11 +10,35 @@ class KtpCacheManager {
   static const String _keyPrefix = 'ktp_c_';
 
   static String _generateHash(String input) {
+    String cleanUrl = input;
+    try {
+      final uri = Uri.parse(input);
+      cleanUrl = '${uri.scheme}://${uri.host}${uri.path}';
+    } catch (_) {}
     int hash = 5381;
-    for (int i = 0; i < input.length; i++) {
-      hash = ((hash << 5) + hash) + input.codeUnitAt(i);
+    for (int i = 0; i < cleanUrl.length; i++) {
+      hash = ((hash << 5) + hash) + cleanUrl.codeUnitAt(i);
     }
     return hash.toRadixString(16).replaceAll('-', 'n');
+  }
+
+  /// Synchronous peek into RAM & Web LocalStorage for 0ms instant display
+  static Uint8List? peekMemoryCache(String imageUrl) {
+    if (imageUrl.isEmpty) return null;
+    if (_memCache.containsKey(imageUrl)) {
+      return _memCache[imageUrl];
+    }
+    try {
+      final hash = _generateHash(imageUrl);
+      final storageKey = '$_keyPrefix$hash';
+      final savedBase64 = html.window.localStorage[storageKey];
+      if (savedBase64 != null && savedBase64.isNotEmpty) {
+        final bytes = base64Decode(savedBase64);
+        _memCache[imageUrl] = bytes;
+        return bytes;
+      }
+    } catch (_) {}
+    return null;
   }
 
   static Future<KtpCacheResult?> getOrFetchKtpImage({

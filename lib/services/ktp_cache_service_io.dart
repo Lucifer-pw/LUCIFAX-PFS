@@ -7,28 +7,35 @@ import 'ktp_cache_service.dart';
 class KtpCacheManager {
   static final Map<String, Uint8List> _memCache = {};
 
+  /// Synchronous peek into RAM memory cache for 0ms instant display
+  static Uint8List? peekMemoryCache(String imageUrl) {
+    if (imageUrl.isEmpty) return null;
+    return _memCache[imageUrl];
+  }
+
   static String _generateHash(String input) {
+    // Strip query parameters (like ?alt=media&token=...) so token refreshes never invalidate the cache!
+    String cleanUrl = input;
+    try {
+      final uri = Uri.parse(input);
+      cleanUrl = '${uri.scheme}://${uri.host}${uri.path}';
+    } catch (_) {}
     int hash = 5381;
-    for (int i = 0; i < input.length; i++) {
-      hash = ((hash << 5) + hash) + input.codeUnitAt(i);
+    for (int i = 0; i < cleanUrl.length; i++) {
+      hash = ((hash << 5) + hash) + cleanUrl.codeUnitAt(i);
     }
     return hash.toRadixString(16).replaceAll('-', 'n');
   }
 
+  /// Get permanent documents storage directory on Android/Desktop so OS never auto-cleans it
   static Future<Directory> getKtpCacheDir() async {
-    Directory? baseDir;
-    if (!kIsWeb && Platform.isAndroid) {
-      try {
-        final extDirs = await getExternalCacheDirectories();
-        if (extDirs != null && extDirs.isNotEmpty) {
-          baseDir = extDirs.first;
-        }
-      } catch (e) {
-        debugPrint('Notice accessing external cache dirs: $e');
-      }
+    Directory baseDir;
+    try {
+      baseDir = await getApplicationDocumentsDirectory();
+    } catch (_) {
+      baseDir = await getTemporaryDirectory();
     }
-    baseDir ??= await getTemporaryDirectory();
-    final ktpDir = Directory('${baseDir.path}/ktp');
+    final ktpDir = Directory('${baseDir.path}/ktp_photos');
     if (!await ktpDir.exists()) {
       await ktpDir.create(recursive: true);
     }
@@ -44,7 +51,7 @@ class KtpCacheManager {
     final cleanId = customerId.trim().replaceAll(RegExp(r'[^\w\-]'), '_');
     final hash = _generateHash(imageUrl);
 
-    // 1. Check RAM memory cache
+    // 1. Check RAM memory cache (Instant 0ms)
     if (_memCache.containsKey(imageUrl)) {
       return KtpCacheResult(
         bytes: _memCache[imageUrl]!,
@@ -52,7 +59,7 @@ class KtpCacheManager {
       );
     }
 
-    // 2. Check Android / Local Disk storage
+    // 2. Check Android Permanent Document Storage
     try {
       final ktpDir = await getKtpCacheDir();
       final cacheFile = File('${ktpDir.path}/KTP_${cleanId}_$hash.jpg');
@@ -69,6 +76,24 @@ class KtpCacheManager {
         }
       }
 
+      // Check legacy temp directory if exists to migrate smoothly
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final legacyFile = File('${tempDir.path}/ktp/KTP_${cleanId}_$hash.jpg');
+        if (await legacyFile.exists()) {
+          final bytes = await legacyFile.readAsBytes();
+          if (bytes.isNotEmpty) {
+            await cacheFile.writeAsBytes(bytes);
+            _memCache[imageUrl] = bytes;
+            return KtpCacheResult(
+              bytes: bytes,
+              isFromCache: true,
+              localFilePath: cacheFile.path,
+            );
+          }
+        }
+      } catch (_) {}
+
       // If URL changed, clean any older cached image for this customer
       try {
         final allFiles = ktpDir.listSync();
@@ -79,7 +104,7 @@ class KtpCacheManager {
         }
       } catch (_) {}
 
-      // 3. Download once from Firebase Storage
+      // 3. Download once from Firebase Storage and store permanently in phone storage
       final resp = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 35));
       if (resp.statusCode == 200) {
         final bytes = resp.bodyBytes;
