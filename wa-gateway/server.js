@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.2'; // v3.3.2 - Whitelist ON/OFF toggles, factory delivery order detection, refined OCR & bank slip parser
+const GATEWAY_VERSION = '3.3.3'; // v3.3.3 - Autonomous Termux Auto-PO Engine & Quoted Reply Context Recovery
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
