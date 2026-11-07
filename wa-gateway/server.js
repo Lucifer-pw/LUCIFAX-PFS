@@ -19,6 +19,8 @@ const ocrEngine = require('./ocr-engine');
 const bankSlipParser = require('./bank-slip-parser');
 
 const firebaseAdapter = require('./firebase-adapter');
+const AutonomousPoProcessor = require('./autonomous-po-processor');
+const autoPoProcessor = new AutonomousPoProcessor(firebaseAdapter);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -242,6 +244,8 @@ async function flushMessageBuffer(bufferKey) {
     quotedInvoiceNo: buf.quotedInvoiceNo || null,
     quotedOcrText: buf.quotedOcrText || '',
     quotedImageUrl: buf.quotedImageUrl || null,
+    quotedMessageText: buf.quotedMessageText || '',
+    quotedStanzaId: buf.quotedStanzaId || null,
     caption: buf.caption || '',
     rawOcrText: buf.rawOcrText || '',
     messageCount: buf.texts.length,
@@ -256,7 +260,14 @@ async function flushMessageBuffer(bufferKey) {
   });
   if (recentChats.length > 20) recentChats.pop();
 
-  await firebaseAdapter.saveIncomingChat(chatPayload);
+  const savedId = await firebaseAdapter.saveIncomingChat(chatPayload);
+
+  // Autonomous Auto-PO execution (khusus Termux saat laptop kasir mati / background)
+  if (autoPoEnabled && chatPayload.messageType === 'ORDER_PO' && !chatPayload.isQuotedReply) {
+    autoPoProcessor.processAutonomousPo(savedId, chatPayload).catch(err => {
+      console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
+    });
+  }
 }
 
 async function flushAllBuffers() {
@@ -647,6 +658,8 @@ async function startBaileys() {
       let quotedInvoiceNo = null;
       let quotedOcrText = '';
       let quotedImageUrl = null;
+      let quotedMessageText = '';
+      let quotedStanzaId = null;
 
       try {
         const ctxInfo = allCtxInfo;
@@ -715,17 +728,32 @@ async function startBaileys() {
               console.warn(`[QUOTED VISION DOWNLOAD ERROR] Gagal download foto yang di-reply: ${quotedDlErr.message}`);
             }
           } else {
-            // Quoted message is text — check if it contains invoice number
+            // Quoted message is text — extract full text and check invoice / previous chat linkage
             const quotedText = ctxInfo.quotedMessage?.conversation
               || ctxInfo.quotedMessage?.extendedTextMessage?.text
+              || unwrapMessage(ctxInfo.quotedMessage)?.conversation
+              || unwrapMessage(ctxInfo.quotedMessage)?.extendedTextMessage?.text
               || '';
             if (quotedText) {
+              quotedMessageText = quotedText.trim();
+              quotedStanzaId = ctxInfo.stanzaId || null;
+              quotedOcrText = quotedText.trim();
+              console.log(`[QUOTED TEXT] 💬 Teks yang di-reply: "${quotedMessageText.substring(0, 100).replace(/\n/g, ' ')}"`);
+
               const textInvMatch = quotedText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i)
                 || quotedText.match(/#(\d{2,6})\b/);
               if (textInvMatch) {
                 quotedInvoiceNo = textInvMatch[1];
-                quotedOcrText = quotedText;
                 console.log(`[QUOTED TEXT] 🎯 Nomor invoice dari teks yang di-reply: #${quotedInvoiceNo}`);
+              } else if (quotedStanzaId) {
+                // Check if stanzaId matches an earlier order chat in Firestore
+                try {
+                  const prevChat = await firebaseAdapter.findChatByMessageId(quotedStanzaId);
+                  if (prevChat && prevChat.createdInvoiceNo) {
+                    quotedInvoiceNo = prevChat.createdInvoiceNo.replace(/[^0-9]/g, '');
+                    console.log(`[QUOTED STANZA MATCH] 🎯 Menemukan Invoice #${quotedInvoiceNo} dari pesan order sebelumnya!`);
+                  }
+                } catch (_) {}
               }
             }
           }
@@ -1111,6 +1139,8 @@ async function startBaileys() {
           quotedInvoiceNo: quotedInvoiceNo || null,
           quotedOcrText: quotedOcrText || '',
           quotedImageUrl: quotedImageUrl || null,
+          quotedMessageText: quotedMessageText || '',
+          quotedStanzaId: quotedStanzaId || null,
           isForwarded: isForwardedMessage,
           isQuotedReply: isQuotedReply,
           caption: rawCaption || '',
@@ -1127,7 +1157,14 @@ async function startBaileys() {
         });
         if (recentChats.length > 20) recentChats.pop();
 
-        await firebaseAdapter.saveIncomingChat(bypassPayload);
+        const savedBypassId = await firebaseAdapter.saveIncomingChat(bypassPayload);
+
+        // Autonomous Auto-PO execution untuk pesan forwarded pesanan (khusus Termux saat laptop kasir mati)
+        if (autoPoEnabled && bypassPayload.messageType === 'ORDER_PO' && !bypassPayload.isQuotedReply) {
+          autoPoProcessor.processAutonomousPo(savedBypassId, bypassPayload).catch(err => {
+            console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
+          });
+        }
         return; // Selesai! Langsung keluar agar tidak masuk buffer
       }
 
@@ -1168,6 +1205,10 @@ async function startBaileys() {
           buf.quotedInvoiceNo = quotedInvoiceNo;
           buf.quotedOcrText = quotedOcrText;
         }
+        if (!buf.quotedMessageText && quotedMessageText) {
+          buf.quotedMessageText = quotedMessageText;
+          buf.quotedStanzaId = quotedStanzaId;
+        }
         if (senderName && senderName !== 'Kontak WhatsApp') {
           buf.senderName = senderName;
         }
@@ -1198,6 +1239,9 @@ async function startBaileys() {
           matchedInvoiceNo: null,
           quotedInvoiceNo: quotedInvoiceNo || null,
           quotedOcrText: quotedOcrText || '',
+          quotedImageUrl: quotedImageUrl || null,
+          quotedMessageText: quotedMessageText || '',
+          quotedStanzaId: quotedStanzaId || null,
           caption: rawCaption,
           rawOcrText: ocrText,
           firstReceivedAt: now,

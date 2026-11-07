@@ -310,6 +310,33 @@ class FirebaseAdapter {
     return ids;
   }
 
+  async findChatByMessageId(messageId) {
+    if (!messageId) return null;
+    try {
+      if (this.mode === 'admin' && this.db) {
+        let snap = await this.db.collection('incoming_po_chats')
+          .where('messageId', '==', messageId)
+          .limit(1)
+          .get();
+        if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
+
+        snap = await this.db.collection('incoming_po_chats')
+          .where('messageIds', 'array-contains', messageId)
+          .limit(1)
+          .get();
+        if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { collection, query, where, limit, getDocs } = this.clientSdk;
+        const q = query(collection(this.clientDb, 'incoming_po_chats'), where('messageId', '==', messageId), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
+      }
+    } catch (e) {
+      console.warn('[FIREBASE] findChatByMessageId notice:', e.message);
+    }
+    return null;
+  }
+
   listenToCommands(onCommand) {
     let isExecuting = false;
     if (this.mode === 'admin') {
@@ -668,6 +695,71 @@ class FirebaseAdapter {
     } catch (err) {
       console.error(`[AUTO-SETTLE ERROR] Gagal memproses Faktur #${invClean}:`, err.message);
       return { success: false, error: err.message };
+    }
+  }
+
+  async getNextInvoiceNo() {
+    try {
+      if (this.mode === 'admin') {
+        const counterRef = this.db.collection('counters').doc('transactions');
+        return await this.db.runTransaction(async (transaction) => {
+          const snap = await transaction.get(counterRef);
+          let currentNo = 180;
+          if (snap.exists) {
+            currentNo = snap.data().lastInvoiceNo || currentNo;
+          }
+          const nextNo = currentNo + 1;
+          transaction.set(counterRef, { lastInvoiceNo: nextNo }, { merge: true });
+          return String(nextNo);
+        });
+      } else if (this.mode === 'client') {
+        const { doc, getDoc, setDoc } = this.clientSdk;
+        const counterRef = doc(this.clientDb, 'counters', 'transactions');
+        const snap = await getDoc(counterRef);
+        let currentNo = 180;
+        if (snap.exists && (typeof snap.exists === 'function' ? snap.exists() : true)) {
+          currentNo = snap.data()?.lastInvoiceNo || currentNo;
+        }
+        const nextNo = currentNo + 1;
+        await setDoc(counterRef, { lastInvoiceNo: nextNo }, { merge: true });
+        return String(nextNo);
+      }
+    } catch (e) {
+      console.error('[FIREBASE GET NEXT INVOICE ERROR]', e.message);
+      return String(Date.now() % 1000000);
+    }
+  }
+
+  async saveTransaction(invoiceNo, transactionData) {
+    const invStr = String(invoiceNo);
+    if (this.mode === 'admin') {
+      await this.db.collection('transactions').doc(invStr).set(transactionData);
+    } else if (this.mode === 'client') {
+      const { doc, setDoc } = this.clientSdk;
+      await setDoc(doc(this.clientDb, 'transactions', invStr), transactionData);
+    }
+  }
+
+  async markChatAsProcessed(chatDocId, invoiceNo) {
+    if (!chatDocId) return;
+    const invStr = String(invoiceNo);
+    const updatePayload = {
+      status: 'processed',
+      createdInvoiceNo: invStr,
+      createdTransactionId: invStr,
+      processedAt: new Date()
+    };
+    try {
+      if (this.mode === 'admin') {
+        await this.db.collection('incoming_po_chats').doc(chatDocId).update(updatePayload);
+        await this.db.collection('incoming_wa_orders').doc(chatDocId).set(updatePayload, { merge: true }).catch(() => {});
+      } else if (this.mode === 'client') {
+        const { doc, updateDoc, setDoc } = this.clientSdk;
+        await updateDoc(doc(this.clientDb, 'incoming_po_chats', chatDocId), updatePayload);
+        await setDoc(doc(this.clientDb, 'incoming_wa_orders', chatDocId), updatePayload, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('[MARK CHAT PROCESSED ERROR]', e.message);
     }
   }
 }

@@ -25,6 +25,8 @@ class IncomingPoChat {
   final String? quotedInvoiceNo;
   final String? quotedOcrText;
   final String? quotedImageUrl;
+  final String? quotedMessageText;
+  final String? quotedStanzaId;
   final bool isForwarded;
   final bool isQuotedReply;
   final String? rawOcrText;
@@ -54,6 +56,8 @@ class IncomingPoChat {
     this.quotedInvoiceNo,
     this.quotedOcrText,
     this.quotedImageUrl,
+    this.quotedMessageText,
+    this.quotedStanzaId,
     this.isForwarded = false,
     this.isQuotedReply = false,
     this.rawOcrText,
@@ -106,6 +110,8 @@ class IncomingPoChat {
       quotedInvoiceNo: map['quotedInvoiceNo']?.toString(),
       quotedOcrText: map['quotedOcrText']?.toString(),
       quotedImageUrl: map['quotedImageUrl']?.toString(),
+      quotedMessageText: map['quotedMessageText']?.toString(),
+      quotedStanzaId: map['quotedStanzaId']?.toString(),
       isForwarded: map['isForwarded'] == true,
       isQuotedReply: map['isQuotedReply'] == true,
       rawOcrText: (map['rawOcrText'] ?? tInfo?['rawOcrText'] ?? map['quotedOcrText'])?.toString(),
@@ -137,6 +143,8 @@ class IncomingPoChat {
       'quotedInvoiceNo': quotedInvoiceNo,
       'quotedOcrText': quotedOcrText,
       'quotedImageUrl': quotedImageUrl,
+      'quotedMessageText': quotedMessageText,
+      'quotedStanzaId': quotedStanzaId,
       'isForwarded': isForwarded,
       'isQuotedReply': isQuotedReply,
       'rawOcrText': rawOcrText,
@@ -161,6 +169,8 @@ class IncomingPoChat {
     String? quotedInvoiceNo,
     String? quotedOcrText,
     String? quotedImageUrl,
+    String? quotedMessageText,
+    String? quotedStanzaId,
     bool? isForwarded,
     bool? isQuotedReply,
     String? rawOcrText,
@@ -190,6 +200,8 @@ class IncomingPoChat {
       quotedInvoiceNo: quotedInvoiceNo ?? this.quotedInvoiceNo,
       quotedOcrText: quotedOcrText ?? this.quotedOcrText,
       quotedImageUrl: quotedImageUrl ?? this.quotedImageUrl,
+      quotedMessageText: quotedMessageText ?? this.quotedMessageText,
+      quotedStanzaId: quotedStanzaId ?? this.quotedStanzaId,
       isForwarded: isForwarded ?? this.isForwarded,
       isQuotedReply: isQuotedReply ?? this.isQuotedReply,
       rawOcrText: rawOcrText ?? this.rawOcrText,

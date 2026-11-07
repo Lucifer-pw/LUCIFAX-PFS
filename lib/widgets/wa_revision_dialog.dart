@@ -67,6 +67,9 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
 
   bool _isLoading = true;
   String? _errorMessage;
+  String? _contextSourceNote;
+  String? _recoveredQuotedText;
+  bool _isRevisionParsed = false;
   Customer? _targetCustomer;
   ChatOrderDraft? _draft;
   List<model_tr.Transaction> _customerInvoices = [];
@@ -74,6 +77,46 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
   bool _isMakeNewPo = false;
   String _mergeMode = 'ACCUMULATE'; // 'ACCUMULATE' or 'REPLACE'
   bool _isSubmitting = false;
+
+  bool _applyRevisionToDraft(ChatOrderDraft draft, String revisionText) {
+    if (draft.items.isEmpty) return false;
+    final lower = revisionText.toLowerCase();
+
+    // Pola: 'jadinya 25 k', 'jadi 25 ktn', 'ganti 25 karton', dsb.
+    final match = RegExp(
+      r'(?:jadinya|jadi|menjadi|ganti|revisi\s*(?:jadinya|jadi)?)\s*(\d+(?:[.,]\d+)?)\s*(k|ktn|karton|dus|box|pack|pcs|bal)?',
+      caseSensitive: false,
+    ).firstMatch(lower);
+
+    double? newQty;
+    String? matchedUnit;
+
+    if (match != null) {
+      newQty = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+      matchedUnit = match.group(2);
+    } else {
+      final fallbackMatch = RegExp(r'\b(\d+(?:[.,]\d+)?)\s*(k|ktn|karton)\b', caseSensitive: false).firstMatch(lower);
+      if (fallbackMatch != null) {
+        newQty = double.tryParse(fallbackMatch.group(1)!.replaceAll(',', '.'));
+        matchedUnit = fallbackMatch.group(2);
+      }
+    }
+
+    if (newQty != null && newQty > 0) {
+      final item = draft.items.first;
+      final isKarton = matchedUnit == null || ['k', 'ktn', 'karton', 'dus', 'box'].contains(matchedUnit.toLowerCase());
+      final pcsPerKtn = (item.qtyInput > 0 && item.qtyPcs > 0)
+          ? (item.qtyPcs / item.qtyInput)
+          : (item.sizeGrams >= 1000 ? 10.0 : 15.0);
+
+      item.qtyInput = newQty;
+      item.qtyUnit = isKarton ? 'karton' : 'pcs';
+      item.qtyPcs = isKarton ? (newQty * pcsPerKtn) : newQty;
+      debugPrint('[REVISION HELPER] Applied revision qty: ' + newQty.toString() + ' -> ' + item.qtyPcs.toString() + ' pcs for ' + item.productName);
+      return true;
+    }
+    return false;
+  }
 
   @override
   void initState() {
@@ -93,7 +136,7 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
         generalInstructions = await widget.firebaseService.getAiGeneralInstructions().timeout(const Duration(seconds: 4));
       } catch (_) {}
 
-      final drafts = await _parserService.parseChatOrders(
+      var drafts = await _parserService.parseChatOrders(
         rawChat: widget.chat.messageText,
         customers: widget.customerProvider.customers,
         products: widget.productProvider.products,
@@ -102,11 +145,72 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
         senderPhone: widget.chat.senderPhone,
       );
 
+      // Context Recovery jika chat revisi tidak memuat nama barang (seperti: 'Revisi... Jadinya 25 k Bulan 10 k')
+      if (drafts.isEmpty || drafts.first.items.isEmpty) {
+        String? recoveredContext;
+
+        // A. Cek quotedMessageText dari balasan pesan
+        if (widget.chat.quotedMessageText != null && widget.chat.quotedMessageText!.trim().isNotEmpty) {
+          recoveredContext = widget.chat.quotedMessageText!.trim();
+          _contextSourceNote = 'Konteks diambil dari balasan pesan (quoted message).';
+        }
+
+        // B. Fallback: Cari chat pesanan sebelumnya dari pengirim yang sama di Firestore
+        if (recoveredContext == null || recoveredContext.isEmpty) {
+          try {
+            final prevChatSnap = await FirebaseFirestore.instance
+                .collection('incoming_po_chats')
+                .where('senderPhone', isEqualTo: widget.chat.senderPhone)
+                .orderBy('receivedAt', descending: true)
+                .limit(5)
+                .get();
+
+            for (var doc in prevChatSnap.docs) {
+              if (doc.id == widget.chat.id) continue;
+              final data = doc.data();
+              final prevText = (data['messageText'] ?? '').toString();
+              if (prevText.isNotEmpty &&
+                  (data['messageType'] == 'ORDER_PO' ||
+                   data['createdInvoiceNo'] != null ||
+                   prevText.toLowerCase().contains('kg') ||
+                   prevText.toLowerCase().contains('ktn') ||
+                   prevText.toLowerCase().contains('k '))) {
+                recoveredContext = prevText;
+                _contextSourceNote = 'Konteks diambil otomatis dari chat pesanan sebelumnya.';
+                break;
+              }
+            }
+          } catch (e) {
+            debugPrint('[REVISION DIALOG] Fallback prev chat lookup error: ');
+          }
+        }
+
+        if (recoveredContext != null && recoveredContext.isNotEmpty) {
+          _recoveredQuotedText = recoveredContext;
+          drafts = await _parserService.parseChatOrders(
+            rawChat: recoveredContext,
+            customers: widget.customerProvider.customers,
+            products: widget.productProvider.products,
+            rules: rulesSnap,
+            generalInstructions: generalInstructions,
+            senderPhone: widget.chat.senderPhone,
+          );
+
+          if (drafts.isNotEmpty && drafts.first.items.isNotEmpty) {
+            final applied = _applyRevisionToDraft(drafts.first, widget.chat.messageText);
+            if (applied) {
+              _mergeMode = 'REPLACE';
+              _isRevisionParsed = true;
+            }
+          }
+        }
+      }
+
       if (drafts.isEmpty || drafts.first.items.isEmpty) {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _errorMessage = 'Tidak ditemukan format pesanan barang dalam teks chat ini.';
+            _errorMessage = 'Tidak ditemukan format pesanan barang dalam teks chat ini maupun pesan yang di-reply.';
           });
         }
         return;
@@ -589,6 +693,40 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Box Konteks Pesan Asli (Quoted Message / Previous Order) jika tersedia
+                        if (_recoveredQuotedText != null && _recoveredQuotedText!.trim().isNotEmpty) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0C4A6E).withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.reply_rounded, color: Color(0xFF38BDF8), size: 15),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _contextSourceNote ?? 'Konteks Pesanan yang Di-reply:',
+                                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                SelectableText(
+                                  _recoveredQuotedText!,
+                                  style: const TextStyle(color: Color(0xFFBAE6FD), fontSize: 11.5, fontFamily: 'monospace', height: 1.3),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
                         // Box Pesan WhatsApp Asli
                         Container(
                           width: double.infinity,
@@ -601,11 +739,18 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
-                                  Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF38BDF8), size: 14),
-                                  SizedBox(width: 6),
-                                  Text('Teks Chat dari Pengirim:', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const Icon(Icons.edit_note_rounded, color: Color(0xFFFBBF24), size: 14),
+                                  const SizedBox(width: 6),
+                                  const Text('Teks Revisi dari Pengirim:', style: TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const Spacer(),
+                                  if (_isRevisionParsed)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: const Color(0xFF065F46), borderRadius: BorderRadius.circular(4)),
+                                      child: const Text('✨ Revisi Qty Terdeteksi', style: TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ),
                                 ],
                               ),
                               const SizedBox(height: 6),
@@ -872,23 +1017,34 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
                         ),
                         const SizedBox(height: 14),
 
-                        // Warning jika Invoice Terpilih berstatus DIKIRIM
+                        // Guardrail Pembatas: Jika Invoice Terpilih berstatus DIKIRIM
                         if (!_isMakeNewPo && _selectedInvoice != null && _selectedInvoice!.status == 'DIKIRIM') ...[
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF7F1D1D).withOpacity(0.4),
+                              color: const Color(0xFF7F1D1D).withOpacity(0.5),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFEF4444)),
+                              border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
                             ),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.warning_amber_rounded, color: Color(0xFFFCA5A5), size: 20),
+                                const Icon(Icons.lock_rounded, color: Color(0xFFFCA5A5), size: 22),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(
-                                    '⚠️ Peringatan: Invoice #${_selectedInvoice!.invoiceNo} berstatus DIKIRIM (Tutup Buku). Mengubah invoice ini akan mempengaruhi laporan fisik stok gudang dan stok opname.',
-                                    style: const TextStyle(color: Color(0xFFFEE2E2), fontSize: 11, height: 1.3),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        '🔒 PEMBATAS KEAMANAN: FAKTUR SUDAH BERSTATUS "DIKIRIM"',
+                                        style: TextStyle(color: Color(0xFFFCA5A5), fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Invoice #${_selectedInvoice!.invoiceNo} sudah dalam pengiriman fisik (status: DIKIRIM). Update otomatis dinonaktifkan demi mencegah salah faktur & selisih stok opname.\n\nSesuai aturan operasional, revisi pesanan yang sudah dikirim WAJIB ditangani secara manual oleh Admin, atau buatkan faktur susulan baru melalui tombol "Buat Sebagai PO Baru Terpisah".',
+                                        style: const TextStyle(color: Color(0xFFFEE2E2), fontSize: 11, height: 1.35),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -1049,21 +1205,51 @@ class _WaRevisionDialogContentState extends State<_WaRevisionDialogContent> {
           child: const Text('Batal'),
         ),
         if (!_isMakeNewPo && _selectedInvoice != null) ...[
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          if (_selectedInvoice!.status == 'DIKIRIM') ...[
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF334155),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: null, // Terkunci pembatas aman!
+              icon: const Icon(Icons.lock_rounded, color: Color(0xFF94A3B8), size: 16),
+              label: Text(
+                'Terkunci: Invoice #${_selectedInvoice!.invoiceNo} Sudah DIKIRIM (Wajib Manual Admin)',
+                style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12),
+              ),
             ),
-            onPressed: _isSubmitting ? null : _submitUpdate,
-            icon: _isSubmitting
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
-            label: Text(
-              _isSubmitting ? 'Memperbarui...' : 'Terapkan & Update Invoice #${_selectedInvoice!.invoiceNo}',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                widget.onMakeNewPo();
+              },
+              icon: const Icon(Icons.add_task_rounded, color: Colors.white, size: 16),
+              label: const Text('Buat Sebagai PO Baru Terpisah (Susulan)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
             ),
-          ),
+          ] else ...[
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _isSubmitting ? null : _submitUpdate,
+              icon: _isSubmitting
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+              label: Text(
+                _isSubmitting ? 'Memperbarui...' : 'Terapkan & Update Invoice #${_selectedInvoice!.invoiceNo} (PENDING)',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ],
         ] else if (_isMakeNewPo) ...[
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
