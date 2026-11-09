@@ -575,128 +575,255 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
   }
 
-  /// Cetak Laporan PDF Ranking Kacab
+  /// Helper membangun sel tabel PDF dengan perataan dan styling rapi
+  pw.Widget _buildPdfCell(
+    String text, {
+    bool isHeader = false,
+    bool isBold = false,
+    pw.TextAlign align = pw.TextAlign.left,
+    PdfColor? textColor,
+    double fontSize = 7.5,
+    double vPad = 2.6,
+  }) {
+    return pw.Padding(
+      padding: pw.EdgeInsets.symmetric(horizontal: 4, vertical: vPad),
+      child: pw.Text(
+        text,
+        textAlign: align,
+        style: pw.TextStyle(
+          color: isHeader ? PdfColors.white : (textColor ?? PdfColors.black),
+          fontWeight: (isHeader || isBold) ? pw.FontWeight.bold : pw.FontWeight.normal,
+          fontSize: fontSize,
+        ),
+      ),
+    );
+  }
+
+  /// Membangun dokumen PDF Laporan Weekly Kacab (Format A4 Landscape pas 1 halaman)
+  Future<pw.Document> _buildPdfDocument(
+    List<Map<String, dynamic>> filteredList,
+    Map<String, dynamic> computed,
+  ) async {
+    final doc = pw.Document();
+
+    final int rowCount = filteredList.length;
+    // Dynamic padding & font size agar muat pas 1 lembar halaman tanpa tumpah ke halaman 2
+    final double vPadding = rowCount > 22 ? 1.8 : (rowCount > 16 ? 2.3 : 3.0);
+    final double dataFontSize = rowCount > 22 ? 6.8 : (rowCount > 16 ? 7.2 : 7.8);
+    final double headerFontSize = rowCount > 22 ? 7.2 : 7.8;
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        build: (pw.Context context) {
+          return [
+            // 1. Header Title & Informasi Kantor
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'LAPORAN WEEKLY KACAB',
+                      style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
+                      style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.grey700),
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('LUCIFAX PFS JATENG', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900)),
+                    pw.SizedBox(height: 2),
+                    pw.Text('Tanggal Cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.Divider(thickness: 0.8, color: PdfColors.grey300),
+            pw.SizedBox(height: 4),
+
+            // 2. Ringkasan KPI Stats Cards
+            pw.Row(
+              children: [
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromInt(0xFFF8FAFC),
+                      border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('TOTAL RATA-RATA 3 BULAN', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+                        pw.SizedBox(height: 1.5),
+                        pw.Text(_currency.format(_parseNum(computed['gAverage'])), style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
+                      ],
+                    ),
+                  ),
+                ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromInt(0xFFF8FAFC),
+                      border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('TOKO PERINGKAT #1', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+                        pw.SizedBox(height: 1.5),
+                        pw.Text(computed['top1Name'].toString(), style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.amber800)),
+                      ],
+                    ),
+                  ),
+                ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromInt(0xFFF8FAFC),
+                      border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('TOTAL OUTLET', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+                        pw.SizedBox(height: 1.5),
+                        pw.Text('${computed['storeCount']} Toko', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 6),
+
+            // 3. Tabel Data Ranking Kacab
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+              columnWidths: const {
+                0: pw.FixedColumnWidth(24),  // NO
+                1: pw.FlexColumnWidth(3.2),  // OUTLET
+                2: pw.FlexColumnWidth(1.8),  // BULAN 1
+                3: pw.FlexColumnWidth(1.8),  // BULAN 2
+                4: pw.FlexColumnWidth(1.8),  // BULAN 3
+                5: pw.FlexColumnWidth(2.0),  // TOTAL
+                6: pw.FlexColumnWidth(2.0),  // RATA-RATA 3 BULAN
+              },
+              defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+              children: [
+                // Header Row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+                  children: [
+                    _buildPdfCell('NO', isHeader: true, align: pw.TextAlign.center, fontSize: headerFontSize, vPad: vPadding),
+                    _buildPdfCell('OUTLET', isHeader: true, align: pw.TextAlign.left, fontSize: headerFontSize, vPad: vPadding),
+                    _buildPdfCell(_month1Name.toUpperCase(), isHeader: true, align: pw.TextAlign.right, fontSize: headerFontSize, vPad: vPadding),
+                    _buildPdfCell(_month2Name.toUpperCase(), isHeader: true, align: pw.TextAlign.right, fontSize: headerFontSize, vPad: vPadding),
+                    _buildPdfCell(_month3Name.toUpperCase(), isHeader: true, align: pw.TextAlign.right, fontSize: headerFontSize, vPad: vPadding),
+                    _buildPdfCell('TOTAL', isHeader: true, align: pw.TextAlign.right, fontSize: headerFontSize, vPad: vPadding),
+                    _buildPdfCell('RATA-RATA 3 BULAN', isHeader: true, align: pw.TextAlign.right, fontSize: headerFontSize, vPad: vPadding),
+                  ],
+                ),
+                // Data Rows
+                ...filteredList.map((item) {
+                  final rank = item['rank'] as int? ?? 0;
+                  final isTop3 = rank <= 3;
+                  final isEven = rank % 2 == 0;
+                  return pw.TableRow(
+                    decoration: pw.BoxDecoration(
+                      color: isEven ? PdfColor.fromInt(0xFFF8FAFC) : PdfColors.white,
+                    ),
+                    children: [
+                      _buildPdfCell('$rank', align: pw.TextAlign.center, isBold: isTop3, fontSize: dataFontSize, vPad: vPadding),
+                      _buildPdfCell(item['alias'].toString(), align: pw.TextAlign.left, isBold: isTop3, fontSize: dataFontSize, vPad: vPadding),
+                      _buildPdfCell(_currency.format(_parseNum(item['month1'])), align: pw.TextAlign.right, fontSize: dataFontSize, vPad: vPadding),
+                      _buildPdfCell(_currency.format(_parseNum(item['month2'])), align: pw.TextAlign.right, fontSize: dataFontSize, vPad: vPadding),
+                      _buildPdfCell(_currency.format(_parseNum(item['month3'])), align: pw.TextAlign.right, fontSize: dataFontSize, vPad: vPadding),
+                      _buildPdfCell(_currency.format(_parseNum(item['total'])), align: pw.TextAlign.right, isBold: true, textColor: PdfColors.blue900, fontSize: dataFontSize, vPad: vPadding),
+                      _buildPdfCell(_currency.format(_parseNum(item['average'])), align: pw.TextAlign.right, isBold: true, textColor: PdfColors.green900, fontSize: dataFontSize, vPad: vPadding),
+                    ],
+                  );
+                }),
+                // Footer Total Row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(
+                    color: PdfColor.fromInt(0xFFE2E8F0),
+                  ),
+                  children: [
+                    _buildPdfCell('TOTAL', align: pw.TextAlign.center, isBold: true, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                    _buildPdfCell('TOTAL GRANDTOTAL (SEMUA)', align: pw.TextAlign.left, isBold: true, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                    _buildPdfCell(_currency.format(_parseNum(computed['gM1'])), align: pw.TextAlign.right, isBold: true, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                    _buildPdfCell(_currency.format(_parseNum(computed['gM2'])), align: pw.TextAlign.right, isBold: true, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                    _buildPdfCell(_currency.format(_parseNum(computed['gM3'])), align: pw.TextAlign.right, isBold: true, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                    _buildPdfCell(_currency.format(_parseNum(computed['gTotal'])), align: pw.TextAlign.right, isBold: true, textColor: PdfColors.blue900, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                    _buildPdfCell(_currency.format(_parseNum(computed['gAverage'])), align: pw.TextAlign.right, isBold: true, textColor: PdfColors.green900, fontSize: dataFontSize, vPad: vPadding + 0.5),
+                  ],
+                ),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc;
+  }
+
+  /// Download langsung berkas PDF Laporan Weekly Kacab
+  Future<void> _downloadPdf(
+    List<Map<String, dynamic>> filteredList,
+    Map<String, dynamic> computed,
+  ) async {
+    try {
+      final doc = await _buildPdfDocument(filteredList, computed);
+      final fileName = 'Laporan_Weekly_Kacab_${_month1Name}_$_month3Name.pdf'.replaceAll(' ', '_');
+      final bytes = await doc.save();
+
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Berhasil download $fileName!'),
+            backgroundColor: Colors.teal,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal download PDF: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  /// Cetak / Pratinjau Laporan PDF Ranking Kacab
   Future<void> _printPdf(
     List<Map<String, dynamic>> filteredList,
     Map<String, dynamic> computed,
   ) async {
     try {
-      final doc = pw.Document();
-
-      doc.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.all(24),
-          build: (pw.Context context) {
-            return [
-              // Header Title
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'LAPORAN WEEKLY KACAB',
-                        style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Cabang: JAWA TENGAH | Periode: $_month1Name - $_month3Name',
-                        style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('LUCIFAX PFS JATENG', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Tanggal Cetak: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-              pw.Divider(thickness: 1, color: PdfColors.grey400),
-              pw.SizedBox(height: 10),
-
-              // KPI Stats Box
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-                children: [
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(8),
-                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('TOTAL RATA-RATA 3 BULAN', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
-                        pw.Text(_currency.format(_parseNum(computed['gAverage'])), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
-                      ],
-                    ),
-                  ),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(8),
-                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('TOKO PERINGKAT #1', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
-                        pw.Text(computed['top1Name'].toString(), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.amber800)),
-                      ],
-                    ),
-                  ),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(8),
-                    decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('TOTAL OUTLET', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
-                        pw.Text('${computed['storeCount']} Toko', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 14),
-
-              // Ranking Table
-              pw.TableHelper.fromTextArray(
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
-                headerHeight: 24,
-                cellHeight: 20,
-                headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
-                cellStyle: const pw.TextStyle(fontSize: 8),
-                cellAlignment: pw.Alignment.centerLeft,
-                headers: ['NO', 'OUTLET', _month1Name.toUpperCase(), _month2Name.toUpperCase(), _month3Name.toUpperCase(), 'TOTAL', 'RATA-RATA 3 BULAN'],
-                data: [
-                  ...filteredList.map((item) => [
-                    '${item['rank']}',
-                    item['alias'].toString(),
-                    _currency.format(_parseNum(item['month1'])),
-                    _currency.format(_parseNum(item['month2'])),
-                    _currency.format(_parseNum(item['month3'])),
-                    _currency.format(_parseNum(item['total'])),
-                    _currency.format(_parseNum(item['average'])),
-                  ]),
-                  [
-                    'TOTAL',
-                    'TOTAL GRANDTOTAL (SEMUA)',
-                    _currency.format(_parseNum(computed['gM1'])),
-                    _currency.format(_parseNum(computed['gM2'])),
-                    _currency.format(_parseNum(computed['gM3'])),
-                    _currency.format(_parseNum(computed['gTotal'])),
-                    _currency.format(_parseNum(computed['gAverage'])),
-                  ],
-                ],
-              ),
-            ];
-          },
-        ),
-      );
-
-      final fileName = 'Laporan_Ranking_Kacab_${_month1Name}_$_month3Name.pdf'.replaceAll(' ', '_');
+      final doc = await _buildPdfDocument(filteredList, computed);
+      final fileName = 'Laporan_Weekly_Kacab_${_month1Name}_$_month3Name.pdf'.replaceAll(' ', '_');
       await Printing.layoutPdf(
         onLayout: (format) async => doc.save(),
         name: fileName,
@@ -704,12 +831,11 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mencetak PDF: $e')),
+          SnackBar(content: Text('Gagal mencetak PDF: $e'), backgroundColor: Colors.redAccent),
         );
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     // Listen to providers so view updates automatically when data arrives
@@ -840,13 +966,37 @@ final selectedKey = '${_startMonth}_$_startYear';
                               child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
                             ),
                             onSelected: (val) {
-                              if (val == 'excel' && filtered.isNotEmpty) {
-                                _exportToExcel(filtered, computed);
-                              } else if (val == 'pdf' && filtered.isNotEmpty) {
+                              if (val == 'download_pdf' && filtered.isNotEmpty) {
+                                _downloadPdf(filtered, computed);
+                              } else if (val == 'print_pdf' && filtered.isNotEmpty) {
                                 _printPdf(filtered, computed);
+                              } else if (val == 'excel' && filtered.isNotEmpty) {
+                                _exportToExcel(filtered, computed);
                               }
                             },
                             itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'download_pdf',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFEF4444), size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Download PDF (.pdf)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuDivider(height: 1),
+                              const PopupMenuItem(
+                                value: 'print_pdf',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Cetak / Pratinjau PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuDivider(height: 1),
                               const PopupMenuItem(
                                 value: 'excel',
                                 child: Row(
@@ -854,17 +1004,6 @@ final selectedKey = '${_startMonth}_$_startYear';
                                     Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
                                     SizedBox(width: 10),
                                     Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuDivider(height: 1),
-                              const PopupMenuItem(
-                                value: 'pdf',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
-                                    SizedBox(width: 10),
-                                    Text('Cetak PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ),
@@ -952,6 +1091,18 @@ final selectedKey = '${_startMonth}_$_startYear';
                             onChanged: _onPeriodChanged,
                           ),
                         ),
+                        // Tombol Download PDF Cepat (1-Klik)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: filtered.isEmpty ? null : () => _downloadPdf(filtered, computed),
+                          icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                          label: const Text('Download PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
                         PopupMenuButton<String>(
                           tooltip: 'Menu Opsi Titik 3',
                           offset: const Offset(0, 40),
@@ -970,13 +1121,37 @@ final selectedKey = '${_startMonth}_$_startYear';
                             child: const Icon(Icons.more_vert_rounded, color: Color(0xFF38BDF8), size: 18),
                           ),
                           onSelected: (val) {
-                            if (val == 'excel' && filtered.isNotEmpty) {
-                              _exportToExcel(filtered, computed);
-                            } else if (val == 'pdf' && filtered.isNotEmpty) {
+                            if (val == 'download_pdf' && filtered.isNotEmpty) {
+                              _downloadPdf(filtered, computed);
+                            } else if (val == 'print_pdf' && filtered.isNotEmpty) {
                               _printPdf(filtered, computed);
+                            } else if (val == 'excel' && filtered.isNotEmpty) {
+                              _exportToExcel(filtered, computed);
                             }
                           },
                           itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'download_pdf',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFEF4444), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Download PDF (.pdf)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(height: 1),
+                            const PopupMenuItem(
+                              value: 'print_pdf',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.print_rounded, color: Color(0xFF38BDF8), size: 18),
+                                  SizedBox(width: 10),
+                                  Text('Cetak / Pratinjau PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(height: 1),
                             const PopupMenuItem(
                               value: 'excel',
                               child: Row(
@@ -984,17 +1159,6 @@ final selectedKey = '${_startMonth}_$_startYear';
                                   Icon(Icons.table_view_rounded, color: Color(0xFF10B981), size: 18),
                                   SizedBox(width: 10),
                                   Text('Export Excel (.xlsx)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuDivider(height: 1),
-                            const PopupMenuItem(
-                              value: 'pdf',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.print_rounded, color: Color(0xFF0284C7), size: 18),
-                                  SizedBox(width: 10),
-                                  Text('Cetak PDF', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
