@@ -1091,18 +1091,6 @@ final selectedKey = '${_startMonth}_$_startYear';
                             onChanged: _onPeriodChanged,
                           ),
                         ),
-                        // Tombol Download PDF Cepat (1-Klik)
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFDC2626),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: filtered.isEmpty ? null : () => _downloadPdf(filtered, computed),
-                          icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-                          label: const Text('Download PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
                         PopupMenuButton<String>(
                           tooltip: 'Menu Opsi Titik 3',
                           offset: const Offset(0, 40),

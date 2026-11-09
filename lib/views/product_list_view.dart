@@ -3936,6 +3936,27 @@ class _ProductListViewState extends State<ProductListView> {
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 14, color: Colors.white),
+                  label: const Text('Download PDF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  onPressed: () {
+                    _downloadPhysicalStockDirect(
+                      selectedYear: selectedYear,
+                      selectedMonth: selectedMonth,
+                      selectedWeek: selectedWeek,
+                      unitMode: unitMode,
+                      monthName: monthNames[selectedMonth - 1],
+                      periodLabel: periodLabel,
+                    );
+                  },
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0284C7),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     minimumSize: Size.zero,
@@ -3972,6 +3993,50 @@ class _ProductListViewState extends State<ProductListView> {
     );
   }
 
+  // Helper to fetch data for physical stock operations
+  Future<List<_PhysicalStockItem>> _fetchPhysicalStockData({
+    required int selectedYear,
+    required int selectedMonth,
+    required int selectedWeek,
+  }) async {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final daysInMonth = DateTime(selectedYear, selectedMonth + 1, 0).day;
+    final firstDay = DateTime(selectedYear, selectedMonth, 1);
+    final firstDayOffset = firstDay.weekday % 7;
+    int getWeek(int day) => ((day - 1 + firstDayOffset) ~/ 7) + 1;
+
+    final Map<int, List<int>> weekDaysMap = {};
+    for (int d = 1; d <= daysInMonth; d++) {
+      final w = getWeek(d);
+      weekDaysMap.putIfAbsent(w, () => []).add(d);
+    }
+    final int maxWeek = weekDaysMap.keys.isEmpty ? 5 : weekDaysMap.keys.reduce((a, b) => a > b ? a : b);
+
+    final DateTime startOfMonth = DateTime(selectedYear, selectedMonth, 1, 0, 0, 0);
+    final DateTime endOfMonth = DateTime(selectedYear, selectedMonth, daysInMonth, 23, 59, 59, 999);
+    final String formattedMonthYear = '${selectedMonth.toString().padLeft(2, '0')}-$selectedYear';
+
+    final entriesSnap = await FirebaseFirestore.instance.collection('stock_entries').where('monthYear', isEqualTo: formattedMonthYear).get();
+    final allEntries = entriesSnap.docs.map((d) => StockEntry.fromFirestore(d)).toList();
+
+    final mutationsSnap = await FirebaseFirestore.instance.collection('stock_mutations')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
+        .get();
+    final allMutations = mutationsSnap.docs.map((d) => StockMutation.fromFirestore(d)).toList();
+
+    return _calculateChainedPhysicalStock(
+      products: productProvider.products,
+      allEntries: allEntries,
+      allMutations: allMutations,
+      selectedYear: selectedYear,
+      selectedMonth: selectedMonth,
+      selectedWeek: selectedWeek,
+      maxWeek: maxWeek,
+      weekDaysMap: weekDaysMap,
+    );
+  }
+
   // Helper to fetch data and export Excel
   Future<void> _exportPhysicalStockDirect({
     required int selectedYear,
@@ -3982,41 +4047,10 @@ class _ProductListViewState extends State<ProductListView> {
     required String periodLabel,
   }) async {
     try {
-      final productProvider = Provider.of<ProductProvider>(context, listen: false);
-      final daysInMonth = DateTime(selectedYear, selectedMonth + 1, 0).day;
-      final firstDay = DateTime(selectedYear, selectedMonth, 1);
-      final firstDayOffset = firstDay.weekday % 7;
-      int getWeek(int day) => ((day - 1 + firstDayOffset) ~/ 7) + 1;
-
-      final Map<int, List<int>> weekDaysMap = {};
-      for (int d = 1; d <= daysInMonth; d++) {
-        final w = getWeek(d);
-        weekDaysMap.putIfAbsent(w, () => []).add(d);
-      }
-      final int maxWeek = weekDaysMap.keys.isEmpty ? 5 : weekDaysMap.keys.reduce((a, b) => a > b ? a : b);
-
-      final DateTime startOfMonth = DateTime(selectedYear, selectedMonth, 1, 0, 0, 0);
-      final DateTime endOfMonth = DateTime(selectedYear, selectedMonth, daysInMonth, 23, 59, 59, 999);
-      final String formattedMonthYear = '${selectedMonth.toString().padLeft(2, '0')}-$selectedYear';
-
-      final entriesSnap = await FirebaseFirestore.instance.collection('stock_entries').where('monthYear', isEqualTo: formattedMonthYear).get();
-      final allEntries = entriesSnap.docs.map((d) => StockEntry.fromFirestore(d)).toList();
-
-      final mutationsSnap = await FirebaseFirestore.instance.collection('stock_mutations')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
-          .get();
-      final allMutations = mutationsSnap.docs.map((d) => StockMutation.fromFirestore(d)).toList();
-
-      final computedItems = _calculateChainedPhysicalStock(
-        products: productProvider.products,
-        allEntries: allEntries,
-        allMutations: allMutations,
+      final computedItems = await _fetchPhysicalStockData(
         selectedYear: selectedYear,
         selectedMonth: selectedMonth,
         selectedWeek: selectedWeek,
-        maxWeek: maxWeek,
-        weekDaysMap: weekDaysMap,
       );
 
       await _exportPhysicalStockToExcel(
@@ -4035,6 +4069,38 @@ class _ProductListViewState extends State<ProductListView> {
     }
   }
 
+  // Helper to fetch data and download PDF
+  Future<void> _downloadPhysicalStockDirect({
+    required int selectedYear,
+    required int selectedMonth,
+    required int selectedWeek,
+    required String unitMode,
+    required String monthName,
+    required String periodLabel,
+  }) async {
+    try {
+      final computedItems = await _fetchPhysicalStockData(
+        selectedYear: selectedYear,
+        selectedMonth: selectedMonth,
+        selectedWeek: selectedWeek,
+      );
+
+      await _downloadPhysicalStockPdf(
+        items: computedItems,
+        monthName: monthName,
+        year: selectedYear,
+        periodLabel: periodLabel,
+        unitMode: unitMode,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal download PDF: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   // Helper to fetch data and print PDF
   Future<void> _printPhysicalStockDirect({
     required int selectedYear,
@@ -4045,41 +4111,10 @@ class _ProductListViewState extends State<ProductListView> {
     required String periodLabel,
   }) async {
     try {
-      final productProvider = Provider.of<ProductProvider>(context, listen: false);
-      final daysInMonth = DateTime(selectedYear, selectedMonth + 1, 0).day;
-      final firstDay = DateTime(selectedYear, selectedMonth, 1);
-      final firstDayOffset = firstDay.weekday % 7;
-      int getWeek(int day) => ((day - 1 + firstDayOffset) ~/ 7) + 1;
-
-      final Map<int, List<int>> weekDaysMap = {};
-      for (int d = 1; d <= daysInMonth; d++) {
-        final w = getWeek(d);
-        weekDaysMap.putIfAbsent(w, () => []).add(d);
-      }
-      final int maxWeek = weekDaysMap.keys.isEmpty ? 5 : weekDaysMap.keys.reduce((a, b) => a > b ? a : b);
-
-      final DateTime startOfMonth = DateTime(selectedYear, selectedMonth, 1, 0, 0, 0);
-      final DateTime endOfMonth = DateTime(selectedYear, selectedMonth, daysInMonth, 23, 59, 59, 999);
-      final String formattedMonthYear = '${selectedMonth.toString().padLeft(2, '0')}-$selectedYear';
-
-      final entriesSnap = await FirebaseFirestore.instance.collection('stock_entries').where('monthYear', isEqualTo: formattedMonthYear).get();
-      final allEntries = entriesSnap.docs.map((d) => StockEntry.fromFirestore(d)).toList();
-
-      final mutationsSnap = await FirebaseFirestore.instance.collection('stock_mutations')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
-          .get();
-      final allMutations = mutationsSnap.docs.map((d) => StockMutation.fromFirestore(d)).toList();
-
-      final computedItems = _calculateChainedPhysicalStock(
-        products: productProvider.products,
-        allEntries: allEntries,
-        allMutations: allMutations,
+      final computedItems = await _fetchPhysicalStockData(
         selectedYear: selectedYear,
         selectedMonth: selectedMonth,
         selectedWeek: selectedWeek,
-        maxWeek: maxWeek,
-        weekDaysMap: weekDaysMap,
       );
 
       await _printPhysicalStockPdf(
@@ -4288,6 +4323,141 @@ class _ProductListViewState extends State<ProductListView> {
     }
   }
 
+  pw.Document _generatePhysicalStockPdfDoc({
+    required List<_PhysicalStockItem> items,
+    required String monthName,
+    required int year,
+    required String periodLabel,
+    required String unitMode,
+  }) {
+    final doc = pw.Document();
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+
+    final tableHeaders = [
+      'No',
+      'Kode',
+      'Nama Produk',
+      'Isi/Ctn',
+      'Awal ($unitMode)',
+      'Sblm In (Kedatangan)',
+      '+In',
+      'Adjust (±)',
+      '-Out',
+      'Akhir ($unitMode)',
+    ];
+
+    final tableData = <List<String>>[];
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      final p = item.product;
+      final perBox = p.isiKarton > 0 ? p.isiKarton : 1;
+
+      double initVal = unitMode == 'KARTON' ? item.initialStock / perBox : item.initialStock;
+      double? beforeInVal = item.stockBeforeIn != null ? (unitMode == 'KARTON' ? item.stockBeforeIn! / perBox : item.stockBeforeIn!) : null;
+      double inVal = unitMode == 'KARTON' ? item.inflow / perBox : item.inflow;
+      double adjVal = unitMode == 'KARTON' ? item.adjust / perBox : item.adjust;
+      double outVal = unitMode == 'KARTON' ? item.outflow / perBox : item.outflow;
+      double finalVal = unitMode == 'KARTON' ? item.finalStock / perBox : item.finalStock;
+
+      tableData.add([
+        '${i + 1}',
+        p.kodeInduk,
+        p.name,
+        '${p.isiKarton}',
+        unitMode == 'KARTON' ? initVal.toStringAsFixed(1) : '${initVal.toInt()}',
+        beforeInVal != null ? (unitMode == 'KARTON' ? beforeInVal.toStringAsFixed(1) : '${beforeInVal.toInt()}') : '-',
+        unitMode == 'KARTON' ? (inVal > 0 ? '+${inVal.toStringAsFixed(1)}' : '0') : (inVal > 0 ? '+${inVal.toInt()}' : '0'),
+        adjVal != 0
+            ? (unitMode == 'KARTON'
+                ? (adjVal > 0 ? '+${adjVal.toStringAsFixed(1)}' : adjVal.toStringAsFixed(1))
+                : (adjVal > 0 ? '+${adjVal.toInt()}' : '${adjVal.toInt()}'))
+            : '-',
+        unitMode == 'KARTON' ? (outVal > 0 ? '-${outVal.toStringAsFixed(1)}' : '0') : (outVal > 0 ? '-${outVal.toInt()}' : '0'),
+        unitMode == 'KARTON' ? finalVal.toStringAsFixed(1) : '${finalVal.toInt()}',
+      ]);
+    }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        build: (pw.Context ctx) {
+          return [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'LAPORAN RIWAYAT STOK FISIK',
+                      style: pw.TextStyle(fontSize: 12.5, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF0F172A)),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Row(
+                      children: [
+                        pw.Text(
+                          'Bulan: ${monthName.toUpperCase()} $year | $periodLabel',
+                          style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
+                        ),
+                        pw.SizedBox(width: 12),
+                        pw.Text(
+                          'Satuan Data: $unitMode',
+                          style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF0284C7)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('PT. PANGAN FROZEN SEJAHTERA', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF0F172A))),
+                    pw.SizedBox(height: 1),
+                    pw.Text('Dicetak: $dateStr | Total Barang: ${items.length} item', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.Divider(thickness: 0.8, color: PdfColors.grey400),
+            pw.SizedBox(height: 4),
+            pw.TableHelper.fromTextArray(
+              headers: tableHeaders,
+              data: tableData,
+              headerStyle: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+              headerPadding: const pw.EdgeInsets.symmetric(horizontal: 2.5, vertical: 2.5),
+              headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF0F172A)),
+              rowDecoration: const pw.BoxDecoration(color: PdfColors.white),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F5F9)),
+              cellPadding: const pw.EdgeInsets.symmetric(horizontal: 2.5, vertical: 1.8),
+              cellStyle: const pw.TextStyle(fontSize: 6.8),
+              cellAlignment: pw.Alignment.center,
+              cellAlignments: {
+                2: pw.Alignment.centerLeft,
+              },
+              columnWidths: {
+                0: const pw.FixedColumnWidth(22),
+                1: const pw.FixedColumnWidth(65),
+                2: const pw.FlexColumnWidth(3),
+                3: const pw.FixedColumnWidth(35),
+                4: const pw.FixedColumnWidth(50),
+                5: const pw.FixedColumnWidth(60),
+                6: const pw.FixedColumnWidth(42),
+                7: const pw.FixedColumnWidth(45),
+                8: const pw.FixedColumnWidth(42),
+                9: const pw.FixedColumnWidth(50),
+              },
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc;
+  }
+
   Future<void> _printPhysicalStockPdf({
     required List<_PhysicalStockItem> items,
     required String monthName,
@@ -4296,123 +4466,13 @@ class _ProductListViewState extends State<ProductListView> {
     required String unitMode,
   }) async {
     try {
-      final doc = pw.Document();
-      final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
-
-      final tableHeaders = [
-        'No',
-        'Kode',
-        'Nama Produk',
-        'Isi/Ctn',
-        'Awal ($unitMode)',
-        'Sblm In (Kedatangan)',
-        '+In',
-        'Adjust (±)',
-        '-Out',
-        'Akhir ($unitMode)',
-      ];
-
-      final tableData = <List<String>>[];
-      for (int i = 0; i < items.length; i++) {
-        final item = items[i];
-        final p = item.product;
-        final perBox = p.isiKarton > 0 ? p.isiKarton : 1;
-
-        double initVal = unitMode == 'KARTON' ? item.initialStock / perBox : item.initialStock;
-        double? beforeInVal = item.stockBeforeIn != null ? (unitMode == 'KARTON' ? item.stockBeforeIn! / perBox : item.stockBeforeIn!) : null;
-        double inVal = unitMode == 'KARTON' ? item.inflow / perBox : item.inflow;
-        double adjVal = unitMode == 'KARTON' ? item.adjust / perBox : item.adjust;
-        double outVal = unitMode == 'KARTON' ? item.outflow / perBox : item.outflow;
-        double finalVal = unitMode == 'KARTON' ? item.finalStock / perBox : item.finalStock;
-
-        tableData.add([
-          '${i + 1}',
-          p.kodeInduk,
-          p.name,
-          '${p.isiKarton}',
-          unitMode == 'KARTON' ? initVal.toStringAsFixed(1) : '${initVal.toInt()}',
-          beforeInVal != null ? (unitMode == 'KARTON' ? beforeInVal.toStringAsFixed(1) : '${beforeInVal.toInt()}') : '-',
-          unitMode == 'KARTON' ? (inVal > 0 ? '+${inVal.toStringAsFixed(1)}' : '0') : (inVal > 0 ? '+${inVal.toInt()}' : '0'),
-          adjVal != 0
-              ? (unitMode == 'KARTON'
-                  ? (adjVal > 0 ? '+${adjVal.toStringAsFixed(1)}' : adjVal.toStringAsFixed(1))
-                  : (adjVal > 0 ? '+${adjVal.toInt()}' : '${adjVal.toInt()}'))
-              : '-',
-          unitMode == 'KARTON' ? (outVal > 0 ? '-${outVal.toStringAsFixed(1)}' : '0') : (outVal > 0 ? '-${outVal.toInt()}' : '0'),
-          unitMode == 'KARTON' ? finalVal.toStringAsFixed(1) : '${finalVal.toInt()}',
-        ]);
-      }
-
-      doc.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.all(20),
-          build: (pw.Context ctx) {
-            return [
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'LAPORAN RIWAYAT STOK FISIK',
-                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-                      ),
-                      pw.SizedBox(height: 3),
-                      pw.Text(
-                        'Bulan: ${monthName.toUpperCase()} $year | $periodLabel',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
-                      pw.Text(
-                        'Satuan Data: $unitMode',
-                        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('PT. PANGAN FROZEN SEJAHTERA', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Dicetak: $dateStr', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-                      pw.Text('Total Barang: ${items.length} item', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-              pw.Divider(thickness: 1, color: PdfColors.grey400),
-              pw.SizedBox(height: 6),
-              pw.TableHelper.fromTextArray(
-                headers: tableHeaders,
-                data: tableData,
-                headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-                headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF0F172A)),
-                rowDecoration: const pw.BoxDecoration(color: PdfColors.white),
-                oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F5F9)),
-                cellStyle: const pw.TextStyle(fontSize: 7.5),
-                cellAlignment: pw.Alignment.center,
-                cellAlignments: {
-                  2: pw.Alignment.centerLeft,
-                },
-                columnWidths: {
-                  0: const pw.FixedColumnWidth(22),
-                  1: const pw.FixedColumnWidth(65),
-                  2: const pw.FlexColumnWidth(3),
-                  3: const pw.FixedColumnWidth(35),
-                  4: const pw.FixedColumnWidth(50),
-                  5: const pw.FixedColumnWidth(60),
-                  6: const pw.FixedColumnWidth(42),
-                  7: const pw.FixedColumnWidth(45),
-                  8: const pw.FixedColumnWidth(42),
-                  9: const pw.FixedColumnWidth(50),
-                },
-              ),
-            ];
-          },
-        ),
+      final doc = _generatePhysicalStockPdfDoc(
+        items: items,
+        monthName: monthName,
+        year: year,
+        periodLabel: periodLabel,
+        unitMode: unitMode,
       );
-
       final fileName = 'Riwayat_Stok_Fisik_${monthName}_$year.pdf';
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => doc.save(),
@@ -4422,6 +4482,43 @@ class _ProductListViewState extends State<ProductListView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal mencetak PDF: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadPhysicalStockPdf({
+    required List<_PhysicalStockItem> items,
+    required String monthName,
+    required int year,
+    required String periodLabel,
+    required String unitMode,
+  }) async {
+    try {
+      final doc = _generatePhysicalStockPdfDoc(
+        items: items,
+        monthName: monthName,
+        year: year,
+        periodLabel: periodLabel,
+        unitMode: unitMode,
+      );
+      final fileName = 'Riwayat_Stok_Fisik_${monthName}_$year.pdf';
+      final bytes = await doc.save();
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Berhasil download $fileName!'),
+            backgroundColor: Colors.teal,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal download PDF: $e'), backgroundColor: Colors.redAccent),
         );
       }
     }
