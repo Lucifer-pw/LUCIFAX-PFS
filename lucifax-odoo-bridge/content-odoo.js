@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.4</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.5</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1780,14 +1780,16 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           if (!targetHasCat && optHasCat) return -1; // Target is NOT Jari-Jari, candidate is Jari-Jari!
         }
 
-        // B. Meat Type & Flavor Variant Constraint (Ayam vs Sapi vs Ori/Coklat)
+        // B. Meat Type & Flavor Variant Constraint (Ayam vs Sapi vs Ori/Coklat vs Merah)
         const targetHasSapi = targetLower.includes('sapi') || fallbackLower.includes('sapi');
         const targetHasAyam = targetLower.includes('ayam') || fallbackLower.includes('ayam');
         const targetHasOriOrCoklat = targetLower.includes('ori') || targetLower.includes('coklat') || fallbackLower.includes('ori') || fallbackLower.includes('coklat');
+        const targetHasMerah = targetLower.includes('merah') || fallbackLower.includes('merah');
 
         const optHasSapi = txt.includes('sapi');
         const optHasAyam = txt.includes('ayam');
         const optHasOri = txt.includes('ori');
+        const optHasMerah = txt.includes('merah');
 
         // If target specifies Sapi, candidate MUST have Sapi and CANNOT have Ayam
         if (targetHasSapi && (!optHasSapi || optHasAyam)) return -1;
@@ -1799,9 +1801,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         // This strictly prevents BRS Coklat / BRS Ori from ever selecting BRS Ayam!
         if (!targetHasAyam && optHasAyam) return -1;
 
-        // If target specifies Ori or Coklat, strictly forbid Ayam and give Ori a massive bonus
+        // CRITICAL: Merah constraint!
+        // If target specifies Merah, candidate MUST have Merah and CANNOT have Ayam/Sapi
+        if (targetHasMerah && (!optHasMerah || optHasAyam || optHasSapi)) return -1;
+        // If target does NOT specify Merah, candidate MUST NOT have Merah!
+        // This strictly prevents BRS Coklat / BRS Ori from ever selecting BRS Merah!
+        if (!targetHasMerah && optHasMerah) return -1;
+        if (targetHasMerah && optHasMerah) score += 3000;
+
+        // If target specifies Ori or Coklat, strictly forbid Ayam/Merah and give Ori a massive bonus
         if (targetHasOriOrCoklat) {
-          if (optHasAyam) return -1;
+          if (optHasAyam || optHasMerah) return -1;
           if (optHasOri) score += 3000;
         }
 
@@ -1948,11 +1958,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           addQuery('BRS 13');
           if (preferLk) addQuery('[PRODUK LK] BRS 13');
         } else if (targetLower.includes('24') || fallbackLower.includes('24')) {
-          addQuery('[PRODUK LK] BRS Merah 24 PCS @ 500 g LK');
-          addQuery('[PRODUK LK] BRS Merah 24');
-          addQuery('BRS Merah 24');
-          if (preferLk) addQuery('[PRODUK LK] BRS 24');
-          addQuery('BRS 24');
+          const isMerah = targetLower.includes('merah') || fallbackLower.includes('merah');
+          if (isMerah) {
+            addQuery('[PRODUK LK] BRS Merah 24 PCS @ 500 g LK');
+            addQuery('[PRODUK LK] BRS Merah 24');
+            addQuery('BRS Merah 24');
+            addQuery('BRS Merah');
+          } else {
+            addQuery('[PRODUK LK] BRS 24 PCS @ 500 g LK');
+            addQuery('[PRODUK LK] BRS 24');
+            addQuery('BRS 24');
+          }
         } else if (targetLower.includes('30') || fallbackLower.includes('30')) {
           addQuery('BRS 30');
           if (preferLk) addQuery('[PRODUK LK] BRS 30');
