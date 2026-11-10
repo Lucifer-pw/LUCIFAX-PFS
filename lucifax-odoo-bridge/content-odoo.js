@@ -62,12 +62,28 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           border: 1px solid #334155;
           border-radius: 8px;
           padding: 8px 10px;
-          margin-bottom: 12px;
+          margin-bottom: 8px;
         ">
           <div id="lucifax-invoice-status" style="color: #94A3B8; font-size: 11px; line-height: 1.4;">
             Belum ada transaksi dipilih.<br/>
             Klik <b>[Siapkan ke Odoo]</b> di Lucifax PFS.
           </div>
+        </div>
+
+        <div id="lucifax-paste-section" style="margin-bottom: 10px;">
+          <input id="lucifax-paste-input" type="text" placeholder="📋 Klik di sini lalu tekan Ctrl+V" style="
+            width: 100%;
+            box-sizing: border-box;
+            padding: 7px 10px;
+            background: #020617;
+            border: 1.5px dashed #38BDF8;
+            border-radius: 6px;
+            color: #F8FAFC;
+            font-size: 11px;
+            outline: none;
+            text-align: center;
+            cursor: pointer;
+          " />
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -193,11 +209,30 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       widget.style.width = isMinimized ? '200px' : '320px';
     });
 
-    // Button event listeners
+    // Button & input event listeners
     document.getElementById('btn-fill-pt-po').addEventListener('click', () => runAutoFill('PT_PO'));
     document.getElementById('btn-fill-pt-so').addEventListener('click', () => runAutoFill('PT_SO'));
     document.getElementById('btn-fill-cv-so').addEventListener('click', () => runAutoFill('CV_SO'));
-    document.getElementById('btn-paste-clipboard').addEventListener('click', pasteFromClipboard);
+    document.getElementById('btn-paste-clipboard').addEventListener('click', () => pasteFromClipboard(true));
+
+    const pasteInput = document.getElementById('lucifax-paste-input');
+    if (pasteInput) {
+      pasteInput.addEventListener('focus', () => pasteInput.select());
+      pasteInput.addEventListener('paste', (e) => {
+        const text = (e.clipboardData || window.clipboardData)?.getData('text');
+        if (text && applyPayloadText(text, true)) {
+          pasteInput.value = '';
+          pasteInput.blur();
+        }
+      });
+      pasteInput.addEventListener('input', () => {
+        const text = pasteInput.value;
+        if (text && applyPayloadText(text, true)) {
+          pasteInput.value = '';
+          pasteInput.blur();
+        }
+      });
+    }
   }
 
   // Helper log
@@ -214,6 +249,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   function updateInvoiceBox(payload) {
     currentPayload = payload;
     const box = document.getElementById('lucifax-invoice-status');
+    const pasteInput = document.getElementById('lucifax-paste-input');
     if (!box) return;
 
     if (payload && payload.invoiceNo) {
@@ -228,11 +264,16 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           Rp ${Number(payload.grandTotal || 0).toLocaleString('id-ID')}
         </div>
       `;
+      if (pasteInput) {
+        pasteInput.placeholder = `✅ Invoice #${payload.invoiceNo} Siap Diisi`;
+        pasteInput.style.borderColor = '#4ADE80';
+        pasteInput.style.color = '#4ADE80';
+      }
     } else {
       box.innerHTML = `
-        <div style="color: #94A3B8;">
-          Belum ada data invoice.<br/>
-          Buka Lucifax PFS lalu klik <b>[Siapkan ke Odoo]</b>.
+        <div style="color: #94A3B8; font-size: 11px; line-height: 1.4;">
+          Belum ada transaksi dipilih.<br/>
+          Klik <b>[Siapkan ke Odoo]</b> di Lucifax PFS.
         </div>
       `;
     }
@@ -380,13 +421,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
   // MAIN AUTO-FILL FUNCTION
   async function runAutoFill(mode) {
-    // 1. Coba update data dari clipboard (mendukung jika Lucifax dibuka di profil Chrome berbeda)
+    // 1. Coba update data dari clipboard
     await pasteFromClipboard(false);
 
     if (!currentPayload || !currentPayload.items || currentPayload.items.length === 0) {
-      logMessage('Peringatan: Belum ada data invoice yang siap!', false, true);
-      alert('Belum ada data invoice!\nSilakan buka Detail Invoice di Lucifax PFS lalu klik tombol [Siapkan ke Odoo].');
-      return;
+      const pasted = prompt('Data invoice belum terhubung.\nSilakan tekan Ctrl+V (Paste) di bawah ini lalu klik OK:');
+      if (pasted && applyPayloadText(pasted, true)) {
+        // Berhasil dimuat dari prompt paste! Lanjutkan otomatis
+      } else {
+        logMessage('Peringatan: Belum ada data invoice yang siap!', false, true);
+        return;
+      }
     }
 
     const p = currentPayload;
