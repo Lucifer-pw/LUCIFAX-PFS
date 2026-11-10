@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.8</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.9</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1024,11 +1024,33 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await setMany2OneField('partner_id', p.ptSoCustomer || `${p.customerAlias} (${p.customerName})`, ['customer', 'pelanggan']);
         await setMany2OneField('pricelist_id', 'PFS Customer (IDP)', ['pricelist', 'daftar harga']);
 
-        logMessage('2. Mengisi Order Lines (Harga sebelum PPN)...');
+        // 2. Tab Other Info (Gambar 2): Tags & Analytic Account
+        logMessage('2. Membuka tab Other Info...');
+        clickTab('Other Info');
+        await sleep(300);
+        await waitForOdooRpcSettled(300);
+
+        // Tags -> "Joko Setiawan"
+        logMessage('3. Mengisi Tags: "Joko Setiawan"...');
+        await setTagsField('tag_ids', 'Joko Setiawan', ['tags', 'tag']);
+        await waitForOdooRpcSettled(400);
+
+        // Analytic Account -> "Jateng"
+        logMessage('4. Mengisi Analytic Account: "Jateng"...');
+        await setMany2OneField(
+          'analytic_account_id',
+          'Jateng',
+          ['analytic account', 'akun analitis']
+        );
+        await waitForOdooRpcSettled(400);
+
+        // 3. Kembali ke Order Lines
+        logMessage('5. Membuka tab Order Lines (Harga sebelum PPN, tanpa Taxes)...');
         clickTab('Order Lines');
         await sleep(300);
+        await waitForOdooRpcSettled(300);
 
-        // Fill Items
+        // 4. Fill Items
         const filled = await fillOrderLines(p.items, 'PT_SO');
         if (filled === p.items.length) {
           logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
@@ -1444,6 +1466,96 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
+  // Helper: Clear Taxes field (in PT SO & CV SO, Taxes must be empty!)
+  async function clearTaxesField(rowIndex, timing) {
+    for (let attempt = 1; attempt <= timing.retries; attempt++) {
+      dismissDiscardModal();
+      await waitForOdooRpcSettled(200);
+
+      const rows = getOrderLineRows();
+      const row = rows[rowIndex];
+      if (!row) {
+        await sleep(250);
+        continue;
+      }
+
+      // Find Taxes cell (in Sales it is name="tax_id", in Purchase it is name="taxes_id")
+      let cell = row.querySelector('td[name="tax_id"], td[name="taxes_id"], td[data-name="tax_id"], td[data-name="taxes_id"]') 
+        || findCellByColumnHeader(row, ['taxes', 'pajak'], 'tax_id')
+        || findCellByColumnHeader(row, ['taxes', 'pajak'], 'taxes_id');
+      if (!cell) {
+        await sleep(250);
+        continue;
+      }
+
+      // 1. Check if already empty
+      const badges = Array.from(cell.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      const textHasTax = cell.innerText.includes('%') || cell.innerText.toLowerCase().includes('tax');
+      if (badges.length === 0 && !textHasTax) {
+        logMessage(`✓ Taxes baris ${rowIndex + 1} sudah kosong`);
+        return true;
+      }
+
+      // 2. Click all delete buttons (x) on badges
+      let clickedAny = false;
+      for (const b of badges) {
+        const delBtn = b.querySelector('.o_delete, .fa-times, .close, a, i') || b;
+        delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        delBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+        delBtn.click();
+        clickedAny = true;
+        await sleep(150);
+      }
+
+      // 3. If badges still remain, activate cell to open tag editor
+      const remainingBeforeEdit = Array.from(cell.querySelectorAll('.badge, .o_tag'));
+      if (remainingBeforeEdit.length > 0) {
+        cell.click();
+        await sleep(200);
+
+        // Click delete buttons inside activated cell
+        const editDelBtns = Array.from(cell.querySelectorAll('.o_delete, .fa-times, .close, a, i'));
+        for (const db of editDelBtns) {
+          db.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+          db.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          db.click();
+          await sleep(150);
+        }
+
+        // If input field is present, select and clear / backspace
+        const input = cell.querySelector('input');
+        if (input) {
+          input.focus();
+          input.value = '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', keyCode: 8, bubbles: true }));
+          await sleep(100);
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+        }
+      }
+
+      // Wait for Odoo onchange
+      await waitForOdooRpcSettled(timing.delayCellInput || 500);
+      dismissDiscardModal();
+
+      // Read back to verify
+      const freshRows = getOrderLineRows();
+      const freshRow = freshRows[rowIndex];
+      const freshCell = freshRow ? (freshRow.querySelector('td[name="tax_id"], td[name="taxes_id"]') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'])) : null;
+      const freshBadges = freshCell ? Array.from(freshCell.querySelectorAll('.badge, .o_tag')) : [];
+      if (freshBadges.length === 0 && (!freshCell || !freshCell.innerText.includes('%'))) {
+        logMessage(`✓ Taxes baris ${rowIndex + 1} bersih (tanpa PPN)`);
+        return true;
+      }
+
+      await sleep(300);
+    }
+    return false;
+  }
+
   // Fill product order lines in Odoo table with strict step-by-step verification
   async function fillOrderLines(items, mode) {
     const timing = getTimingSettings();
@@ -1489,8 +1601,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const registeredLower = registeredOdooName.toLowerCase().trim();
       const fallbackLower = fallbackName.toLowerCase().trim();
       const isExplicitJadi = targetLower.includes('[produk jadi]');
-      // In PT PO and CV SO, ALWAYS prioritize [PRODUK LK] and strictly forbid [PRODUK JADI]
-      const preferLk = !isExplicitJadi && (isPtPo || isCvSo || targetLower.includes('[produk lk]'));
+      // In PT PO, PT SO, and CV SO: ALWAYS prioritize [PRODUK LK] and strictly forbid [PRODUK JADI]
+      const preferLk = !isExplicitJadi;
 
       // Distinguishing keywords that MUST be in the product
       const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'dan', 'yang', 'atau', '@', 'mbg', 'coklat'];
@@ -1617,6 +1729,25 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           }
         }
 
+        // D. Weight / Gram Variant Constraint (250 vs 500 vs 1000)
+        // E.g. Rolade Ayam 250 g vs Rolade Ayam 1000 g
+        const weightVariants = ['250', '500', '1000'];
+        for (const w of weightVariants) {
+          const wRegex = new RegExp(`(?:^|\\D)${w}\\s*(?:g|gram|kg)?(?:\\D|$)`, 'i');
+          const targetHasWeight = wRegex.test(targetLower) || wRegex.test(fallbackLower);
+          const optHasWeight = wRegex.test(txt);
+          if (targetHasWeight && !optHasWeight) return -1;
+          if (!targetHasWeight && optHasWeight) {
+            if (weightVariants.some(otherW => {
+              if (otherW === w) return false;
+              const r = new RegExp(`(?:^|\\D)${otherW}\\s*(?:g|gram|kg)?(?:\\D|$)`, 'i');
+              return r.test(targetLower) || r.test(fallbackLower);
+            })) {
+              return -1;
+            }
+          }
+        }
+
         // D. Calculate Score based on matching distinctive tokens
         let score = 0;
         let matchedTokens = 0;
@@ -1725,10 +1856,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           addQuery('BRS 13');
           if (preferLk) addQuery('[PRODUK LK] BRS 13');
         } else if (targetLower.includes('24') || fallbackLower.includes('24')) {
+          addQuery('[PRODUK LK] BRS Merah 24 PCS @ 500 g LK');
+          addQuery('[PRODUK LK] BRS Merah 24');
           addQuery('BRS Merah 24');
-          addQuery('BRS 24');
-          if (preferLk) addQuery('[PRODUK LK] BRS Merah 24');
           if (preferLk) addQuery('[PRODUK LK] BRS 24');
+          addQuery('BRS 24');
         } else if (targetLower.includes('30') || fallbackLower.includes('30')) {
           addQuery('BRS 30');
           if (preferLk) addQuery('[PRODUK LK] BRS 30');
@@ -1739,12 +1871,21 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
 
       if (fallbackLower.includes('rolade') || fallbackLower.includes('rollade') || targetLower.includes('rolade') || targetLower.includes('rollade')) {
-        if (targetLower.includes('ayam') || fallbackLower.includes('ayam')) {
-          addQuery('Rolade Ayam');
-          if (preferLk) addQuery('[PRODUK LK] Rolade Ayam');
-        } else if (targetLower.includes('sapi') || fallbackLower.includes('sapi')) {
-          addQuery('Rolade Sapi');
-          if (preferLk) addQuery('[PRODUK LK] Rolade Sapi');
+        const isAyam = targetLower.includes('ayam') || fallbackLower.includes('ayam');
+        const isSapi = targetLower.includes('sapi') || fallbackLower.includes('sapi');
+        const meat = isAyam ? 'Ayam' : (isSapi ? 'Sapi' : '');
+        const has250 = targetLower.includes('250') || fallbackLower.includes('250');
+        const has1000 = targetLower.includes('1000') || fallbackLower.includes('1000');
+        const weight = has250 ? '250' : (has1000 ? '1000' : '');
+
+        if (meat) {
+          if (weight) {
+            addQuery(`[PRODUK LK] Rolade ${meat} ${weight} g LK`);
+            addQuery(`[PRODUK LK] Rolade ${meat} ${weight}`);
+            addQuery(`Rolade ${meat} ${weight}`);
+          }
+          addQuery(`[PRODUK LK] Rolade ${meat}`);
+          addQuery(`Rolade ${meat}`);
         }
       }
 
@@ -1880,11 +2021,15 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         timing
       );
 
-      // 5. SET TAXES (In PT PO: always 11%)
+      // 5. TAXES: In PT PO always 11%; in PT SO & CV SO Taxes must be EMPTY (no PPN / tax)!
       if (isPtPo) {
         logMessage(`✏️ Mengisi Taxes: 11%...`);
         await setTaxesField(i, timing, '11%');
         await waitForOdooRpcSettled(500);
+      } else {
+        logMessage(`🧹 Memastikan Taxes baris ${i + 1} kosong (PT SO / CV SO tanpa Taxes)...`);
+        await clearTaxesField(i, timing);
+        await waitForOdooRpcSettled(400);
       }
 
       // 6. COMMIT & SETTLE ROW
