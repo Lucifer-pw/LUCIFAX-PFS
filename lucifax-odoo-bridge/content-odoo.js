@@ -527,30 +527,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
-  // Clean product search term: extract short, distinctive keywords for fast Odoo matching
-  function getSmartSearchKeyword(name) {
-    if (!name) return '';
-    let clean = name.replace(/^\[.*?\]\s*/, '').trim();
-    clean = clean.replace(/[@()\-]/g, ' ').replace(/\s+/g, ' ').trim();
-
-    // Specific smart extractions for Fiva products
-    if (/brs\s+ori\s+7/i.test(clean)) return 'BRS ORI 7';
-    if (/brs\s+13/i.test(clean)) return 'BRS 13';
-    if (/brs\s+merah\s+24/i.test(clean)) return 'BRS Merah 24';
-    if (/brs\s+coklat\s+24/i.test(clean)) return 'BRS Coklat 24';
-    if (/brs\s+coklat\s+7/i.test(clean)) return 'BRS Coklat 7';
-    if (/brs\s+coklat\s+13/i.test(clean)) return 'BRS Coklat 13';
-    if (/rolade\s+ayam\s+1000/i.test(clean)) return 'Rolade Ayam 1000';
-    if (/rolade\s+sapi\s+1000/i.test(clean)) return 'Rolade Sapi 1000';
-
-    // Default: first 3 distinct words
-    const words = clean.split(' ').filter(w => w.length > 1 && !['pcs', 'lk', 'g', 'gram'].includes(w.toLowerCase()));
-    if (words.length >= 2) {
-      return words.slice(0, 3).join(' ');
-    }
-    return clean;
-  }
-
   // Find cell by column header name in table
   function findCellByColumnHeader(row, headerKeywords) {
     const table = row.closest('table');
@@ -586,13 +562,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     cell.click();
     await sleep(300);
 
-    let input = cell.querySelector('input') || row.querySelector(cellSelector + ' input') || document.activeElement;
-    if (!input || (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA')) {
+    let input = cell.querySelector('input');
+    if (!input) {
       cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       await sleep(300);
-      input = cell.querySelector('input') || document.activeElement;
+      input = cell.querySelector('input');
     }
 
+    // CRITICAL: ONLY operate if input is strictly inside this cell (never use external activeElement)
     if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
       input.focus();
       input.select();
@@ -605,7 +582,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       input.value = formattedVal;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       input.dispatchEvent(new Event('blur', { bubbles: true }));
       await sleep(350);
       return true;
@@ -613,13 +589,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
-  // Fill product order lines in Odoo table
+  // Fill product order lines in Odoo table using EXACT registered Odoo name
   async function fillOrderLines(items, mode) {
     for (let i = 0; i < items.length; i++) {
       dismissDiscardModal();
 
       const item = items[i];
-      const prodName = item.odooProductName || item.productName;
+      // USE EXACT NAME FROM MASTER BARANG - NO SHORTENED KEYWORDS
+      const exactOdooName = (item.odooProductName && item.odooProductName.trim().length > 0)
+        ? item.odooProductName.trim()
+        : item.productName.trim();
+
       const qty = item.quantityCarton || (item.quantityPack / (item.isiKarton || 1));
       
       // Determine unit price based on mode
@@ -628,20 +608,19 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         price = item.priceSalePrePpn || (item.priceUnit / 1.11);
       }
 
-      const searchTerm = getSmartSearchKeyword(prodName);
-      logMessage(`📦 Baris ${i + 1}/${items.length}: Mencari "${searchTerm}"...`);
+      logMessage(`📦 Baris ${i + 1}/${items.length}: Mencari persis "${exactOdooName}"...`);
 
       // 1. Find "Add a product" button
       const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a, a.o_field_x2many_list_row_add'));
       const addBtn = addBtns.find(b => b.innerText.toLowerCase().includes('add a product') || b.innerText.toLowerCase().includes('tambah produk'));
 
       if (addBtn) {
-        // Click cleanly without browser navigation
+        // Click cleanly without triggering URL hash navigation
         addBtn.focus();
         const clickEvt = new MouseEvent('click', { bubbles: true, cancelable: true });
         addBtn.dispatchEvent(clickEvt);
         
-        // Wait 1200ms for Odoo to create and initialize row
+        // Wait 1200ms for Odoo to create and initialize the new line
         await sleep(1200);
         dismissDiscardModal();
 
@@ -650,6 +629,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         const activeRow = document.querySelector('tr.o_selected_row') || allRows[allRows.length - 1];
 
         if (activeRow) {
+          let prodCell = activeRow.querySelector('td[name="product_id"], td[data-name="product_id"]')
+            || findCellByColumnHeader(activeRow, ['product', 'produk', 'barang']);
+          
+          if (prodCell) {
+            prodCell.click();
+            await sleep(250);
+          }
+
           let prodInput = activeRow.querySelector('td[name="product_id"] input, td[data-name="product_id"] input') 
             || activeRow.querySelector('input') 
             || document.activeElement;
@@ -659,37 +646,68 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
             prodInput.select();
             document.execCommand('selectAll', false, null);
             document.execCommand('delete', false, null);
-            document.execCommand('insertText', false, searchTerm);
+            // Type the exact Odoo name directly
+            document.execCommand('insertText', false, exactOdooName);
             prodInput.dispatchEvent(new Event('input', { bubbles: true }));
             prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
             // Wait up to 3.5 seconds for autocomplete dropdown items to appear
             let matchedItem = null;
-            const searchTokens = searchTerm.toLowerCase().split(' ').filter(t => t.length > 1);
+            const targetLower = exactOdooName.toLowerCase().trim();
+            const isLk = targetLower.includes('[produk lk]');
+            const isJadi = targetLower.includes('[produk jadi]');
+            
+            // Clean tokens for token fallback (excluding brackets)
+            const cleanTokens = targetLower
+              .replace(/\[.*?\]/g, '')
+              .replace(/[@()\-]/g, ' ')
+              .split(' ')
+              .filter(t => t.length > 1);
 
             for (let attempt = 0; attempt < 14; attempt++) {
               await sleep(250);
               dismissDiscardModal();
               const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
+              
               if (dropdownOptions.length > 0) {
-                // Find matching option containing search tokens
-                matchedItem = dropdownOptions.find(opt => {
-                  const txt = opt.innerText.toLowerCase();
-                  return searchTokens.every(tok => txt.includes(tok));
-                });
+                // Tier 1: Exact string match
+                matchedItem = dropdownOptions.find(opt => opt.innerText.toLowerCase().trim() === targetLower);
+
+                // Tier 2: Category-enforced token match ([PRODUK LK] vs [PRODUK JADI])
                 if (!matchedItem) {
                   matchedItem = dropdownOptions.find(opt => {
-                    const txt = opt.innerText.toLowerCase();
-                    const matchCount = searchTokens.filter(tok => txt.includes(tok)).length;
-                    return matchCount >= Math.min(2, searchTokens.length);
+                    const txt = opt.innerText.toLowerCase().trim();
+                    if (isLk && !txt.includes('[produk lk]')) return false; // Strictly enforce [PRODUK LK]
+                    if (isJadi && !txt.includes('[produk jadi]')) return false;
+                    return cleanTokens.every(tok => txt.includes(tok));
                   });
                 }
+
+                // Tier 3: Category-enforced partial token match
+                if (!matchedItem) {
+                  matchedItem = dropdownOptions.find(opt => {
+                    const txt = opt.innerText.toLowerCase().trim();
+                    if (isLk && !txt.includes('[produk lk]')) return false;
+                    if (isJadi && !txt.includes('[produk jadi]')) return false;
+                    const matchCount = cleanTokens.filter(tok => txt.includes(tok)).length;
+                    return matchCount >= Math.min(2, cleanTokens.length);
+                  });
+                }
+
+                // Tier 4: General token match if no category tag
+                if (!matchedItem && !isLk && !isJadi) {
+                  matchedItem = dropdownOptions.find(opt => {
+                    const txt = opt.innerText.toLowerCase().trim();
+                    return cleanTokens.every(tok => txt.includes(tok));
+                  });
+                }
+
                 if (matchedItem) break;
               }
             }
 
             if (matchedItem) {
-              logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 24)}...`);
+              logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 30)}...`);
               const link = matchedItem.querySelector('a') || matchedItem;
               link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
               link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -699,7 +717,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
               await sleep(1500);
               dismissDiscardModal();
             } else {
-              logMessage(`⚠️ Opsi dropdown "${searchTerm}" belum muncul, menekan Enter...`);
+              logMessage(`⚠️ Dropdown tidak menemukan persis "${exactOdooName}", menekan Enter...`);
               prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
               await sleep(1000);
             }
@@ -709,7 +727,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           const updatedRow = document.querySelector('tr.o_selected_row') || activeRow;
 
           // 4. Set Quantity
-          logMessage(`✏️ Mengisi Qty: ${qty} Ktn...`);
+          logMessage(`✏️ Qty: ${qty} Ktn...`);
           await setCellInput(
             updatedRow,
             'td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"], td[data-name="product_uom_qty"]',
@@ -721,7 +739,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           dismissDiscardModal();
 
           // 5. Set Unit Price
-          logMessage(`✏️ Mengisi Harga: Rp ${Math.round(price).toLocaleString('id-ID')}...`);
+          logMessage(`✏️ Harga: Rp ${Math.round(price).toLocaleString('id-ID')}...`);
           await setCellInput(
             updatedRow,
             'td[name="price_unit"], td[data-name="price_unit"]',
