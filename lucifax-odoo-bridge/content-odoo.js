@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.0</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.1</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -446,11 +446,25 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return null;
   }
 
-  // Dismiss any "Record has been modified / discard changes" modal
-  function dismissDiscardModal() {
+  // Dismiss any unwanted Odoo modal (Record modified / Do you want to create)
+  function dismissOdooModals() {
     const modals = Array.from(document.querySelectorAll('.modal, .modal-dialog, [role="dialog"]'));
     for (const modal of modals) {
-      if (modal.innerText.includes('discarded') || modal.innerText.includes('modified') || modal.innerText.includes('diabaikan')) {
+      if (modal.offsetParent === null) continue;
+      const text = modal.innerText.toLowerCase();
+      // 1. "Record has been modified, your changes will be discarded" -> click Cancel
+      if (text.includes('discarded') || text.includes('modified') || text.includes('diabaikan')) {
+        const cancelBtn = Array.from(modal.querySelectorAll('button')).find(b => 
+          b.innerText.toLowerCase().includes('cancel') || 
+          b.innerText.toLowerCase().includes('batal')
+        );
+        if (cancelBtn) {
+          cancelBtn.click();
+          return true;
+        }
+      }
+      // 2. "Do you want to create X as a new Y?" -> click Cancel so it doesn't create unwanted records or freeze Odoo!
+      if (text.includes('create') && (text.includes('as a new') || text.includes('apakah anda ingin membuat') || text.includes('new tags') || text.includes('new delivery address'))) {
         const cancelBtn = Array.from(modal.querySelectorAll('button')).find(b => 
           b.innerText.toLowerCase().includes('cancel') || 
           b.innerText.toLowerCase().includes('batal')
@@ -463,22 +477,53 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     }
     return false;
   }
+  const dismissDiscardModal = dismissOdooModals;
 
-  // Helper: Wait until Odoo's network RPCs and loading overlays are completely finished
-  async function waitForOdooRpcSettled(extraDelay = 800) {
+  // Detect if Odoo is currently busy / loading in server
+  function isOdooLoading() {
+    // 1. Standard loading indicators & overlays
+    const loadingIndicators = Array.from(document.querySelectorAll('.o_loading, .oe_loading, .o_spinner, .o_blockUI, .blockUI, div.ui-autocomplete-loading'));
+    for (const el of loadingIndicators) {
+      if (el.offsetParent !== null && !el.classList.contains('d-none') && el.style.display !== 'none') {
+        return true;
+      }
+    }
+    // 2. Check if "still loading" text exists in any visible element
+    const centerSpinners = Array.from(document.querySelectorAll('div, span, p')).filter(el => 
+      el.offsetParent !== null && el.children.length === 0 && (
+        el.innerText.toLowerCase().includes('still loading') ||
+        el.innerText.toLowerCase().includes('loading...')
+      )
+    );
+    if (centerSpinners.length > 0) return true;
+
+    // 3. jQuery active network calls
+    if (window.jQuery && typeof window.jQuery.active === 'number' && window.jQuery.active > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Helper: Wait until Odoo's network RPCs, loading overlays, and "Still loading..." are completely settled
+  async function waitForOdooRpcSettled(extraDelay = 800, maxWaitMs = 30000) {
     const startTime = Date.now();
-    const maxWaitMs = 8000;
+    let lastLogTime = 0;
+
     while (Date.now() - startTime < maxWaitMs) {
-      dismissDiscardModal();
-      const isLoading = document.querySelector('.o_loading:not(.d-none), .o_blockUI, .o_spinner');
-      const isJQueryActive = (window.jQuery && typeof window.jQuery.active === 'number' && window.jQuery.active > 0);
-      if (!isLoading && !isJQueryActive) {
+      dismissOdooModals();
+      const loading = isOdooLoading();
+      if (!loading) {
         break;
       }
-      await sleep(250);
+      if (Date.now() - lastLogTime > 2500) {
+        logMessage('⏳ Odoo sedang proses server (Still loading...), menunggu jaringan selesai...');
+        lastLogTime = Date.now();
+      }
+      await sleep(350);
     }
     await sleep(extraDelay);
-    dismissDiscardModal();
+    dismissOdooModals();
   }
 
   // Helper to set Odoo Many2One / Many2Many autocomplete dropdown with robust polling & selection
@@ -490,46 +535,71 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       return false;
     }
 
+    // Dismiss any existing open menus or modals first
+    dismissOdooModals();
+    await waitForOdooRpcSettled(200);
+
     input.focus();
+    input.click();
+    await sleep(150);
     input.select();
     document.execCommand('selectAll', false, null);
     document.execCommand('delete', false, null);
     document.execCommand('insertText', false, searchText);
     input.value = searchText;
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
     // Poll up to 16 times (4 seconds) for autocomplete dropdown menu to appear
     let matchedItem = null;
     const searchLower = searchText.toLowerCase().trim();
+    const searchNormalized = searchLower.replace(/\s+/g, ' ');
 
     for (let attempt = 0; attempt < 16; attempt++) {
       await sleep(250);
-      dismissDiscardModal();
-      const options = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
+      dismissOdooModals();
+
+      // Query ONLY visible dropdown menus currently rendered on screen
+      const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
+        .filter(m => m.offsetParent !== null && m.style.display !== 'none');
       
+      let options = [];
+      if (visibleMenus.length > 0) {
+        options = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item:not(.o_m2o_dropdown_option), .dropdown-item')));
+      }
+
       const cleanOptions = options.filter(opt => {
+        if (opt.offsetParent === null) return false;
         const t = opt.innerText.toLowerCase().trim();
+        // NEVER pick create options to prevent opening unwanted dialogs!
         return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
       });
 
       if (cleanOptions.length > 0) {
-        // 1. Exact match priority
-        matchedItem = cleanOptions.find(opt => opt.innerText.toLowerCase().trim() === searchLower);
+        // 1. Exact match priority (normalized whitespace)
+        matchedItem = cleanOptions.find(opt => {
+          const optText = opt.innerText.toLowerCase().replace(/\s+/g, ' ').trim();
+          return optText === searchNormalized;
+        });
 
-        // 2. Contains match if not strictly required exact
+        // 2. Contains match if not strict exact
         if (!matchedItem && !exactMatch) {
-          matchedItem = cleanOptions.find(opt => opt.innerText.toLowerCase().trim().includes(searchLower));
+          matchedItem = cleanOptions.find(opt => {
+            const optText = opt.innerText.toLowerCase().replace(/\s+/g, ' ').trim();
+            return optText.includes(searchNormalized);
+          });
         }
 
-        // 3. Match by individual tokens
+        // 3. Match by all search tokens (e.g. "Mister Sosis" or "Joko Setiawan")
         if (!matchedItem) {
-          const searchTokens = searchLower.split(/\s+/).filter(t => t.length > 1);
-          matchedItem = cleanOptions.find(opt => {
-            const t = opt.innerText.toLowerCase();
-            return searchTokens.every(tok => t.includes(tok));
-          });
+          const searchTokens = searchNormalized.split(' ').filter(t => t.length > 1);
+          if (searchTokens.length > 0) {
+            matchedItem = cleanOptions.find(opt => {
+              const optText = opt.innerText.toLowerCase();
+              return searchTokens.every(tok => optText.includes(tok));
+            });
+          }
         }
 
         // 4. Fallback to first clean option if partial match allowed
@@ -544,17 +614,23 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     if (matchedItem) {
       logMessage(`✓ Memilih [${fieldName}]: ${matchedItem.innerText.trim().substring(0, 35)}`);
       const link = matchedItem.querySelector('a') || matchedItem;
+      link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
       link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
       link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       link.click();
       
       // Wait for onchange partner / analytic account RPC to settle
-      await waitForOdooRpcSettled(800);
+      await waitForOdooRpcSettled(1000);
       return true;
     } else {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-      triggerEvents(input);
-      await waitForOdooRpcSettled(600);
+      // CRITICAL: NEVER press Enter! Pressing Enter triggers Odoo's "Do you want to create...?" dialog!
+      logMessage(`⚠️ Pilihan "${searchText}" tidak muncul di dropdown [${fieldName}]. Menutup dropdown agar tidak membuat record baru.`);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      await sleep(300);
+      dismissOdooModals();
     }
     return false;
   }
@@ -571,7 +647,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         return true;
       }
     }
-    return await setMany2OneField(fieldName, tagText, labelKeywords, true);
+    // Allow partial/normalized matching so whitespace or icons do not prevent selecting Joko Setiawan
+    return await setMany2OneField(fieldName, tagText, labelKeywords, false);
   }
 
   // Helper to set plain text field
@@ -632,7 +709,12 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await sleep(300);
 
         // Fill Items
-        await fillOrderLines(p.items, 'PT_PO');
+        const filled = await fillOrderLines(p.items, 'PT_PO');
+        if (filled === p.items.length) {
+          logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
+        } else {
+          logMessage(`⚠️ Baru terisi ${filled} dari ${p.items.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
+        }
 
       } else if (mode === 'PT_SO') {
         // PT SO: Quotation (Sales PT)
@@ -645,7 +727,12 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await sleep(300);
 
         // Fill Items
-        await fillOrderLines(p.items, 'PT_SO');
+        const filled = await fillOrderLines(p.items, 'PT_SO');
+        if (filled === p.items.length) {
+          logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
+        } else {
+          logMessage(`⚠️ Baru terisi ${filled} dari ${p.items.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
+        }
 
       } else if (mode === 'CV_SO') {
         // CV SO: Quotation (Sales CV)
@@ -656,7 +743,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           ['customer', 'pelanggan']
         );
         logMessage('⏳ Menunggu Odoo memuat default alamat & pricelist...');
-        await waitForOdooRpcSettled(1200);
+        await waitForOdooRpcSettled(1500);
+        await sleep(500);
 
         // 2. Delivery Address: cari Customer (misal MISTER SOSIS) via dropdown
         const deliveryTarget = p.cvSoDelivery || p.customerAlias || p.customerName;
@@ -667,40 +755,47 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
             deliveryTarget,
             ['delivery address', 'alamat pengiriman']
           );
-          await waitForOdooRpcSettled(800);
+          await waitForOdooRpcSettled(1000);
+          await sleep(400);
         }
 
         // 3. Masuk ke tab "Other Info"
         logMessage('3. Membuka tab Other Info...');
         clickTab('Other Info');
-        await sleep(500);
+        await sleep(600);
+        await waitForOdooRpcSettled(500);
 
         // 4. Kolom Tag -> dropdown pilih "Joko Setiawan"
         logMessage('4. Mengisi Tags: "Joko Setiawan"...');
         await setTagsField('tag_ids', 'Joko Setiawan', ['tags', 'tag']);
-        await waitForOdooRpcSettled(600);
+        await waitForOdooRpcSettled(800);
+        await sleep(400);
 
         // 5. Kolom Analytic Account -> dropdown pilih "Jateng"
         logMessage('5. Mengisi Analytic Account: "Jateng"...');
         await setMany2OneField(
           'analytic_account_id',
           'Jateng',
-          ['analytic account', 'akun analitis'],
-          true
+          ['analytic account', 'akun analitis']
         );
-        await waitForOdooRpcSettled(800);
+        await waitForOdooRpcSettled(1000);
+        await sleep(400);
 
         // 6. Kembali ke tab "Order Lines"
         logMessage('6. Membuka tab Order Lines...');
         clickTab('Order Lines');
-        await sleep(500);
+        await sleep(600);
+        await waitForOdooRpcSettled(500);
 
         // 7. Mengisi Produk / Item Barang (Wajib PRODUK LK, Dilarang PRODUK JADI)
         logMessage('7. Mengisi item produk CV SO (Harga PO/SO & [PRODUK LK])...');
-        await fillOrderLines(p.items, 'CV_SO');
+        const filled = await fillOrderLines(p.items, 'CV_SO');
+        if (filled === p.items.length) {
+          logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
+        } else {
+          logMessage(`⚠️ Baru terisi ${filled} dari ${p.items.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
+        }
       }
-
-      logMessage('🎉 SELESAI! Semua baris terisi (Draft). Silakan periksa angka lalu klik SAVE.', true);
 
     } catch (err) {
       console.error('[Lucifax-Odoo] Error during auto-fill:', err);
@@ -1030,10 +1125,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const timing = getTimingSettings();
     const isPtPo = (mode === 'PT_PO');
     const isCvSo = (mode === 'CV_SO');
+    let successfulRows = 0;
     logMessage(`⚙️ Menggunakan ${timing.name} (Verifikasi ketat per kolom)...`);
 
     for (let i = 0; i < items.length; i++) {
-      dismissDiscardModal();
+      dismissOdooModals();
 
       const item = items[i];
       // Full registered name from Master Barang (e.g. [PRODUK LK] BRS 13 PCS 500 g LK)
@@ -1234,10 +1330,12 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         document.activeElement.blur();
       }
       await waitForOdooRpcSettled(timing.delayAfterRowCommit);
-      dismissDiscardModal();
+      dismissOdooModals();
 
+      successfulRows++;
       logMessage(`✅ Baris ${i + 1}/${items.length} selesai diverifikasi.`);
     }
+    return successfulRows;
   }
 
   // Initialize
