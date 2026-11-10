@@ -247,16 +247,18 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     });
   }
 
-  // Read clipboard as fallback
+  // Read clipboard as fallback / cross-profile sync
   async function pasteFromClipboard(manualTrigger = true) {
     try {
       const text = await navigator.clipboard.readText();
       if (text && text.includes('LUCIFAX_ODOO_PAYLOAD:')) {
         const jsonStr = text.substring(text.indexOf('LUCIFAX_ODOO_PAYLOAD:') + 'LUCIFAX_ODOO_PAYLOAD:'.length).trim();
         const payload = JSON.parse(jsonStr);
-        updateInvoiceBox(payload);
-        chrome.runtime.sendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
-        if (manualTrigger) logMessage('Data invoice berhasil dimuat dari clipboard!', true);
+        if (!currentPayload || currentPayload.timestamp !== payload.timestamp || currentPayload.invoiceNo !== payload.invoiceNo) {
+          updateInvoiceBox(payload);
+          chrome.runtime.sendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
+          if (manualTrigger) logMessage('Data invoice berhasil dimuat dari clipboard!', true);
+        }
       } else if (manualTrigger) {
         logMessage('Clipboard tidak berisi format data Lucifax!', false, true);
       }
@@ -335,9 +337,12 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
   // MAIN AUTO-FILL FUNCTION
   async function runAutoFill(mode) {
+    // 1. Coba update data dari clipboard (mendukung jika Lucifax dibuka di profil Chrome berbeda)
+    await pasteFromClipboard(false);
+
     if (!currentPayload || !currentPayload.items || currentPayload.items.length === 0) {
       logMessage('Peringatan: Belum ada data invoice yang siap!', false, true);
-      alert('Belum ada data invoice! Silakan buka Detail Invoice di Lucifax PFS lalu klik tombol [Siapkan ke Odoo].');
+      alert('Belum ada data invoice!\nSilakan buka Detail Invoice di Lucifax PFS lalu klik tombol [Siapkan ke Odoo].');
       return;
     }
 
@@ -478,5 +483,15 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     createFloatingWidget();
     loadStoredPayload();
   }, 1000);
+
+  // Auto-sync clipboard when switching between windows / Chrome profiles
+  window.addEventListener('focus', () => {
+    pasteFromClipboard(false);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      pasteFromClipboard(false);
+    }
+  });
 
 })();
