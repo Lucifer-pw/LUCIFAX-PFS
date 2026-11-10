@@ -7,6 +7,7 @@ class Product {
   final double stock;
   final int isiKarton;
   final double sizeGrams;
+  final String odooName; // Nama barang persis di Odoo ERP (e.g. [PRODUK LK] BRS ORI 7 PCS 500 g LK)
 
   Product({
     required this.id,
@@ -17,6 +18,7 @@ class Product {
     required this.stock,
     required this.isiKarton,
     required this.sizeGrams,
+    this.odooName = '',
   }) : kodeInduk = (kodeInduk != null && kodeInduk.isNotEmpty) ? kodeInduk : id;
 
   factory Product.fromMap(Map<String, dynamic> map, String docId) {
@@ -30,6 +32,7 @@ class Product {
       stock: (map['stock'] ?? 0.0).toDouble(),
       isiKarton: map['isiKarton'] ?? 0,
       sizeGrams: (map['sizeGrams'] ?? 0.0).toDouble(),
+      odooName: map['odooName']?.toString() ?? '',
     );
   }
 
@@ -42,6 +45,7 @@ class Product {
       'stock': stock,
       'isiKarton': isiKarton,
       'sizeGrams': sizeGrams,
+      'odooName': odooName,
     };
   }
 
@@ -65,6 +69,7 @@ class Product {
     double? stock,
     int? isiKarton,
     double? sizeGrams,
+    String? odooName,
   }) {
     return Product(
       id: id ?? this.id,
@@ -75,6 +80,7 @@ class Product {
       stock: stock ?? this.stock,
       isiKarton: isiKarton ?? this.isiKarton,
       sizeGrams: sizeGrams ?? this.sizeGrams,
+      odooName: odooName ?? this.odooName,
     );
   }
 }

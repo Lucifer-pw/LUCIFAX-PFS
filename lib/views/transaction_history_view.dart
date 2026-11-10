@@ -4,6 +4,7 @@ import '../providers/receivable_provider.dart';
 import '../models/receivable.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -2423,6 +2424,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => _prepareOdooTransfer(tr),
+                    icon: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 16),
+                    label: const Text('Siapkan ke Odoo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7C3AED),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   OutlinedButton(
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
@@ -2496,6 +2508,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _prepareOdooTransfer(tr),
+                icon: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 16),
+                label: const Text('Siapkan ke Odoo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -4428,7 +4451,128 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   }
 
   // Toggle Lock/Unlock Transaction
-  Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
+  Future<void> _prepareOdooTransfer(model_tr.Transaction tr) async {
+    try {
+      final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+
+      Customer? matchedCustomer;
+      try {
+        matchedCustomer = customerProvider.customers.firstWhere(
+          (c) => c.customerName.trim().toUpperCase() == tr.customerName.trim().toUpperCase() ||
+                 (tr.aliasName.isNotEmpty && c.aliasName.trim().toUpperCase() == tr.aliasName.trim().toUpperCase()),
+        );
+      } catch (_) {}
+
+      final ptSoCustomer = matchedCustomer?.effectiveOdooPtSo ??
+          (tr.aliasName.isNotEmpty && tr.customerName.isNotEmpty
+              ? '${tr.aliasName} (${tr.customerName})'
+              : (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName));
+
+      final cvSoDelivery = matchedCustomer?.effectiveOdooCvSo ??
+          (tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName);
+
+      final storeLabel = tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName;
+      final vendorRef = '$storeLabel ${tr.city}'.trim();
+
+      double totalCartons = 0.0;
+      final List<Map<String, dynamic>> itemsList = [];
+      for (final item in tr.items) {
+        Product? matchedProduct;
+        try {
+          matchedProduct = productProvider.products.firstWhere(
+            (p) => p.name.trim().toUpperCase() == item.productName.trim().toUpperCase() ||
+                   p.kodeInduk.trim().toUpperCase() == item.productId.trim().toUpperCase() ||
+                   p.id.trim().toUpperCase() == item.productId.trim().toUpperCase(),
+          );
+        } catch (_) {}
+
+        final odooProductName = matchedProduct?.odooName.isNotEmpty == true
+            ? matchedProduct!.odooName
+            : item.productName;
+
+        final double pricePoSo = (matchedProduct != null && matchedProduct.pricePoSo > 0)
+            ? matchedProduct.pricePoSo
+            : item.price;
+
+        final double priceSalePrePpn = double.parse((item.price / 1.11).toStringAsFixed(2));
+
+        final int isiKarton = matchedProduct?.isiKarton ?? 0;
+        final double qtyCtn = (isiKarton > 0 && item.qty > 0)
+            ? (item.qty / isiKarton)
+            : 0.0;
+        totalCartons += qtyCtn;
+
+        itemsList.add({
+          'productName': item.productName,
+          'odooProductName': odooProductName,
+          'productId': item.productId,
+          'kodeInduk': matchedProduct?.kodeInduk ?? item.productId,
+          'isiKarton': isiKarton,
+          'quantityPack': item.qty,
+          'quantityCarton': double.parse(qtyCtn.toStringAsFixed(2)),
+          'priceUnit': item.price,
+          'pricePoSo': pricePoSo,
+          'priceSalePrePpn': priceSalePrePpn,
+          'discountPercent': item.discountPercent,
+          'isBonus': item.isBonus,
+          'subtotal': item.subtotal,
+        });
+      }
+
+      final payload = {
+        'source': 'LUCIFAX_PFS',
+        'invoiceNo': tr.invoiceNo,
+        'customerName': tr.customerName,
+        'customerAlias': tr.aliasName,
+        'city': tr.city,
+        'province': tr.province,
+        'vendorRef': vendorRef,
+        'ptSoCustomer': ptSoCustomer,
+        'cvSoDelivery': cvSoDelivery,
+        'date': DateFormat('dd-MM-yyyy').format(tr.date),
+        'grandTotal': tr.grandTotal,
+        'grandTotalCarton': double.parse(totalCartons.toStringAsFixed(1)),
+        'timestamp': DateTime.now().toIso8601String(),
+        'items': itemsList,
+      };
+
+      final payloadJson = jsonEncode(payload);
+
+      // Copy payload to clipboard for instant pasting / extension reading
+      await Clipboard.setData(ClipboardData(text: 'LUCIFAX_ODOO_PAYLOAD:$payloadJson'));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.rocket_launch_rounded, color: Colors.amberAccent),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '🎉 Data Invoice #${tr.invoiceNo} ($storeLabel) siap diisi ke Odoo!\nBuka tab Odoo dan klik tombol Auto-Fill.',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF7C3AED),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyiapkan data Odoo: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
     final willLock = !tr.isLocked;
 

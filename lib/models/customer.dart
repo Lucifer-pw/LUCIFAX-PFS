@@ -10,6 +10,8 @@ class Customer {
   final String ktpNumber;
   final String ktpImageUrl;
   final double depositBalance;
+  final String odooNamePtSo; // Nama Customer di Odoo PT SO (e.g. MISTER SOSIS (SUSILO HARYAWAN))
+  final String odooDeliveryAddressCvSo; // Nama Delivery Address di Odoo CV SO (e.g. MISTER SOSIS)
 
   Customer({
     required this.id,
@@ -23,6 +25,8 @@ class Customer {
     required this.ktpNumber,
     this.ktpImageUrl = '',
     this.depositBalance = 0.0,
+    this.odooNamePtSo = '',
+    this.odooDeliveryAddressCvSo = '',
   });
 
   String get displayName {
@@ -33,6 +37,12 @@ class Customer {
     }
     return alias.isNotEmpty ? alias : name;
   }
+
+  // Fallbacks: if explicit Odoo mapping is empty, use displayName for PT SO and alias/name for CV SO
+  String get effectiveOdooPtSo => odooNamePtSo.trim().isNotEmpty ? odooNamePtSo.trim() : displayName;
+  String get effectiveOdooCvSo => odooDeliveryAddressCvSo.trim().isNotEmpty
+      ? odooDeliveryAddressCvSo.trim()
+      : (aliasName.trim().isNotEmpty ? aliasName.trim() : customerName.trim());
 
   factory Customer.fromMap(Map<String, dynamic> map, String docId) {
     return Customer(
@@ -47,6 +57,8 @@ class Customer {
       ktpNumber: map['ktpNumber'] ?? '',
       ktpImageUrl: map['ktpImageUrl'] ?? '',
       depositBalance: (map['depositBalance'] is num) ? (map['depositBalance'] as num).toDouble() : 0.0,
+      odooNamePtSo: map['odooNamePtSo']?.toString() ?? '',
+      odooDeliveryAddressCvSo: map['odooDeliveryAddressCvSo']?.toString() ?? '',
     );
   }
 
@@ -62,6 +74,8 @@ class Customer {
       'ktpNumber': ktpNumber,
       'ktpImageUrl': ktpImageUrl,
       'depositBalance': depositBalance,
+      'odooNamePtSo': odooNamePtSo,
+      'odooDeliveryAddressCvSo': odooDeliveryAddressCvSo,
     };
   }
 
@@ -77,6 +91,8 @@ class Customer {
     String? ktpNumber,
     String? ktpImageUrl,
     double? depositBalance,
+    String? odooNamePtSo,
+    String? odooDeliveryAddressCvSo,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -90,6 +106,8 @@ class Customer {
       ktpNumber: ktpNumber ?? this.ktpNumber,
       ktpImageUrl: ktpImageUrl ?? this.ktpImageUrl,
       depositBalance: depositBalance ?? this.depositBalance,
+      odooNamePtSo: odooNamePtSo ?? this.odooNamePtSo,
+      odooDeliveryAddressCvSo: odooDeliveryAddressCvSo ?? this.odooDeliveryAddressCvSo,
     );
   }
 }

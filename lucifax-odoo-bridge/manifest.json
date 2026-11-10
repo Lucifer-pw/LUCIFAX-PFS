@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Lucifax PFS - Odoo ERP Auto-Fill Assistant",
+  "version": "1.0.0",
+  "description": "Asisten pintar pengisi formulir Odoo ERP (PT PO, PT SO, CV SO) secara otomatis dari transaksi Lucifax PFS.",
+  "permissions": [
+    "storage",
+    "clipboardRead",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://erp.fivafood.co.id:8069/*",
+    "https://aplikasi-transaksi-fiva-frozen.web.app/*",
+    "http://localhost:*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://aplikasi-transaksi-fiva-frozen.web.app/*",
+        "http://localhost:*/*"
+      ],
+      "js": ["content-lucifax.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "http://erp.fivafood.co.id:8069/*"
+      ],
+      "js": ["content-odoo.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "128": "icon.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Lucifax Odoo Assistant",
+    "default_icon": "icon.png"
+  }
+}

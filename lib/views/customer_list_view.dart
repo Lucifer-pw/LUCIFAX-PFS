@@ -40,6 +40,8 @@ class _CustomerListViewState extends State<CustomerListView> {
     final countryController = TextEditingController(text: customer?.country.isNotEmpty == true ? customer!.country : 'INDONESIA');
     final phoneController = TextEditingController(text: customer?.phone ?? '');
     final ktpController = TextEditingController(text: customer?.ktpNumber ?? '');
+    final odooPtSoController = TextEditingController(text: customer?.odooNamePtSo ?? '');
+    final odooCvSoDeliveryController = TextEditingController(text: customer?.odooDeliveryAddressCvSo ?? '');
 
     Uint8List? selectedKtpBytes;
     String? selectedKtpFileName;
@@ -260,6 +262,32 @@ class _CustomerListViewState extends State<CustomerListView> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Odoo ERP Mapping Fields (Optional)
+                      TextFormField(
+                        controller: odooPtSoController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration(hint: 'Contoh: MISTER SOSIS (SUSILO HARYAWAN)').copyWith(
+                          labelText: 'Nama Customer Odoo PT SO (Opsional)',
+                          labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                          prefixIcon: const Icon(Icons.business_rounded, size: 16, color: Color(0xFF38BDF8)),
+                          helperText: 'Default: [Nama Toko] ([Pemilik]) jika dikosongkan',
+                          helperStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: odooCvSoDeliveryController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration(hint: 'Contoh: MISTER SOSIS').copyWith(
+                          labelText: 'Nama Delivery Address Odoo CV SO (Opsional)',
+                          labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                          prefixIcon: const Icon(Icons.local_shipping_rounded, size: 16, color: Color(0xFF38BDF8)),
+                          helperText: 'Default: [Nama Toko] jika dikosongkan',
+                          helperStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -539,6 +567,8 @@ class _CustomerListViewState extends State<CustomerListView> {
                               ktpNumber: ktp,
                               ktpImageUrl: finalKtpUrl,
                               depositBalance: customer?.depositBalance ?? 0.0,
+                              odooNamePtSo: odooPtSoController.text.trim(),
+                              odooDeliveryAddressCvSo: odooCvSoDeliveryController.text.trim(),
                             );
 
                             await custProvider.saveCustomer(newCustomer);

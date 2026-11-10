@@ -124,6 +124,7 @@ class _ProductListViewState extends State<ProductListView> {
           ? (product.pricePoSo % 1 == 0 ? product.pricePoSo.toInt().toString() : product.pricePoSo.toString())
           : '',
     );
+    final odooNameController = TextEditingController(text: product?.odooName ?? '');
     final stockController = TextEditingController(text: product != null ? product.stock.toStringAsFixed(0) : '0');
     final cartonController = TextEditingController(text: product?.isiKarton.toString() ?? '');
     final sizeController = TextEditingController(text: product != null ? product.sizeGrams.toStringAsFixed(0) : '');
@@ -249,6 +250,18 @@ class _ProductListViewState extends State<ProductListView> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: odooNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _buildInputDecoration(hint: 'Contoh: [PRODUK LK] BRS ORI 7 PCS 500 g LK').copyWith(
+                          labelText: 'Nama Produk di Odoo ERP (Opsional)',
+                          labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                          prefixIcon: const Icon(Icons.hub_rounded, size: 16, color: Color(0xFF38BDF8)),
+                          helperText: 'Digunakan untuk otomatisasi pencocokan produk saat input Odoo',
+                          helperStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -430,6 +443,7 @@ class _ProductListViewState extends State<ProductListView> {
                           stock: stock,
                           isiKarton: carton,
                           sizeGrams: size,
+                          odooName: odooNameController.text.trim(),
                         );
                         await productProvider.saveProduct(
                           updated,
@@ -447,6 +461,7 @@ class _ProductListViewState extends State<ProductListView> {
                           stock: stock,
                           isiKarton: carton,
                           sizeGrams: size,
+                          odooName: odooNameController.text.trim(),
                         );
                         await productProvider.saveProduct(newProd);
                       }
