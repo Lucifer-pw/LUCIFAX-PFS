@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.6</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.7</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -2156,15 +2156,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         }
       }
 
-      // 6. TAXES: In PT PO & PT SO always 11%; in CV SO Taxes must be EMPTY (no PPN / tax)!
+      // 6. TAXES: In PT PO & PT SO always 11%; in CV SO Taxes & Disc.(%) are skipped (keeps Odoo default 11%)
       if (isPtPo || mode === 'PT_SO') {
         logMessage(`✏️ Memastikan Taxes: 11%...`);
         await setTaxesField(i, timing, '11%');
         await waitForOdooRpcSettled(400);
       } else {
-        logMessage(`🧹 Memastikan Taxes baris ${i + 1} kosong (CV SO tanpa Taxes)...`);
-        await clearTaxesField(i, timing);
-        await waitForOdooRpcSettled(400);
+        // CV SO: Skip Taxes & Disc.(%) (membiarkan default bawaan Odoo 11% dan tanpa diskon)
+        logMessage(`✓ Baris ${i + 1}: Taxes & Disc.(%) dilewati (mengikuti default Odoo 11%)`);
       }
 
       // 6. COMMIT & SETTLE ROW
