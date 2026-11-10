@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.3</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.5</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -856,29 +856,32 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     let input = (container && container.querySelector('input')) || findFieldInput('picking_type_id', ['deliver to', 'kirim ke']);
     if (!input) {
       logMessage('⚠️ Field Deliver To (picking_type_id) tidak ditemukan.');
+      clickTab('Products');
       return false;
     }
 
     dismissOdooModals();
 
-    // 1. Check if already has a value
-    if (input.value && input.value.trim().length > 0) {
-      logMessage(`✓ Deliver To sudah terisi: "${input.value.trim()}"`);
+    // 1. Check if ALREADY set to Jawa Tengah
+    if (input.value && input.value.toLowerCase().includes('jawa tengah')) {
+      logMessage(`✓ Deliver To sudah Jawa Tengah: "${input.value.trim()}"`);
+      clickTab('Products');
+      await sleep(300);
       return true;
     }
 
     // Helper to get clean dropdown options
     function getCleanDropdownOptions() {
-      const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
+      const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu, .dropdown-menu'))
         .filter(m => {
           const rect = m.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && m.style.display !== 'none';
         });
       let menuOptions = [];
       if (visibleMenus.length > 0) {
-        menuOptions = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item, .dropdown-item')));
+        menuOptions = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item, .dropdown-item, li.ui-menu-item')));
       } else {
-        menuOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'))
+        menuOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item, li.ui-menu-item'))
           .filter(el => {
             const rect = el.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
@@ -895,6 +898,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     // 2. Open dropdown by clicking caret button or input
     const dropBtn = container?.querySelector('.o_dropdown_button, button, .fa-caret-down');
     if (dropBtn) {
+      dropBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      dropBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
       dropBtn.click();
     } else {
       input.focus();
@@ -903,30 +908,27 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     await sleep(250);
 
     let cleanOptions = [];
-    for (let wait = 0; wait < 12; wait++) {
+    for (let wait = 0; wait < 10; wait++) {
       await sleep(200);
       cleanOptions = getCleanDropdownOptions();
       if (cleanOptions.length > 0) break;
     }
 
-    // 3. If no options appeared by clicking caret, try typing queries
+    // 3. If options didn't appear by clicking caret, type 'Jawa Tengah' directly
     if (cleanOptions.length === 0) {
-      const searchQueries = ['Jawa Tengah', 'Receipts', 'Jateng', 'PFS'];
-      for (const query of searchQueries) {
-        if (cleanOptions.length > 0) break;
-        input.focus();
-        input.value = '';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        await sleep(50);
-        input.value = query;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new KeyboardEvent('keyup', { key: query[query.length - 1], bubbles: true }));
+      input.focus();
+      input.select();
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      document.execCommand('insertText', false, 'Jawa Tengah');
+      input.value = 'Jawa Tengah';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'h', bubbles: true }));
 
-        for (let wait = 0; wait < 10; wait++) {
-          await sleep(200);
-          cleanOptions = getCleanDropdownOptions();
-          if (cleanOptions.length > 0) break;
-        }
+      for (let wait = 0; wait < 12; wait++) {
+        await sleep(200);
+        cleanOptions = getCleanDropdownOptions();
+        if (cleanOptions.length > 0) break;
       }
     }
 
@@ -948,19 +950,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         });
       }
 
-      // Priority 3: Contains "fiva" or "pfs"
-      if (!matched) {
-        matched = cleanOptions.find(opt => {
-          const t = opt.innerText.toLowerCase();
-          return t.includes('fiva') || t.includes('pfs');
-        });
-      }
-
-      // Priority 4: Fallback to the first available option in dropdown
-      if (!matched && cleanOptions.length > 0) {
-        matched = cleanOptions[0];
-      }
-
       if (matched) {
         logMessage(`✓ Memilih Deliver To: "${matched.innerText.trim()}"`);
         const link = matched.querySelector('a') || matched;
@@ -974,17 +963,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
         await sleep(350);
         await waitForOdooRpcSettled(400);
+
+        clickTab('Products');
+        await sleep(350);
+        await waitForOdooRpcSettled(300);
         return true;
       }
     }
 
     logMessage('⚠️ Tidak dapat menemukan pilihan yang cocok untuk Deliver To.');
-    input.value = '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      document.activeElement.blur();
-    }
+    clickTab('Products');
+    await sleep(350);
     return false;
   }
 
@@ -1173,6 +1162,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return null;
   }
 
+  // Helper: Query all order line rows (both view mode and edit mode)
+  function getOrderLineRows() {
+    return Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr, tbody tr'))
+      .filter(r => {
+        if (r.classList.contains('o_field_x2many_list_row_add')) return false;
+        if (r.classList.contains('o_data_row') || r.classList.contains('o_selected_row')) return true;
+        if (r.querySelector('td[name="product_id"], td[data-name="product_id"], td.o_data_cell')) return true;
+        return false;
+      });
+  }
+
   // Helper: Add new row and VERIFY it appears before proceeding
   async function addNewRowWithVerification(targetIndex, timing) {
     for (let attempt = 1; attempt <= timing.retries; attempt++) {
@@ -1180,7 +1180,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Wait for any pending Odoo loading / tax RPC to finish first!
       await waitForOdooRpcSettled(300);
 
-      let currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      let currentRows = getOrderLineRows();
       if (currentRows.length > targetIndex) {
         return currentRows[targetIndex];
       }
@@ -1189,7 +1189,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
-      await sleep(250);
+      await sleep(200);
+      await waitForOdooRpcSettled(300);
 
       const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a, a.o_field_x2many_list_row_add'));
       const addBtn = addBtns.find(b => b.innerText.toLowerCase().includes('add a product') || b.innerText.toLowerCase().includes('tambah produk'));
@@ -1200,14 +1201,15 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
       // Click cleanly without URL hash navigation
       addBtn.focus();
-      addBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
+      addBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      addBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
       addBtn.click();
 
-      // Poll up to 14 times (3.5s) for new row to appear
-      for (let wait = 0; wait < 14; wait++) {
+      // Poll up to 16 times (4s) for new row to appear
+      for (let wait = 0; wait < 16; wait++) {
         await sleep(250);
         dismissDiscardModal();
-        currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+        currentRows = getOrderLineRows();
         if (currentRows.length > targetIndex) {
           await sleep(timing.delayAfterRow);
           return currentRows[targetIndex];
@@ -1225,7 +1227,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const maxWaitMs = 6000;
     while (Date.now() - startTime < maxWaitMs) {
       dismissDiscardModal();
-      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const rows = getOrderLineRows();
       const row = rows[rowIndex];
       if (row) {
         const descCell = row.querySelector('td[name="name"]') || findCellByColumnHeader(row, ['description', 'deskripsi']);
@@ -1262,7 +1264,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissDiscardModal();
 
       // ALWAYS query fresh row from DOM to prevent detached node reference
-      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const rows = getOrderLineRows();
       const row = rows[rowIndex];
       if (!row) {
         await sleep(300);
@@ -1313,7 +1315,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissDiscardModal();
 
       // Read back from live DOM to VERIFY
-      const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const freshRows = getOrderLineRows();
       const freshRow = freshRows[rowIndex];
       const freshCell = freshRow ? (freshRow.querySelector(cellSelector) || findCellByColumnHeader(freshRow, headerKeywords, fieldName)) : null;
       const verifiedVal = (freshCell?.querySelector('input')?.value || freshCell?.innerText || '').trim().replace(/[.,\s]/g, '');
@@ -1334,7 +1336,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   // Helper: Set Taxes field (in PT PO, Taxes always = 11%)
   async function setTaxesField(rowIndex, timing, taxTarget = '11%') {
     // 1. First check if cell already has 11% tag BEFORE doing any click
-    const initialRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+    const initialRows = getOrderLineRows();
     const initialRow = initialRows[rowIndex];
     if (initialRow) {
       const initialCell = initialRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') 
@@ -1353,7 +1355,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissDiscardModal();
       await waitForOdooRpcSettled(200);
 
-      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const rows = getOrderLineRows();
       const row = rows[rowIndex];
       if (!row) {
         await sleep(250);
@@ -1429,7 +1431,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
 
       // Verify cell content
-      const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const freshRows = getOrderLineRows();
       const freshRow = freshRows[rowIndex];
       const freshCell = freshRow ? (freshRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'], 'taxes_id')) : null;
       if (freshCell && (freshCell.innerText.includes(taxTarget) || Array.from(freshCell.querySelectorAll('.badge, .o_tag')).some(b => b.innerText.includes(taxTarget)))) {
@@ -1471,7 +1473,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
 
       // Clean name to type: strip leading [bracket] prefix (e.g. "[PRODUK LK] BRS Merah 24 PCS @ 500 g LK" -> "BRS Merah 24 PCS @ 500 g LK")
-      // CRITICAL: KEEP '@', '()', '-' because Odoo product names in database literally contain '@' (e.g. "@ 500 g")!
       const exactCleanName = exactOdooName.replace(/^\[.*?\]\s*/, '').replace(/\s+/g, ' ').trim();
 
       // Extract core query tokens for intelligent fallback (e.g. "BRS Merah 24", "BRS 13", "BRS ORI 7", "Rolade Ayam")
@@ -1479,6 +1480,38 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const cutIndex = rawWords.findIndex(w => ['pcs', '@', 'pack', '500g', '1000g', '500', '1000'].includes(w.toLowerCase()));
       const coreTokens = (cutIndex > 0) ? rawWords.slice(0, cutIndex) : rawWords.slice(0, 3);
       const coreQuery = coreTokens.join(' ');
+
+      const targetLower = exactOdooName.toLowerCase().trim();
+      const isExplicitJadi = targetLower.includes('[produk jadi]');
+      // In PT PO and CV SO, ALWAYS prioritize [PRODUK LK] and strictly forbid [PRODUK JADI]
+      const preferLk = !isExplicitJadi && (isPtPo || isCvSo || targetLower.includes('[produk lk]'));
+
+      // Distinguishing keywords that MUST be in the product
+      const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'dan', 'yang', 'atau', '@', 'mbg'];
+      const keyTokens = exactOdooName
+        .replace(/^\[.*?\]\s*/, '')
+        .toLowerCase()
+        .split(/[\s@()\-]+/)
+        .filter(t => t.length > 0 && !noiseWords.includes(t));
+
+      // SMART RESUME GUARD:
+      // If row i is ALREADY filled with a completed product matching this item and has valid qty, skip!
+      const currentTableRows = getOrderLineRows();
+      if (currentTableRows.length > i) {
+        const checkRow = currentTableRows[i];
+        const checkProdText = (checkRow.querySelector('td[name="product_id"], td[data-name="product_id"]')?.innerText || '').toLowerCase();
+        const checkQtyText = (checkRow.querySelector('td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"]')?.innerText || '').replace(/[.,]/g, '');
+        const checkQtyNum = parseFloat(checkQtyText) || 0;
+        
+        if (checkProdText.length > 3 && !checkProdText.includes('add a product') && checkQtyNum > 0) {
+          const isMatching = keyTokens.some(tok => tok !== 'lk' && checkProdText.includes(tok));
+          if (isMatching) {
+            logMessage(`✓ Baris ${i + 1}/${items.length} sudah terisi ("${checkRow.querySelector('td[name="product_id"], td[data-name="product_id"]')?.innerText.trim()}"). Melanjutkan...`);
+            successfulRows++;
+            continue;
+          }
+        }
+      }
 
       logMessage(`📦 Baris ${i + 1}/${items.length}: Membuka baris untuk "${exactOdooName}"...`);
 
@@ -1502,92 +1535,80 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         || activeRow.querySelector('input') 
         || document.activeElement;
 
-      const targetLower = exactOdooName.toLowerCase().trim();
-      const isExplicitJadi = targetLower.includes('[produk jadi]');
-      // In PT PO and CV SO, ALWAYS prioritize [PRODUK LK] and strictly forbid [PRODUK JADI]
-      const preferLk = !isExplicitJadi && (isPtPo || isCvSo || targetLower.includes('[produk lk]'));
+      // Helper function to score dropdown candidates
+      function scoreCandidate(optText) {
+        const txt = optText.toLowerCase().trim();
+        if (preferLk && txt.includes('[produk jadi]')) return -1;
+        if (preferLk && !txt.includes('[produk lk]')) return -1;
 
-      // Distinguishing keywords that MUST be in the product
-      const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'dan', 'yang', 'atau', '@'];
-      const keyTokens = exactOdooName
-        .replace(/^\[.*?\]\s*/, '')
-        .toLowerCase()
-        .split(/[\s@()\-]+/)
-        .filter(t => t.length > 0 && !noiseWords.includes(t));
+        let score = 0;
+        if (preferLk && txt.includes('[produk lk]')) score += 10;
+        if (txt === targetLower) score += 50;
+
+        for (const tok of keyTokens) {
+          if (tok === 'lk') continue;
+          if (txt.includes(tok)) {
+            score += 5;
+          } else if (tok.endsWith('s') && txt.includes(tok.slice(0, -1))) {
+            score += 4; // e.g. 24s matches 24
+          }
+        }
+        return score;
+      }
+
+      // Prepare multi-tier search queries (e.g. "Rolade Ayam 1000", "Rolade Ayam", "Rolade")
+      const searchQueries = [];
+      const normalizedCore = coreQuery.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
+      if (normalizedCore) searchQueries.push(normalizedCore);
+
+      const normalizedExact = exactCleanName.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
+      if (normalizedExact && normalizedExact !== normalizedCore) searchQueries.push(normalizedExact);
+
+      if (coreTokens.length > 1) {
+        const twoWords = coreTokens.slice(0, 2).join(' ').replace(/rollade/gi, 'Rolade');
+        if (!searchQueries.includes(twoWords)) searchQueries.push(twoWords);
+      }
+
+      let matchedItem = null;
 
       if (prodInput && prodInput.tagName === 'INPUT') {
-        prodInput.focus();
-        prodInput.select();
-        document.execCommand('selectAll', false, null);
-        document.execCommand('delete', false, null);
-        // Type full clean name from Master Barang preserving '@' (e.g. "BRS Merah 24 PCS @ 500 g LK")
-        document.execCommand('insertText', false, exactCleanName);
-        prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-        prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-        prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+        for (const query of searchQueries) {
+          if (matchedItem) break;
+          logMessage(`🔍 Mencari produk: "${query}"...`);
 
-        // Wait up to 5 seconds for autocomplete dropdown items to appear
-        let matchedItem = null;
+          prodInput.focus();
+          prodInput.select();
+          document.execCommand('selectAll', false, null);
+          document.execCommand('delete', false, null);
+          document.execCommand('insertText', false, query);
+          prodInput.value = query;
+          prodInput.dispatchEvent(new Event('input', { bubbles: true }));
+          prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+          prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
-        for (let attempt = 0; attempt < 20; attempt++) {
-          await sleep(250);
-          dismissDiscardModal();
-          
-          let dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
-          
-          // Fallback: If after 5 attempts (1.25s) no options appeared with exactCleanName, try core query (e.g. "BRS Merah 24")
-          if (dropdownOptions.length === 0 && attempt === 5 && coreQuery && coreQuery !== exactCleanName) {
-            logMessage(`...Mencoba kata kunci inti: "${coreQuery}"...`);
-            prodInput.focus();
-            document.execCommand('selectAll', false, null);
-            document.execCommand('delete', false, null);
-            document.execCommand('insertText', false, coreQuery);
-            prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-            continue;
-          }
+          // Poll up to 10 times (2.5s) per query
+          for (let attempt = 0; attempt < 10; attempt++) {
+            await sleep(250);
+            dismissDiscardModal();
 
-          if (dropdownOptions.length > 0) {
-            // STRICT RULE: If PT PO or preferLk, NEVER accept an option that contains [PRODUK JADI]!
-            const validOptions = preferLk
-              ? dropdownOptions.filter(opt => !opt.innerText.toLowerCase().includes('[produk jadi]'))
-              : dropdownOptions;
-
-            // Tier 1: Look for option containing [PRODUK LK] AND matching key tokens
-            if (preferLk) {
-              matchedItem = validOptions.find(opt => {
-                const txt = opt.innerText.toLowerCase().trim();
-                if (!txt.includes('[produk lk]')) return false;
-                return keyTokens.every(tok => txt.includes(tok));
+            const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'))
+              .filter(opt => {
+                const rect = opt.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
               });
-            }
 
-            // Tier 2: Exact string match with targetLower
-            if (!matchedItem) {
-              matchedItem = validOptions.find(opt => opt.innerText.toLowerCase().trim() === targetLower);
-            }
+            if (dropdownOptions.length > 0) {
+              const scored = dropdownOptions.map(opt => ({
+                opt,
+                score: scoreCandidate(opt.innerText)
+              })).filter(x => x.score > 0);
 
-            // Tier 3: Option containing [PRODUK LK] and matching main tokens
-            if (!matchedItem && preferLk) {
-              matchedItem = validOptions.find(opt => {
-                const txt = opt.innerText.toLowerCase().trim();
-                if (!txt.includes('[produk lk]')) return false;
-                const mainTokens = keyTokens.filter(t => t !== 'lk');
-                const matches = mainTokens.filter(tok => txt.includes(tok));
-                return matches.length >= Math.max(1, mainTokens.length - 1);
-              });
+              scored.sort((a, b) => b.score - a.score);
+              if (scored.length > 0) {
+                matchedItem = scored[0].opt;
+                break;
+              }
             }
-
-            // Tier 4: General match for non-PT_PO
-            if (!matchedItem && !preferLk) {
-              matchedItem = validOptions.find(opt => {
-                const txt = opt.innerText.toLowerCase().trim();
-                return keyTokens.every(tok => txt.includes(tok));
-              });
-            }
-
-            if (matchedItem) break;
           }
         }
 
@@ -1603,14 +1624,20 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           await waitForProductOnchange(i, keyTokens, timing);
           dismissDiscardModal();
         } else {
-          // CRITICAL: Clear input if no [PRODUK LK] matched and SKIP row to prevent freezing subsequent rows!
-          logMessage(`⚠️ Opsi [PRODUK LK] "${exactOdooName}" tidak muncul di dropdown. Melewati baris ini agar baris berikutnya tidak macet.`);
-          prodInput.focus();
-          document.execCommand('selectAll', false, null);
-          document.execCommand('delete', false, null);
-          prodInput.value = '';
-          prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-          await sleep(300);
+          logMessage(`⚠️ Opsi [PRODUK LK] "${exactOdooName}" tidak muncul di dropdown.`);
+          // CRITICAL: Clean up the empty invalid row so Odoo does NOT block subsequent rows!
+          const trashBtn = activeRow.querySelector('.o_list_record_delete, .fa-trash-o, .fa-trash, button[name="delete"]');
+          if (trashBtn) {
+            trashBtn.click();
+            await sleep(300);
+            await waitForOdooRpcSettled(300);
+          } else {
+            prodInput.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+            prodInput.value = '';
+            prodInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
           continue;
         }
       } else {
