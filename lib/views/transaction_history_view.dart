@@ -4480,20 +4480,56 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       for (final item in tr.items) {
         Product? matchedProduct;
         try {
+          // 1. Match by product ID first
           matchedProduct = productProvider.products.firstWhere(
-            (p) => p.name.trim().toUpperCase() == item.productName.trim().toUpperCase() ||
-                   p.kodeInduk.trim().toUpperCase() == item.productId.trim().toUpperCase() ||
-                   p.id.trim().toUpperCase() == item.productId.trim().toUpperCase(),
+            (p) => p.id.trim().toUpperCase() == item.productId.trim().toUpperCase(),
           );
-        } catch (_) {}
+        } catch (_) {
+          try {
+            // 2. Match by exact product name
+            matchedProduct = productProvider.products.firstWhere(
+              (p) => p.name.trim().toUpperCase() == item.productName.trim().toUpperCase(),
+            );
+          } catch (_) {
+            try {
+              // 3. Match by kodeInduk
+              matchedProduct = productProvider.products.firstWhere(
+                (p) => p.kodeInduk.trim().toUpperCase() == item.productId.trim().toUpperCase(),
+              );
+            } catch (_) {}
+          }
+        }
 
-        final odooProductName = matchedProduct?.odooName.isNotEmpty == true
-            ? matchedProduct!.odooName
-            : item.productName;
+        // Cross-check sibling products with same kodeInduk if odooName is empty
+        String effectiveOdooName = matchedProduct?.odooName.trim() ?? '';
+        if (effectiveOdooName.isEmpty && matchedProduct != null && matchedProduct.kodeInduk.isNotEmpty) {
+          try {
+            final sibling = productProvider.products.firstWhere(
+              (p) => p.kodeInduk.trim().toUpperCase() == matchedProduct!.kodeInduk.trim().toUpperCase() &&
+                     p.odooName.trim().isNotEmpty,
+            );
+            effectiveOdooName = sibling.odooName.trim();
+          } catch (_) {}
+        }
+        if (effectiveOdooName.isEmpty) {
+          effectiveOdooName = item.productName;
+        }
 
-        final double pricePoSo = (matchedProduct != null && matchedProduct.pricePoSo > 0)
+        double pricePoSo = (matchedProduct != null && matchedProduct.pricePoSo > 0)
             ? matchedProduct.pricePoSo
-            : item.price;
+            : 0.0;
+        if (pricePoSo <= 0 && matchedProduct != null && matchedProduct.kodeInduk.isNotEmpty) {
+          try {
+            final sibling = productProvider.products.firstWhere(
+              (p) => p.kodeInduk.trim().toUpperCase() == matchedProduct!.kodeInduk.trim().toUpperCase() &&
+                     p.pricePoSo > 0,
+            );
+            pricePoSo = sibling.pricePoSo;
+          } catch (_) {}
+        }
+        if (pricePoSo <= 0) {
+          pricePoSo = item.price;
+        }
 
         final double priceSalePrePpn = double.parse((item.price / 1.11).toStringAsFixed(2));
 
@@ -4505,7 +4541,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
         itemsList.add({
           'productName': item.productName,
-          'odooProductName': odooProductName,
+          'odooProductName': effectiveOdooName,
           'productId': item.productId,
           'kodeInduk': matchedProduct?.kodeInduk ?? item.productId,
           'isiKarton': isiKarton,

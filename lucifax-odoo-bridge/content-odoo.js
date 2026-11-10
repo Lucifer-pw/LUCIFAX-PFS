@@ -493,6 +493,35 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     }
   }
 
+  // Helper to safely set cell value in Odoo editable tree
+  async function setCellInput(row, cellSelector, value) {
+    if (value === undefined || value === null) return false;
+    const cell = row.querySelector(cellSelector);
+    if (!cell) return false;
+
+    // Click cell to activate input
+    let input = cell.querySelector('input');
+    if (!input) {
+      cell.click();
+      await sleep(250);
+      input = cell.querySelector('input') || row.querySelector(cellSelector + ' input') || document.activeElement;
+    }
+
+    if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
+      input.focus();
+      input.select();
+      const numVal = typeof value === 'number' ? (value % 1 === 0 ? Math.round(value) : Number(value.toFixed(2))) : value;
+      input.value = numVal.toString();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+      input.dispatchEvent(new Event('blur', { bubbles: true }));
+      await sleep(250);
+      return true;
+    }
+    return false;
+  }
+
   // Fill product order lines in Odoo table
   async function fillOrderLines(items, mode) {
     for (let i = 0; i < items.length; i++) {
@@ -506,63 +535,94 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         price = item.priceSalePrePpn || (item.priceUnit / 1.11);
       }
 
-      logMessage(`📦 Menambah barang (${i + 1}/${items.length}): ${prodName.substring(0, 20)}...`);
+      logMessage(`📦 Menambah (${i + 1}/${items.length}): ${prodName.substring(0, 24)}...`);
 
-      // Find "Add a product" link/button
-      const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a'));
+      // 1. Find and click "Add a product" button
+      const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a, a.o_field_x2many_list_row_add'));
       const addBtn = addBtns.find(b => b.innerText.toLowerCase().includes('add a product') || b.innerText.toLowerCase().includes('tambah produk'));
 
       if (addBtn) {
         addBtn.click();
-        await sleep(350);
+        await sleep(600); // Give Odoo time to render the new row
 
-        // Target the active/latest row
-        const rows = document.querySelectorAll('tr.o_data_row');
-        const activeRow = rows[rows.length - 1];
+        // Target the active selected row
+        const activeRow = document.querySelector('tr.o_selected_row') 
+          || document.querySelectorAll('tr.o_data_row')[document.querySelectorAll('tr.o_data_row').length - 1];
 
         if (activeRow) {
-          // Find product cell input
-          const prodInput = activeRow.querySelector('td[data-name="product_id"] input, td.o_data_cell[data-name="product_id"] input')
-            || document.activeElement;
+          // 2. Find and fill product input
+          const prodCell = activeRow.querySelector('td[data-name="product_id"]');
+          let prodInput = activeRow.querySelector('td[data-name="product_id"] input') || document.activeElement;
+          if (!prodInput || prodInput.tagName !== 'INPUT') {
+            if (prodCell) prodCell.click();
+            await sleep(250);
+            prodInput = activeRow.querySelector('td[data-name="product_id"] input') || document.activeElement;
+          }
 
           if (prodInput && prodInput.tagName === 'INPUT') {
+            prodInput.focus();
             prodInput.value = prodName;
             prodInput.dispatchEvent(new Event('input', { bubbles: true }));
             prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-            await sleep(400);
+            prodInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true }));
 
-            const dropdownItem = document.querySelector('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item');
-            if (dropdownItem) {
-              dropdownItem.click();
+            // Wait up to 1500ms for autocomplete dropdown items to appear
+            let matchedItem = null;
+            const cleanTarget = prodName.toLowerCase().replace(/\[.*?\]/g, '').replace(/[@()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+            const targetTokens = cleanTarget.split(' ').filter(t => t.length > 1);
+
+            for (let attempt = 0; attempt < 8; attempt++) {
+              await sleep(250);
+              const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
+              if (dropdownOptions.length > 0) {
+                // Find matching option containing target tokens
+                matchedItem = dropdownOptions.find(opt => {
+                  const txt = opt.innerText.toLowerCase();
+                  return targetTokens.every(tok => txt.includes(tok));
+                });
+                if (!matchedItem) {
+                  matchedItem = dropdownOptions.find(opt => {
+                    const txt = opt.innerText.toLowerCase();
+                    const matches = targetTokens.filter(tok => txt.includes(tok));
+                    return matches.length >= Math.min(2, targetTokens.length);
+                  });
+                }
+                if (!matchedItem) {
+                  const firstTxt = dropdownOptions[0].innerText.toLowerCase();
+                  if (targetTokens.some(tok => firstTxt.includes(tok))) {
+                    matchedItem = dropdownOptions[0];
+                  }
+                }
+                if (matchedItem) break;
+              }
+            }
+
+            if (matchedItem) {
+              const link = matchedItem.querySelector('a') || matchedItem;
+              link.click();
             } else {
               prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
               triggerEvents(prodInput);
             }
 
-            await sleep(300);
+            // CRITICAL: Wait 1000ms for Odoo's asynchronous onchange_product_id RPC to finish
+            await sleep(1000);
           }
 
-          // Find quantity cell input
-          const qtyInput = activeRow.querySelector('td[data-name="product_qty"] input, td[data-name="product_uom_qty"] input, [data-name="quantity"] input');
-          if (qtyInput) {
-            qtyInput.focus();
-            qtyInput.value = Number(qty).toFixed(1).replace('.0', '');
-            triggerEvents(qtyInput);
-            await sleep(200);
-          }
+          // 3. Re-select the active row after Odoo's onchange re-render
+          const updatedRow = document.querySelector('tr.o_selected_row') || activeRow;
 
-          // Find unit price cell input
-          const priceInput = activeRow.querySelector('td[data-name="price_unit"] input, [data-name="unit_price"] input');
-          if (priceInput) {
-            priceInput.focus();
-            priceInput.value = Math.round(price);
-            triggerEvents(priceInput);
-            await sleep(200);
-          }
+          // 4. Set Quantity
+          await setCellInput(updatedRow, 'td[data-name="product_qty"], td[data-name="product_uom_qty"], td[data-name="quantity"]', qty);
+          await sleep(350);
+
+          // 5. Set Unit Price
+          await setCellInput(updatedRow, 'td[data-name="price_unit"], td[data-name="unit_price"]', Math.round(price));
+          await sleep(350);
         }
       }
 
-      await sleep(200);
+      await sleep(300);
     }
   }
 
