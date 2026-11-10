@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.5</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.6</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1494,21 +1494,31 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         .split(/[\s@()\-]+/)
         .filter(t => t.length > 0 && !noiseWords.includes(t));
 
+      const targetIsLk = targetLower.includes('[produk lk]') || isPtPo || isCvSo;
+
       // SMART RESUME GUARD:
-      // If row i is ALREADY filled with a completed product matching this item and has valid qty, skip!
+      // If row i is ALREADY filled in Odoo, check if it matches the EXACT registered variant!
       const currentTableRows = getOrderLineRows();
       if (currentTableRows.length > i) {
         const checkRow = currentTableRows[i];
-        const checkProdText = (checkRow.querySelector('td[name="product_id"], td[data-name="product_id"]')?.innerText || '').toLowerCase();
+        const checkProdText = (checkRow.querySelector('td[name="product_id"], td[data-name="product_id"]')?.innerText || '').trim();
+        const checkProdLower = checkProdText.toLowerCase();
         const checkQtyText = (checkRow.querySelector('td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"]')?.innerText || '').replace(/[.,]/g, '');
         const checkQtyNum = parseFloat(checkQtyText) || 0;
         
-        if (checkProdText.length > 3 && !checkProdText.includes('add a product') && checkQtyNum > 0) {
-          const isMatching = keyTokens.some(tok => tok !== 'lk' && checkProdText.includes(tok));
-          if (isMatching) {
-            logMessage(`✓ Baris ${i + 1}/${items.length} sudah terisi ("${checkRow.querySelector('td[name="product_id"], td[data-name="product_id"]')?.innerText.trim()}"). Melanjutkan...`);
+        const rowHasLk = checkProdLower.includes('[produk lk]');
+        const rowHasJadi = checkProdLower.includes('[produk jadi]');
+
+        if (checkProdText.length > 3 && !checkProdLower.includes('add a product') && checkQtyNum > 0) {
+          // If the target is [PRODUK LK] and the row ALREADY has [PRODUK LK] and matches:
+          if (targetIsLk && rowHasLk && keyTokens.some(tok => tok !== 'lk' && checkProdLower.includes(tok))) {
+            logMessage(`✓ Baris ${i + 1}/${items.length} sudah sesuai ("${checkProdText}"). Melanjutkan...`);
             successfulRows++;
             continue;
+          }
+          // If the row currently has [PRODUK JADI] when we want [PRODUK LK], do NOT skip!
+          if (targetIsLk && rowHasJadi) {
+            logMessage(`⚠️ Baris ${i + 1} saat ini "[PRODUK JADI]". Mengganti ke "[PRODUK LK]" sesuai master barang...`);
           }
         }
       }
@@ -1538,31 +1548,55 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Helper function to score dropdown candidates
       function scoreCandidate(optText) {
         const txt = optText.toLowerCase().trim();
+        // STRICT RULE: If preferLk is true (PT PO / CV SO), strictly forbid [PRODUK JADI]
         if (preferLk && txt.includes('[produk jadi]')) return -1;
         if (preferLk && !txt.includes('[produk lk]')) return -1;
 
         let score = 0;
         if (preferLk && txt.includes('[produk lk]')) score += 10;
-        if (txt === targetLower) score += 50;
+
+        // HIGHEST PRIORITY: Exact match with exactOdooName (the exact name registered in Master Barang)
+        if (txt === targetLower) score += 1000;
+
+        // Normalized comparison ignoring brackets, punctuation, and extra whitespace
+        const cleanOpt = txt.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+        const cleanTarget = targetLower.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (cleanOpt === cleanTarget) score += 500;
 
         for (const tok of keyTokens) {
           if (tok === 'lk') continue;
           if (txt.includes(tok)) {
-            score += 5;
+            score += 10;
           } else if (tok.endsWith('s') && txt.includes(tok.slice(0, -1))) {
-            score += 4; // e.g. 24s matches 24
+            score += 8; // e.g. 24s matches 24
           }
         }
         return score;
       }
 
-      // Prepare multi-tier search queries (e.g. "Rolade Ayam 1000", "Rolade Ayam", "Rolade")
+      // Prepare multi-tier search queries prioritizing the exact name registered in Master Barang
       const searchQueries = [];
       const normalizedCore = coreQuery.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
-      if (normalizedCore) searchQueries.push(normalizedCore);
 
+      // Tier 1: Search using the exact registered name with [PRODUK LK] prefix
+      if (exactOdooName.startsWith('[PRODUK LK]')) {
+        searchQueries.push(exactOdooName);
+        if (normalizedCore) searchQueries.push(`[PRODUK LK] ${normalizedCore}`);
+      } else if (preferLk) {
+        if (normalizedCore) searchQueries.push(`[PRODUK LK] ${normalizedCore}`);
+      }
+
+      // Tier 2: Clean target without bracket prefix
       const normalizedExact = exactCleanName.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
-      if (normalizedExact && normalizedExact !== normalizedCore) searchQueries.push(normalizedExact);
+      if (normalizedExact && !searchQueries.includes(normalizedExact)) searchQueries.push(normalizedExact);
+
+      // Tier 3: Core tokens with LK
+      if (preferLk && normalizedCore && !searchQueries.includes(`${normalizedCore} LK`)) {
+        searchQueries.push(`${normalizedCore} LK`);
+      }
+
+      // Tier 4: Core query
+      if (normalizedCore && !searchQueries.includes(normalizedCore)) searchQueries.push(normalizedCore);
 
       if (coreTokens.length > 1) {
         const twoWords = coreTokens.slice(0, 2).join(' ').replace(/rollade/gi, 'Rolade');
