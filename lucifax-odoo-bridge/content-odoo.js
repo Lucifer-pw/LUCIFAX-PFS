@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.2</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.3</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -674,13 +674,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const targetNorm = tagText.toLowerCase().replace(/\s+/g, ' ').trim();
     const targetTokens = targetNorm.split(' ').filter(t => t.length > 1);
 
-    // Helper: Purge unwanted tags (e.g. "Follow Up", "Selesai", or anything not matching target)
+    // Helper: Purge unwanted tags (e.g. "Follow Up", "Selesai", or anything not matching target, or duplicates)
     async function purgeUnwantedTags() {
       for (let pass = 0; pass < 5; pass++) {
         const c = getTagContainer();
         if (!c) return;
         const badges = Array.from(c.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
         let removedAny = false;
+        let targetCount = 0;
         for (const b of badges) {
           const text = b.innerText.toLowerCase().trim();
           const isTarget = targetTokens.length > 0 && targetTokens.some(tok => text.includes(tok));
@@ -699,6 +700,25 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
               } catch (_) {}
             }
             await sleep(200);
+          } else {
+            targetCount++;
+            if (targetCount > 1) {
+              // DUPLICATE TARGET TAG: Remove extra "Joko Setiawan"!
+              removedAny = true;
+              logMessage(`🧹 Menghapus tag ganda: "${b.innerText.trim()}"...`);
+              const delBtn = b.querySelector('.o_delete') || b.querySelector('.fa-times') || b.querySelector('a') || b;
+              delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+              delBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+              delBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+              delBtn.click();
+              if (window.jQuery) {
+                try {
+                  window.jQuery(delBtn).trigger('click');
+                  window.jQuery(b).find('.o_delete, .fa-times').trigger('click');
+                } catch (_) {}
+              }
+              await sleep(200);
+            }
           }
         }
         if (!removedAny) break;
@@ -707,23 +727,26 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
     }
 
-    // Pre-clean: Remove any unwanted tag (e.g. Follow Up) before starting
+    // Pre-clean: Remove any unwanted tag (e.g. Follow Up) or duplicate before starting
     await purgeUnwantedTags();
 
-    // Check if target tag is ALREADY attached and no unwanted tag exists
+    // Check if target tag is ALREADY attached and no unwanted or duplicate tag exists
     container = getTagContainer();
     if (container) {
       const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
-      const hasTarget = badges.some(b => b.innerText.toLowerCase().includes(targetNorm));
-      const hasUnwanted = badges.some(b => !targetTokens.some(tok => b.innerText.toLowerCase().includes(tok)));
-      if (hasTarget && !hasUnwanted) {
-        logMessage(`✓ Tag [${tagText}] sudah sesuai.`);
+      const targetMatches = badges.filter(b => targetTokens.some(tok => b.innerText.toLowerCase().includes(tok)));
+      if (targetMatches.length === 1 && badges.length === 1) {
+        logMessage(`✓ Tag [${tagText}] sudah sesuai (1 tag).`);
         return true;
       }
-      if (hasTarget && hasUnwanted) {
+      if (targetMatches.length > 0) {
         await purgeUnwantedTags();
-        logMessage(`✓ Tag [${tagText}] sudah sesuai (tag lain dibersihkan).`);
-        return true;
+        const freshBadges = Array.from(getTagContainer()?.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge') || []);
+        const freshMatches = freshBadges.filter(b => targetTokens.some(tok => b.innerText.toLowerCase().includes(tok)));
+        if (freshMatches.length === 1 && freshBadges.length === 1) {
+          logMessage(`✓ Tag [${tagText}] sudah sesuai (1 tag).`);
+          return true;
+        }
       }
     }
 
@@ -810,19 +833,19 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
     if (matchedOption) {
       logMessage(`✓ Memilih Tag: "${matchedOption.innerText.trim()}"`);
-      const link = matchedOption.querySelector('a') || matchedOption;
-      link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
-      link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-      link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-      link.click();
-      matchedOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-      matchedOption.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-      matchedOption.click();
+      const clickEl = matchedOption.querySelector('a') || matchedOption;
+      clickEl.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
+      clickEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      clickEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      clickEl.click();
+      if (window.jQuery && clickEl !== matchedOption) {
+        try { window.jQuery(clickEl).trigger('click'); } catch (_) {}
+      }
 
       await sleep(350);
       await waitForOdooRpcSettled(400);
 
-      // Post-clean to guarantee only "Joko Setiawan" remains
+      // Post-clean to guarantee strictly ONE "Joko Setiawan" tag remains
       await purgeUnwantedTags();
 
       // Final check
@@ -1072,7 +1095,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await waitForOdooRpcSettled(400);
 
         // 3. Kembali ke Order Lines
-        logMessage('5. Membuka tab Order Lines (Harga sebelum PPN, Diskon Invoice, tanpa Taxes)...');
+        logMessage('5. Membuka tab Order Lines (Harga sebelum PPN, Diskon Invoice, Taxes 11%)...');
         clickTab('Order Lines');
         await sleep(300);
         await waitForOdooRpcSettled(300);
@@ -1400,13 +1423,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
-  // Helper: Set Taxes field (in PT PO, Taxes always = 11%)
+  // Helper: Set Taxes field (in PT PO & PT SO, Taxes always = 11%)
   async function setTaxesField(rowIndex, timing, taxTarget = '11%') {
     // 1. First check if cell already has 11% tag BEFORE doing any click
     const initialRows = getOrderLineRows();
     const initialRow = initialRows[rowIndex];
     if (initialRow) {
-      const initialCell = initialRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') 
+      const initialCell = initialRow.querySelector('td[name="tax_id"], td[name="taxes_id"], td[data-name="tax_id"], td[data-name="taxes_id"]') 
+        || findCellByColumnHeader(initialRow, ['taxes', 'pajak'], 'tax_id')
         || findCellByColumnHeader(initialRow, ['taxes', 'pajak'], 'taxes_id');
       const hasTax = initialCell && (
         initialCell.innerText.includes(taxTarget) || 
@@ -1430,7 +1454,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
 
       // Find Taxes cell
-      let cell = row.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') 
+      let cell = row.querySelector('td[name="tax_id"], td[name="taxes_id"], td[data-name="tax_id"], td[data-name="taxes_id"]') 
+        || findCellByColumnHeader(row, ['taxes', 'pajak'], 'tax_id')
         || findCellByColumnHeader(row, ['taxes', 'pajak'], 'taxes_id');
       if (!cell) {
         await sleep(250);
@@ -1500,7 +1525,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Verify cell content
       const freshRows = getOrderLineRows();
       const freshRow = freshRows[rowIndex];
-      const freshCell = freshRow ? (freshRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'], 'taxes_id')) : null;
+      const freshCell = freshRow ? (freshRow.querySelector('td[name="tax_id"], td[name="taxes_id"], td[data-name="tax_id"], td[data-name="taxes_id"]') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'], 'tax_id') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'], 'taxes_id')) : null;
       if (freshCell && (freshCell.innerText.includes(taxTarget) || Array.from(freshCell.querySelectorAll('.badge, .o_tag')).some(b => b.innerText.includes(taxTarget)))) {
         logMessage(`✓ Taxes terverifikasi: ${taxTarget}`);
         return true;
@@ -2085,13 +2110,13 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         }
       }
 
-      // 6. TAXES: In PT PO always 11%; in PT SO & CV SO Taxes must be EMPTY (no PPN / tax)!
-      if (isPtPo) {
-        logMessage(`✏️ Mengisi Taxes: 11%...`);
+      // 6. TAXES: In PT PO & PT SO always 11%; in CV SO Taxes must be EMPTY (no PPN / tax)!
+      if (isPtPo || mode === 'PT_SO') {
+        logMessage(`✏️ Memastikan Taxes: 11%...`);
         await setTaxesField(i, timing, '11%');
-        await waitForOdooRpcSettled(500);
+        await waitForOdooRpcSettled(400);
       } else {
-        logMessage(`🧹 Memastikan Taxes baris ${i + 1} kosong (PT SO / CV SO tanpa Taxes)...`);
+        logMessage(`🧹 Memastikan Taxes baris ${i + 1} kosong (CV SO tanpa Taxes)...`);
         await clearTaxesField(i, timing);
         await waitForOdooRpcSettled(400);
       }
