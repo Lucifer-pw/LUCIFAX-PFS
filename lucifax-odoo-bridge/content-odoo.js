@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.0.9</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.0</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -409,11 +409,41 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     element.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
-  // Helper to find input by field name in Odoo DOM
-  function findFieldInput(fieldName) {
-    return document.querySelector(`div[name="${fieldName}"] input`)
+  // Helper to find input by field name or label in Odoo DOM
+  function findFieldInput(fieldName, labelKeywords = []) {
+    let el = document.querySelector(`div[name="${fieldName}"] input`)
       || document.querySelector(`input[name="${fieldName}"]`)
-      || document.querySelector(`[data-name="${fieldName}"] input`);
+      || document.querySelector(`[data-name="${fieldName}"] input`)
+      || document.querySelector(`.o_field_widget[name="${fieldName}"] input`)
+      || document.querySelector(`.o_field_many2manytags[name="${fieldName}"] input`);
+    if (el) return el;
+
+    if (labelKeywords && labelKeywords.length > 0) {
+      const labels = Array.from(document.querySelectorAll('label.o_form_label, label'));
+      for (const kw of labelKeywords) {
+        const kwLower = kw.toLowerCase().trim();
+        const matchedLabel = labels.find(l => {
+          const txt = l.innerText.toLowerCase().trim();
+          return txt === kwLower || txt.startsWith(kwLower);
+        });
+        if (matchedLabel) {
+          const forId = matchedLabel.getAttribute('for');
+          if (forId) {
+            const byFor = document.getElementById(forId);
+            if (byFor) {
+              const inp = byFor.tagName === 'INPUT' ? byFor : byFor.querySelector('input');
+              if (inp) return inp;
+            }
+          }
+          const parentRow = matchedLabel.closest('tr, .o_row, .o_cell, .row, .o_group, div');
+          if (parentRow) {
+            const inp = parentRow.querySelector('input');
+            if (inp) return inp;
+          }
+        }
+      }
+    }
+    return null;
   }
 
   // Dismiss any "Record has been modified / discard changes" modal
@@ -451,10 +481,10 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     dismissDiscardModal();
   }
 
-  // Helper to set Odoo Many2One autocomplete dropdown with robust polling & selection
-  async function setMany2OneField(fieldName, searchText) {
+  // Helper to set Odoo Many2One / Many2Many autocomplete dropdown with robust polling & selection
+  async function setMany2OneField(fieldName, searchText, labelKeywords = [], exactMatch = false) {
     if (!searchText) return false;
-    const input = findFieldInput(fieldName);
+    const input = findFieldInput(fieldName, labelKeywords);
     if (!input) {
       logMessage(`Field ${fieldName} tidak ditemukan.`);
       return false;
@@ -478,19 +508,47 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       await sleep(250);
       dismissDiscardModal();
       const options = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
-      if (options.length > 0) {
-        matchedItem = options.find(opt => opt.innerText.toLowerCase().trim().includes(searchLower)) || options[0];
+      
+      const cleanOptions = options.filter(opt => {
+        const t = opt.innerText.toLowerCase().trim();
+        return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
+      });
+
+      if (cleanOptions.length > 0) {
+        // 1. Exact match priority
+        matchedItem = cleanOptions.find(opt => opt.innerText.toLowerCase().trim() === searchLower);
+
+        // 2. Contains match if not strictly required exact
+        if (!matchedItem && !exactMatch) {
+          matchedItem = cleanOptions.find(opt => opt.innerText.toLowerCase().trim().includes(searchLower));
+        }
+
+        // 3. Match by individual tokens
+        if (!matchedItem) {
+          const searchTokens = searchLower.split(/\s+/).filter(t => t.length > 1);
+          matchedItem = cleanOptions.find(opt => {
+            const t = opt.innerText.toLowerCase();
+            return searchTokens.every(tok => t.includes(tok));
+          });
+        }
+
+        // 4. Fallback to first clean option if partial match allowed
+        if (!matchedItem && !exactMatch && cleanOptions.length > 0) {
+          matchedItem = cleanOptions[0];
+        }
+
         if (matchedItem) break;
       }
     }
 
     if (matchedItem) {
+      logMessage(`✓ Memilih [${fieldName}]: ${matchedItem.innerText.trim().substring(0, 35)}`);
       const link = matchedItem.querySelector('a') || matchedItem;
       link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
       link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       link.click();
       
-      // Wait for onchange partner RPC to settle so red border disappears
+      // Wait for onchange partner / analytic account RPC to settle
       await waitForOdooRpcSettled(800);
       return true;
     } else {
@@ -499,6 +557,21 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       await waitForOdooRpcSettled(600);
     }
     return false;
+  }
+
+  // Helper to set Odoo Many2Many Tags (e.g. tag_ids: "Joko Setiawan")
+  async function setTagsField(fieldName, tagText, labelKeywords = ['tags', 'tag']) {
+    if (!tagText) return false;
+    const container = document.querySelector(`div[name="${fieldName}"], [data-name="${fieldName}"], .o_field_many2manytags[name="${fieldName}"]`)
+      || document.querySelector('.o_field_many2manytags');
+    if (container) {
+      const existingBadges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      if (existingBadges.some(b => b.innerText.toLowerCase().includes(tagText.toLowerCase()))) {
+        logMessage(`✓ Tag [${tagText}] sudah terpasang.`);
+        return true;
+      }
+    }
+    return await setMany2OneField(fieldName, tagText, labelKeywords, true);
   }
 
   // Helper to set plain text field
@@ -514,7 +587,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
   // Helper to click tab
   function clickTab(tabText) {
-    const tabs = Array.from(document.querySelectorAll('.nav-tabs a, .nav-link, [role="tab"]'));
+    const tabs = Array.from(document.querySelectorAll('.nav-tabs a, .nav-link, [role="tab"], .o_notebook_headers a, .o_notebook_headers li a'));
     const matched = tabs.find(t => t.innerText.trim().toLowerCase().includes(tabText.toLowerCase()));
     if (matched) {
       matched.click();
@@ -545,14 +618,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       if (mode === 'PT_PO') {
         // PT PO: Requests for Quotation (Purchase)
         logMessage('1. Mengisi Vendor & Vendor Reference...');
-        await setMany2OneField('partner_id', 'CV Fivafood and Meat Supply');
+        await setMany2OneField('partner_id', 'CV Fivafood and Meat Supply', ['vendor', 'rekanan']);
         setTextField('partner_ref', p.vendorRef || `${p.customerAlias || p.customerName} ${p.city}`);
-        await setMany2OneField('currency_id', 'IDP');
+        await setMany2OneField('currency_id', 'IDP', ['currency', 'mata uang']);
 
         logMessage('2. Mengatur Deliver To ke Jawa Tengah...');
         clickTab('Other Information');
         await sleep(200);
-        await setMany2OneField('picking_type_id', 'Jawa Tengah: Receipts');
+        await setMany2OneField('picking_type_id', 'Jawa Tengah: Receipts', ['deliver to', 'kirim ke']);
 
         logMessage('3. Membuka tab Products...');
         clickTab('Products');
@@ -564,8 +637,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       } else if (mode === 'PT_SO') {
         // PT SO: Quotation (Sales PT)
         logMessage('1. Mengisi Customer PT SO...');
-        await setMany2OneField('partner_id', p.ptSoCustomer || `${p.customerAlias} (${p.customerName})`);
-        await setMany2OneField('pricelist_id', 'PFS Customer (IDP)');
+        await setMany2OneField('partner_id', p.ptSoCustomer || `${p.customerAlias} (${p.customerName})`, ['customer', 'pelanggan']);
+        await setMany2OneField('pricelist_id', 'PFS Customer (IDP)', ['pricelist', 'daftar harga']);
 
         logMessage('2. Mengisi Order Lines (Harga sebelum PPN)...');
         clickTab('Order Lines');
@@ -576,16 +649,54 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
       } else if (mode === 'CV_SO') {
         // CV SO: Quotation (Sales CV)
-        logMessage('1. Mengisi Customer PT Fiva Jateng & Delivery Address...');
-        await setMany2OneField('partner_id', 'PT Putra Fiva Sejahtera ( JAWA TENGAH )');
-        await setMany2OneField('partner_shipping_id', p.cvSoDelivery || p.customerAlias || p.customerName);
-        await setMany2OneField('pricelist_id', 'PFS Buy to CV 2023 (IDP)');
+        logMessage('1. Mengisi Customer: PT Putra Fiva Sejahtera ( JAWA TENGAH )...');
+        await setMany2OneField(
+          'partner_id',
+          'PT Putra Fiva Sejahtera ( JAWA TENGAH )',
+          ['customer', 'pelanggan']
+        );
+        logMessage('⏳ Menunggu Odoo memuat default alamat & pricelist...');
+        await waitForOdooRpcSettled(1200);
 
-        logMessage('2. Mengisi Order Lines (Harga PO/SO)...');
+        // 2. Delivery Address: cari Customer (misal MISTER SOSIS) via dropdown
+        const deliveryTarget = p.cvSoDelivery || p.customerAlias || p.customerName;
+        if (deliveryTarget) {
+          logMessage(`2. Mengisi Delivery Address: "${deliveryTarget}" via dropdown...`);
+          await setMany2OneField(
+            'partner_shipping_id',
+            deliveryTarget,
+            ['delivery address', 'alamat pengiriman']
+          );
+          await waitForOdooRpcSettled(800);
+        }
+
+        // 3. Masuk ke tab "Other Info"
+        logMessage('3. Membuka tab Other Info...');
+        clickTab('Other Info');
+        await sleep(500);
+
+        // 4. Kolom Tag -> dropdown pilih "Joko Setiawan"
+        logMessage('4. Mengisi Tags: "Joko Setiawan"...');
+        await setTagsField('tag_ids', 'Joko Setiawan', ['tags', 'tag']);
+        await waitForOdooRpcSettled(600);
+
+        // 5. Kolom Analytic Account -> dropdown pilih "Jateng"
+        logMessage('5. Mengisi Analytic Account: "Jateng"...');
+        await setMany2OneField(
+          'analytic_account_id',
+          'Jateng',
+          ['analytic account', 'akun analitis'],
+          true
+        );
+        await waitForOdooRpcSettled(800);
+
+        // 6. Kembali ke tab "Order Lines"
+        logMessage('6. Membuka tab Order Lines...');
         clickTab('Order Lines');
-        await sleep(300);
+        await sleep(500);
 
-        // Fill Items
+        // 7. Mengisi Produk / Item Barang (Wajib PRODUK LK, Dilarang PRODUK JADI)
+        logMessage('7. Mengisi item produk CV SO (Harga PO/SO & [PRODUK LK])...');
         await fillOrderLines(p.items, 'CV_SO');
       }
 
