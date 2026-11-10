@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.3</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.4</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1032,6 +1032,21 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return null;
   }
 
+  // Helper: Query all valid line rows in list/editable view (committed and in-progress/editing)
+  function getOrderLineRows() {
+    const allTrs = Array.from(document.querySelectorAll(
+      'table.o_section_and_note_list_view tbody tr, .o_field_x2many_list tbody tr, table.o_list_table tbody tr, tbody.ui-sortable tr, tbody tr'
+    ));
+    return allTrs.filter(tr => {
+      if (tr.classList.contains('o_field_x2many_list_row_add')) return false;
+      if (tr.classList.contains('o_is_section')) return false;
+      if (tr.classList.contains('o_is_note')) return false;
+      if (tr.querySelector('.o_field_x2many_list_row_add, a.o_field_x2many_list_row_add')) return false;
+      const tds = tr.querySelectorAll('td');
+      return tds.length >= 3;
+    });
+  }
+
   // Helper: Add new row and VERIFY it appears before proceeding
   async function addNewRowWithVerification(targetIndex, timing) {
     for (let attempt = 1; attempt <= timing.retries; attempt++) {
@@ -1039,7 +1054,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Wait for any pending Odoo loading / tax RPC to finish first!
       await waitForOdooRpcSettled(300);
 
-      let currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      let currentRows = getOrderLineRows();
       if (currentRows.length > targetIndex) {
         return currentRows[targetIndex];
       }
@@ -1057,16 +1072,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         return null;
       }
 
-      // Click cleanly without URL hash navigation
+      // Click cleanly WITHOUT preventDefault so Odoo creates the row
       addBtn.focus();
-      addBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
+      addBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      addBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       addBtn.click();
 
-      // Poll up to 14 times (3.5s) for new row to appear
-      for (let wait = 0; wait < 14; wait++) {
+      // Poll up to 16 times (4s) for new row to appear
+      for (let wait = 0; wait < 16; wait++) {
         await sleep(250);
         dismissDiscardModal();
-        currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+        currentRows = getOrderLineRows();
         if (currentRows.length > targetIndex) {
           await sleep(timing.delayAfterRow);
           return currentRows[targetIndex];
@@ -1084,7 +1100,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const maxWaitMs = 6000;
     while (Date.now() - startTime < maxWaitMs) {
       dismissDiscardModal();
-      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const rows = getOrderLineRows();
       const row = rows[rowIndex];
       if (row) {
         const descCell = row.querySelector('td[name="name"]') || findCellByColumnHeader(row, ['description', 'deskripsi']);
@@ -1094,7 +1110,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
         // Odoo onchange is done when Description or UoM has content
         const hasContent = descText.length > 2 || uomText.length > 0;
-        const isLoading = document.querySelector('.o_loading:not(.d-none), .o_blockUI');
+        const isLoading = isOdooLoading();
 
         if (hasContent && !isLoading) {
           await sleep(timing.delayAfterProduct);
@@ -1121,7 +1137,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissDiscardModal();
 
       // ALWAYS query fresh row from DOM to prevent detached node reference
-      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const rows = getOrderLineRows();
       const row = rows[rowIndex];
       if (!row) {
         await sleep(300);
@@ -1172,7 +1188,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissDiscardModal();
 
       // Read back from live DOM to VERIFY
-      const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const freshRows = getOrderLineRows();
       const freshRow = freshRows[rowIndex];
       const freshCell = freshRow ? (freshRow.querySelector(cellSelector) || findCellByColumnHeader(freshRow, headerKeywords, fieldName)) : null;
       const verifiedVal = (freshCell?.querySelector('input')?.value || freshCell?.innerText || '').trim().replace(/[.,\s]/g, '');
@@ -1193,7 +1209,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   // Helper: Set Taxes field (in PT PO, Taxes always = 11%)
   async function setTaxesField(rowIndex, timing, taxTarget = '11%') {
     // 1. First check if cell already has 11% tag BEFORE doing any click
-    const initialRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+    const initialRows = getOrderLineRows();
     const initialRow = initialRows[rowIndex];
     if (initialRow) {
       const initialCell = initialRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') 
@@ -1212,7 +1228,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissDiscardModal();
       await waitForOdooRpcSettled(200);
 
-      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const rows = getOrderLineRows();
       const row = rows[rowIndex];
       if (!row) {
         await sleep(250);
@@ -1247,35 +1263,85 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
       if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
         input.focus();
-        document.execCommand('selectAll', false, null);
-        document.execCommand('delete', false, null);
-        document.execCommand('insertText', false, taxTarget);
-        input.value = taxTarget;
+        input.value = '';
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-        await sleep(350);
+        await sleep(50);
 
-        // Check dropdown options
-        const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'));
-        const taxOption = dropdownOptions.find(opt => opt.innerText.trim().includes(taxTarget));
-        if (taxOption) {
-          const link = taxOption.querySelector('a') || taxOption;
+        // Type "11" without ArrowDown
+        input.value = '11';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { key: '1', bubbles: true }));
+
+        // Poll for autocomplete dropdown
+        let matchedTax = null;
+        for (let wait = 0; wait < 16; wait++) {
+          await sleep(200);
+          dismissDiscardModal();
+
+          const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
+            .filter(m => {
+              const rect = m.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0 && m.style.display !== 'none';
+            });
+
+          let menuOptions = [];
+          if (visibleMenus.length > 0) {
+            menuOptions = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item, .dropdown-item')));
+          } else {
+            menuOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'))
+              .filter(el => {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+              });
+          }
+
+          const validOptions = menuOptions.filter(opt => {
+            const rect = opt.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return false;
+            const t = opt.innerText.toLowerCase().trim();
+            return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
+          });
+
+          if (validOptions.length > 0) {
+            matchedTax = validOptions.find(opt => {
+              const t = opt.innerText.trim();
+              return t.includes('11%') || t.includes('11');
+            });
+            if (matchedTax) break;
+          }
+        }
+
+        if (matchedTax) {
+          logMessage(`✓ Memilih Taxes: "${matchedTax.innerText.trim()}"`);
+          const link = matchedTax.querySelector('a') || matchedTax;
+          link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
           link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
           link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
           link.click();
-          
-          // CRITICAL: Wait for Odoo's onchange_taxes RPC and loading overlay to finish!
+          matchedTax.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+          matchedTax.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          matchedTax.click();
+
+          // Wait for Odoo's onchange_taxes RPC to finish
           logMessage(`⏳ Menunggu perhitungan PPN 11% Odoo selesai...`);
           await waitForOdooRpcSettled(timing.delayAfterProduct);
           return true;
         } else {
-          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-          await waitForOdooRpcSettled(timing.delayAfterProduct);
+          // NEVER press Enter if not matched! Clear input and close dropdown safely
+          logMessage(`⚠️ Opsi Taxes "11%" tidak muncul di dropdown. Menutup dropdown.`);
+          input.value = '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+          await sleep(200);
+          dismissDiscardModal();
         }
       }
 
       // Verify cell content
-      const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const freshRows = getOrderLineRows();
       const freshRow = freshRows[rowIndex];
       const freshCell = freshRow ? (freshRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'], 'taxes_id')) : null;
       if (freshCell && (freshCell.innerText.includes(taxTarget) || Array.from(freshCell.querySelectorAll('.badge, .o_tag')).some(b => b.innerText.includes(taxTarget)))) {
@@ -1332,7 +1398,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const activeRow = await addNewRowWithVerification(i, timing);
       if (!activeRow) {
         logMessage(`❌ Gagal membuka baris ke-${i + 1}. Menghentikan proses.`);
-        return;
+        return successfulRows;
       }
 
       // 2. FILL PRODUCT
@@ -1369,7 +1435,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         // Type full clean name from Master Barang preserving '@' (e.g. "BRS Merah 24 PCS @ 500 g LK")
         document.execCommand('insertText', false, exactCleanName);
         prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-        prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
         prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
         // Wait up to 5 seconds for autocomplete dropdown items to appear
@@ -1379,7 +1444,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           await sleep(250);
           dismissDiscardModal();
           
-          let dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
+          let dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'))
+            .filter(opt => {
+              const rect = opt.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0;
+            });
           
           // Fallback: If after 5 attempts (1.25s) no options appeared with exactCleanName, try core query (e.g. "BRS Merah 24")
           if (dropdownOptions.length === 0 && attempt === 5 && coreQuery && coreQuery !== exactCleanName) {
@@ -1389,7 +1458,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
             document.execCommand('delete', false, null);
             document.execCommand('insertText', false, coreQuery);
             prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
             prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
             continue;
           }
