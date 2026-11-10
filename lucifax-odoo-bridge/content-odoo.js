@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.1</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.2</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -664,45 +664,71 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     if (!tagText) return false;
     dismissOdooModals();
 
-    // 1. Locate container
-    const container = document.querySelector(
-      `div[name="${fieldName}"], [data-name="${fieldName}"], .o_field_many2manytags[name="${fieldName}"], .o_field_widget[name="${fieldName}"]`
-    ) || document.querySelector('.o_field_many2manytags');
+    function getTagContainer() {
+      return document.querySelector(
+        `div[name="${fieldName}"], [data-name="${fieldName}"], .o_field_many2manytags[name="${fieldName}"], .o_field_widget[name="${fieldName}"]`
+      ) || document.querySelector('.o_field_many2manytags');
+    }
 
+    let container = getTagContainer();
     const targetNorm = tagText.toLowerCase().replace(/\s+/g, ' ').trim();
     const targetTokens = targetNorm.split(' ').filter(t => t.length > 1);
 
-    // Helper: Purge unwanted tags (e.g. "Selesai" or anything not matching target)
+    // Helper: Purge unwanted tags (e.g. "Follow Up", "Selesai", or anything not matching target)
     async function purgeUnwantedTags() {
-      if (!container) return;
-      const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
-      for (const b of badges) {
-        const text = b.innerText.toLowerCase().trim();
-        const isTarget = targetTokens.length > 0 && targetTokens.some(tok => text.includes(tok));
-        if (text.includes('selesai') || !isTarget) {
-          logMessage(`🧹 Menghapus tag tidak sesuai: "${b.innerText.trim()}"...`);
-          const delBtn = b.querySelector('.o_delete, .fa-times, .close, a, i, span:last-child') || b;
-          delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-          delBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-          delBtn.click();
-          await sleep(250);
+      for (let pass = 0; pass < 5; pass++) {
+        const c = getTagContainer();
+        if (!c) return;
+        const badges = Array.from(c.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+        let removedAny = false;
+        for (const b of badges) {
+          const text = b.innerText.toLowerCase().trim();
+          const isTarget = targetTokens.length > 0 && targetTokens.some(tok => text.includes(tok));
+          if (!isTarget) {
+            removedAny = true;
+            logMessage(`🧹 Menghapus tag tidak sesuai: "${b.innerText.trim()}"...`);
+            const delBtn = b.querySelector('.o_delete') || b.querySelector('.fa-times') || b.querySelector('a') || b;
+            delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            delBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            delBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            delBtn.click();
+            if (window.jQuery) {
+              try {
+                window.jQuery(delBtn).trigger('click');
+                window.jQuery(b).find('.o_delete, .fa-times').trigger('click');
+              } catch (_) {}
+            }
+            await sleep(200);
+          }
         }
+        if (!removedAny) break;
+        await sleep(300);
+        await waitForOdooRpcSettled(300);
       }
     }
 
-    // Pre-clean: Remove any accidental "Selesai" tag before starting
+    // Pre-clean: Remove any unwanted tag (e.g. Follow Up) before starting
     await purgeUnwantedTags();
 
-    // Check if target tag is already attached
+    // Check if target tag is ALREADY attached and no unwanted tag exists
+    container = getTagContainer();
     if (container) {
       const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
-      if (badges.some(b => b.innerText.toLowerCase().includes(targetNorm))) {
-        logMessage(`✓ Tag [${tagText}] sudah terpasang.`);
+      const hasTarget = badges.some(b => b.innerText.toLowerCase().includes(targetNorm));
+      const hasUnwanted = badges.some(b => !targetTokens.some(tok => b.innerText.toLowerCase().includes(tok)));
+      if (hasTarget && !hasUnwanted) {
+        logMessage(`✓ Tag [${tagText}] sudah sesuai.`);
+        return true;
+      }
+      if (hasTarget && hasUnwanted) {
+        await purgeUnwantedTags();
+        logMessage(`✓ Tag [${tagText}] sudah sesuai (tag lain dibersihkan).`);
         return true;
       }
     }
 
     // 2. Find input inside tags container
+    container = getTagContainer();
     const input = (container && container.querySelector('input')) || findFieldInput(fieldName, labelKeywords);
     if (!input) {
       logMessage(`Input field [${fieldName}] tidak ditemukan.`);
@@ -796,12 +822,13 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       await sleep(350);
       await waitForOdooRpcSettled(400);
 
-      // Post-clean to guarantee "Selesai" was not attached
+      // Post-clean to guarantee only "Joko Setiawan" remains
       await purgeUnwantedTags();
 
       // Final check
-      if (container) {
-        const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      const postContainer = getTagContainer();
+      if (postContainer) {
+        const badges = Array.from(postContainer.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
         if (badges.some(b => b.innerText.toLowerCase().includes('joko'))) {
           logMessage(`✓ Berhasil memasang Tag "${tagText}"!`, true);
           return true;
@@ -1638,6 +1665,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Helper function to score dropdown candidates with strict product identity constraints
       function scoreCandidate(optText) {
         if (!optText) return -1;
+        let score = 0;
         const txt = optText.toLowerCase().trim();
 
         // 1. NEVER pick create or search more options
@@ -1767,7 +1795,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         }
 
         // D. Calculate Score based on matching distinctive tokens
-        let score = 0;
         let matchedTokens = 0;
 
         for (const tok of keyTokens) {
