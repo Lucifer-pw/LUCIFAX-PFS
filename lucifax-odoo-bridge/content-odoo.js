@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.0.7</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.0.8</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -639,10 +639,30 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return coreWords.length > 0 ? coreWords.join(' ') : clean;
   }
 
+  // Helper: Wait until Odoo's network RPCs and loading overlays are completely finished
+  async function waitForOdooRpcSettled(extraDelay = 1000) {
+    const startTime = Date.now();
+    const maxWaitMs = 8000;
+    while (Date.now() - startTime < maxWaitMs) {
+      dismissDiscardModal();
+      const isLoading = document.querySelector('.o_loading:not(.d-none), .o_blockUI, .o_spinner');
+      const isJQueryActive = (window.jQuery && typeof window.jQuery.active === 'number' && window.jQuery.active > 0);
+      if (!isLoading && !isJQueryActive) {
+        break;
+      }
+      await sleep(250);
+    }
+    await sleep(extraDelay);
+    dismissDiscardModal();
+  }
+
   // Helper: Add new row and VERIFY it appears before proceeding
   async function addNewRowWithVerification(targetIndex, timing) {
     for (let attempt = 1; attempt <= timing.retries; attempt++) {
       dismissDiscardModal();
+      // Wait for any pending Odoo loading / tax RPC to finish first!
+      await waitForOdooRpcSettled(300);
+
       let currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
       if (currentRows.length > targetIndex) {
         return currentRows[targetIndex];
@@ -796,8 +816,26 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
   // Helper: Set Taxes field (in PT PO, Taxes always = 11%)
   async function setTaxesField(rowIndex, timing, taxTarget = '11%') {
+    // 1. First check if cell already has 11% tag BEFORE doing any click
+    const initialRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+    const initialRow = initialRows[rowIndex];
+    if (initialRow) {
+      const initialCell = initialRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') 
+        || findCellByColumnHeader(initialRow, ['taxes', 'pajak'], 'taxes_id');
+      const hasTax = initialCell && (
+        initialCell.innerText.includes(taxTarget) || 
+        Array.from(initialCell.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge')).some(b => b.innerText.includes(taxTarget))
+      );
+      if (hasTax) {
+        logMessage(`✓ Taxes sudah ${taxTarget}`);
+        return true;
+      }
+    }
+
     for (let attempt = 1; attempt <= timing.retries; attempt++) {
       dismissDiscardModal();
+      await waitForOdooRpcSettled(200);
+
       const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
       const row = rows[rowIndex];
       if (!row) {
@@ -805,7 +843,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         continue;
       }
 
-      // 1. Find Taxes cell
+      // Find Taxes cell
       let cell = row.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') 
         || findCellByColumnHeader(row, ['taxes', 'pajak'], 'taxes_id');
       if (!cell) {
@@ -813,8 +851,9 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         continue;
       }
 
-      // Check if cell already contains '11%'
-      if (cell.innerText.includes(taxTarget)) {
+      // Check again if tag was already added
+      const existingTags = Array.from(cell.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      if (cell.innerText.includes(taxTarget) || existingTags.some(b => b.innerText.includes(taxTarget))) {
         logMessage(`✓ Taxes terverifikasi: ${taxTarget}`);
         return true;
       }
@@ -848,12 +887,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
           link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
           link.click();
-          await sleep(timing.delayCellInput);
-          dismissDiscardModal();
+          
+          // CRITICAL: Wait for Odoo's onchange_taxes RPC and loading overlay to finish!
+          logMessage(`⏳ Menunggu perhitungan PPN 11% Odoo selesai...`);
+          await waitForOdooRpcSettled(timing.delayAfterProduct);
+          return true;
         } else {
           input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-          await sleep(timing.delayCellInput);
-          dismissDiscardModal();
+          await waitForOdooRpcSettled(timing.delayAfterProduct);
         }
       }
 
@@ -861,7 +902,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
       const freshRow = freshRows[rowIndex];
       const freshCell = freshRow ? (freshRow.querySelector('td[name="taxes_id"], td[data-name="taxes_id"]') || findCellByColumnHeader(freshRow, ['taxes', 'pajak'], 'taxes_id')) : null;
-      if (freshCell && freshCell.innerText.includes(taxTarget)) {
+      if (freshCell && (freshCell.innerText.includes(taxTarget) || Array.from(freshCell.querySelectorAll('.badge, .o_tag')).some(b => b.innerText.includes(taxTarget)))) {
         logMessage(`✓ Taxes terverifikasi: ${taxTarget}`);
         return true;
       }
@@ -1063,13 +1104,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       if (isPtPo) {
         logMessage(`✏️ Mengisi Taxes: 11%...`);
         await setTaxesField(i, timing, '11%');
+        await waitForOdooRpcSettled(500);
       }
 
       // 6. COMMIT & SETTLE ROW
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
-      await sleep(timing.delayAfterRowCommit);
+      await waitForOdooRpcSettled(timing.delayAfterRowCommit);
       dismissDiscardModal();
 
       logMessage(`✅ Baris ${i + 1}/${items.length} selesai diverifikasi.`);
