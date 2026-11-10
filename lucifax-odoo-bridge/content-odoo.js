@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.3</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.4</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -750,15 +750,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
     }
 
-    // 2. Find input inside tags container
-    container = getTagContainer();
-    const input = (container && container.querySelector('input')) || findFieldInput(fieldName, labelKeywords);
-    if (!input) {
-      logMessage(`Input field [${fieldName}] tidak ditemukan.`);
-      return false;
-    }
-
-    // 3. Search strategies: try short keyword "Joko" first (most reliable in Odoo M2M), fallback to full name
+    // 2. Search strategies: try short keyword "Joko" first (most reliable in Odoo M2M), fallback to full name
     const searchKeywords = ['Joko', tagText];
     let matchedOption = null;
 
@@ -766,20 +758,34 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       if (matchedOption) break;
       dismissOdooModals();
 
-      input.focus();
-      input.click();
-      await sleep(150);
+      // Always query fresh live input element from tags container
+      const liveInput = getTagContainer()?.querySelector('input') || findFieldInput(fieldName, labelKeywords);
+      if (!liveInput) {
+        logMessage(`Input field [${fieldName}] tidak ditemukan.`);
+        return false;
+      }
 
-      // Clear existing input
-      input.value = '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      await sleep(50);
+      liveInput.focus();
+      liveInput.click();
+      await sleep(100);
 
-      // Type keyword
-      input.value = kw;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: kw[kw.length - 1], bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: kw[kw.length - 1], bubbles: true }));
+      // Type keyword with select & insertText
+      try {
+        liveInput.select();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        document.execCommand('insertText', false, kw);
+      } catch (_) {}
+      liveInput.value = kw;
+      liveInput.dispatchEvent(new Event('input', { bubbles: true }));
+      liveInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+
+      // Explicitly trigger jQuery UI autocomplete search
+      try {
+        if (window.jQuery && typeof window.jQuery(liveInput).autocomplete === 'function') {
+          window.jQuery(liveInput).autocomplete('search', kw);
+        }
+      } catch (_) {}
 
       // Poll for autocomplete dropdown
       for (let attempt = 0; attempt < 18; attempt++) {
@@ -831,6 +837,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
     }
 
+    const currentLiveInput = getTagContainer()?.querySelector('input') || findFieldInput(fieldName, labelKeywords);
+
     if (matchedOption) {
       logMessage(`✓ Memilih Tag: "${matchedOption.innerText.trim()}"`);
       const clickEl = matchedOption.querySelector('a') || matchedOption;
@@ -838,14 +846,26 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       clickEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
       clickEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       clickEl.click();
-      if (window.jQuery && clickEl !== matchedOption) {
-        try { window.jQuery(clickEl).trigger('click'); } catch (_) {}
-      }
+      matchedOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      matchedOption.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      matchedOption.click();
+
+      // Trigger jQuery UI autocompleteselect on live input
+      try {
+        if (window.jQuery && currentLiveInput) {
+          const itemData = window.jQuery(matchedOption).data('ui-autocomplete-item')
+                        || window.jQuery(matchedOption).data('item.autocomplete')
+                        || window.jQuery(clickEl).data('ui-autocomplete-item');
+          if (itemData) {
+            window.jQuery(currentLiveInput).trigger(window.jQuery.Event('autocompleteselect', { item: itemData }));
+          }
+        }
+      } catch (_) {}
 
       await sleep(350);
       await waitForOdooRpcSettled(400);
 
-      // Post-clean to guarantee strictly ONE "Joko Setiawan" tag remains
+      // Post-clean to guarantee strictly ONE "Joko Setiawan" tag remains and unwanted tags are gone
       await purgeUnwantedTags();
 
       // Final check
@@ -860,9 +880,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       return true;
     } else {
       logMessage(`⚠️ Tag "${tagText}" tidak ditemukan di dropdown autocomplete. Menutup dropdown.`);
-      input.value = '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      if (currentLiveInput) {
+        currentLiveInput.value = '';
+        currentLiveInput.dispatchEvent(new Event('input', { bubbles: true }));
+        currentLiveInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      }
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
