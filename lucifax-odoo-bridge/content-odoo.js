@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.7</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.8</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1575,14 +1575,30 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           if (!targetHasCat && optHasCat) return -1; // Target is NOT Jari-Jari, candidate is Jari-Jari!
         }
 
-        // B. Meat Type Constraint (Ayam vs Sapi)
+        // B. Meat Type & Flavor Variant Constraint (Ayam vs Sapi vs Ori/Coklat)
         const targetHasSapi = targetLower.includes('sapi') || fallbackLower.includes('sapi');
         const targetHasAyam = targetLower.includes('ayam') || fallbackLower.includes('ayam');
+        const targetHasOriOrCoklat = targetLower.includes('ori') || targetLower.includes('coklat') || fallbackLower.includes('ori') || fallbackLower.includes('coklat');
+
         const optHasSapi = txt.includes('sapi');
         const optHasAyam = txt.includes('ayam');
+        const optHasOri = txt.includes('ori');
 
-        if (targetHasSapi && optHasAyam && !optHasSapi) return -1;
-        if (targetHasAyam && optHasSapi && !optHasAyam) return -1;
+        // If target specifies Sapi, candidate MUST have Sapi and CANNOT have Ayam
+        if (targetHasSapi && (!optHasSapi || optHasAyam)) return -1;
+
+        // If target specifies Ayam, candidate MUST have Ayam and CANNOT have Sapi
+        if (targetHasAyam && (!optHasAyam || optHasSapi)) return -1;
+
+        // CRITICAL: If target does NOT specify Ayam, candidate MUST NOT have Ayam!
+        // This strictly prevents BRS Coklat / BRS Ori from ever selecting BRS Ayam!
+        if (!targetHasAyam && optHasAyam) return -1;
+
+        // If target specifies Ori or Coklat, strictly forbid Ayam and give Ori a massive bonus
+        if (targetHasOriOrCoklat) {
+          if (optHasAyam) return -1;
+          if (optHasOri) score += 3000;
+        }
 
         // C. Variant Number Constraint (7 vs 13 vs 24 vs 30 vs 6)
         const variantNumbers = ['7', '13', '24', '30', '6'];
@@ -1699,9 +1715,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // 2. Known product categories & variant numbers
       if (fallbackLower.includes('brs') || targetLower.includes('brs')) {
         if (targetLower.includes('7') || fallbackLower.includes('7')) {
+          addQuery('[PRODUK LK] BRS ORI 7 PCS 500 g LK');
+          addQuery('BRS ORI 7 PCS 500 g LK');
           addQuery('BRS ORI 7');
-          addQuery('BRS 7');
           if (preferLk) addQuery('[PRODUK LK] BRS ORI 7');
+          addQuery('BRS 7');
           if (preferLk) addQuery('[PRODUK LK] BRS 7');
         } else if (targetLower.includes('13') || fallbackLower.includes('13')) {
           addQuery('BRS 13');
