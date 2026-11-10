@@ -845,6 +845,149 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
+  // Helper to set "Deliver To" in PT PO (Other Information -> picking_type_id)
+  async function setDeliverToField() {
+    logMessage('2. Mengatur Deliver To di tab Other Information...');
+    clickTab('Other Information');
+    await sleep(350);
+    await waitForOdooRpcSettled(300);
+
+    const container = document.querySelector('div[name="picking_type_id"], [data-name="picking_type_id"], .o_field_widget[name="picking_type_id"]');
+    let input = (container && container.querySelector('input')) || findFieldInput('picking_type_id', ['deliver to', 'kirim ke']);
+    if (!input) {
+      logMessage('⚠️ Field Deliver To (picking_type_id) tidak ditemukan.');
+      return false;
+    }
+
+    dismissOdooModals();
+
+    // 1. Check if already has a value
+    if (input.value && input.value.trim().length > 0) {
+      logMessage(`✓ Deliver To sudah terisi: "${input.value.trim()}"`);
+      return true;
+    }
+
+    // Helper to get clean dropdown options
+    function getCleanDropdownOptions() {
+      const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
+        .filter(m => {
+          const rect = m.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && m.style.display !== 'none';
+        });
+      let menuOptions = [];
+      if (visibleMenus.length > 0) {
+        menuOptions = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item, .dropdown-item')));
+      } else {
+        menuOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'))
+          .filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          });
+      }
+      return menuOptions.filter(opt => {
+        const rect = opt.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return false;
+        const t = opt.innerText.toLowerCase().trim();
+        return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
+      });
+    }
+
+    // 2. Open dropdown by clicking caret button or input
+    const dropBtn = container?.querySelector('.o_dropdown_button, button, .fa-caret-down');
+    if (dropBtn) {
+      dropBtn.click();
+    } else {
+      input.focus();
+      input.click();
+    }
+    await sleep(250);
+
+    let cleanOptions = [];
+    for (let wait = 0; wait < 12; wait++) {
+      await sleep(200);
+      cleanOptions = getCleanDropdownOptions();
+      if (cleanOptions.length > 0) break;
+    }
+
+    // 3. If no options appeared by clicking caret, try typing queries
+    if (cleanOptions.length === 0) {
+      const searchQueries = ['Jawa Tengah', 'Receipts', 'Jateng', 'PFS'];
+      for (const query of searchQueries) {
+        if (cleanOptions.length > 0) break;
+        input.focus();
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(50);
+        input.value = query;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { key: query[query.length - 1], bubbles: true }));
+
+        for (let wait = 0; wait < 10; wait++) {
+          await sleep(200);
+          cleanOptions = getCleanDropdownOptions();
+          if (cleanOptions.length > 0) break;
+        }
+      }
+    }
+
+    if (cleanOptions.length > 0) {
+      const optionTexts = cleanOptions.map(opt => opt.innerText.trim());
+      logMessage(`ℹ️ Pilihan Deliver To: [${optionTexts.join(' | ')}]`);
+
+      // Priority 1: Contains "jawa" and "tengah" (or "jateng")
+      let matched = cleanOptions.find(opt => {
+        const t = opt.innerText.toLowerCase();
+        return (t.includes('jawa') && t.includes('tengah')) || t.includes('jateng');
+      });
+
+      // Priority 2: Contains "receipt" or "penerimaan"
+      if (!matched) {
+        matched = cleanOptions.find(opt => {
+          const t = opt.innerText.toLowerCase();
+          return t.includes('receipt') || t.includes('penerimaan');
+        });
+      }
+
+      // Priority 3: Contains "fiva" or "pfs"
+      if (!matched) {
+        matched = cleanOptions.find(opt => {
+          const t = opt.innerText.toLowerCase();
+          return t.includes('fiva') || t.includes('pfs');
+        });
+      }
+
+      // Priority 4: Fallback to the first available option in dropdown
+      if (!matched && cleanOptions.length > 0) {
+        matched = cleanOptions[0];
+      }
+
+      if (matched) {
+        logMessage(`✓ Memilih Deliver To: "${matched.innerText.trim()}"`);
+        const link = matched.querySelector('a') || matched;
+        link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
+        link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+        link.click();
+        matched.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        matched.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+        matched.click();
+
+        await sleep(350);
+        await waitForOdooRpcSettled(400);
+        return true;
+      }
+    }
+
+    logMessage('⚠️ Tidak dapat menemukan pilihan yang cocok untuk Deliver To.');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    return false;
+  }
+
   // MAIN AUTO-FILL FUNCTION
   async function runAutoFill(mode) {
     // 1. Coba update data dari clipboard
@@ -871,10 +1014,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         setTextField('partner_ref', p.vendorRef || `${p.customerAlias || p.customerName} ${p.city}`);
         await setMany2OneField('currency_id', 'IDP', ['currency', 'mata uang']);
 
-        logMessage('2. Mengatur Deliver To ke Jawa Tengah...');
-        clickTab('Other Information');
-        await sleep(200);
-        await setMany2OneField('picking_type_id', 'Jawa Tengah: Receipts', ['deliver to', 'kirim ke']);
+        // 2. Deliver To in Other Information tab
+        await setDeliverToField();
 
         logMessage('3. Membuka tab Products...');
         clickTab('Products');
@@ -1252,12 +1393,22 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         document.execCommand('insertText', false, taxTarget);
         input.value = taxTarget;
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-        await sleep(350);
+        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
-        // Check dropdown options
-        const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'));
-        const taxOption = dropdownOptions.find(opt => opt.innerText.trim().includes(taxTarget));
+        // Check dropdown options with polling
+        let taxOption = null;
+        for (let wait = 0; wait < 10; wait++) {
+          await sleep(200);
+          dismissDiscardModal();
+          const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'));
+          taxOption = dropdownOptions.find(opt => {
+            const rect = opt.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return false;
+            return opt.innerText.trim().includes(taxTarget) || opt.innerText.trim().includes('11');
+          });
+          if (taxOption) break;
+        }
+
         if (taxOption) {
           const link = taxOption.querySelector('a') || taxOption;
           link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
@@ -1269,8 +1420,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           await waitForOdooRpcSettled(timing.delayAfterProduct);
           return true;
         } else {
-          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-          await waitForOdooRpcSettled(timing.delayAfterProduct);
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+          await sleep(200);
         }
       }
 
@@ -1332,7 +1486,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const activeRow = await addNewRowWithVerification(i, timing);
       if (!activeRow) {
         logMessage(`❌ Gagal membuka baris ke-${i + 1}. Menghentikan proses.`);
-        return;
+        return successfulRows;
       }
 
       // 2. FILL PRODUCT
