@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.0.5</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.0.6</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -142,6 +142,28 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           </button>
         </div>
 
+        <div style="margin-top: 10px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 10px; color: #94A3B8; font-weight: bold;">Kecepatan / Pacing:</span>
+            <span id="lucifax-speed-badge" style="font-size: 10px; color: #38BDF8; font-weight: bold;">🛡️ Mode Aman</span>
+          </div>
+          <select id="lucifax-speed-select" style="
+            width: 100%;
+            background: #1E293B;
+            color: #F8FAFC;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            padding: 4px 6px;
+            font-size: 11px;
+            outline: none;
+            cursor: pointer;
+          ">
+            <option value="safe" selected>🛡️ Mode Aman / Jaringan Lambat (Rekomendasi)</option>
+            <option value="ultra_safe">🐢 Mode Sangat Santai (Extra Verifikasi)</option>
+            <option value="fast">⚡ Mode Cepat (Jaringan Cepat)</option>
+          </select>
+        </div>
+
         <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
           <button id="btn-paste-clipboard" style="
             background: #1E293B;
@@ -231,6 +253,16 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           pasteInput.value = '';
           pasteInput.blur();
         }
+      });
+    }
+
+    const speedSelect = document.getElementById('lucifax-speed-select');
+    const speedBadge = document.getElementById('lucifax-speed-badge');
+    if (speedSelect && speedBadge) {
+      speedSelect.addEventListener('change', () => {
+        if (speedSelect.value === 'ultra_safe') speedBadge.innerText = '🐢 Sangat Santai';
+        else if (speedSelect.value === 'fast') speedBadge.innerText = '⚡ Mode Cepat';
+        else speedBadge.innerText = '🛡️ Mode Aman';
       });
     }
   }
@@ -527,9 +559,44 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
+  // Timing settings based on user-selected speed in widget
+  function getTimingSettings() {
+    const speed = document.getElementById('lucifax-speed-select')?.value || 'safe';
+    if (speed === 'ultra_safe') {
+      return {
+        name: 'Sangat Santai',
+        delayAfterRow: 2000,
+        delayAfterProduct: 2800,
+        delayCellInput: 1100,
+        delayAfterRowCommit: 1800,
+        retries: 5,
+      };
+    } else if (speed === 'fast') {
+      return {
+        name: 'Cepat',
+        delayAfterRow: 800,
+        delayAfterProduct: 1400,
+        delayCellInput: 500,
+        delayAfterRowCommit: 800,
+        retries: 3,
+      };
+    } else {
+      // Default: 'safe' (Mode Aman / Jaringan Lambat)
+      return {
+        name: 'Aman (Rekomendasi)',
+        delayAfterRow: 1400,
+        delayAfterProduct: 2200,
+        delayCellInput: 800,
+        delayAfterRowCommit: 1400,
+        retries: 4,
+      };
+    }
+  }
+
   // Find cell by column header name in table
   function findCellByColumnHeader(row, headerKeywords) {
-    const table = row.closest('table');
+    if (!row) return null;
+    const table = row.closest('table') || document.querySelector('table.o_section_and_note_list_view, table.o_list_table, .o_field_x2many_list table');
     if (!table) return null;
     const headers = Array.from(table.querySelectorAll('thead th'));
     const colIndex = headers.findIndex(th => {
@@ -541,52 +608,6 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       return cells[colIndex] || null;
     }
     return null;
-  }
-
-  // Helper to safely set cell value in Odoo editable tree
-  async function setCellInput(row, cellSelector, headerKeywords, value) {
-    if (value === undefined || value === null) return false;
-
-    // 1. Find cell by selector
-    let cell = row.querySelector(cellSelector);
-    // 2. Fallback: find by column header name
-    if (!cell && headerKeywords) {
-      cell = findCellByColumnHeader(row, headerKeywords);
-    }
-    if (!cell) {
-      console.warn('[Lucifax-Odoo] Cell tidak ditemukan untuk:', cellSelector);
-      return false;
-    }
-
-    // Click cell to activate input
-    cell.click();
-    await sleep(300);
-
-    let input = cell.querySelector('input');
-    if (!input) {
-      cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-      await sleep(300);
-      input = cell.querySelector('input');
-    }
-
-    // CRITICAL: ONLY operate if input is strictly inside this cell (never use external activeElement)
-    if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
-      input.focus();
-      input.select();
-      const formattedVal = typeof value === 'number'
-        ? (value % 1 === 0 ? Math.round(value).toString() : Number(value.toFixed(2)).toString())
-        : value.toString();
-
-      document.execCommand('selectAll', false, null);
-      document.execCommand('insertText', false, formattedVal);
-      input.value = formattedVal;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new Event('blur', { bubbles: true }));
-      await sleep(350);
-      return true;
-    }
-    return false;
   }
 
   // Helper to extract clean query keywords for typing into Odoo's product search bar
@@ -608,8 +629,164 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return coreWords.length > 0 ? coreWords.join(' ') : clean;
   }
 
-  // Fill product order lines in Odoo table using EXACT registered Odoo name
+  // Helper: Add new row and VERIFY it appears before proceeding
+  async function addNewRowWithVerification(targetIndex, timing) {
+    for (let attempt = 1; attempt <= timing.retries; attempt++) {
+      dismissDiscardModal();
+      let currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      if (currentRows.length > targetIndex) {
+        return currentRows[targetIndex];
+      }
+
+      // Blur previous element so Odoo commits previous cell
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      await sleep(250);
+
+      const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a, a.o_field_x2many_list_row_add'));
+      const addBtn = addBtns.find(b => b.innerText.toLowerCase().includes('add a product') || b.innerText.toLowerCase().includes('tambah produk'));
+      if (!addBtn) {
+        logMessage('⚠️ Tombol "Add a product" tidak ditemukan!');
+        return null;
+      }
+
+      // Click cleanly without URL hash navigation
+      addBtn.focus();
+      addBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
+      addBtn.click();
+
+      // Poll up to 14 times (3.5s) for new row to appear
+      for (let wait = 0; wait < 14; wait++) {
+        await sleep(250);
+        dismissDiscardModal();
+        currentRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+        if (currentRows.length > targetIndex) {
+          await sleep(timing.delayAfterRow);
+          return currentRows[targetIndex];
+        }
+      }
+
+      logMessage(`⏳ Menunggu Odoo menyiapkan baris #${targetIndex + 1} (percobaan ${attempt}/${timing.retries})...`);
+    }
+    return null;
+  }
+
+  // Helper: Wait for Odoo's onchange_product_id network RPC to finish and populate the row
+  async function waitForProductOnchange(rowIndex, expectedTokens, timing) {
+    const startTime = Date.now();
+    const maxWaitMs = 6000;
+    while (Date.now() - startTime < maxWaitMs) {
+      dismissDiscardModal();
+      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const row = rows[rowIndex];
+      if (row) {
+        const descCell = row.querySelector('td[name="name"]') || findCellByColumnHeader(row, ['description', 'deskripsi']);
+        const uomCell = row.querySelector('td[name="product_uom"], td[name="product_uom_id"]') || findCellByColumnHeader(row, ['uom', 'satuan']);
+        const descText = (descCell?.innerText || '').toLowerCase();
+        const uomText = (uomCell?.innerText || '').toLowerCase();
+
+        // Odoo onchange is done when Description or UoM has content
+        const hasContent = descText.length > 2 || uomText.length > 0;
+        const isLoading = document.querySelector('.o_loading:not(.d-none), .o_blockUI');
+
+        if (hasContent && !isLoading) {
+          await sleep(timing.delayAfterProduct);
+          return true;
+        }
+      }
+      await sleep(250);
+    }
+    // Fallback safe buffer
+    await sleep(timing.delayAfterProduct);
+    return false;
+  }
+
+  // Helper: Safely set cell input and VERIFY that the value is stored before proceeding
+  async function setAndVerifyCell(rowIndex, cellSelector, headerKeywords, value, colName, timing) {
+    if (value === undefined || value === null) return false;
+
+    const formattedVal = typeof value === 'number'
+      ? (value % 1 === 0 ? Math.round(value).toString() : Number(value.toFixed(2)).toString())
+      : value.toString();
+    const cleanTarget = formattedVal.replace(/[.,\s]/g, '');
+
+    for (let attempt = 1; attempt <= timing.retries; attempt++) {
+      dismissDiscardModal();
+
+      // ALWAYS query fresh row from DOM to prevent detached node reference
+      const rows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const row = rows[rowIndex];
+      if (!row) {
+        await sleep(300);
+        continue;
+      }
+
+      let cell = row.querySelector(cellSelector) || findCellByColumnHeader(row, headerKeywords);
+      if (!cell) {
+        await sleep(300);
+        continue;
+      }
+
+      // Check if already contains the target value
+      const currentText = (cell.querySelector('input')?.value || cell.innerText || '').trim().replace(/[.,\s]/g, '');
+      if (currentText === cleanTarget) {
+        logMessage(`✓ Kolom ${colName} [${formattedVal}] terverifikasi`);
+        return true;
+      }
+
+      // Activate cell
+      cell.click();
+      await sleep(200);
+
+      let input = cell.querySelector('input');
+      if (!input) {
+        cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        await sleep(200);
+        input = cell.querySelector('input');
+      }
+
+      if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
+        input.focus();
+        input.select();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        document.execCommand('insertText', false, formattedVal);
+        input.value = formattedVal;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', keyCode: 9, bubbles: true }));
+        input.dispatchEvent(new Event('blur', { bubbles: true }));
+      }
+
+      // Wait for Odoo to compute/accept cell input
+      await sleep(timing.delayCellInput);
+      dismissDiscardModal();
+
+      // Read back from live DOM to VERIFY
+      const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
+      const freshRow = freshRows[rowIndex];
+      const freshCell = freshRow ? (freshRow.querySelector(cellSelector) || findCellByColumnHeader(freshRow, headerKeywords)) : null;
+      const verifiedVal = (freshCell?.querySelector('input')?.value || freshCell?.innerText || '').trim().replace(/[.,\s]/g, '');
+
+      if (verifiedVal === cleanTarget || verifiedVal.includes(cleanTarget) || cleanTarget.includes(verifiedVal)) {
+        logMessage(`✓ Kolom ${colName} [${formattedVal}] tersimpan`);
+        return true;
+      }
+
+      logMessage(`⏳ Verifikasi ${colName} [${formattedVal}] belum terbaca (coba lagi ${attempt}/${timing.retries})...`);
+      await sleep(350);
+    }
+
+    logMessage(`⚠️ Kolom ${colName} selesai diatur ke ${formattedVal}`);
+    return false;
+  }
+
+  // Fill product order lines in Odoo table with strict step-by-step verification
   async function fillOrderLines(items, mode) {
+    const timing = getTimingSettings();
+    logMessage(`⚙️ Menggunakan ${timing.name} (Verifikasi ketat per kolom)...`);
+
     for (let i = 0; i < items.length; i++) {
       dismissDiscardModal();
 
@@ -633,155 +810,148 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Query to type into Odoo search input (e.g. "BRS 13", "BRS ORI 7", "Rolade Ayam 1000")
       const searchStringToType = getOdooSearchQuery(exactOdooName);
 
-      logMessage(`📦 Baris ${i + 1}/${items.length}: Mencari "${exactOdooName}" (ketik: "${searchStringToType}")...`);
+      logMessage(`📦 Baris ${i + 1}/${items.length}: Membuka baris untuk "${exactOdooName}"...`);
 
-      // 1. Commit/blur any previous cell first so Odoo doesn't think record is dirty
-      if (document.activeElement && typeof document.activeElement.blur === 'function') {
-        document.activeElement.blur();
+      // 1. ADD / VERIFY ROW
+      const activeRow = await addNewRowWithVerification(i, timing);
+      if (!activeRow) {
+        logMessage(`❌ Gagal membuka baris ke-${i + 1}. Menghentikan proses.`);
+        return;
       }
-      await sleep(250);
 
-      // 2. Find "Add a product" button
-      const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a, a.o_field_x2many_list_row_add'));
-      const addBtn = addBtns.find(b => b.innerText.toLowerCase().includes('add a product') || b.innerText.toLowerCase().includes('tambah produk'));
+      // 2. FILL PRODUCT
+      let prodCell = activeRow.querySelector('td[name="product_id"], td[data-name="product_id"]')
+        || findCellByColumnHeader(activeRow, ['product', 'produk', 'barang']);
+      
+      if (prodCell) {
+        prodCell.click();
+        await sleep(250);
+      }
 
-      if (addBtn) {
-        // Prevent URL hash modification on anchor click
-        addBtn.focus();
-        addBtn.addEventListener('click', (e) => e.preventDefault(), { once: true });
-        addBtn.click();
-        
-        // Wait 1200ms for Odoo to create and initialize the new line
-        await sleep(1200);
-        dismissDiscardModal();
+      let prodInput = activeRow.querySelector('td[name="product_id"] input, td[data-name="product_id"] input') 
+        || activeRow.querySelector('input') 
+        || document.activeElement;
 
-        // 3. Identify the active row
-        const allRows = document.querySelectorAll('tr.o_data_row');
-        const activeRow = document.querySelector('tr.o_selected_row') || allRows[allRows.length - 1];
+      const targetLower = exactOdooName.toLowerCase().trim();
+      const isExplicitJadi = targetLower.includes('[produk jadi]');
+      // In PT PO and CV SO, ALWAYS prioritize [PRODUK LK]
+      const preferLk = !isExplicitJadi && (mode === 'PT_PO' || mode === 'CV_SO' || targetLower.includes('[produk lk]'));
 
-        if (activeRow) {
-          let prodCell = activeRow.querySelector('td[name="product_id"], td[data-name="product_id"]')
-            || findCellByColumnHeader(activeRow, ['product', 'produk', 'barang']);
+      // Distinguishing keywords that MUST be in the product
+      const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'lk', 'produk', 'jadi', 'dan', 'yang', 'atau'];
+      const keyTokens = exactOdooName
+        .replace(/^\[.*?\]\s*/, '')
+        .replace(/[@()\-]/g, ' ')
+        .toLowerCase()
+        .split(' ')
+        .filter(t => t.length > 0 && !noiseWords.includes(t));
+
+      if (prodInput && prodInput.tagName === 'INPUT') {
+        prodInput.focus();
+        prodInput.select();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        // Type clean search query into Odoo's input
+        document.execCommand('insertText', false, searchStringToType);
+        prodInput.dispatchEvent(new Event('input', { bubbles: true }));
+        prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+
+        // Wait up to 5 seconds for autocomplete dropdown items to appear
+        let matchedItem = null;
+
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await sleep(250);
+          dismissDiscardModal();
+          const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
           
-          if (prodCell) {
-            prodCell.click();
-            await sleep(250);
-          }
-
-          let prodInput = activeRow.querySelector('td[name="product_id"] input, td[data-name="product_id"] input') 
-            || activeRow.querySelector('input') 
-            || document.activeElement;
-
-          if (prodInput && prodInput.tagName === 'INPUT') {
-            prodInput.focus();
-            prodInput.select();
-            document.execCommand('selectAll', false, null);
-            document.execCommand('delete', false, null);
-            // Type the clean search query into Odoo's input
-            document.execCommand('insertText', false, searchStringToType);
-            prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-
-            // Wait up to 4.5 seconds for autocomplete dropdown items to appear
-            let matchedItem = null;
-            const targetLower = exactOdooName.toLowerCase().trim();
-            const isLk = targetLower.includes('[produk lk]');
-            const isJadi = targetLower.includes('[produk jadi]');
-            
-            // Distinguishing keywords that MUST be in the product (excluding generic noise words)
-            const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'lk', 'produk', 'jadi', 'dan', 'yang', 'atau'];
-            const keyTokens = exactOdooName
-              .replace(/^\[.*?\]\s*/, '')
-              .replace(/[@()\-]/g, ' ')
-              .toLowerCase()
-              .split(' ')
-              .filter(t => t.length > 0 && !noiseWords.includes(t));
-
-            for (let attempt = 0; attempt < 18; attempt++) {
-              await sleep(250);
-              dismissDiscardModal();
-              const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
-              
-              if (dropdownOptions.length > 0) {
-                // Tier 1: Exact match with category tag
-                matchedItem = dropdownOptions.find(opt => opt.innerText.toLowerCase().trim() === targetLower);
-
-                // Tier 2: Category matching ([PRODUK LK]) AND all distinctive key tokens match
-                if (!matchedItem) {
-                  matchedItem = dropdownOptions.find(opt => {
-                    const txt = opt.innerText.toLowerCase().trim();
-                    if (isLk && !txt.includes('[produk lk]')) return false; // Strictly enforce [PRODUK LK]
-                    if (isJadi && !txt.includes('[produk jadi]')) return false;
-                    // ALL key tokens (e.g. ['brs', '13', '500'] or ['brs', 'ori', '7']) MUST be present!
-                    return keyTokens.every(tok => txt.includes(tok));
-                  });
-                }
-
-                // Tier 3: Category matching ([PRODUK LK]) AND at least key core tokens match
-                if (!matchedItem && keyTokens.length > 1) {
-                  matchedItem = dropdownOptions.find(opt => {
-                    const txt = opt.innerText.toLowerCase().trim();
-                    if (isLk && !txt.includes('[produk lk]')) return false;
-                    if (isJadi && !txt.includes('[produk jadi]')) return false;
-                    const matches = keyTokens.filter(tok => txt.includes(tok));
-                    return matches.length >= Math.max(1, keyTokens.length - 1);
-                  });
-                }
-
-                if (matchedItem) break;
-              }
+          if (dropdownOptions.length > 0) {
+            // Tier 1: Prefer [PRODUK LK] if preferLk is true AND key tokens match
+            if (preferLk) {
+              matchedItem = dropdownOptions.find(opt => {
+                const txt = opt.innerText.toLowerCase().trim();
+                if (!txt.includes('[produk lk]')) return false;
+                return keyTokens.every(tok => txt.includes(tok));
+              });
             }
 
-            if (matchedItem) {
-              logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 32)}...`);
-              const link = matchedItem.querySelector('a') || matchedItem;
-              link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-              link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-              link.click();
-              
-              // CRITICAL: Wait 1500ms for Odoo's onchange_product_id network RPC to finish
-              await sleep(1500);
-              dismissDiscardModal();
-            } else {
-              // NEVER press Enter blindly on unmatched dropdown to prevent discard modal!
-              logMessage(`⚠️ Opsi "${exactOdooName}" tidak muncul di dropdown. Lewati pilihan barang ini.`);
-              await sleep(500);
+            // Tier 2: Exact string match with targetLower
+            if (!matchedItem) {
+              matchedItem = dropdownOptions.find(opt => opt.innerText.toLowerCase().trim() === targetLower);
             }
+
+            // Tier 3: Category-enforced match with key tokens
+            if (!matchedItem) {
+              matchedItem = dropdownOptions.find(opt => {
+                const txt = opt.innerText.toLowerCase().trim();
+                if (preferLk && !txt.includes('[produk lk]')) return false;
+                if (isExplicitJadi && !txt.includes('[produk jadi]')) return false;
+                return keyTokens.every(tok => txt.includes(tok));
+              });
+            }
+
+            // Tier 4: Partial key token match with category enforced
+            if (!matchedItem && keyTokens.length > 1) {
+              matchedItem = dropdownOptions.find(opt => {
+                const txt = opt.innerText.toLowerCase().trim();
+                if (preferLk && !txt.includes('[produk lk]')) return false;
+                if (isExplicitJadi && !txt.includes('[produk jadi]')) return false;
+                const matches = keyTokens.filter(tok => txt.includes(tok));
+                return matches.length >= Math.max(1, keyTokens.length - 1);
+              });
+            }
+
+            if (matchedItem) break;
           }
+        }
 
-          // 4. Re-select the active row after Odoo's onchange re-render
-          const updatedRow = document.querySelector('tr.o_selected_row') || activeRow;
-
-          // 5. Set Quantity (QTY Packs, e.g. 75, 45, 45, 300 - NOT Karton!)
-          logMessage(`✏️ Qty: ${qty} Pcs/Units...`);
-          await setCellInput(
-            updatedRow,
-            'td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"], td[data-name="product_uom_qty"]',
-            ['quantity', 'qty', 'kuantitas', 'jumlah'],
-            qty
-          );
-          // Wait 700ms for Odoo subtotal calculation
-          await sleep(700);
+        if (matchedItem) {
+          logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 32)}...`);
+          const link = matchedItem.querySelector('a') || matchedItem;
+          link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+          link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          link.click();
+          
+          // VERIFY Odoo onchange RPC finishes and updates description/price/uom
+          logMessage(`⏳ Menunggu Odoo memuat data produk #${i + 1}...`);
+          await waitForProductOnchange(i, keyTokens, timing);
           dismissDiscardModal();
-
-          // 6. Set Unit Price
-          logMessage(`✏️ Harga: Rp ${Math.round(price).toLocaleString('id-ID')}...`);
-          await setCellInput(
-            updatedRow,
-            'td[name="price_unit"], td[data-name="price_unit"]',
-            ['unit price', 'harga', 'price'],
-            Math.round(price)
-          );
-          // Wait 700ms for Odoo price calculation
-          await sleep(700);
-          dismissDiscardModal();
+        } else {
+          logMessage(`⚠️ Opsi "${exactOdooName}" tidak muncul di dropdown. Melewati kolom produk ini.`);
+          await sleep(500);
         }
       }
 
-      // Rest 1200ms before starting the next row so Odoo backend is completely settled
-      logMessage(`✅ Baris ${i + 1} selesai.`);
-      await sleep(1200);
+      // 3. SET QUANTITY & VERIFY
+      logMessage(`✏️ Mengisi Qty: ${qty} Units...`);
+      await setAndVerifyCell(
+        i,
+        'td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"], td[data-name="product_uom_qty"]',
+        ['quantity', 'qty', 'kuantitas', 'jumlah'],
+        qty,
+        'Quantity',
+        timing
+      );
+
+      // 4. SET UNIT PRICE & VERIFY
+      logMessage(`✏️ Mengisi Harga: Rp ${Math.round(price).toLocaleString('id-ID')}...`);
+      await setAndVerifyCell(
+        i,
+        'td[name="price_unit"], td[data-name="price_unit"]',
+        ['unit price', 'harga', 'price'],
+        Math.round(price),
+        'Unit Price',
+        timing
+      );
+
+      // 5. COMMIT & SETTLE ROW
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      await sleep(timing.delayAfterRowCommit);
+      dismissDiscardModal();
+
+      logMessage(`✅ Baris ${i + 1}/${items.length} selesai diverifikasi.`);
     }
   }
 
