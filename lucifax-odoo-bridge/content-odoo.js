@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.4</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.5</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -845,6 +845,161 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
+  // Helper to set "Deliver To" in PT PO (Other Information -> picking_type_id)
+  async function setDeliverToField() {
+    logMessage('2. Mengatur Deliver To di tab Other Information...');
+    clickTab('Other Information');
+    await sleep(350);
+    await waitForOdooRpcSettled(300);
+
+    const container = document.querySelector('div[name="picking_type_id"], [data-name="picking_type_id"], .o_field_widget[name="picking_type_id"]');
+    let input = (container && container.querySelector('input')) || findFieldInput('picking_type_id', ['deliver to', 'kirim ke']);
+    if (!input) {
+      logMessage('⚠️ Field Deliver To (picking_type_id) tidak ditemukan.');
+      clickTab('Products');
+      await sleep(300);
+      return false;
+    }
+
+    dismissOdooModals();
+
+    // 1. Check if already has a value
+    if (input.value && input.value.trim().length > 0) {
+      logMessage(`✓ Deliver To sudah terisi: "${input.value.trim()}"`);
+      clickTab('Products');
+      await sleep(300);
+      return true;
+    }
+
+    // Helper to get clean dropdown options
+    function getCleanDropdownOptions() {
+      const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
+        .filter(m => {
+          const rect = m.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && m.style.display !== 'none';
+        });
+      let menuOptions = [];
+      if (visibleMenus.length > 0) {
+        menuOptions = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item, .dropdown-item')));
+      } else {
+        menuOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'))
+          .filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          });
+      }
+      return menuOptions.filter(opt => {
+        const rect = opt.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return false;
+        const t = opt.innerText.toLowerCase().trim();
+        return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
+      });
+    }
+
+    // 2. Open dropdown by clicking caret button or input
+    const dropBtn = container?.querySelector('.o_dropdown_button, button, .fa-caret-down');
+    if (dropBtn) {
+      dropBtn.click();
+    } else {
+      input.focus();
+      input.click();
+    }
+    await sleep(250);
+
+    let cleanOptions = [];
+    for (let wait = 0; wait < 12; wait++) {
+      await sleep(200);
+      cleanOptions = getCleanDropdownOptions();
+      if (cleanOptions.length > 0) break;
+    }
+
+    // 3. If no options appeared by clicking caret, try typing queries
+    if (cleanOptions.length === 0) {
+      const searchQueries = ['Jawa Tengah', 'Receipts', 'Jateng', 'PFS'];
+      for (const query of searchQueries) {
+        if (cleanOptions.length > 0) break;
+        input.focus();
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(50);
+        input.value = query;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { key: query[query.length - 1], bubbles: true }));
+
+        for (let wait = 0; wait < 10; wait++) {
+          await sleep(200);
+          cleanOptions = getCleanDropdownOptions();
+          if (cleanOptions.length > 0) break;
+        }
+      }
+    }
+
+    if (cleanOptions.length > 0) {
+      const optionTexts = cleanOptions.map(opt => opt.innerText.trim());
+      logMessage(`ℹ️ Pilihan Deliver To: [${optionTexts.join(' | ')}]`);
+
+      // Priority 1: Contains "jawa" and "tengah" (or "jateng")
+      let matched = cleanOptions.find(opt => {
+        const t = opt.innerText.toLowerCase();
+        return (t.includes('jawa') && t.includes('tengah')) || t.includes('jateng');
+      });
+
+      // Priority 2: Contains "receipt" or "penerimaan"
+      if (!matched) {
+        matched = cleanOptions.find(opt => {
+          const t = opt.innerText.toLowerCase();
+          return t.includes('receipt') || t.includes('penerimaan');
+        });
+      }
+
+      // Priority 3: Contains "fiva" or "pfs"
+      if (!matched) {
+        matched = cleanOptions.find(opt => {
+          const t = opt.innerText.toLowerCase();
+          return t.includes('fiva') || t.includes('pfs');
+        });
+      }
+
+      // Priority 4: Fallback to the first available option in dropdown
+      if (!matched && cleanOptions.length > 0) {
+        matched = cleanOptions[0];
+      }
+
+      if (matched) {
+        logMessage(`✓ Memilih Deliver To: "${matched.innerText.trim()}"`);
+        const link = matched.querySelector('a') || matched;
+        link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
+        link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+        link.click();
+        matched.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        matched.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+        matched.click();
+
+        await sleep(350);
+        await waitForOdooRpcSettled(400);
+
+        logMessage('3. Membuka tab Products...');
+        clickTab('Products');
+        await sleep(300);
+        await waitForOdooRpcSettled(300);
+        return true;
+      }
+    }
+
+    logMessage('⚠️ Tidak dapat menemukan pilihan yang cocok untuk Deliver To.');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    logMessage('3. Membuka tab Products...');
+    clickTab('Products');
+    await sleep(300);
+    return false;
+  }
+
   // MAIN AUTO-FILL FUNCTION
   async function runAutoFill(mode) {
     // 1. Coba update data dari clipboard
@@ -871,16 +1026,10 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         setTextField('partner_ref', p.vendorRef || `${p.customerAlias || p.customerName} ${p.city}`);
         await setMany2OneField('currency_id', 'IDP', ['currency', 'mata uang']);
 
-        logMessage('2. Mengatur Deliver To ke Jawa Tengah...');
-        clickTab('Other Information');
-        await sleep(200);
-        await setMany2OneField('picking_type_id', 'Jawa Tengah: Receipts', ['deliver to', 'kirim ke']);
+        // 2. Deliver To in Other Information tab
+        await setDeliverToField();
 
-        logMessage('3. Membuka tab Products...');
-        clickTab('Products');
-        await sleep(300);
-
-        // Fill Items
+        // 3. Fill Items
         const filled = await fillOrderLines(p.items, 'PT_PO');
         if (filled === p.items.length) {
           logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
@@ -1415,9 +1564,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         || document.activeElement;
 
       const targetLower = exactOdooName.toLowerCase().trim();
-      const isExplicitJadi = targetLower.includes('[produk jadi]');
       // In PT PO and CV SO, ALWAYS prioritize [PRODUK LK] and strictly forbid [PRODUK JADI]
-      const preferLk = !isExplicitJadi && (isPtPo || isCvSo || targetLower.includes('[produk lk]'));
+      const preferLk = isPtPo || isCvSo || targetLower.includes('[produk lk]');
 
       // Distinguishing keywords that MUST be in the product
       const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'dan', 'yang', 'atau', '@'];
@@ -1434,6 +1582,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         document.execCommand('delete', false, null);
         // Type full clean name from Master Barang preserving '@' (e.g. "BRS Merah 24 PCS @ 500 g LK")
         document.execCommand('insertText', false, exactCleanName);
+        prodInput.value = exactCleanName;
         prodInput.dispatchEvent(new Event('input', { bubbles: true }));
         prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
@@ -1450,13 +1599,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
               return rect.width > 0 && rect.height > 0;
             });
           
-          // Fallback: If after 5 attempts (1.25s) no options appeared with exactCleanName, try core query (e.g. "BRS Merah 24")
-          if (dropdownOptions.length === 0 && attempt === 5 && coreQuery && coreQuery !== exactCleanName) {
+          // Fallback: If after 3 attempts (0.75s) no options appeared with exactCleanName, try core query (e.g. "BRS Merah 24")
+          if (dropdownOptions.length === 0 && attempt === 3 && coreQuery && coreQuery !== exactCleanName) {
             logMessage(`...Mencoba kata kunci inti: "${coreQuery}"...`);
             prodInput.focus();
             document.execCommand('selectAll', false, null);
             document.execCommand('delete', false, null);
             document.execCommand('insertText', false, coreQuery);
+            prodInput.value = coreQuery;
             prodInput.dispatchEvent(new Event('input', { bubbles: true }));
             prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
             continue;
@@ -1477,9 +1627,13 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
               });
             }
 
-            // Tier 2: Exact string match with targetLower
+            // Tier 2: Exact string match with targetLower (only if not conflicting with preferLk)
             if (!matchedItem) {
-              matchedItem = validOptions.find(opt => opt.innerText.toLowerCase().trim() === targetLower);
+              matchedItem = validOptions.find(opt => {
+                const txt = opt.innerText.toLowerCase().trim();
+                if (preferLk && txt.includes('[produk jadi]')) return false;
+                return txt === targetLower;
+              });
             }
 
             // Tier 3: Option containing [PRODUK LK] and matching main tokens
@@ -1517,14 +1671,20 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           await waitForProductOnchange(i, keyTokens, timing);
           dismissDiscardModal();
         } else {
-          // CRITICAL: Clear input if no [PRODUK LK] matched and SKIP row to prevent freezing subsequent rows!
-          logMessage(`⚠️ Opsi [PRODUK LK] "${exactOdooName}" tidak muncul di dropdown. Melewati baris ini agar baris berikutnya tidak macet.`);
-          prodInput.focus();
-          document.execCommand('selectAll', false, null);
-          document.execCommand('delete', false, null);
-          prodInput.value = '';
-          prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-          await sleep(300);
+          // CRITICAL: Delete empty row if no [PRODUK LK] matched to prevent freezing subsequent rows!
+          logMessage(`⚠️ Opsi [PRODUK LK] "${exactOdooName}" tidak muncul di dropdown. Menghapus baris kosong.`);
+          const deleteBtn = activeRow.querySelector('.o_list_record_remove, .fa-trash-o, .fa-trash, button.o_list_record_delete');
+          if (deleteBtn) {
+            deleteBtn.click();
+            await sleep(350);
+          } else {
+            prodInput.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+            prodInput.value = '';
+            prodInput.dispatchEvent(new Event('input', { bubbles: true }));
+            await sleep(300);
+          }
           continue;
         }
       } else {
