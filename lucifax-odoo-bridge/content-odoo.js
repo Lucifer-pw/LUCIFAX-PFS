@@ -593,16 +593,26 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     }
   }
 
-  // Find cell by column header name in table
-  function findCellByColumnHeader(row, headerKeywords) {
+  // Find cell by column header name or data-name in table
+  function findCellByColumnHeader(row, headerKeywords, fieldName) {
     if (!row) return null;
     const table = row.closest('table') || document.querySelector('table.o_section_and_note_list_view, table.o_list_table, .o_field_x2many_list table');
     if (!table) return null;
     const headers = Array.from(table.querySelectorAll('thead th'));
-    const colIndex = headers.findIndex(th => {
-      const text = th.innerText.toLowerCase();
-      return headerKeywords.some(kw => text.includes(kw.toLowerCase()));
-    });
+    let colIndex = -1;
+    if (fieldName) {
+      colIndex = headers.findIndex(th => 
+        th.getAttribute('data-name') === fieldName || 
+        th.getAttribute('name') === fieldName ||
+        th.classList.contains(fieldName)
+      );
+    }
+    if (colIndex === -1 && headerKeywords) {
+      colIndex = headers.findIndex(th => {
+        const text = th.innerText.toLowerCase();
+        return headerKeywords.some(kw => text.includes(kw.toLowerCase()));
+      });
+    }
     if (colIndex !== -1) {
       const cells = row.querySelectorAll('td');
       return cells[colIndex] || null;
@@ -722,7 +732,9 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         continue;
       }
 
-      let cell = row.querySelector(cellSelector) || findCellByColumnHeader(row, headerKeywords);
+      const fieldMatch = cellSelector.match(/name="([^"]+)"/);
+      const fieldName = fieldMatch ? fieldMatch[1] : null;
+      let cell = row.querySelector(cellSelector) || findCellByColumnHeader(row, headerKeywords, fieldName);
       if (!cell) {
         await sleep(300);
         continue;
@@ -766,7 +778,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       // Read back from live DOM to VERIFY
       const freshRows = Array.from(document.querySelectorAll('table.o_section_and_note_list_view tbody tr.o_data_row, tbody tr.o_data_row'));
       const freshRow = freshRows[rowIndex];
-      const freshCell = freshRow ? (freshRow.querySelector(cellSelector) || findCellByColumnHeader(freshRow, headerKeywords)) : null;
+      const freshCell = freshRow ? (freshRow.querySelector(cellSelector) || findCellByColumnHeader(freshRow, headerKeywords, fieldName)) : null;
       const verifiedVal = (freshCell?.querySelector('input')?.value || freshCell?.innerText || '').trim().replace(/[.,\s]/g, '');
 
       if (verifiedVal === cleanTarget || verifiedVal.includes(cleanTarget) || cleanTarget.includes(verifiedVal)) {
