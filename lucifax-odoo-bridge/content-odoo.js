@@ -493,25 +493,66 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     }
   }
 
+  // Clean product search term: remove [PRODUK LK] and special chars to match Odoo backend
+  function getSearchTerm(name) {
+    if (!name) return '';
+    let clean = name.replace(/^\[.*?\]\s*/, '').trim();
+    clean = clean.replace(/[@()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+    return clean;
+  }
+
+  // Find cell by column header name in table
+  function findCellByColumnHeader(row, headerKeywords) {
+    const table = row.closest('table');
+    if (!table) return null;
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const colIndex = headers.findIndex(th => {
+      const text = th.innerText.toLowerCase();
+      return headerKeywords.some(kw => text.includes(kw.toLowerCase()));
+    });
+    if (colIndex !== -1) {
+      const cells = row.querySelectorAll('td');
+      return cells[colIndex] || null;
+    }
+    return null;
+  }
+
   // Helper to safely set cell value in Odoo editable tree
-  async function setCellInput(row, cellSelector, value) {
+  async function setCellInput(row, cellSelector, headerKeywords, value) {
     if (value === undefined || value === null) return false;
-    const cell = row.querySelector(cellSelector);
-    if (!cell) return false;
+
+    // 1. Find cell by selector
+    let cell = row.querySelector(cellSelector);
+    // 2. Fallback: find by column header name
+    if (!cell && headerKeywords) {
+      cell = findCellByColumnHeader(row, headerKeywords);
+    }
+    if (!cell) {
+      console.warn('[Lucifax-Odoo] Cell tidak ditemukan untuk:', cellSelector);
+      return false;
+    }
 
     // Click cell to activate input
-    let input = cell.querySelector('input');
-    if (!input) {
-      cell.click();
+    cell.click();
+    await sleep(250);
+
+    let input = cell.querySelector('input') || row.querySelector(cellSelector + ' input') || document.activeElement;
+    if (!input || (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA')) {
+      cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       await sleep(250);
-      input = cell.querySelector('input') || row.querySelector(cellSelector + ' input') || document.activeElement;
+      input = cell.querySelector('input') || document.activeElement;
     }
 
     if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
       input.focus();
       input.select();
-      const numVal = typeof value === 'number' ? (value % 1 === 0 ? Math.round(value) : Number(value.toFixed(2))) : value;
-      input.value = numVal.toString();
+      const formattedVal = typeof value === 'number'
+        ? (value % 1 === 0 ? Math.round(value).toString() : Number(value.toFixed(2)).toString())
+        : value.toString();
+
+      document.execCommand('selectAll', false, null);
+      document.execCommand('insertText', false, formattedVal);
+      input.value = formattedVal;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
@@ -535,7 +576,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         price = item.priceSalePrePpn || (item.priceUnit / 1.11);
       }
 
-      logMessage(`📦 Menambah (${i + 1}/${items.length}): ${prodName.substring(0, 24)}...`);
+      const searchTerm = getSearchTerm(prodName);
+      logMessage(`📦 (${i + 1}/${items.length}) Mencari: "${searchTerm}"...`);
 
       // 1. Find and click "Add a product" button
       const addBtns = Array.from(document.querySelectorAll('.o_field_x2many_list_row_add a, button.o_field_x2many_list_row_add, .o_field_widget a, a.o_field_x2many_list_row_add'));
@@ -543,81 +585,93 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
       if (addBtn) {
         addBtn.click();
-        await sleep(600); // Give Odoo time to render the new row
+        await sleep(700); // Give Odoo time to render the new row
 
         // Target the active selected row
-        const activeRow = document.querySelector('tr.o_selected_row') 
-          || document.querySelectorAll('tr.o_data_row')[document.querySelectorAll('tr.o_data_row').length - 1];
+        const allRows = document.querySelectorAll('tr.o_data_row');
+        const activeRow = document.querySelector('tr.o_selected_row') || allRows[allRows.length - 1];
 
         if (activeRow) {
-          // 2. Find and fill product input
-          const prodCell = activeRow.querySelector('td[data-name="product_id"]');
-          let prodInput = activeRow.querySelector('td[data-name="product_id"] input') || document.activeElement;
-          if (!prodInput || prodInput.tagName !== 'INPUT') {
-            if (prodCell) prodCell.click();
+          // 2. Find and activate product cell input
+          let prodCell = activeRow.querySelector('td[name="product_id"], td[data-name="product_id"]')
+            || findCellByColumnHeader(activeRow, ['product', 'produk', 'barang']);
+          
+          if (prodCell) {
+            prodCell.click();
             await sleep(250);
-            prodInput = activeRow.querySelector('td[data-name="product_id"] input') || document.activeElement;
           }
+
+          let prodInput = activeRow.querySelector('td[name="product_id"] input, td[data-name="product_id"] input') 
+            || activeRow.querySelector('input') 
+            || document.activeElement;
 
           if (prodInput && prodInput.tagName === 'INPUT') {
             prodInput.focus();
-            prodInput.value = prodName;
+            prodInput.select();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+            document.execCommand('insertText', false, searchTerm);
             prodInput.dispatchEvent(new Event('input', { bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-            prodInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true }));
+            prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
-            // Wait up to 1500ms for autocomplete dropdown items to appear
+            // Wait up to 2.5s for autocomplete dropdown items to appear
             let matchedItem = null;
-            const cleanTarget = prodName.toLowerCase().replace(/\[.*?\]/g, '').replace(/[@()\-]/g, ' ').replace(/\s+/g, ' ').trim();
-            const targetTokens = cleanTarget.split(' ').filter(t => t.length > 1);
+            const searchTokens = searchTerm.toLowerCase().split(' ').filter(t => t.length > 1);
 
-            for (let attempt = 0; attempt < 8; attempt++) {
+            for (let attempt = 0; attempt < 10; attempt++) {
               await sleep(250);
               const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'));
               if (dropdownOptions.length > 0) {
-                // Find matching option containing target tokens
+                // Find matching option containing search tokens
                 matchedItem = dropdownOptions.find(opt => {
                   const txt = opt.innerText.toLowerCase();
-                  return targetTokens.every(tok => txt.includes(tok));
+                  return searchTokens.every(tok => txt.includes(tok));
                 });
                 if (!matchedItem) {
                   matchedItem = dropdownOptions.find(opt => {
                     const txt = opt.innerText.toLowerCase();
-                    const matches = targetTokens.filter(tok => txt.includes(tok));
-                    return matches.length >= Math.min(2, targetTokens.length);
+                    const matchCount = searchTokens.filter(tok => txt.includes(tok)).length;
+                    return matchCount >= Math.min(2, searchTokens.length);
                   });
-                }
-                if (!matchedItem) {
-                  const firstTxt = dropdownOptions[0].innerText.toLowerCase();
-                  if (targetTokens.some(tok => firstTxt.includes(tok))) {
-                    matchedItem = dropdownOptions[0];
-                  }
                 }
                 if (matchedItem) break;
               }
             }
 
             if (matchedItem) {
+              logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 24)}...`);
               const link = matchedItem.querySelector('a') || matchedItem;
+              link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+              link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
               link.click();
+              // Wait for Odoo's onchange_product_id RPC
+              await sleep(1000);
             } else {
+              logMessage(`⚠️ Opsi dropdown "${searchTerm}" belum muncul, menekan Enter...`);
               prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-              triggerEvents(prodInput);
+              await sleep(800);
             }
-
-            // CRITICAL: Wait 1000ms for Odoo's asynchronous onchange_product_id RPC to finish
-            await sleep(1000);
           }
 
           // 3. Re-select the active row after Odoo's onchange re-render
           const updatedRow = document.querySelector('tr.o_selected_row') || activeRow;
 
           // 4. Set Quantity
-          await setCellInput(updatedRow, 'td[data-name="product_qty"], td[data-name="product_uom_qty"], td[data-name="quantity"]', qty);
+          await setCellInput(
+            updatedRow,
+            'td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"], td[data-name="product_uom_qty"]',
+            ['quantity', 'qty', 'kuantitas', 'jumlah'],
+            qty
+          );
           await sleep(350);
 
           // 5. Set Unit Price
-          await setCellInput(updatedRow, 'td[data-name="price_unit"], td[data-name="unit_price"]', Math.round(price));
+          await setCellInput(
+            updatedRow,
+            'td[name="price_unit"], td[data-name="price_unit"]',
+            ['unit price', 'harga', 'price'],
+            Math.round(price)
+          );
           await sleep(350);
         }
       }
