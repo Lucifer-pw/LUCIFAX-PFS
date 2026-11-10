@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.6</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.7</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1457,9 +1457,13 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
       const item = items[i];
       // Full registered name from Master Barang (e.g. [PRODUK LK] BRS 13 PCS 500 g LK)
-      const exactOdooName = (item.odooProductName && item.odooProductName.trim().length > 0)
+      const registeredOdooName = (item.odooProductName && item.odooProductName.trim().length > 0)
         ? item.odooProductName.trim()
-        : item.productName.trim();
+        : '';
+      const fallbackName = (item.productName && item.productName.trim().length > 0)
+        ? item.productName.trim()
+        : '';
+      const exactOdooName = registeredOdooName || fallbackName;
 
       // Quantity in Odoo is always QTY (Packs/Pieces), NOT Karton!
       const qty = (item.quantityPack !== undefined && item.quantityPack !== null)
@@ -1477,48 +1481,171 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
       // Extract core query tokens for intelligent fallback (e.g. "BRS Merah 24", "BRS 13", "BRS ORI 7", "Rolade Ayam")
       const rawWords = exactCleanName.split(/\s+/);
-      const cutIndex = rawWords.findIndex(w => ['pcs', '@', 'pack', '500g', '1000g', '500', '1000'].includes(w.toLowerCase()));
+      const cutIndex = rawWords.findIndex(w => ['pcs', '@', 'pack', '500g', '1000g', '250g', '500', '1000', '250'].includes(w.toLowerCase()));
       const coreTokens = (cutIndex > 0) ? rawWords.slice(0, cutIndex) : rawWords.slice(0, 3);
       const coreQuery = coreTokens.join(' ');
 
       const targetLower = exactOdooName.toLowerCase().trim();
+      const registeredLower = registeredOdooName.toLowerCase().trim();
+      const fallbackLower = fallbackName.toLowerCase().trim();
       const isExplicitJadi = targetLower.includes('[produk jadi]');
       // In PT PO and CV SO, ALWAYS prioritize [PRODUK LK] and strictly forbid [PRODUK JADI]
       const preferLk = !isExplicitJadi && (isPtPo || isCvSo || targetLower.includes('[produk lk]'));
 
       // Distinguishing keywords that MUST be in the product
-      const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'dan', 'yang', 'atau', '@', 'mbg'];
+      const noiseWords = ['pcs', 'pack', 'g', 'gram', 'kg', 'dan', 'yang', 'atau', '@', 'mbg', 'coklat'];
       const keyTokens = exactOdooName
         .replace(/^\[.*?\]\s*/, '')
         .toLowerCase()
         .split(/[\s@()\-]+/)
         .filter(t => t.length > 0 && !noiseWords.includes(t));
 
-      const targetIsLk = targetLower.includes('[produk lk]') || isPtPo || isCvSo;
+      const cleanTarget = targetLower.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+      const cleanRegistered = registeredLower ? registeredLower.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim() : '';
+      const targetCore = targetLower.replace(/^\[.*?\]\s*/, '').replace(/\s+/g, ' ').trim();
+      const registeredCore = registeredLower ? registeredLower.replace(/^\[.*?\]\s*/, '').replace(/\s+/g, ' ').trim() : '';
+
+      // Helper function to score dropdown candidates with strict product identity constraints
+      function scoreCandidate(optText) {
+        if (!optText) return -1;
+        const txt = optText.toLowerCase().trim();
+
+        // 1. NEVER pick create or search more options
+        if (txt.startsWith('create ') || txt.startsWith('buat ') || txt.includes('search more') || txt.includes('cari lebih banyak')) {
+          return -1;
+        }
+
+        // 2. STRICT RULE: In PT PO and CV SO, STRICTLY FORBID [PRODUK JADI] and REQUIRE [PRODUK LK]
+        if (preferLk) {
+          if (txt.includes('[produk jadi]')) return -1;
+          if (!txt.includes('[produk lk]')) return -1;
+        }
+
+        // 3. HIGHEST PRIORITY: Exact match with registered name from Master Barang
+        if (registeredLower && txt === registeredLower) {
+          return 10000;
+        }
+        if (targetLower && txt === targetLower) {
+          return 9000;
+        }
+
+        // 4. Normalized exact match (ignoring brackets, punctuation, and extra whitespace)
+        const cleanOpt = txt.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (cleanRegistered && cleanOpt === cleanRegistered) {
+          return 8000;
+        }
+        if (cleanTarget && cleanOpt === cleanTarget) {
+          return 7500;
+        }
+
+        // 5. Compare core name (without bracket prefix)
+        const optCore = txt.replace(/^\[.*?\]\s*/, '').replace(/\s+/g, ' ').trim();
+        if (registeredCore && optCore === registeredCore) {
+          return 7000;
+        }
+        if (targetCore && optCore === targetCore) {
+          return 6500;
+        }
+
+        // 6. Substring match of clean core
+        if (registeredCore && optCore.includes(registeredCore)) {
+          return 6000;
+        }
+        if (targetCore && optCore.includes(targetCore)) {
+          return 5500;
+        }
+
+        // 7. PRODUCT IDENTITY & ATTRIBUTE CONSTRAINTS:
+        // A. Primary Product Category Constraint
+        const primaryCategories = [
+          { key: 'rolade', aliases: ['rolade', 'rollade'] },
+          { key: 'brs', aliases: ['brs'] },
+          { key: 'bakso', aliases: ['bakso', 'baso'] },
+          { key: 'sosis', aliases: ['sosis'] },
+          { key: 'kornet', aliases: ['kornet', 'corned'] },
+          { key: 'nugget', aliases: ['nugget'] },
+          { key: 'jari', aliases: ['jari'] },
+          { key: 'miniku', aliases: ['miniku'] },
+        ];
+
+        for (const cat of primaryCategories) {
+          const targetHasCat = cat.aliases.some(a => targetLower.includes(a) || fallbackLower.includes(a));
+          const optHasCat = cat.aliases.some(a => txt.includes(a));
+          if (targetHasCat && !optHasCat) return -1; // Target is Rolade, candidate is not!
+          if (!targetHasCat && optHasCat) return -1; // Target is NOT Jari-Jari, candidate is Jari-Jari!
+        }
+
+        // B. Meat Type Constraint (Ayam vs Sapi)
+        const targetHasSapi = targetLower.includes('sapi') || fallbackLower.includes('sapi');
+        const targetHasAyam = targetLower.includes('ayam') || fallbackLower.includes('ayam');
+        const optHasSapi = txt.includes('sapi');
+        const optHasAyam = txt.includes('ayam');
+
+        if (targetHasSapi && optHasAyam && !optHasSapi) return -1;
+        if (targetHasAyam && optHasSapi && !optHasAyam) return -1;
+
+        // C. Variant Number Constraint (7 vs 13 vs 24 vs 30 vs 6)
+        const variantNumbers = ['7', '13', '24', '30', '6'];
+        for (const num of variantNumbers) {
+          const numRegex = new RegExp(`(?:^|\\D)${num}(?:s|pcs|pack)?(?:\\D|$)`, 'i');
+          const targetHasNum = numRegex.test(targetLower) || numRegex.test(fallbackLower);
+          const optHasNum = numRegex.test(txt);
+          if (targetHasNum && !optHasNum) return -1;
+          if (!targetHasNum && optHasNum) {
+            if (variantNumbers.some(n => {
+              const r = new RegExp(`(?:^|\\D)${n}(?:s|pcs|pack)?(?:\\D|$)`, 'i');
+              return r.test(targetLower) || r.test(fallbackLower);
+            })) {
+              return -1;
+            }
+          }
+        }
+
+        // D. Calculate Score based on matching distinctive tokens
+        let score = 0;
+        let matchedTokens = 0;
+
+        for (const tok of keyTokens) {
+          if (['lk', 'produk', 'pcs', 'g', 'gram', '500', '250', '1000'].includes(tok)) continue;
+          if (txt.includes(tok)) {
+            score += 25;
+            matchedTokens++;
+          } else if (tok.endsWith('s') && txt.includes(tok.slice(0, -1))) {
+            score += 20;
+            matchedTokens++;
+          }
+        }
+
+        // CRITICAL: Must have at least 1 matched distinctive product token!
+        if (matchedTokens === 0) {
+          return -1;
+        }
+
+        // Extra bonus for [PRODUK LK] if preferLk
+        if (preferLk && txt.includes('[produk lk]')) {
+          score += 500;
+        }
+
+        return score;
+      }
 
       // SMART RESUME GUARD:
-      // If row i is ALREADY filled in Odoo, check if it matches the EXACT registered variant!
+      // If row i is ALREADY filled in Odoo, check if it matches the target product using scoreCandidate!
       const currentTableRows = getOrderLineRows();
       if (currentTableRows.length > i) {
         const checkRow = currentTableRows[i];
         const checkProdText = (checkRow.querySelector('td[name="product_id"], td[data-name="product_id"]')?.innerText || '').trim();
-        const checkProdLower = checkProdText.toLowerCase();
         const checkQtyText = (checkRow.querySelector('td[name="product_qty"], td[data-name="product_qty"], td[name="product_uom_qty"]')?.innerText || '').replace(/[.,]/g, '');
         const checkQtyNum = parseFloat(checkQtyText) || 0;
         
-        const rowHasLk = checkProdLower.includes('[produk lk]');
-        const rowHasJadi = checkProdLower.includes('[produk jadi]');
-
-        if (checkProdText.length > 3 && !checkProdLower.includes('add a product') && checkQtyNum > 0) {
-          // If the target is [PRODUK LK] and the row ALREADY has [PRODUK LK] and matches:
-          if (targetIsLk && rowHasLk && keyTokens.some(tok => tok !== 'lk' && checkProdLower.includes(tok))) {
+        if (checkProdText.length > 3 && !checkProdText.toLowerCase().includes('add a product') && checkQtyNum > 0) {
+          const existingScore = scoreCandidate(checkProdText);
+          if (existingScore > 0) {
             logMessage(`✓ Baris ${i + 1}/${items.length} sudah sesuai ("${checkProdText}"). Melanjutkan...`);
             successfulRows++;
             continue;
-          }
-          // If the row currently has [PRODUK JADI] when we want [PRODUK LK], do NOT skip!
-          if (targetIsLk && rowHasJadi) {
-            logMessage(`⚠️ Baris ${i + 1} saat ini "[PRODUK JADI]". Mengganti ke "[PRODUK LK]" sesuai master barang...`);
+          } else {
+            logMessage(`⚠️ Baris ${i + 1} saat ini "${checkProdText}" (tidak cocok). Mengganti ke produk yang sesuai...`);
           }
         }
       }
@@ -1545,62 +1672,71 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         || activeRow.querySelector('input') 
         || document.activeElement;
 
-      // Helper function to score dropdown candidates
-      function scoreCandidate(optText) {
-        const txt = optText.toLowerCase().trim();
-        // STRICT RULE: If preferLk is true (PT PO / CV SO), strictly forbid [PRODUK JADI]
-        if (preferLk && txt.includes('[produk jadi]')) return -1;
-        if (preferLk && !txt.includes('[produk lk]')) return -1;
-
-        let score = 0;
-        if (preferLk && txt.includes('[produk lk]')) score += 10;
-
-        // HIGHEST PRIORITY: Exact match with exactOdooName (the exact name registered in Master Barang)
-        if (txt === targetLower) score += 1000;
-
-        // Normalized comparison ignoring brackets, punctuation, and extra whitespace
-        const cleanOpt = txt.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-        const cleanTarget = targetLower.replace(/[\(\)@\-\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (cleanOpt === cleanTarget) score += 500;
-
-        for (const tok of keyTokens) {
-          if (tok === 'lk') continue;
-          if (txt.includes(tok)) {
-            score += 10;
-          } else if (tok.endsWith('s') && txt.includes(tok.slice(0, -1))) {
-            score += 8; // e.g. 24s matches 24
-          }
-        }
-        return score;
-      }
-
       // Prepare multi-tier search queries prioritizing the exact name registered in Master Barang
       const searchQueries = [];
-      const normalizedCore = coreQuery.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
-
-      // Tier 1: Search using the exact registered name with [PRODUK LK] prefix
-      if (exactOdooName.startsWith('[PRODUK LK]')) {
-        searchQueries.push(exactOdooName);
-        if (normalizedCore) searchQueries.push(`[PRODUK LK] ${normalizedCore}`);
-      } else if (preferLk) {
-        if (normalizedCore) searchQueries.push(`[PRODUK LK] ${normalizedCore}`);
+      function addQuery(q) {
+        if (!q) return;
+        const trimmed = q.replace(/\s+/g, ' ').trim();
+        if (trimmed.length > 0 && !searchQueries.includes(trimmed)) {
+          searchQueries.push(trimmed);
+        }
       }
 
-      // Tier 2: Clean target without bracket prefix
+      // 1. If registered name from Master Barang is present
+      if (registeredOdooName) {
+        addQuery(registeredOdooName);
+        const cleanReg = registeredOdooName.replace(/^\[.*?\]\s*/, '').trim();
+        addQuery(cleanReg);
+        const regWords = cleanReg.split(/\s+/);
+        const cut = regWords.findIndex(w => ['pcs', '@', 'pack', '500g', '250g', '1000g', '500', '250', '1000'].includes(w.toLowerCase()));
+        const coreReg = (cut > 0) ? regWords.slice(0, cut).join(' ') : regWords.slice(0, 3).join(' ');
+        if (coreReg) {
+          addQuery(coreReg);
+          if (preferLk) addQuery(`[PRODUK LK] ${coreReg}`);
+        }
+      }
+
+      // 2. Known product categories & variant numbers
+      if (fallbackLower.includes('brs') || targetLower.includes('brs')) {
+        if (targetLower.includes('7') || fallbackLower.includes('7')) {
+          addQuery('BRS ORI 7');
+          addQuery('BRS 7');
+          if (preferLk) addQuery('[PRODUK LK] BRS ORI 7');
+          if (preferLk) addQuery('[PRODUK LK] BRS 7');
+        } else if (targetLower.includes('13') || fallbackLower.includes('13')) {
+          addQuery('BRS 13');
+          if (preferLk) addQuery('[PRODUK LK] BRS 13');
+        } else if (targetLower.includes('24') || fallbackLower.includes('24')) {
+          addQuery('BRS Merah 24');
+          addQuery('BRS 24');
+          if (preferLk) addQuery('[PRODUK LK] BRS Merah 24');
+          if (preferLk) addQuery('[PRODUK LK] BRS 24');
+        } else if (targetLower.includes('30') || fallbackLower.includes('30')) {
+          addQuery('BRS 30');
+          if (preferLk) addQuery('[PRODUK LK] BRS 30');
+        } else if (targetLower.includes('6') || fallbackLower.includes('6')) {
+          addQuery('BRS 6');
+          if (preferLk) addQuery('[PRODUK LK] BRS 6');
+        }
+      }
+
+      if (fallbackLower.includes('rolade') || fallbackLower.includes('rollade') || targetLower.includes('rolade') || targetLower.includes('rollade')) {
+        if (targetLower.includes('ayam') || fallbackLower.includes('ayam')) {
+          addQuery('Rolade Ayam');
+          if (preferLk) addQuery('[PRODUK LK] Rolade Ayam');
+        } else if (targetLower.includes('sapi') || fallbackLower.includes('sapi')) {
+          addQuery('Rolade Sapi');
+          if (preferLk) addQuery('[PRODUK LK] Rolade Sapi');
+        }
+      }
+
+      // 3. Fallback generic queries
       const normalizedExact = exactCleanName.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
-      if (normalizedExact && !searchQueries.includes(normalizedExact)) searchQueries.push(normalizedExact);
-
-      // Tier 3: Core tokens with LK
-      if (preferLk && normalizedCore && !searchQueries.includes(`${normalizedCore} LK`)) {
-        searchQueries.push(`${normalizedCore} LK`);
-      }
-
-      // Tier 4: Core query
-      if (normalizedCore && !searchQueries.includes(normalizedCore)) searchQueries.push(normalizedCore);
-
-      if (coreTokens.length > 1) {
-        const twoWords = coreTokens.slice(0, 2).join(' ').replace(/rollade/gi, 'Rolade');
-        if (!searchQueries.includes(twoWords)) searchQueries.push(twoWords);
+      addQuery(normalizedExact);
+      const normalizedCore = coreQuery.replace(/rollade/gi, 'Rolade').replace(/\(.*?\)/g, '').trim();
+      if (normalizedCore) {
+        addQuery(normalizedCore);
+        if (preferLk) addQuery(`[PRODUK LK] ${normalizedCore}`);
       }
 
       let matchedItem = null;
@@ -1620,26 +1756,40 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           prodInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
           prodInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
-          // Poll up to 10 times (2.5s) per query
-          for (let attempt = 0; attempt < 10; attempt++) {
+          // Explicitly trigger jQuery UI autocomplete search if available
+          try {
+            if (window.jQuery) {
+              window.jQuery(prodInput).autocomplete('search', query);
+            }
+          } catch (_) {}
+
+          // Poll up to 14 times (3.5s) per query
+          for (let attempt = 0; attempt < 14; attempt++) {
             await sleep(250);
             dismissDiscardModal();
 
-            const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'))
+            const dropdownOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item, ul.ui-autocomplete li.ui-menu-item'))
               .filter(opt => {
                 const rect = opt.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
+                return rect.width > 0 && rect.height > 0 && opt.style.display !== 'none';
               });
 
             if (dropdownOptions.length > 0) {
               const scored = dropdownOptions.map(opt => ({
                 opt,
+                text: opt.innerText.trim(),
                 score: scoreCandidate(opt.innerText)
               })).filter(x => x.score > 0);
 
               scored.sort((a, b) => b.score - a.score);
               if (scored.length > 0) {
+                // If input is still actively loading autocomplete from server, give it a brief moment
+                if (prodInput.classList.contains('ui-autocomplete-loading') && attempt < 3) {
+                  await sleep(250);
+                  continue;
+                }
                 matchedItem = scored[0].opt;
+                logMessage(`🎯 Menemukan kecocokan: "${scored[0].text}" (Skor: ${scored[0].score})`);
                 break;
               }
             }
@@ -1647,11 +1797,22 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         }
 
         if (matchedItem) {
-          logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 32)}...`);
+          logMessage(`✓ Memilih: ${matchedItem.innerText.trim().substring(0, 35)}...`);
           const link = matchedItem.querySelector('a') || matchedItem;
+          link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
           link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
           link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
           link.click();
+          matchedItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+          matchedItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          matchedItem.click();
+
+          try {
+            if (window.jQuery && window.jQuery(matchedItem).data('ui-autocomplete-item')) {
+              const itemData = window.jQuery(matchedItem).data('ui-autocomplete-item');
+              window.jQuery(prodInput).trigger(window.jQuery.Event('autocompleteselect', { item: itemData }));
+            }
+          } catch (_) {}
           
           // VERIFY Odoo onchange RPC finishes and updates description/price/uom
           logMessage(`⏳ Menunggu Odoo memuat data produk #${i + 1}...`);
