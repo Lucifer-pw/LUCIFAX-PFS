@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.1</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.2</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -506,7 +506,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   }
 
   // Helper: Wait until Odoo's network RPCs, loading overlays, and "Still loading..." are completely settled
-  async function waitForOdooRpcSettled(extraDelay = 800, maxWaitMs = 30000) {
+  async function waitForOdooRpcSettled(extraDelay = 400, maxWaitMs = 12000) {
     const startTime = Date.now();
     let lastLogTime = 0;
 
@@ -514,20 +514,20 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissOdooModals();
       const loading = isOdooLoading();
       if (!loading) {
-        break;
+        break; // Langsung lanjut begitu loading screen hilang!
       }
-      if (Date.now() - lastLogTime > 2500) {
+      if (Date.now() - lastLogTime > 2000) {
         logMessage('⏳ Odoo sedang proses server (Still loading...), menunggu jaringan selesai...');
         lastLogTime = Date.now();
       }
-      await sleep(350);
+      await sleep(150);
     }
-    await sleep(extraDelay);
+    await sleep(extraDelay); // Jeda aman singkat 0.4s agar rendering DOM Odoo tuntas
     dismissOdooModals();
   }
 
   // Helper to set Odoo Many2One / Many2Many autocomplete dropdown with robust polling & selection
-  async function setMany2OneField(fieldName, searchText, labelKeywords = [], exactMatch = false) {
+  async function setMany2OneField(fieldName, searchText, labelKeywords = [], exactMatch = false, targetMatchText = null) {
     if (!searchText) return false;
     const input = findFieldInput(fieldName, labelKeywords);
     if (!input) {
@@ -537,11 +537,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
     // Dismiss any existing open menus or modals first
     dismissOdooModals();
-    await waitForOdooRpcSettled(200);
+    await waitForOdooRpcSettled(150);
 
     input.focus();
     input.click();
-    await sleep(150);
+    await sleep(100);
     input.select();
     document.execCommand('selectAll', false, null);
     document.execCommand('delete', false, null);
@@ -551,10 +551,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
+    // Trigger jQuery UI autocomplete search directly if available
+    if (window.jQuery) {
+      try {
+        window.jQuery(input).autocomplete('search', searchText);
+      } catch (_) {}
+    }
+
     // Poll up to 16 times (4 seconds) for autocomplete dropdown menu to appear
     let matchedItem = null;
-    const searchLower = searchText.toLowerCase().trim();
-    const searchNormalized = searchLower.replace(/\s+/g, ' ');
+    const searchTarget = (targetMatchText || searchText).toLowerCase().trim();
+    const searchNormalized = searchTarget.replace(/\s+/g, ' ');
 
     for (let attempt = 0; attempt < 16; attempt++) {
       await sleep(250);
@@ -602,11 +609,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           }
         }
 
-        // 4. Fallback to first clean option if partial match allowed
-        if (!matchedItem && !exactMatch && cleanOptions.length > 0) {
-          matchedItem = cleanOptions[0];
-        }
-
+        // STRICT: NEVER fallback to cleanOptions[0] to prevent picking wrong tags like "Selesai"!
         if (matchedItem) break;
       }
     }
@@ -620,7 +623,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       link.click();
       
       // Wait for onchange partner / analytic account RPC to settle
-      await waitForOdooRpcSettled(1000);
+      await waitForOdooRpcSettled(500);
       return true;
     } else {
       // CRITICAL: NEVER press Enter! Pressing Enter triggers Odoo's "Do you want to create...?" dialog!
@@ -629,7 +632,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
-      await sleep(300);
+      await sleep(200);
       dismissOdooModals();
     }
     return false;
@@ -641,14 +644,38 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const container = document.querySelector(`div[name="${fieldName}"], [data-name="${fieldName}"], .o_field_many2manytags[name="${fieldName}"]`)
       || document.querySelector('.o_field_many2manytags');
     if (container) {
-      const existingBadges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
-      if (existingBadges.some(b => b.innerText.toLowerCase().includes(tagText.toLowerCase()))) {
+      // 1. Remove unwanted "Selesai" tag if it was accidentally attached
+      const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      for (const b of badges) {
+        if (b.innerText.toLowerCase().includes('selesai')) {
+          const delBtn = b.querySelector('.o_delete, .fa-times, .close, a, i');
+          if (delBtn) {
+            delBtn.click();
+            await sleep(250);
+          }
+        }
+      }
+
+      // 2. Check if target tag is already attached
+      const updatedBadges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      if (updatedBadges.some(b => b.innerText.toLowerCase().includes(tagText.toLowerCase()))) {
         logMessage(`✓ Tag [${tagText}] sudah terpasang.`);
         return true;
       }
     }
-    // Allow partial/normalized matching so whitespace or icons do not prevent selecting Joko Setiawan
-    return await setMany2OneField(fieldName, tagText, labelKeywords, false);
+
+    // Try full tag name first (e.g. "Joko Setiawan")
+    let success = await setMany2OneField(fieldName, tagText, labelKeywords, false, tagText);
+    
+    // If not found, try searching with short prefix (e.g. "Joko") which reliably lists "Joko Setiawan"
+    if (!success) {
+      const shortPrefix = tagText.split(' ')[0]; // "Joko"
+      if (shortPrefix && shortPrefix.toLowerCase() !== tagText.toLowerCase()) {
+        logMessage(`...Mencoba mencari tag dengan kata kunci: "${shortPrefix}"...`);
+        success = await setMany2OneField(fieldName, shortPrefix, labelKeywords, false, tagText);
+      }
+    }
+    return success;
   }
 
   // Helper to set plain text field
@@ -743,8 +770,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           ['customer', 'pelanggan']
         );
         logMessage('⏳ Menunggu Odoo memuat default alamat & pricelist...');
-        await waitForOdooRpcSettled(1500);
-        await sleep(500);
+        await waitForOdooRpcSettled(500);
 
         // 2. Delivery Address: cari Customer (misal MISTER SOSIS) via dropdown
         const deliveryTarget = p.cvSoDelivery || p.customerAlias || p.customerName;
@@ -755,21 +781,19 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
             deliveryTarget,
             ['delivery address', 'alamat pengiriman']
           );
-          await waitForOdooRpcSettled(1000);
-          await sleep(400);
+          await waitForOdooRpcSettled(400);
         }
 
         // 3. Masuk ke tab "Other Info"
         logMessage('3. Membuka tab Other Info...');
         clickTab('Other Info');
-        await sleep(600);
-        await waitForOdooRpcSettled(500);
+        await sleep(300);
+        await waitForOdooRpcSettled(300);
 
         // 4. Kolom Tag -> dropdown pilih "Joko Setiawan"
         logMessage('4. Mengisi Tags: "Joko Setiawan"...');
         await setTagsField('tag_ids', 'Joko Setiawan', ['tags', 'tag']);
-        await waitForOdooRpcSettled(800);
-        await sleep(400);
+        await waitForOdooRpcSettled(400);
 
         // 5. Kolom Analytic Account -> dropdown pilih "Jateng"
         logMessage('5. Mengisi Analytic Account: "Jateng"...');
@@ -778,14 +802,13 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           'Jateng',
           ['analytic account', 'akun analitis']
         );
-        await waitForOdooRpcSettled(1000);
-        await sleep(400);
+        await waitForOdooRpcSettled(400);
 
         // 6. Kembali ke tab "Order Lines"
         logMessage('6. Membuka tab Order Lines...');
         clickTab('Order Lines');
-        await sleep(600);
-        await waitForOdooRpcSettled(500);
+        await sleep(300);
+        await waitForOdooRpcSettled(300);
 
         // 7. Mengisi Produk / Item Barang (Wajib PRODUK LK, Dilarang PRODUK JADI)
         logMessage('7. Mengisi item produk CV SO (Harga PO/SO & [PRODUK LK])...');
