@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.9</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.0</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1024,28 +1024,23 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await setMany2OneField('partner_id', p.ptSoCustomer || `${p.customerAlias} (${p.customerName})`, ['customer', 'pelanggan']);
         await setMany2OneField('pricelist_id', 'PFS Customer (IDP)', ['pricelist', 'daftar harga']);
 
-        // 2. Tab Other Info (Gambar 2): Tags & Analytic Account
+        // 2. Tab Other Info (Gambar 2): Analytic Account -> "PFS-Jateng" (Tags dibiarkan kosong)
         logMessage('2. Membuka tab Other Info...');
         clickTab('Other Info');
         await sleep(300);
         await waitForOdooRpcSettled(300);
 
-        // Tags -> "Joko Setiawan"
-        logMessage('3. Mengisi Tags: "Joko Setiawan"...');
-        await setTagsField('tag_ids', 'Joko Setiawan', ['tags', 'tag']);
-        await waitForOdooRpcSettled(400);
-
-        // Analytic Account -> "Jateng"
-        logMessage('4. Mengisi Analytic Account: "Jateng"...');
+        // Analytic Account -> "PFS-Jateng"
+        logMessage('3. Mengisi Analytic Account: "PFS-Jateng"...');
         await setMany2OneField(
           'analytic_account_id',
-          'Jateng',
+          'PFS-Jateng',
           ['analytic account', 'akun analitis']
         );
         await waitForOdooRpcSettled(400);
 
         // 3. Kembali ke Order Lines
-        logMessage('5. Membuka tab Order Lines (Harga sebelum PPN, tanpa Taxes)...');
+        logMessage('4. Membuka tab Order Lines (Harga sebelum PPN, tanpa Taxes)...');
         clickTab('Order Lines');
         await sleep(300);
         await waitForOdooRpcSettled(300);
