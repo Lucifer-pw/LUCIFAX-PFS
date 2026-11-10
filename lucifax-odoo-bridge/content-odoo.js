@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.0</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.1</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -1024,14 +1024,19 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await setMany2OneField('partner_id', p.ptSoCustomer || `${p.customerAlias} (${p.customerName})`, ['customer', 'pelanggan']);
         await setMany2OneField('pricelist_id', 'PFS Customer (IDP)', ['pricelist', 'daftar harga']);
 
-        // 2. Tab Other Info (Gambar 2): Analytic Account -> "PFS-Jateng" (Tags dibiarkan kosong)
+        // 2. Tab Other Info: Tags -> "Joko Setiawan" & Analytic Account -> "PFS-Jateng"
         logMessage('2. Membuka tab Other Info...');
         clickTab('Other Info');
         await sleep(300);
         await waitForOdooRpcSettled(300);
 
+        // Tags -> "Joko Setiawan"
+        logMessage('3. Mengisi Tags: "Joko Setiawan"...');
+        await setTagsField('tag_ids', 'Joko Setiawan', ['tags', 'tag']);
+        await waitForOdooRpcSettled(400);
+
         // Analytic Account -> "PFS-Jateng"
-        logMessage('3. Mengisi Analytic Account: "PFS-Jateng"...');
+        logMessage('4. Mengisi Analytic Account: "PFS-Jateng"...');
         await setMany2OneField(
           'analytic_account_id',
           'PFS-Jateng',
@@ -1040,7 +1045,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await waitForOdooRpcSettled(400);
 
         // 3. Kembali ke Order Lines
-        logMessage('4. Membuka tab Order Lines (Harga sebelum PPN, tanpa Taxes)...');
+        logMessage('5. Membuka tab Order Lines (Harga sebelum PPN, Diskon Invoice, tanpa Taxes)...');
         clickTab('Order Lines');
         await sleep(300);
         await waitForOdooRpcSettled(300);
@@ -1275,7 +1280,25 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const formattedVal = typeof value === 'number'
       ? (value % 1 === 0 ? Math.round(value).toString() : Number(value.toFixed(2)).toString())
       : value.toString();
-    const cleanTarget = formattedVal.replace(/[.,\s]/g, '');
+    const cleanTarget = formattedVal.replace(/[.,\s%]/g, '');
+    const targetNum = typeof value === 'number' ? value : parseFloat(formattedVal.replace(',', '.'));
+    const isNumeric = !isNaN(targetNum);
+
+    function checkCellMatches(raw) {
+      if (!raw) return false;
+      const clean = raw.trim().replace(/[.,\s%]/g, '');
+      if (clean === cleanTarget || clean.includes(cleanTarget) || cleanTarget.includes(clean)) return true;
+      if (isNumeric) {
+        const numPart = raw.replace(/[^0-9.,]/g, '');
+        if (numPart) {
+          const parsed = parseFloat(numPart.replace(/,/g, ''));
+          if (!isNaN(parsed) && Math.abs(parsed - targetNum) < 0.05) return true;
+          const parsedId = parseFloat(numPart.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(parsedId) && Math.abs(parsedId - targetNum) < 0.05) return true;
+        }
+      }
+      return false;
+    }
 
     for (let attempt = 1; attempt <= timing.retries; attempt++) {
       dismissDiscardModal();
@@ -1297,8 +1320,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
 
       // Check if already contains the target value
-      const currentText = (cell.querySelector('input')?.value || cell.innerText || '').trim().replace(/[.,\s]/g, '');
-      if (currentText === cleanTarget) {
+      const currentRaw = (cell.querySelector('input')?.value || cell.innerText || '').trim();
+      if (checkCellMatches(currentRaw)) {
         logMessage(`✓ Kolom ${colName} [${formattedVal}] terverifikasi`);
         return true;
       }
@@ -1335,9 +1358,9 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const freshRows = getOrderLineRows();
       const freshRow = freshRows[rowIndex];
       const freshCell = freshRow ? (freshRow.querySelector(cellSelector) || findCellByColumnHeader(freshRow, headerKeywords, fieldName)) : null;
-      const verifiedVal = (freshCell?.querySelector('input')?.value || freshCell?.innerText || '').trim().replace(/[.,\s]/g, '');
+      const verifiedRaw = (freshCell?.querySelector('input')?.value || freshCell?.innerText || '').trim();
 
-      if (verifiedVal === cleanTarget || verifiedVal.includes(cleanTarget) || cleanTarget.includes(verifiedVal)) {
+      if (checkCellMatches(verifiedRaw)) {
         logMessage(`✓ Kolom ${colName} [${formattedVal}] tersimpan`);
         return true;
       }
@@ -2016,7 +2039,26 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         timing
       );
 
-      // 5. TAXES: In PT PO always 11%; in PT SO & CV SO Taxes must be EMPTY (no PPN / tax)!
+      // 5. DISCOUNT (%): In PT SO, follow invoice discount; in PT PO & CV SO, no discount
+      if (mode === 'PT_SO') {
+        const discVal = Number(item.discountPercent !== undefined && item.discountPercent !== null ? item.discountPercent : (item.discount || 0));
+        if (discVal > 0) {
+          logMessage(`✏️ Mengisi Diskon: ${discVal}%...`);
+          await setAndVerifyCell(
+            i,
+            'td[name="discount"], td[data-name="discount"]',
+            ['disc', 'discount', 'diskon'],
+            discVal,
+            'Discount (%)',
+            timing
+          );
+          await waitForOdooRpcSettled(300);
+        } else {
+          logMessage(`✓ Diskon baris ${i + 1}: 0%`);
+        }
+      }
+
+      // 6. TAXES: In PT PO always 11%; in PT SO & CV SO Taxes must be EMPTY (no PPN / tax)!
       if (isPtPo) {
         logMessage(`✏️ Mengisi Taxes: 11%...`);
         await setTaxesField(i, timing, '11%');
