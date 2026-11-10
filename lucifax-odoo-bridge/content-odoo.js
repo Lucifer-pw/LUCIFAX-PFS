@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.2</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.1.3</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -450,7 +450,8 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   function dismissOdooModals() {
     const modals = Array.from(document.querySelectorAll('.modal, .modal-dialog, [role="dialog"]'));
     for (const modal of modals) {
-      if (modal.offsetParent === null) continue;
+      const rect = modal.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0 || modal.style.display === 'none') continue;
       const text = modal.innerText.toLowerCase();
       // 1. "Record has been modified, your changes will be discarded" -> click Cancel
       if (text.includes('discarded') || text.includes('modified') || text.includes('diabaikan')) {
@@ -484,23 +485,29 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     // 1. Standard loading indicators & overlays
     const loadingIndicators = Array.from(document.querySelectorAll('.o_loading, .oe_loading, .o_spinner, .o_blockUI, .blockUI, div.ui-autocomplete-loading'));
     for (const el of loadingIndicators) {
-      if (el.offsetParent !== null && !el.classList.contains('d-none') && el.style.display !== 'none') {
-        return true;
+      if (!el.classList.contains('d-none') && el.style.display !== 'none') {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          return true;
+        }
       }
     }
     // 2. Check if "still loading" text exists in any visible element
-    const centerSpinners = Array.from(document.querySelectorAll('div, span, p')).filter(el => 
-      el.offsetParent !== null && el.children.length === 0 && (
-        el.innerText.toLowerCase().includes('still loading') ||
-        el.innerText.toLowerCase().includes('loading...')
-      )
-    );
+    const centerSpinners = Array.from(document.querySelectorAll('div, span, p')).filter(el => {
+      if (el.children.length > 0) return false;
+      const text = el.innerText.toLowerCase();
+      if (!text.includes('still loading') && !text.includes('loading...')) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && el.style.display !== 'none';
+    });
     if (centerSpinners.length > 0) return true;
 
     // 3. jQuery active network calls
-    if (window.jQuery && typeof window.jQuery.active === 'number' && window.jQuery.active > 0) {
-      return true;
-    }
+    try {
+      if (window.jQuery && typeof window.jQuery.active === 'number' && window.jQuery.active > 0) {
+        return true;
+      }
+    } catch (_) {}
 
     return false;
   }
@@ -526,7 +533,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     dismissOdooModals();
   }
 
-  // Helper to set Odoo Many2One / Many2Many autocomplete dropdown with robust polling & selection
+  // Helper to set Odoo Many2One autocomplete dropdown with robust polling & selection
   async function setMany2OneField(fieldName, searchText, labelKeywords = [], exactMatch = false, targetMatchText = null) {
     if (!searchText) return false;
     const input = findFieldInput(fieldName, labelKeywords);
@@ -548,15 +555,14 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     document.execCommand('insertText', false, searchText);
     input.value = searchText;
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
 
     // Trigger jQuery UI autocomplete search directly if available
-    if (window.jQuery) {
-      try {
+    try {
+      if (window.jQuery) {
         window.jQuery(input).autocomplete('search', searchText);
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     // Poll up to 16 times (4 seconds) for autocomplete dropdown menu to appear
     let matchedItem = null;
@@ -567,17 +573,27 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       await sleep(250);
       dismissOdooModals();
 
-      // Query ONLY visible dropdown menus currently rendered on screen
+      // Query ONLY visible dropdown menus currently rendered on screen using getBoundingClientRect
       const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
-        .filter(m => m.offsetParent !== null && m.style.display !== 'none');
+        .filter(m => {
+          const rect = m.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && m.style.display !== 'none';
+        });
       
       let options = [];
       if (visibleMenus.length > 0) {
         options = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item:not(.o_m2o_dropdown_option), .dropdown-item')));
+      } else {
+        options = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item:not(.o_m2o_dropdown_option), .o-autocomplete--dropdown-menu .dropdown-item'))
+          .filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          });
       }
 
       const cleanOptions = options.filter(opt => {
-        if (opt.offsetParent === null) return false;
+        const rect = opt.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return false;
         const t = opt.innerText.toLowerCase().trim();
         // NEVER pick create options to prevent opening unwanted dialogs!
         return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
@@ -609,7 +625,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           }
         }
 
-        // STRICT: NEVER fallback to cleanOptions[0] to prevent picking wrong tags like "Selesai"!
+        // STRICT: NEVER fallback to cleanOptions[0] to prevent picking wrong records!
         if (matchedItem) break;
       }
     }
@@ -621,14 +637,19 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
       link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       link.click();
+      matchedItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      matchedItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      matchedItem.click();
       
       // Wait for onchange partner / analytic account RPC to settle
       await waitForOdooRpcSettled(500);
       return true;
     } else {
-      // CRITICAL: NEVER press Enter! Pressing Enter triggers Odoo's "Do you want to create...?" dialog!
+      // CRITICAL: NEVER press Enter! Clear value before blur to prevent opening unwanted create dialog!
       logMessage(`⚠️ Pilihan "${searchText}" tidak muncul di dropdown [${fieldName}]. Menutup dropdown agar tidak membuat record baru.`);
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
@@ -638,44 +659,168 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     return false;
   }
 
-  // Helper to set Odoo Many2Many Tags (e.g. tag_ids: "Joko Setiawan")
+  // Dedicated Helper to set Odoo Many2Many Tags (tag_ids: "Joko Setiawan")
   async function setTagsField(fieldName, tagText, labelKeywords = ['tags', 'tag']) {
     if (!tagText) return false;
-    const container = document.querySelector(`div[name="${fieldName}"], [data-name="${fieldName}"], .o_field_many2manytags[name="${fieldName}"]`)
-      || document.querySelector('.o_field_many2manytags');
-    if (container) {
-      // 1. Remove unwanted "Selesai" tag if it was accidentally attached
+    dismissOdooModals();
+
+    // 1. Locate container
+    const container = document.querySelector(
+      `div[name="${fieldName}"], [data-name="${fieldName}"], .o_field_many2manytags[name="${fieldName}"], .o_field_widget[name="${fieldName}"]`
+    ) || document.querySelector('.o_field_many2manytags');
+
+    const targetNorm = tagText.toLowerCase().replace(/\s+/g, ' ').trim();
+    const targetTokens = targetNorm.split(' ').filter(t => t.length > 1);
+
+    // Helper: Purge unwanted tags (e.g. "Selesai" or anything not matching target)
+    async function purgeUnwantedTags() {
+      if (!container) return;
       const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
       for (const b of badges) {
-        if (b.innerText.toLowerCase().includes('selesai')) {
-          const delBtn = b.querySelector('.o_delete, .fa-times, .close, a, i');
-          if (delBtn) {
-            delBtn.click();
-            await sleep(250);
-          }
+        const text = b.innerText.toLowerCase().trim();
+        const isTarget = targetTokens.length > 0 && targetTokens.some(tok => text.includes(tok));
+        if (text.includes('selesai') || !isTarget) {
+          logMessage(`🧹 Menghapus tag tidak sesuai: "${b.innerText.trim()}"...`);
+          const delBtn = b.querySelector('.o_delete, .fa-times, .close, a, i, span:last-child') || b;
+          delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+          delBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          delBtn.click();
+          await sleep(250);
         }
       }
+    }
 
-      // 2. Check if target tag is already attached
-      const updatedBadges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
-      if (updatedBadges.some(b => b.innerText.toLowerCase().includes(tagText.toLowerCase()))) {
+    // Pre-clean: Remove any accidental "Selesai" tag before starting
+    await purgeUnwantedTags();
+
+    // Check if target tag is already attached
+    if (container) {
+      const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+      if (badges.some(b => b.innerText.toLowerCase().includes(targetNorm))) {
         logMessage(`✓ Tag [${tagText}] sudah terpasang.`);
         return true;
       }
     }
 
-    // Try full tag name first (e.g. "Joko Setiawan")
-    let success = await setMany2OneField(fieldName, tagText, labelKeywords, false, tagText);
-    
-    // If not found, try searching with short prefix (e.g. "Joko") which reliably lists "Joko Setiawan"
-    if (!success) {
-      const shortPrefix = tagText.split(' ')[0]; // "Joko"
-      if (shortPrefix && shortPrefix.toLowerCase() !== tagText.toLowerCase()) {
-        logMessage(`...Mencoba mencari tag dengan kata kunci: "${shortPrefix}"...`);
-        success = await setMany2OneField(fieldName, shortPrefix, labelKeywords, false, tagText);
+    // 2. Find input inside tags container
+    const input = (container && container.querySelector('input')) || findFieldInput(fieldName, labelKeywords);
+    if (!input) {
+      logMessage(`Input field [${fieldName}] tidak ditemukan.`);
+      return false;
+    }
+
+    // 3. Search strategies: try short keyword "Joko" first (most reliable in Odoo M2M), fallback to full name
+    const searchKeywords = ['Joko', tagText];
+    let matchedOption = null;
+
+    for (const kw of searchKeywords) {
+      if (matchedOption) break;
+      dismissOdooModals();
+
+      input.focus();
+      input.click();
+      await sleep(150);
+
+      // Clear existing input
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(50);
+
+      // Type keyword
+      input.value = kw;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: kw[kw.length - 1], bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: kw[kw.length - 1], bubbles: true }));
+
+      // Poll for autocomplete dropdown
+      for (let attempt = 0; attempt < 18; attempt++) {
+        await sleep(200);
+        dismissOdooModals();
+
+        // Find visible menus using getBoundingClientRect
+        const visibleMenus = Array.from(document.querySelectorAll('ul.ui-autocomplete, .o-autocomplete--dropdown-menu'))
+          .filter(m => {
+            const rect = m.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && m.style.display !== 'none';
+          });
+
+        let menuOptions = [];
+        if (visibleMenus.length > 0) {
+          menuOptions = visibleMenus.flatMap(m => Array.from(m.querySelectorAll('.ui-menu-item, .dropdown-item')));
+        } else {
+          menuOptions = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item, .o-autocomplete--dropdown-menu .dropdown-item'))
+            .filter(el => {
+              const rect = el.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0;
+            });
+        }
+
+        const validOptions = menuOptions.filter(opt => {
+          const rect = opt.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return false;
+          const t = opt.innerText.toLowerCase().trim();
+          return !t.startsWith('create ') && !t.startsWith('buat ') && !t.includes('search more') && !t.includes('cari lebih banyak');
+        });
+
+        if (validOptions.length > 0) {
+          // Priority 1: Exact match
+          matchedOption = validOptions.find(opt => {
+            const optNorm = opt.innerText.toLowerCase().replace(/\s+/g, ' ').trim();
+            return optNorm === targetNorm;
+          });
+
+          // Priority 2: Contains both "joko" and "setiawan"
+          if (!matchedOption) {
+            matchedOption = validOptions.find(opt => {
+              const optNorm = opt.innerText.toLowerCase().replace(/\s+/g, ' ').trim();
+              return optNorm.includes(targetNorm) || (optNorm.includes('joko') && optNorm.includes('setiawan'));
+            });
+          }
+
+          if (matchedOption) break;
+        }
       }
     }
-    return success;
+
+    if (matchedOption) {
+      logMessage(`✓ Memilih Tag: "${matchedOption.innerText.trim()}"`);
+      const link = matchedOption.querySelector('a') || matchedOption;
+      link.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }));
+      link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      link.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      link.click();
+      matchedOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      matchedOption.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      matchedOption.click();
+
+      await sleep(350);
+      await waitForOdooRpcSettled(400);
+
+      // Post-clean to guarantee "Selesai" was not attached
+      await purgeUnwantedTags();
+
+      // Final check
+      if (container) {
+        const badges = Array.from(container.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'));
+        if (badges.some(b => b.innerText.toLowerCase().includes('joko'))) {
+          logMessage(`✓ Berhasil memasang Tag "${tagText}"!`, true);
+          return true;
+        }
+      }
+      return true;
+    } else {
+      logMessage(`⚠️ Tag "${tagText}" tidak ditemukan di dropdown autocomplete. Menutup dropdown.`);
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      await sleep(200);
+      dismissOdooModals();
+      await purgeUnwantedTags();
+      return false;
+    }
   }
 
   // Helper to set plain text field
