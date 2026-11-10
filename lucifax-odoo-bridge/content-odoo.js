@@ -279,9 +279,25 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     }
   }
 
+  // Safe wrapper for chrome.runtime.sendMessage to prevent "Extension context invalidated" errors
+  function safeSendMessage(message, callback) {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime && chrome.runtime.lastError) {
+            // Silently ignore context invalidation
+          }
+          if (callback) callback(response);
+        });
+        return;
+      }
+    } catch (_) {}
+    if (callback) callback(null);
+  }
+
   // Check storage on load
   function loadStoredPayload() {
-    chrome.runtime.sendMessage({ action: 'GET_INVOICE_PAYLOAD' }, (response) => {
+    safeSendMessage({ action: 'GET_INVOICE_PAYLOAD' }, (response) => {
       if (response && response.payload && response.payload.invoiceNo) {
         updateInvoiceBox(response.payload);
       } else {
@@ -326,7 +342,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const jsonStr = text.substring(text.indexOf('LUCIFAX_ODOO_PAYLOAD:') + 'LUCIFAX_ODOO_PAYLOAD:'.length).trim();
       const payload = JSON.parse(jsonStr);
       updateInvoiceBox(payload);
-      chrome.runtime.sendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
+      safeSendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
       if (manualTrigger) logMessage(`Data Invoice #${payload.invoiceNo} berhasil dimuat!`, true);
       return true;
     } catch (e) {
