@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.5</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.6</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -850,17 +850,24 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       matchedOption.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
       matchedOption.click();
 
-      // Trigger jQuery UI autocompleteselect on live input
-      try {
-        if (window.jQuery && currentLiveInput) {
-          const itemData = window.jQuery(matchedOption).data('ui-autocomplete-item')
-                        || window.jQuery(matchedOption).data('item.autocomplete')
-                        || window.jQuery(clickEl).data('ui-autocomplete-item');
-          if (itemData) {
-            window.jQuery(currentLiveInput).trigger(window.jQuery.Event('autocompleteselect', { item: itemData }));
+      await sleep(150);
+      const postClickContainer = getTagContainer();
+      const tagAlreadySelected = postClickContainer && Array.from(postClickContainer.querySelectorAll('.badge, .o_tag, .badge-pill, .o_badge'))
+        .some(b => b.innerText.toLowerCase().includes('joko'));
+
+      // If click didn't trigger selection, fallback to jQuery UI autocompleteselect
+      if (!tagAlreadySelected) {
+        try {
+          if (window.jQuery && currentLiveInput) {
+            const itemData = window.jQuery(matchedOption).data('ui-autocomplete-item')
+                          || window.jQuery(matchedOption).data('item.autocomplete')
+                          || window.jQuery(clickEl).data('ui-autocomplete-item');
+            if (itemData) {
+              window.jQuery(currentLiveInput).trigger(window.jQuery.Event('autocompleteselect', { item: itemData }));
+            }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
       await sleep(350);
       await waitForOdooRpcSettled(400);
@@ -1359,7 +1366,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     function checkCellMatches(raw) {
       if (!raw) return false;
       const clean = raw.trim().replace(/[.,\s%]/g, '');
-      if (clean === cleanTarget || clean.includes(cleanTarget) || cleanTarget.includes(clean)) return true;
+      if (clean === cleanTarget) return true;
       if (isNumeric) {
         const numPart = raw.replace(/[^0-9.,]/g, '');
         if (numPart) {
@@ -1368,8 +1375,9 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           const parsedId = parseFloat(numPart.replace(/\./g, '').replace(',', '.'));
           if (!isNaN(parsedId) && Math.abs(parsedId - targetNum) < 0.05) return true;
         }
+        return false;
       }
-      return false;
+      return clean.includes(cleanTarget);
     }
 
     for (let attempt = 1; attempt <= timing.retries; attempt++) {
