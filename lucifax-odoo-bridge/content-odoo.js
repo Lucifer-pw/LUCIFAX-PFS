@@ -64,8 +64,9 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           padding: 8px 10px;
           margin-bottom: 12px;
         ">
-          <div id="lucifax-invoice-status" style="color: #94A3B8; font-size: 11px;">
-            Memuat data transaksi...
+          <div id="lucifax-invoice-status" style="color: #94A3B8; font-size: 11px; line-height: 1.4;">
+            Belum ada transaksi dipilih.<br/>
+            Klik <b>[Siapkan ke Odoo]</b> di Lucifax PFS.
           </div>
         </div>
 
@@ -127,16 +128,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
         <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
           <button id="btn-paste-clipboard" style="
-            background: transparent;
-            border: 1px dashed #64748B;
-            color: #94A3B8;
+            background: #1E293B;
+            border: 1px solid #38BDF8;
+            color: #38BDF8;
             border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 10.5px;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: bold;
             cursor: pointer;
-          ">📋 Ambil dari Clipboard</button>
+          ">📋 Ambil / Tempel (Ctrl+V)</button>
           
-          <span style="font-size: 10px; color: #64748B;">Mode: Draft Only (No Auto-Save)</span>
+          <span style="font-size: 10px; color: #64748B;">Mode: Draft Only</span>
         </div>
 
         <div id="lucifax-log" style="
@@ -239,32 +241,73 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   // Check storage on load
   function loadStoredPayload() {
     chrome.runtime.sendMessage({ action: 'GET_INVOICE_PAYLOAD' }, (response) => {
-      if (response && response.payload) {
+      if (response && response.payload && response.payload.invoiceNo) {
         updateInvoiceBox(response.payload);
       } else {
+        updateInvoiceBox(null);
         pasteFromClipboard(false);
       }
     });
   }
 
+  // Helper to read clipboard text in both HTTPS and HTTP contexts
+  async function readClipboardText() {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) return text;
+      } catch (_) {}
+    }
+
+    try {
+      const ta = document.createElement('textarea');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      document.execCommand('paste');
+      const val = ta.value;
+      document.body.removeChild(ta);
+      if (val) return val;
+    } catch (_) {}
+
+    return null;
+  }
+
+  function applyPayloadText(text, manualTrigger = false) {
+    if (!text || !text.includes('LUCIFAX_ODOO_PAYLOAD:')) {
+      if (manualTrigger) logMessage('Data tidak valid / tidak ada format Lucifax!', false, true);
+      return false;
+    }
+    try {
+      const jsonStr = text.substring(text.indexOf('LUCIFAX_ODOO_PAYLOAD:') + 'LUCIFAX_ODOO_PAYLOAD:'.length).trim();
+      const payload = JSON.parse(jsonStr);
+      updateInvoiceBox(payload);
+      chrome.runtime.sendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
+      if (manualTrigger) logMessage(`Data Invoice #${payload.invoiceNo} berhasil dimuat!`, true);
+      return true;
+    } catch (e) {
+      if (manualTrigger) logMessage('Gagal parse data: ' + e.message, false, true);
+      return false;
+    }
+  }
+
   // Read clipboard as fallback / cross-profile sync
   async function pasteFromClipboard(manualTrigger = true) {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && text.includes('LUCIFAX_ODOO_PAYLOAD:')) {
-        const jsonStr = text.substring(text.indexOf('LUCIFAX_ODOO_PAYLOAD:') + 'LUCIFAX_ODOO_PAYLOAD:'.length).trim();
-        const payload = JSON.parse(jsonStr);
-        if (!currentPayload || currentPayload.timestamp !== payload.timestamp || currentPayload.invoiceNo !== payload.invoiceNo) {
-          updateInvoiceBox(payload);
-          chrome.runtime.sendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
-          if (manualTrigger) logMessage('Data invoice berhasil dimuat dari clipboard!', true);
-        }
-      } else if (manualTrigger) {
-        logMessage('Clipboard tidak berisi format data Lucifax!', false, true);
-      }
-    } catch (e) {
-      if (manualTrigger) logMessage('Izin clipboard ditolak: ' + e.message, false, true);
+    const text = await readClipboardText();
+    if (text && applyPayloadText(text, manualTrigger)) {
+      return true;
     }
+
+    if (manualTrigger) {
+      const manual = prompt('Silakan tempelkan data (tekan Ctrl+V lalu Enter):');
+      if (manual && applyPayloadText(manual, true)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Sleep utility
@@ -491,6 +534,15 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       pasteFromClipboard(false);
+    }
+  });
+
+  // Listen for direct Ctrl+V paste on the page
+  document.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text');
+    if (text && text.includes('LUCIFAX_ODOO_PAYLOAD:')) {
+      e.preventDefault();
+      applyPayloadText(text, true);
     }
   });
 
