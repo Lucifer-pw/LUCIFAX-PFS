@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Lucifax PFS - Odoo ERP Auto-Fill Assistant",
-  "version": "1.2.9",
-  "description": "Asisten pintar pengisi formulir Odoo ERP (PT PO, PT SO, CV SO) secara otomatis dari transaksi Lucifax PFS.",
+  "name": "L.O.R.A - Lucifax Odoo Robotic Assistant",
+  "version": "1.2.10",
+  "description": "L.O.R.A (Lucifax Odoo Robotic Assistant) - Robot RPA pintar pengisi formulir Odoo ERP (PT PO, PT SO, CV SO) secara otomatis dari transaksi Lucifax PFS.",
   "permissions": [
     "storage",
     "clipboardRead",
@@ -38,7 +38,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Lucifax Odoo Assistant",
+    "default_title": "L.O.R.A (Lucifax Odoo Robotic Assistant)",
     "default_icon": "icon.png"
   }
 }

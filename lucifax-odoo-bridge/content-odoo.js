@@ -1,5 +1,5 @@
 // Content script running on Odoo ERP (http://erp.fivafood.co.id:8069)
-console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
+console.log('[Lucifax-Odoo] L.O.R.A (Lucifax Odoo Robotic Assistant) loaded on Odoo ERP');
 
 (function() {
   let currentPayload = null;
@@ -14,7 +14,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       position: fixed;
       top: 65px;
       right: 20px;
-      width: 320px;
+      width: 330px;
       background: #0F172A;
       color: #F8FAFC;
       border: 1.5px solid #38BDF8;
@@ -39,8 +39,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         user-select: none;
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.9</strong>
+          <span style="font-size: 18px; line-height: 1;">⚡</span>
+          <div style="display: flex; flex-direction: column; line-height: 1.2;">
+            <strong style="color: #38BDF8; font-size: 13.5px; font-weight: 800; letter-spacing: 0.5px;">L.O.R.A</strong>
+            <span style="color: #94A3B8; font-size: 9.5px; font-weight: normal; margin-top: 1px;">(Lucifax Odoo Robotic Assistant) v.1.2.10</span>
+          </div>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -229,7 +232,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       isMinimized = !isMinimized;
       body.style.display = isMinimized ? 'none' : 'block';
       toggleBtn.innerText = isMinimized ? '+' : '−';
-      widget.style.width = isMinimized ? '200px' : '320px';
+      widget.style.width = isMinimized ? '220px' : '330px';
     });
 
     // Button & input event listeners
