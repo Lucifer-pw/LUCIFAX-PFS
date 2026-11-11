@@ -417,6 +417,19 @@ class FirebaseAdapter {
     const upperOcr = (rawOcrText || '').toUpperCase();
 
     try {
+      // 0. ENGINE SELF-LEARNING (ESL): Ambil memori aturan yang pernah dipelajari
+      let learnedRules = [];
+      try {
+        if (this.mode === 'admin' && this.db) {
+          const rulesSnap = await this.db.collection('ai_knowledge_rules').where('type', '==', 'customer_alias').get();
+          learnedRules = rulesSnap.docs.map(d => d.data());
+        } else if (this.mode === 'client' && this.clientDb) {
+          const { collection, query, where, getDocs } = this.clientSdk;
+          const rulesSnap = await getDocs(query(collection(this.clientDb, 'ai_knowledge_rules'), where('type', '==', 'customer_alias')));
+          learnedRules = rulesSnap.docs.map(d => d.data());
+        }
+      } catch (_) {}
+
       const getInitials = (str) => {
         return str
           .replace(/[^A-Za-z0-9\s]/g, ' ')
@@ -430,6 +443,20 @@ class FirebaseAdapter {
       const isNameMatched = (toko, hint) => {
         if (!toko) return false;
         const cleanToko = toko.toUpperCase().trim();
+
+        // 0. Cek Engine Self-Learning (ESL) memory rules
+        for (const rule of learnedRules) {
+          const kw = (rule.keyword || '').toUpperCase().trim();
+          const target = (rule.mappedValue || '').toUpperCase().trim();
+          if (kw.length >= 3 && target.length >= 3) {
+            if (upperOcr.includes(kw) || cleanHint.includes(kw)) {
+              if (cleanToko.includes(target) || target.includes(cleanToko)) {
+                console.log(`[ESL RULE HIT] 🧠 Pola terpelajar cocok: "${kw}" -> "${target}" pada Toko "${cleanToko}"`);
+                return true;
+              }
+            }
+          }
+        }
 
         // 1. Cek langsung teks OCR struk apakah mengandung nama toko atau alias/pemilik (misal: "Wimbo Wiek Kustanto" / "LG FF")
         if (upperOcr) {

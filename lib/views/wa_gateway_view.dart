@@ -353,11 +353,30 @@ class _WaGatewayViewState extends State<WaGatewayView> {
     return RegExp(r'\b(revisi|susulan|tambahan?|tmbh|ralat|kurangi?|batalin?|ganti)\b', caseSensitive: false).hasMatch(text);
   }
 
+  bool _isBankSlipLike(IncomingPoChat chat) {
+    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') return true;
+    final text = ('${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''}').toUpperCase();
+    return text.contains('SETORAN TUNAI') ||
+           text.contains('BUKTI SETORAN') ||
+           text.contains('SETOR TUNAI') ||
+           text.contains('PENYETOR') ||
+           text.contains('TELLER') ||
+           text.contains('M-TRANSFER') ||
+           text.contains('TRANSFER DANA') ||
+           text.contains('TRANSAKSI BERHASIL') ||
+           text.contains('BUKTI TRANSAKSI') ||
+           text.contains('REKENING PENERIMA') ||
+           text.contains('PUTRA FIVA') ||
+           text.contains('UTRA FIVA') ||
+           text.contains('2306039099') ||
+           text.contains('5306039099');
+  }
+
   void _checkAndAutoProcess(List<IncomingPoChat> chats, WaAutoPoSettings settings) {
     // 1. Auto-PO untuk pesanan teks (hanya jika autoPoEnabled aktif)
     if (settings.autoPoEnabled) {
       for (var chat in chats) {
-        if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP' || chat.messageType == 'BARANG_DATANG') continue;
+        if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP' || chat.messageType == 'BARANG_DATANG' || _isBankSlipLike(chat)) continue;
 
         // PENTING: Auto-PO HANYA memproses pesan yang benar-benar terdeteksi sebagai ORDER_PO!
         // Jangan auto-proses CASUAL_CHAT, konfirmasi transfer/bayar, atau obrolan santai!
@@ -2689,17 +2708,88 @@ Kirim besok pagi ya pak bc''';
       await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
         'status': 'processed',
         'isPaymentApplied': true,
+        'messageType': 'TRANSFER_SLIP',
         'matchedInvoiceNo': invClean,
         'isPartialPayment': !willBeLunas,
         'remainingAmount': remainingAfter,
         'processedAt': FieldValue.serverTimestamp(),
       });
 
+      // 5. 🧠 ENGINE SELF-LEARNING (ESL): Pelajari pola penyetor / kata kunci baru ke ai_knowledge_rules
+      String learnedClue = '';
+      try {
+        final clues = <String>{};
+        final info = chat.transferInfo ?? {};
+
+        final senderSlip = (info['senderNameFromSlip'] ?? '').toString().trim();
+        if (senderSlip.isNotEmpty && senderSlip.length >= 3) clues.add(senderSlip);
+
+        final hint = (info['customerHint'] ?? '').toString().trim();
+        if (hint.isNotEmpty && hint.length >= 3) clues.add(hint);
+
+        final berita = (info['berita'] ?? '').toString().trim();
+        if (berita.isNotEmpty && berita.length >= 4) {
+          final cleanBerita = berita.replaceAll(RegExp(r'\b(dari|ke|transfer|pembayaran|bi-fast|an)\b', caseSensitive: false), '').trim();
+          if (cleanBerita.length >= 3) clues.add(cleanBerita);
+        }
+
+        // Ambil nama perusahaan (CV / PT / UD / TOKO) dari teks OCR atau pesan
+        final rawOcr = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''} ${info['rawOcrText'] ?? ''}';
+        final coMatches = RegExp(r'\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 ]{3,30})', caseSensitive: false).allMatches(rawOcr);
+        for (final m in coMatches) {
+          final co = m.group(0)!.trim();
+          final up = co.toUpperCase();
+          if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA') && co.length >= 4) {
+            clues.add(co);
+          }
+        }
+
+        // Ambil ID / No Rek Penyetor (misal 0979022222)
+        final idMatch = RegExp(r'(?:No\.?\s*ID|Rek|Nyetor)\s*[:=.\s]+([0-9]{5,15})', caseSensitive: false).firstMatch(rawOcr);
+        if (idMatch != null) {
+          final penId = idMatch.group(1)!.trim();
+          if (penId.length >= 5) clues.add(penId);
+        }
+
+        final rulesCol = FirebaseFirestore.instance.collection('ai_knowledge_rules');
+        for (final clue in clues) {
+          final cleanClue = clue.toUpperCase().trim();
+          if (cleanClue.isEmpty || cleanClue.length < 3 || cleanClue == custName.toUpperCase()) continue;
+
+          final existingSnap = await rulesCol
+              .where('type', isEqualTo: 'customer_alias')
+              .where('keyword', isEqualTo: cleanClue)
+              .limit(1)
+              .get();
+
+          if (existingSnap.docs.isEmpty) {
+            await rulesCol.add({
+              'type': 'customer_alias',
+              'keyword': cleanClue,
+              'mappedValue': custName,
+              'targetId': trData['customerId'] ?? '',
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedBy': 'ESL_LEARNER',
+              'metadata': {
+                'sourceSlip': info['bank'] ?? 'TRANSFER',
+                'sourceInvoice': invClean,
+                'learnedAt': DateTime.now().toIso8601String(),
+              }
+            });
+            learnedClue = cleanClue;
+            debugPrint('[ESL LEARNER] 🧠 Pola baru dipelajari: "$cleanClue" -> "$custName"');
+          }
+        }
+      } catch (eslErr) {
+        debugPrint('[ESL LEARNER WARNING] $eslErr');
+      }
+
       if (mounted) {
+        final eslMsg = learnedClue.isNotEmpty ? '\n🧠 [ESL] Pola transfer "$learnedClue" otomatis disimpan ke memori AI.' : '';
         if (willBeLunas) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🎉 Pembayaran Faktur #$invClean ($custName) LUNAS PENUH! Bukti transfer tersimpan.'),
+              content: Text('🎉 Pembayaran Faktur #$invClean ($custName) LUNAS PENUH! Bukti transfer tersimpan.$eslMsg'),
               backgroundColor: const Color(0xFF059669),
               duration: const Duration(seconds: 4),
             ),
@@ -2707,7 +2797,7 @@ Kirim besok pagi ya pak bc''';
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('💳 Pembayaran Cicilan ${currencyFormatter.format(effectivePay)} dicatat ke Faktur #$invClean ($custName). Sisa Tagihan: ${currencyFormatter.format(remainingAfter)}'),
+              content: Text('💳 Pembayaran Cicilan ${currencyFormatter.format(effectivePay)} dicatat ke Faktur #$invClean ($custName). Sisa Tagihan: ${currencyFormatter.format(remainingAfter)}$eslMsg'),
               backgroundColor: const Color(0xFF0284C7),
               duration: const Duration(seconds: 4),
             ),
@@ -2824,9 +2914,22 @@ Kirim besok pagi ya pak bc''';
   }
 
   Future<void> _showLinkToInvoiceDialog(BuildContext context, IncomingPoChat chat) async {
+    String detectedHint = (chat.transferInfo?['customerHint'] ?? '').toString();
+    if (detectedHint.isEmpty) {
+      final allText = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''}';
+      final coMatch = RegExp(r'\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 ]{3,30})', caseSensitive: false).firstMatch(allText);
+      if (coMatch != null) {
+        final co = coMatch.group(0)!.trim();
+        final up = co.toUpperCase();
+        if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA')) {
+          detectedHint = co;
+        }
+      }
+    }
+
     final initialQuery = (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty)
         ? chat.matchedInvoiceNo!
-        : (chat.transferInfo?['customerHint'] ?? '').toString();
+        : detectedHint;
     final searchCtrl = TextEditingController(text: initialQuery);
     String selectedInv = chat.matchedInvoiceNo ?? '';
     final double targetAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
@@ -4511,7 +4614,18 @@ Kirim besok pagi ya pak bc''';
                         label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
                       ),
                       const SizedBox(width: 8),
-                      if (_isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!))) ...[
+                      if (chat.hasImage && _isBankSlipLike(chat)) ...[
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0284C7),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _showLinkToInvoiceDialog(context, chat),
+                          icon: const Icon(Icons.link_rounded, color: Colors.white, size: 16),
+                          label: const Text('🔗 Tautkan ke Faktur', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                      ] else if (_isRevisionChat(chat.messageText) || (chat.caption != null && _isRevisionChat(chat.caption!))) ...[
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFD97706),

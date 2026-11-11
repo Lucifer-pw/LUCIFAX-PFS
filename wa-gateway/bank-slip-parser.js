@@ -35,7 +35,7 @@ function parseBankReceipt(rawText) {
   }
 
   // Bank name indicators
-  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051') || upper.includes('M-TRANSFER') || upper.includes('M-BCA') || upper.includes('M TRANSFER') || upper.includes('2306039099');
+  const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051') || upper.includes('M-TRANSFER') || upper.includes('M-BCA') || upper.includes('M TRANSFER') || upper.includes('2306039099') || upper.includes('23060') || upper.includes('5306039099') || upper.includes('PURBALINGGA');
   const isMandiri = upper.includes('MANDIRI') || upper.includes('LIVIN');
   const isBri = upper.includes('BRI') || upper.includes('BRIMO');
   const isBni = upper.includes('BNI') || upper.includes('WONDR');
@@ -43,6 +43,9 @@ function parseBankReceipt(rawText) {
   // E-banking / mutasi indicators
   const isEBanking = upper.includes('E-BANKING') || upper.includes('TRSF') || upper.includes('MUTASI') || upper.includes('REKENING KORAN');
   const isFivaRelated = upper.includes('FIVA') || upper.includes('SEJAHTE') || upper.includes('TITIP INV');
+
+  // Teller / slip setoran fisik indicators
+  const isTellerSlip = upper.includes('BUKTI SETORAN') || upper.includes('SETORAN TUNAI') || upper.includes('SETOR TUNAI') || upper.includes('PENYETOR') || upper.includes('NAMA PENYETOR') || upper.includes('NYETOR') || upper.includes('TELLER') || (upper.includes('SETOR') && (isBca || isFivaRelated));
 
   // Transfer receipt indicator keywords
   const receiptKeywords = [
@@ -54,17 +57,25 @@ function parseBankReceipt(rawText) {
     'BERHASIL',
     'NOMOR REFERENSI',
     'NO. REFERENSI',
+    'OFARENSi',
     'REKENING TUJUAN',
     'NAMA PENERIMA',
     'DETAIL TRANSAKSI',
     '2306039099', // Rekening BCA PT Putra Fiva Sejahtera
+    '5306039099', // Variasi OCR rekening
     'TRSF E-BANKING',
     'TITIP INV',
     'MUTASI',
     'M-TRANSFER',
     'M-BCA',
     'M TRANSFER',
-    'BIAYA BONGKAR'
+    'BIAYA BONGKAR',
+    'SETORAN TUNAI',
+    'BUKTI SETORAN',
+    'SETOR TUNAI',
+    'PENYETOR',
+    'TELLER',
+    'BEBAS BIAYA ADM'
   ];
 
   let keywordHits = 0;
@@ -73,17 +84,22 @@ function parseBankReceipt(rawText) {
   }
 
   // PT Fiva identity counts at most 1 hit (prevent duplicate matching)
-  if (upper.includes('PUTRA FIVA') || upper.includes('FIVA SEJAHTERA')) {
+  if (upper.includes('PUTRA FIVA') || upper.includes('UTRA FIVA') || upper.includes('FIVA SEJAHTERA')) {
     keywordHits++;
   }
 
   // Must hit at least 2 bank receipt indicators or 1 strong indicator with bank context
   const hasStrongIndicator =
     upper.includes('BUKTI TRANSAKSI') ||
+    upper.includes('BUKTI SETORAN') ||
+    upper.includes('SETORAN TUNAI') ||
+    upper.includes('SETOR TUNAI') ||
+    upper.includes('PENYETOR') ||
     upper.includes('TRANSFER DANA') ||
     upper.includes('TRSF E-BANKING') ||
     upper.includes('M-TRANSFER') ||
     upper.includes('M-BCA') ||
+    (isTellerSlip && (isBca || isFivaRelated)) ||
     (isEBanking && isFivaRelated) ||
     (upper.includes('BERHASIL') && (isBca || isMandiri || isBri || isBni));
 
@@ -106,6 +122,8 @@ function parseBankReceipt(rawText) {
     /(?:Jumlah|Total|Nominal)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
     /(?:IDR|Rp\.?)\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?)/i,
     /(?:IDR|Rp\.?)\s*([0-9]+(?:[.,][0-9]{2})?)/i,
+    // Formatted currency with thousand separators e.g. "874,574.00" or "102,874,574.00" or "24.784.640"
+    /\b([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?)\b/,
     // Raw mutasi digits without comma e.g. "22000000.00"
     /\b([0-9]{5,10}\.[0-9]{2})\b/
   ];
@@ -219,6 +237,37 @@ function parseBankReceipt(rawText) {
     }
   }
 
+  // Extract Company Name if present in OCR (e.g. "CV HANA MAKMUR") - Prioritas karena lebih bersih
+  const coMatches = Array.from(clean.matchAll(/\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 ]{3,30})/gi));
+  for (const m of coMatches) {
+    const rawCo = m[0].trim();
+    const upCo = rawCo.toUpperCase();
+    if (!upCo.includes('FIVA') && !upCo.includes('SEJAHTERA') && !upCo.includes('PUTRA')) {
+      customerHint = rawCo;
+      senderNameFromSlip = rawCo;
+      break;
+    }
+  }
+
+  // Extract Penyetor from physical teller slip (e.g. "Nama Penyetor : CV HANA MAKMUR" / "Penyetor : ...")
+  if (!senderNameFromSlip) {
+    const penyetorMatch = clean.match(/(?:Nama\s*Penyetor|Penyetor|Rep\s*stor|Nyetor)\s*[:=»\-–—\s]+([^\r\n/]+)/i);
+    if (penyetorMatch) {
+      const rawP = penyetorMatch[1].replace(/[^a-zA-Z0-9\s]/g, ' ').trim();
+      if (rawP.length >= 3) {
+        senderNameFromSlip = rawP;
+        if (!customerHint) customerHint = rawP;
+      }
+    }
+  }
+
+  // Extract ID / No Rek Penyetor (e.g. "0979022222")
+  let penyetorId = '';
+  const idMatch = clean.match(/(?:No\.?\s*ID|Rek|Nyetor)\s*[:=.\s]+([0-9]{5,15})/i);
+  if (idMatch) {
+    penyetorId = idMatch[1].trim();
+  }
+
   // Extract Recipient if available (e.g. "Ke 8175683107\nARSANDY VIDYA GUPTA PRAD")
   let recipient = '';
   const keMatch = clean.match(/Ke\s+([0-9]+)\s*[\r\n]+([^\r\n]+)/i);
@@ -261,8 +310,9 @@ function parseBankReceipt(rawText) {
     rawDate = dateMatch[1].trim();
   }
 
-  // Validasi Mutlak: Struk transfer bank HARUS memiliki nominal > 0
-  if (amount <= 0) {
+  // Validasi Mutlak: Jika indikator bank/teller sangat kuat, JANGAN DIBALIKKAN KE BUKAN STRUK!
+  // Tetap tandai sebagai isBankSlip: true agar tidak pernah salah dibuatkan PO!
+  if (amount <= 0 && !hasStrongIndicator && !isTellerSlip) {
     return {
       isBankSlip: false,
       rawOcrText: clean
@@ -271,9 +321,12 @@ function parseBankReceipt(rawText) {
 
   return {
     isBankSlip: true,
+    slipType: isTellerSlip ? 'TELLER_DEPOSIT_SLIP' : 'TRANSFER_SLIP',
     bank: bankName,
-    amount,
+    amount: amount || 0,
+    isAmountUnclear: amount <= 0,
     refNumber,
+    penyetorId,
     berita,
     recipient,
     senderNameFromSlip,
