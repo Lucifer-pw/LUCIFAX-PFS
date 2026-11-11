@@ -4459,8 +4459,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       Customer? matchedCustomer;
       try {
         matchedCustomer = customerProvider.customers.firstWhere(
-          (c) => c.customerName.trim().toUpperCase() == tr.customerName.trim().toUpperCase() ||
-                 (tr.aliasName.isNotEmpty && c.aliasName.trim().toUpperCase() == tr.aliasName.trim().toUpperCase()),
+          (c) => (tr.customerId.isNotEmpty && c.id.trim().toUpperCase() == tr.customerId.trim().toUpperCase()) ||
+                 c.customerName.trim().toUpperCase() == tr.customerName.trim().toUpperCase() ||
+                 (tr.aliasName.isNotEmpty && c.aliasName.trim().toUpperCase() == tr.aliasName.trim().toUpperCase()) ||
+                 (c.aliasName.trim().toUpperCase() == tr.customerName.trim().toUpperCase()) ||
+                 (tr.aliasName.isNotEmpty && c.customerName.trim().toUpperCase() == tr.aliasName.trim().toUpperCase()),
         );
       } catch (_) {}
 

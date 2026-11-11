@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.7</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.8</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -285,12 +285,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     if (!box) return;
 
     if (payload && payload.invoiceNo) {
+      const allItems = payload.items || [];
+      const bonusItems = allItems.filter(it => it.isBonus === true || (it.productName && it.productName.toUpperCase().includes('(BONUS)')) || (it.priceUnit === 0 && (it.pricePoSo === 0 || !it.pricePoSo) && it.subtotal === 0));
+      const billableCount = allItems.length - bonusItems.length;
+      const bonusBadge = bonusItems.length > 0 ? ` <span style="color: #FBBF24; font-size: 10px;">(${bonusItems.length} Bonus Di-skip)</span>` : '';
+
       box.innerHTML = `
         <div style="font-weight: bold; color: #38BDF8; font-size: 12px; margin-bottom: 2px;">
           Invoice #${payload.invoiceNo} - ${payload.customerAlias || payload.customerName}
         </div>
         <div style="color: #CBD5E1; font-size: 11px;">
-          Kota: <b>${payload.city}</b> | Total: <b>${payload.items ? payload.items.length : 0} Item</b> (${payload.grandTotalCarton || 0} Ktn)
+          Kota: <b>${payload.city}</b> | Total: <b>${billableCount} Item</b> (${payload.grandTotalCarton || 0} Ktn)${bonusBadge}
         </div>
         <div style="color: #4ADE80; font-size: 10.5px; margin-top: 4px;">
           Rp ${Number(payload.grandTotal || 0).toLocaleString('id-ID')}
@@ -1074,6 +1079,19 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     const p = currentPayload;
     logMessage(`Memulai Auto-Fill ${mode} untuk Invoice #${p.invoiceNo}...`);
 
+    // Filter out BONUS items for PT PO, PT SO, and CV SO
+    const effectiveItems = (p.items || []).filter(it => {
+      const isBonus = it.isBonus === true || 
+                      (it.productName && it.productName.toUpperCase().includes('(BONUS)')) || 
+                      (it.priceUnit === 0 && (it.pricePoSo === 0 || !it.pricePoSo) && it.subtotal === 0);
+      return !isBonus;
+    });
+
+    const bonusCount = (p.items || []).length - effectiveItems.length;
+    if (bonusCount > 0) {
+      logMessage(`ℹ️ Terdeteksi ${bonusCount} barang BONUS (otomatis dilewati, tidak diinput ke Odoo).`);
+    }
+
     try {
       if (mode === 'PT_PO') {
         // PT PO: Requests for Quotation (Purchase)
@@ -1090,11 +1108,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await sleep(300);
 
         // Fill Items
-        const filled = await fillOrderLines(p.items, 'PT_PO');
-        if (filled === p.items.length) {
-          logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
+        const filled = await fillOrderLines(effectiveItems, 'PT_PO');
+        if (filled === effectiveItems.length) {
+          logMessage(`🎉 SELESAI! Semua baris (${filled}/${effectiveItems.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
         } else {
-          logMessage(`⚠️ Baru terisi ${filled} dari ${p.items.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
+          logMessage(`⚠️ Baru terisi ${filled} dari ${effectiveItems.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
         }
 
       } else if (mode === 'PT_SO') {
@@ -1130,11 +1148,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
         await waitForOdooRpcSettled(300);
 
         // 4. Fill Items
-        const filled = await fillOrderLines(p.items, 'PT_SO');
-        if (filled === p.items.length) {
-          logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
+        const filled = await fillOrderLines(effectiveItems, 'PT_SO');
+        if (filled === effectiveItems.length) {
+          logMessage(`🎉 SELESAI! Semua baris (${filled}/${effectiveItems.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
         } else {
-          logMessage(`⚠️ Baru terisi ${filled} dari ${p.items.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
+          logMessage(`⚠️ Baru terisi ${filled} dari ${effectiveItems.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
         }
 
       } else if (mode === 'CV_SO') {
@@ -1188,11 +1206,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
         // 7. Mengisi Produk / Item Barang (Wajib PRODUK LK, Dilarang PRODUK JADI)
         logMessage('7. Mengisi item produk CV SO (Harga PO/SO & [PRODUK LK])...');
-        const filled = await fillOrderLines(p.items, 'CV_SO');
-        if (filled === p.items.length) {
-          logMessage(`🎉 SELESAI! Semua baris (${filled}/${p.items.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
+        const filled = await fillOrderLines(effectiveItems, 'CV_SO');
+        if (filled === effectiveItems.length) {
+          logMessage(`🎉 SELESAI! Semua baris (${filled}/${effectiveItems.length}) terisi (Draft). Silakan periksa angka lalu klik SAVE.`, true);
         } else {
-          logMessage(`⚠️ Baru terisi ${filled} dari ${p.items.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
+          logMessage(`⚠️ Baru terisi ${filled} dari ${effectiveItems.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
         }
       }
 
@@ -1668,6 +1686,10 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       dismissOdooModals();
 
       const item = items[i];
+      if (item.isBonus === true || (item.productName && item.productName.toUpperCase().includes('(BONUS)'))) {
+        logMessage(`ℹ️ Melewati baris (${item.productName}) karena berstatus BONUS.`);
+        continue;
+      }
       // Full registered name from Master Barang (e.g. [PRODUK LK] BRS 13 PCS 500 g LK)
       const registeredOdooName = (item.odooProductName && item.odooProductName.trim().length > 0)
         ? item.odooProductName.trim()
