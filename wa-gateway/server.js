@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.3'; // v3.3.3 - Autonomous Termux Auto-PO Engine & Quoted Reply Context Recovery
+const GATEWAY_VERSION = '3.3.4'; // v3.3.4 - Auto-Match Bank Slips & Client SDK Firestore Query Fix
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

@@ -39,8 +39,13 @@ class FirebaseAdapter {
       const { 
         getFirestore, 
         doc, 
+        getDoc,
+        getDocs,
         setDoc, 
         collection, 
+        query,
+        where,
+        limit,
         addDoc, 
         onSnapshot, 
         serverTimestamp,
@@ -60,7 +65,20 @@ class FirebaseAdapter {
       const app = initializeApp(firebaseConfig);
       this.clientDb = getFirestore(app);
       this.clientAuth = getAuth(app);
-      this.clientSdk = { doc, setDoc, collection, addDoc, onSnapshot, serverTimestamp, updateDoc };
+      this.clientSdk = { 
+        doc, 
+        getDoc, 
+        getDocs, 
+        setDoc, 
+        collection, 
+        query, 
+        where, 
+        limit, 
+        addDoc, 
+        onSnapshot, 
+        serverTimestamp, 
+        updateDoc 
+      };
       this.mode = 'client';
 
       const email = process.env.FIREBASE_USER_EMAIL;
