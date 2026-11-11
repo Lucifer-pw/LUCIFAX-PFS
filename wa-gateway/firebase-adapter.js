@@ -449,41 +449,50 @@ class FirebaseAdapter {
       const exactAmountUnpaidList = [];
 
       // 1. PRIORITAS UTAMA: Periksa langsung koleksi transactions (sumber kebenaran nominal riil setelah revisi nota)
-      if (this.mode === 'admin') {
-        try {
+      try {
+        let trDocs = [];
+        if (this.mode === 'admin' && this.db) {
           const trSnap = await this.db.collection('transactions').get();
-          trSnap.forEach(doc => {
-            const d = doc.data();
-            const statusTransfer = (d.statusTransfer || '').toUpperCase();
-            if (statusTransfer === 'PAID') return; // Lewati yang sudah lunas
-
-            const noInvoice = String(d.invoiceNo || doc.id || '').replace(/\D/g, '');
-            const toko = (d.aliasName || d.customerName || '').toUpperCase();
-            const fullCust = (d.customerName || '').toUpperCase();
-            const fullAlias = (d.aliasName || '').toUpperCase();
-            const total = Number(d.grandTotal || 0) - Number(d.returnAmount || 0);
-
-            const amountDiff = Math.abs(total - amount);
-            const isAmountMatch = amountDiff <= 100;
-
-            if (isAmountMatch) {
-              const item = { noInvoice, toko, nominal: total, isLunas: false, docId: doc.id, fromTransaction: true };
-              exactAmountUnpaidList.push(item);
-
-              if (isNameMatched(toko, cleanHint) || isNameMatched(fullCust, cleanHint) || isNameMatched(fullAlias, cleanHint)) {
-                candidates.push(item);
-              }
-            }
-          });
-        } catch (trErr) {
-          console.warn('[MATCH TRANSACTIONS ERROR]:', trErr.message);
+          trDocs = trSnap.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+        } else if (this.mode === 'client' && this.clientDb) {
+          const { collection, getDocs } = this.clientSdk;
+          const trSnap = await getDocs(collection(this.clientDb, 'transactions'));
+          trDocs = trSnap.docs.map(doc => ({ id: doc.id, data: doc.data() }));
         }
+
+        trDocs.forEach(({ id, data: d }) => {
+          const statusTransfer = (d.statusTransfer || '').toUpperCase();
+          if (statusTransfer === 'PAID') return; // Lewati yang sudah lunas
+
+          const noInvoice = String(d.invoiceNo || id || '').replace(/\D/g, '');
+          const toko = (d.aliasName || d.customerName || '').toUpperCase();
+          const fullCust = (d.customerName || '').toUpperCase();
+          const fullAlias = (d.aliasName || '').toUpperCase();
+          const total = Number(d.grandTotal || 0) - Number(d.returnAmount || 0);
+
+          const amountDiff = Math.abs(total - amount);
+          const isAmountMatch = amountDiff <= 100;
+
+          if (isAmountMatch) {
+            const item = { noInvoice, toko, nominal: total, isLunas: false, docId: id, fromTransaction: true };
+            exactAmountUnpaidList.push(item);
+
+            if (isNameMatched(toko, cleanHint) || isNameMatched(fullCust, cleanHint) || isNameMatched(fullAlias, cleanHint)) {
+              candidates.push(item);
+            }
+          }
+        });
+      } catch (trErr) {
+        console.warn('[MATCH TRANSACTIONS ERROR]:', trErr.message);
       }
 
       // Fallback: Jika ada tepat 1 invoice belum lunas dengan nominal persis sama, gunakan sebagai match!
-      if (candidates.length === 0 && exactAmountUnpaidList.length === 1) {
-        console.log(`[AUTO-MATCH UNIQUE AMOUNT] 🎯 Hanya ada 1 faktur tertunggak (#${exactAmountUnpaidList[0].noInvoice} - ${exactAmountUnpaidList[0].toko}) dengan nominal Rp ${amount.toLocaleString('id-ID')}!`);
-        candidates.push(exactAmountUnpaidList[0]);
+      if (candidates.length === 0 && exactAmountUnpaidList.length > 0) {
+        const unpaidExact = exactAmountUnpaidList.filter(c => !c.isLunas);
+        if (unpaidExact.length === 1) {
+          console.log(`[AUTO-MATCH UNIQUE AMOUNT] 🎯 Hanya ada 1 faktur tertunggak (#${unpaidExact[0].noInvoice} - ${unpaidExact[0].toko}) dengan nominal Rp ${amount.toLocaleString('id-ID')}!`);
+          candidates.push(unpaidExact[0]);
+        }
       }
 
       // Jika berhasil dicocokkan via transactions, lakukan sinkronisasi otomatis ke receivables agar sinkron permanen
