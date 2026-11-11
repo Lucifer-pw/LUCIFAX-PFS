@@ -40,7 +40,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       ">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⚡</span>
-          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.8</strong>
+          <strong style="color: #38BDF8; font-size: 13px;">Lucifax Odoo Assistant v1.2.9</strong>
         </div>
         <div style="display: flex; gap: 6px;">
           <button id="lucifax-toggle-btn" style="
@@ -63,6 +63,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           border-radius: 8px;
           padding: 8px 10px;
           margin-bottom: 8px;
+          transition: all 0.35s ease;
         ">
           <div id="lucifax-invoice-status" style="color: #94A3B8; font-size: 11px; line-height: 1.4;">
             Belum ada transaksi dipilih.<br/>
@@ -277,10 +278,45 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     logBox.scrollTop = logBox.scrollHeight;
   }
 
+  let isAutoFillRunning = false;
+  function setButtonsRunningState(running, activeMode = null) {
+    isAutoFillRunning = running;
+    const poBtn = document.getElementById('btn-fill-pt-po');
+    const soBtn = document.getElementById('btn-fill-pt-so');
+    const cvBtn = document.getElementById('btn-fill-cv-so');
+    const pasteBtn = document.getElementById('btn-paste-clipboard');
+
+    if (poBtn) {
+      poBtn.disabled = running;
+      poBtn.style.opacity = running && activeMode !== 'PT_PO' ? '0.5' : '1';
+      poBtn.style.cursor = running ? 'not-allowed' : 'pointer';
+      poBtn.innerHTML = running && activeMode === 'PT_PO' ? '<span>⏳</span> Mengisi PT PO...' : '<span>⚡</span> Auto-Fill PT PO (Purchase)';
+    }
+    if (soBtn) {
+      soBtn.disabled = running;
+      soBtn.style.opacity = running && activeMode !== 'PT_SO' ? '0.5' : '1';
+      soBtn.style.cursor = running ? 'not-allowed' : 'pointer';
+      soBtn.innerHTML = running && activeMode === 'PT_SO' ? '<span>⏳</span> Mengisi PT SO...' : '<span>⚡</span> Auto-Fill PT SO (Sales PT)';
+    }
+    if (cvBtn) {
+      cvBtn.disabled = running;
+      cvBtn.style.opacity = running && activeMode !== 'CV_SO' ? '0.5' : '1';
+      cvBtn.style.cursor = running ? 'not-allowed' : 'pointer';
+      cvBtn.innerHTML = running && activeMode === 'CV_SO' ? '<span>⏳</span> Mengisi CV SO...' : '<span>⚡</span> Auto-Fill CV SO (Sales CV)';
+    }
+    if (pasteBtn) {
+      pasteBtn.disabled = running;
+      pasteBtn.style.opacity = running ? '0.5' : '1';
+      pasteBtn.style.cursor = running ? 'not-allowed' : 'pointer';
+    }
+  }
+
   // Update UI with payload info
-  function updateInvoiceBox(payload) {
+  function updateInvoiceBox(payload, isNewData = false) {
+    const isDifferentInvoice = payload && (!currentPayload || currentPayload.invoiceNo !== payload.invoiceNo);
     currentPayload = payload;
     const box = document.getElementById('lucifax-invoice-status');
+    const invoiceBox = document.getElementById('lucifax-invoice-box');
     const pasteInput = document.getElementById('lucifax-paste-input');
     if (!box) return;
 
@@ -290,21 +326,45 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       const billableCount = allItems.length - bonusItems.length;
       const bonusBadge = bonusItems.length > 0 ? ` <span style="color: #FBBF24; font-size: 10px;">(${bonusItems.length} Bonus Di-skip)</span>` : '';
 
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')} WIB`;
+
       box.innerHTML = `
-        <div style="font-weight: bold; color: #38BDF8; font-size: 12px; margin-bottom: 2px;">
-          Invoice #${payload.invoiceNo} - ${payload.customerAlias || payload.customerName}
+        <div style="font-weight: bold; color: #38BDF8; font-size: 12px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Invoice #${payload.invoiceNo} - ${payload.customerAlias || payload.customerName}</span>
+          <span style="background: #059669; color: #FFFFFF; font-size: 9px; padding: 1px 6px; border-radius: 4px; font-weight: bold;">SIAP</span>
         </div>
         <div style="color: #CBD5E1; font-size: 11px;">
           Kota: <b>${payload.city}</b> | Total: <b>${billableCount} Item</b> (${payload.grandTotalCarton || 0} Ktn)${bonusBadge}
         </div>
-        <div style="color: #4ADE80; font-size: 10.5px; margin-top: 4px;">
-          Rp ${Number(payload.grandTotal || 0).toLocaleString('id-ID')}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06);">
+          <span style="color: #4ADE80; font-size: 11px; font-weight: bold;">
+            Rp ${Number(payload.grandTotal || 0).toLocaleString('id-ID')}
+          </span>
+          <span style="color: #94A3B8; font-size: 9.5px;" title="Waktu data invoice termutakhir">
+            ⏱️ ${timeStr}
+          </span>
         </div>
       `;
+
       if (pasteInput) {
         pasteInput.placeholder = `✅ Invoice #${payload.invoiceNo} Siap Diisi`;
-        pasteInput.style.borderColor = '#4ADE80';
-        pasteInput.style.color = '#4ADE80';
+        pasteInput.style.borderColor = '#10B981';
+        pasteInput.style.color = '#34D399';
+      }
+
+      // Visual Glow / Flash Animation when data is updated or changed
+      if (invoiceBox && (isDifferentInvoice || isNewData)) {
+        invoiceBox.style.border = '1.5px solid #38BDF8';
+        invoiceBox.style.boxShadow = '0 0 16px rgba(56, 189, 248, 0.6)';
+        invoiceBox.style.background = '#0F2744';
+        setTimeout(() => {
+          if (invoiceBox) {
+            invoiceBox.style.border = '1px solid #334155';
+            invoiceBox.style.boxShadow = 'none';
+            invoiceBox.style.background = '#1E293B';
+          }
+        }, 1200);
       }
     } else {
       box.innerHTML = `
@@ -378,7 +438,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
     try {
       const jsonStr = text.substring(text.indexOf('LUCIFAX_ODOO_PAYLOAD:') + 'LUCIFAX_ODOO_PAYLOAD:'.length).trim();
       const payload = JSON.parse(jsonStr);
-      updateInvoiceBox(payload);
+      updateInvoiceBox(payload, true);
       safeSendMessage({ action: 'STORE_INVOICE_PAYLOAD', payload: payload });
       if (manualTrigger) logMessage(`Data Invoice #${payload.invoiceNo} berhasil dimuat!`, true);
       return true;
@@ -389,19 +449,38 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
   }
 
   // Read clipboard as fallback / cross-profile sync
+  let isSyncingClipboard = false;
   async function pasteFromClipboard(manualTrigger = true) {
-    const text = await readClipboardText();
-    if (text && applyPayloadText(text, manualTrigger)) {
-      return true;
+    if (isSyncingClipboard) return false;
+    isSyncingClipboard = true;
+    const pasteInput = document.getElementById('lucifax-paste-input');
+    const prevPlaceholder = pasteInput ? pasteInput.placeholder : '';
+
+    if (pasteInput && manualTrigger) {
+      pasteInput.placeholder = '🔄 Memeriksa data invoice...';
+      pasteInput.style.borderColor = '#38BDF8';
     }
 
-    if (manualTrigger) {
-      const manual = prompt('Silakan tempelkan data (tekan Ctrl+V lalu Enter):');
-      if (manual && applyPayloadText(manual, true)) {
+    try {
+      const text = await readClipboardText();
+      if (text && applyPayloadText(text, manualTrigger)) {
         return true;
       }
+
+      if (pasteInput && manualTrigger) {
+        pasteInput.placeholder = prevPlaceholder;
+      }
+
+      if (manualTrigger) {
+        const manual = prompt('Silakan tempelkan data (tekan Ctrl+V lalu Enter):');
+        if (manual && applyPayloadText(manual, true)) {
+          return true;
+        }
+      }
+      return false;
+    } finally {
+      isSyncingClipboard = false;
     }
-    return false;
   }
 
   // Sleep utility
@@ -1063,6 +1142,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
 
   // MAIN AUTO-FILL FUNCTION
   async function runAutoFill(mode) {
+    if (isAutoFillRunning) {
+      logMessage('⚠️ Proses pengisian sedang berjalan, mohon tunggu hingga selesai...', false, true);
+      return;
+    }
+
     // 1. Coba update data dari clipboard
     await pasteFromClipboard(false);
 
@@ -1076,6 +1160,7 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       }
     }
 
+    setButtonsRunningState(true, mode);
     const p = currentPayload;
     logMessage(`Memulai Auto-Fill ${mode} untuk Invoice #${p.invoiceNo}...`);
 
@@ -1213,10 +1298,11 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
           logMessage(`⚠️ Baru terisi ${filled} dari ${effectiveItems.length} baris (terkendala loading Odoo). Silakan klik Auto-Fill kembali untuk melanjutkan baris sisanya.`, false, true);
         }
       }
-
     } catch (err) {
       console.error('[Lucifax-Odoo] Error during auto-fill:', err);
       logMessage(`Error: ${err.message}`, false, true);
+    } finally {
+      setButtonsRunningState(false);
     }
   }
 
@@ -2216,6 +2302,17 @@ console.log('[Lucifax-Odoo] Assistant loaded on Odoo ERP');
       pasteFromClipboard(false);
     }
   });
+
+  // Real-time synchronization across Odoo tabs when new invoice is saved in background
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'local' && changes.latestInvoicePayload && changes.latestInvoicePayload.newValue) {
+          updateInvoiceBox(changes.latestInvoicePayload.newValue, true);
+        }
+      });
+    }
+  } catch (_) {}
 
   // Listen for direct Ctrl+V paste on the page
   document.addEventListener('paste', (e) => {
