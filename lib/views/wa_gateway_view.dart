@@ -266,6 +266,11 @@ class _WaGatewayViewState extends State<WaGatewayView> {
           }
 
           if (targetCustomer.id.isEmpty) {
+            final validLetters = targetCustomer.customerName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').trim();
+            if (validLetters.length < 3 || targetCustomer.customerName.contains(r'\')) {
+              // Abaikan nama pelanggan tidak valid/sampah OCR
+              continue;
+            }
             try {
               await customerProvider.saveCustomer(targetCustomer);
             } catch (_) {}
@@ -357,6 +362,11 @@ class _WaGatewayViewState extends State<WaGatewayView> {
         // PENTING: Auto-PO HANYA memproses pesan yang benar-benar terdeteksi sebagai ORDER_PO!
         // Jangan auto-proses CASUAL_CHAT, konfirmasi transfer/bayar, atau obrolan santai!
         if (!chat.isOrderDetected && chat.messageType != 'ORDER_PO') {
+          continue;
+        }
+
+        // PENTING: Untuk pesan foto/gambar non-struk, WAJIB terverifikasi valid ORDER_PO
+        if (chat.hasImage && (chat.messageType != 'ORDER_PO' || !chat.isOrderDetected)) {
           continue;
         }
 
@@ -2922,11 +2932,11 @@ Kirim besok pagi ya pak bc''';
                       builder: (context, recProv, trProv, _) {
                         final Map<String, _InvoiceLinkCandidate> candidateMap = {};
 
-                        // 1. Ambil seluruh data Kartu Piutang (mencakup faktur lama & baru dari semua bulan)
+                        // 1. Ambil data Kartu Piutang (HANYA faktur yang BELUM lunas)
                         for (final r in recProv.receivables) {
                           final cleanNo = r.noInvoice.replaceAll('#', '').trim();
-                          if (cleanNo.isEmpty) continue;
-                          final rem = r.isLunas ? 0.0 : r.remainingAmount;
+                          if (cleanNo.isEmpty || r.isLunas) continue;
+                          final rem = r.remainingAmount;
                           final isExact = targetAmount > 0 &&
                               (((r.nominal - targetAmount).abs() <= 100) || ((rem - targetAmount).abs() <= 100));
                           candidateMap[cleanNo] = _InvoiceLinkCandidate(
@@ -2935,27 +2945,26 @@ Kirim besok pagi ya pak bc''';
                             city: r.kota,
                             totalAmount: r.nominal,
                             remainingAmount: rem,
-                            isUnpaid: !r.isLunas,
+                            isUnpaid: true,
                             date: r.tglKirim,
                             isExactMatch: isExact,
                           );
                         }
 
-                        // 2. Lengkapi dari daftar transaksi (faktur yang baru dibuat atau belum ada di piutang)
+                        // 2. Lengkapi dari daftar transaksi (faktur baru atau belum ada di piutang, HANYA yang UNPAID)
                         for (final t in trProv.transactions) {
                           final cleanNo = t.invoiceNo.replaceAll('#', '').trim();
-                          if (cleanNo.isEmpty) continue;
+                          if (cleanNo.isEmpty || t.statusTransfer.toUpperCase() == 'PAID') continue;
                           if (!candidateMap.containsKey(cleanNo)) {
                             final netTotal = (t.grandTotal - t.returnAmount).clamp(0.0, double.infinity);
-                            final isUnpaid = t.statusTransfer != 'PAID';
                             final isExact = targetAmount > 0 && ((netTotal - targetAmount).abs() <= 100);
                             candidateMap[cleanNo] = _InvoiceLinkCandidate(
                               invoiceNo: cleanNo,
                               customerName: (t.aliasName.isNotEmpty ? t.aliasName : t.customerName).trim(),
                               city: t.city,
                               totalAmount: netTotal,
-                              remainingAmount: isUnpaid ? netTotal : 0.0,
-                              isUnpaid: isUnpaid,
+                              remainingAmount: netTotal,
+                              isUnpaid: true,
                               date: t.deliveryDate ?? t.date,
                               isExactMatch: isExact,
                             );

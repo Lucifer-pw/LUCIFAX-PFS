@@ -197,13 +197,27 @@ function parseBankReceipt(rawText) {
 
   // Extract Customer Hint
   let customerHint = '';
-  if (upper.includes('MAJU MARKET')) customerHint = 'MAJU MARKET MANDIRI';
+  if (upper.includes('WIMBO') || upper.includes('KUSTANTO') || upper.includes('LG FF')) customerHint = 'LG FF (WIMBO WIEK KUSTANTO)';
+  else if (upper.includes('MAJU MARKET')) customerHint = 'MAJU MARKET MANDIRI';
   else if (upper.includes('SJJ')) customerHint = 'SJJ';
   else if (upper.includes('SUSILO') || upper.includes('MISTER')) customerHint = 'MISTER SOSIS';
   else if (upper.includes('ANNISA') || upper.includes('ANIZA')) customerHint = 'ANIZA FF';
   else if (upper.includes('PARIS')) customerHint = 'PARIS FOOD';
   else if (upper.includes('HANA MAKMUR')) customerHint = 'HANA MAKMUR';
   else if (upper.includes('AW FF') || /\bAW\b/.test(upper)) customerHint = 'AW FF';
+
+  // Dynamic extraction from receipt lines (e.g. "Dari »— Wimbo Wiek Kustanto", "Pengirim: ...", "Dari: ...")
+  let senderNameFromSlip = '';
+  const senderMatch = clean.match(/(?:Dari|Pengirim|Nama Pengirim|Dari Rekening|Nama)\s*[:=»\-–—\s]+([^\r\n@]+)/i);
+  if (senderMatch) {
+    const rawSender = senderMatch[1].trim();
+    if (!rawSender.toUpperCase().includes('REKENING') && !rawSender.toUpperCase().includes('BANK') && rawSender.length >= 3) {
+      senderNameFromSlip = rawSender;
+      if (!customerHint) {
+        customerHint = rawSender;
+      }
+    }
+  }
 
   // Extract Recipient if available (e.g. "Ke 8175683107\nARSANDY VIDYA GUPTA PRAD")
   let recipient = '';
@@ -262,6 +276,7 @@ function parseBankReceipt(rawText) {
     refNumber,
     berita,
     recipient,
+    senderNameFromSlip,
     isExpense,
     expenseCategory,
     invoiceNo: isExpense ? null : invoiceNo,

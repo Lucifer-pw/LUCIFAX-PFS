@@ -702,14 +702,17 @@ class AiChatParserService {
       }
     }
 
-    // D. If line 0 does not look like an order line, treat it as raw customer name
+    // D. If line 0 does not look like an order line, treat it as raw customer name (minimal 3 huruf valid tanpa simbol aneh)
     if (lines.isNotEmpty && !_looksLikeOrderLine(lines[0]) && !_isIgnoredLine(lines[0])) {
-      return _CustomerResolution(
-        customer: null,
-        rawName: lines[0],
-        headerLineCount: 1,
-        customerLineIndex: 0,
-      );
+      final cleanLine0 = lines[0].replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '').trim();
+      if (cleanLine0.length >= 3 && !lines[0].contains(r'\\')) {
+        return _CustomerResolution(
+          customer: null,
+          rawName: lines[0],
+          headerLineCount: 1,
+          customerLineIndex: 0,
+        );
+      }
     }
 
     // D2. If a candidate customer line was found at the bottom (even if unregistered in master), use it!

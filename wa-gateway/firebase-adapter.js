@@ -393,9 +393,10 @@ class FirebaseAdapter {
     }
   }
 
-  async findMatchingReceivable(customerHint, amount) {
+  async findMatchingReceivable(customerHint, amount, rawOcrText = '') {
     if (!amount || amount <= 0) return null;
     const cleanHint = (customerHint || '').toUpperCase().trim();
+    const upperOcr = (rawOcrText || '').toUpperCase();
 
     try {
       const getInitials = (str) => {
@@ -409,19 +410,43 @@ class FirebaseAdapter {
       };
 
       const isNameMatched = (toko, hint) => {
-        if (!hint || !toko) return false;
+        if (!toko) return false;
         const cleanToko = toko.toUpperCase().trim();
-        const tokoInitials = getInitials(cleanToko);
-        const hintInitials = getInitials(hint);
 
-        if (hint.includes(cleanToko) || cleanToko.includes(hint)) return true;
-        if (hint === tokoInitials || hintInitials === hint || tokoInitials === hintInitials) return true;
-        const hintWords = hint.split(/\s+/).filter(w => w.length >= 4 && !['CV', 'PT', 'TOKO', 'WARUNG', 'MARKET'].includes(w));
+        // 1. Cek langsung teks OCR struk apakah mengandung nama toko atau alias/pemilik (misal: "Wimbo Wiek Kustanto" / "LG FF")
+        if (upperOcr) {
+          if (cleanToko.includes('(')) {
+            const parts = cleanToko.split('(');
+            const outside = parts[0].trim();
+            const inside = parts[1].replace(')', '').trim();
+            if (inside.length >= 3 && upperOcr.includes(inside)) return true;
+            if (outside.length >= 3 && upperOcr.includes(outside)) return true;
+          } else if (cleanToko.length >= 3 && upperOcr.includes(cleanToko)) {
+            return true;
+          }
+        }
+
+        if (!hint) return false;
+        const filteredHint = hint
+          .replace(/\b(DARI|KE|PENGIRIM|SEABANK|BCA|MANDIRI|BRI|BNI|BANK|TRANSFER|BI-FAST|REALTIME|SUKSES|BERHASIL)\b/gi, ' ')
+          .replace(/[^A-Za-z0-9\s]/g, ' ')
+          .trim();
+
+        if (!filteredHint) return false;
+
+        const tokoInitials = getInitials(cleanToko);
+        const hintInitials = getInitials(filteredHint);
+
+        if (filteredHint.includes(cleanToko) || cleanToko.includes(filteredHint)) return true;
+        if (filteredHint === tokoInitials || hintInitials === filteredHint || tokoInitials === hintInitials) return true;
+        const hintWords = filteredHint.split(/\s+/).filter(w => w.length >= 3 && !['CV', 'PT', 'TOKO', 'WARUNG', 'MARKET', 'DAN'].includes(w));
         if (hintWords.some(w => cleanToko.includes(w))) return true;
+
         return false;
       };
 
       const candidates = [];
+      const exactAmountUnpaidList = [];
 
       // 1. PRIORITAS UTAMA: Periksa langsung koleksi transactions (sumber kebenaran nominal riil setelah revisi nota)
       if (this.mode === 'admin') {
@@ -434,18 +459,31 @@ class FirebaseAdapter {
 
             const noInvoice = String(d.invoiceNo || doc.id || '').replace(/\D/g, '');
             const toko = (d.aliasName || d.customerName || '').toUpperCase();
+            const fullCust = (d.customerName || '').toUpperCase();
+            const fullAlias = (d.aliasName || '').toUpperCase();
             const total = Number(d.grandTotal || 0) - Number(d.returnAmount || 0);
 
             const amountDiff = Math.abs(total - amount);
             const isAmountMatch = amountDiff <= 100;
 
-            if (isAmountMatch && isNameMatched(toko, cleanHint)) {
-              candidates.push({ noInvoice, toko, nominal: total, isLunas: false, docId: doc.id, fromTransaction: true });
+            if (isAmountMatch) {
+              const item = { noInvoice, toko, nominal: total, isLunas: false, docId: doc.id, fromTransaction: true };
+              exactAmountUnpaidList.push(item);
+
+              if (isNameMatched(toko, cleanHint) || isNameMatched(fullCust, cleanHint) || isNameMatched(fullAlias, cleanHint)) {
+                candidates.push(item);
+              }
             }
           });
         } catch (trErr) {
           console.warn('[MATCH TRANSACTIONS ERROR]:', trErr.message);
         }
+      }
+
+      // Fallback: Jika ada tepat 1 invoice belum lunas dengan nominal persis sama, gunakan sebagai match!
+      if (candidates.length === 0 && exactAmountUnpaidList.length === 1) {
+        console.log(`[AUTO-MATCH UNIQUE AMOUNT] 🎯 Hanya ada 1 faktur tertunggak (#${exactAmountUnpaidList[0].noInvoice} - ${exactAmountUnpaidList[0].toko}) dengan nominal Rp ${amount.toLocaleString('id-ID')}!`);
+        candidates.push(exactAmountUnpaidList[0]);
       }
 
       // Jika berhasil dicocokkan via transactions, lakukan sinkronisasi otomatis ke receivables agar sinkron permanen

@@ -797,7 +797,8 @@ async function startBaileys() {
                 // JIKA BELUM ADA NOMOR FAKTUR DI BERITA: COCOKKAN KE KARTU PIUTANG SECARA OTOMATIS
                 if (!bankResult.invoiceNo && bankResult.amount > 0) {
                   try {
-                    const matchRec = await firebaseAdapter.findMatchingReceivable(bankResult.customerHint, bankResult.amount);
+                    const combinedHint = [bankResult.customerHint, bankResult.senderNameFromSlip, bankResult.berita, senderName].filter(Boolean).join(' ');
+                    const matchRec = await firebaseAdapter.findMatchingReceivable(combinedHint, bankResult.amount, ocrText);
                     if (matchRec) {
                       bankResult.invoiceNo = matchRec.noInvoice;
                       bankResult.isAutoMatched = true;
@@ -1102,23 +1103,27 @@ async function startBaileys() {
           await flushMessageBuffer(existingBufKey);
         }
 
-        const lower = cleanText.toLowerCase();
-        const isOrderDetected =
-          (bankResult && bankResult.isOrderDocument) ||
-          lower.includes('karton') ||
-          lower.includes('ktn') ||
-          lower.includes('dus') ||
-          lower.includes('box') ||
-          lower.includes('roll') ||
-          lower.includes('pack') ||
-          lower.includes('pcs') ||
-          lower.includes('beres') ||
-          lower.includes('rolade') ||
-          lower.includes('kornet') ||
-          lower.includes('fiva') ||
-          lower.includes('order') ||
-          lower.includes('po') ||
-          lower.includes('kirim');
+        const detectOrder = (text, isImg, bRes) => {
+          if (bRes && bRes.isOrderDocument) return true;
+          const t = (text || '').toLowerCase();
+          const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
+          const hasUnitWord = /\b(karton|ktn|dus|box|roll|rol|pack|pak|pcs|bal|ball)\b/i.test(t);
+          const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso)\b/i.test(t);
+          const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol)\b/i.test(t);
+
+          if (isImg) {
+            if (hasOrderWord && (hasProductWord || hasUnitWord)) return true;
+            if (hasQtyPattern && (hasProductWord || hasOrderWord)) return true;
+            return false;
+          }
+
+          if (hasOrderWord) return true;
+          if (hasUnitWord && (hasQtyPattern || hasProductWord || t.includes('kirim'))) return true;
+          if (hasProductWord && (hasQtyPattern || t.includes('kirim') || hasOrderWord)) return true;
+          return false;
+        };
+
+        const isOrderDetected = detectOrder(cleanText, !!isImageMessage, bankResult);
 
         const bypassType = isQuotedReply ? 'QUOTED_REPLY' : 'FORWARDED';
         const msgType = isQuotedReply ? 'QUOTED_REPLY' : (isOrderDetected ? 'ORDER_PO' : 'CASUAL_CHAT');
@@ -1171,23 +1176,27 @@ async function startBaileys() {
       // =========================================================================
       // ALUR PESANAN TEKS BIASA: Tetap menggunakan Debounce Buffer (Jeda 8 detik)
       // =========================================================================
-      const lower = cleanText.toLowerCase();
-      const isOrderDetected =
-        (bankResult && bankResult.isOrderDocument) ||
-        lower.includes('karton') ||
-        lower.includes('ktn') ||
-        lower.includes('dus') ||
-        lower.includes('box') ||
-        lower.includes('roll') ||
-        lower.includes('pack') ||
-        lower.includes('pcs') ||
-        lower.includes('beres') ||
-        lower.includes('rolade') ||
-        lower.includes('kornet') ||
-        lower.includes('fiva') ||
-        lower.includes('order') ||
-        lower.includes('po') ||
-        lower.includes('kirim');
+      const detectOrderRegular = (text, isImg, bRes) => {
+        if (bRes && bRes.isOrderDocument) return true;
+        const t = (text || '').toLowerCase();
+        const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
+        const hasUnitWord = /\b(karton|ktn|dus|box|roll|rol|pack|pak|pcs|bal|ball)\b/i.test(t);
+        const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso)\b/i.test(t);
+        const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol)\b/i.test(t);
+
+        if (isImg) {
+          if (hasOrderWord && (hasProductWord || hasUnitWord)) return true;
+          if (hasQtyPattern && (hasProductWord || hasOrderWord)) return true;
+          return false;
+        }
+
+        if (hasOrderWord) return true;
+        if (hasUnitWord && (hasQtyPattern || hasProductWord || t.includes('kirim'))) return true;
+        if (hasProductWord && (hasQtyPattern || t.includes('kirim') || hasOrderWord)) return true;
+        return false;
+      };
+
+      const isOrderDetected = detectOrderRegular(cleanText, !!isImageMessage, bankResult);
       const messageType = isOrderDetected ? 'ORDER_PO' : 'CASUAL_CHAT';
 
       const bufferKey = senderPhone || rawJidDigits || remoteJid;
