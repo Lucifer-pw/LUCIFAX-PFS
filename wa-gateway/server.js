@@ -660,6 +660,7 @@ async function startBaileys() {
       let quotedImageUrl = null;
       let quotedMessageText = '';
       let quotedStanzaId = null;
+      let quotedBankResult = { isBankSlip: false };
 
       try {
         const ctxInfo = allCtxInfo;
@@ -700,17 +701,28 @@ async function startBaileys() {
                 if (quotedOcrText.length > 0) {
                   console.log(`[QUOTED VISION OCR] 📝 Hasil scan foto yang di-tag: "${quotedOcrText.substring(0, 100).replace(/\n/g, ' ')}..."`);
 
-                  // Ekstrak nomor invoice dari OCR teks (cari pattern "Invoice #123" atau "Detail Invoice #123")
-                  const invoiceMatch = quotedOcrText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i);
-                  if (invoiceMatch) {
-                    quotedInvoiceNo = invoiceMatch[1];
-                    console.log(`[QUOTED VISION] 🎯 Nomor invoice terdeteksi dari foto yang di-tag: #${quotedInvoiceNo}`);
-                  } else {
-                    // Fallback: cari pattern "#123" standalone
-                    const hashMatch = quotedOcrText.match(/#(\d{2,6})\b/);
-                    if (hashMatch) {
-                      quotedInvoiceNo = hashMatch[1];
-                      console.log(`[QUOTED VISION] 🎯 Nomor invoice (fallback hash) dari foto yang di-tag: #${quotedInvoiceNo}`);
+                  // Cek apakah foto yang di-tag adalah BUKTI TRANSFER BANK
+                  quotedBankResult = bankSlipParser.parseBankReceipt(quotedOcrText);
+                  if (quotedBankResult.isBankSlip) {
+                    console.log(`[QUOTED VISION BANK SLIP] 💳 Bukti Transfer ${quotedBankResult.bank} terdeteksi dari foto yang di-tag! Nominal: Rp ${quotedBankResult.amount.toLocaleString('id-ID')} | Berita: "${quotedBankResult.berita}"`);
+                    if (quotedBankResult.invoiceNo) {
+                      quotedInvoiceNo = quotedBankResult.invoiceNo;
+                    }
+                  }
+
+                  // Ekstrak nomor invoice dari OCR teks jika belum ada
+                  if (!quotedInvoiceNo) {
+                    const invoiceMatch = quotedOcrText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i);
+                    if (invoiceMatch) {
+                      quotedInvoiceNo = invoiceMatch[1];
+                      console.log(`[QUOTED VISION] 🎯 Nomor invoice terdeteksi dari foto yang di-tag: #${quotedInvoiceNo}`);
+                    } else {
+                      // Fallback: cari pattern "#123" standalone
+                      const hashMatch = quotedOcrText.match(/#(\d{2,6})\b/);
+                      if (hashMatch) {
+                        quotedInvoiceNo = hashMatch[1];
+                        console.log(`[QUOTED VISION] 🎯 Nomor invoice (fallback hash) dari foto yang di-tag: #${quotedInvoiceNo}`);
+                      }
                     }
                   }
                 }
@@ -739,6 +751,15 @@ async function startBaileys() {
               quotedStanzaId = ctxInfo.stanzaId || null;
               quotedOcrText = quotedText.trim();
               console.log(`[QUOTED TEXT] 💬 Teks yang di-reply: "${quotedMessageText.substring(0, 100).replace(/\n/g, ' ')}"`);
+
+              // Cek apakah teks yang di-tag adalah BUKTI TRANSFER
+              quotedBankResult = bankSlipParser.parseBankReceipt(quotedText);
+              if (quotedBankResult.isBankSlip) {
+                console.log(`[QUOTED TEXT BANK SLIP] 💳 Bukti Transfer ${quotedBankResult.bank} terdeteksi dari teks yang di-tag! Nominal: Rp ${quotedBankResult.amount.toLocaleString('id-ID')}`);
+                if (quotedBankResult.invoiceNo) {
+                  quotedInvoiceNo = quotedBankResult.invoiceNo;
+                }
+              }
 
               const textInvMatch = quotedText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i)
                 || quotedText.match(/#(\d{2,6})\b/);
@@ -1096,6 +1117,169 @@ async function startBaileys() {
       // TIDAK BOLEH digabung dengan pesan lain dalam buffer!
       // =========================================================================
       if (isForwardedMessage || isQuotedReply) {
+        // =========================================================================
+        // KHUSUS BALASAN / QUOTED KE BUKTI TRANSFER (TRANSFER SLIP REPLY):
+        // Pengguna membalas struk transfer dengan teks (misal nama toko "mister sosis"
+        // atau nomor invoice "#649"). Ini BUKAN PO baru!
+        // WAVIS mencocokkan nominal struk + petunjuk toko ke piutang/faktur,
+        // lalu melunasi faktur secara otomatis jika cocok.
+        // =========================================================================
+        let isReplyToTransfer = isQuotedReply && (quotedBankResult.isBankSlip || (quotedOcrText && quotedOcrText.includes('BUKTI TRANSFER')));
+
+        if (!isReplyToTransfer && isQuotedReply && quotedStanzaId) {
+          try {
+            const prevChat = await firebaseAdapter.findChatByMessageId(quotedStanzaId);
+            if (prevChat && (prevChat.messageType === 'TRANSFER_SLIP' || prevChat.transferInfo?.isBankSlip)) {
+              isReplyToTransfer = true;
+              if (!quotedBankResult.isBankSlip && prevChat.transferInfo) {
+                quotedBankResult = { ...prevChat.transferInfo };
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (isReplyToTransfer) {
+          console.log(`[TRANSFER SLIP REPLY] 🔗 Balasan ke Bukti Transfer ${quotedBankResult.bank || ''} Rp ${quotedBankResult.amount?.toLocaleString('id-ID') || 0} dari ${senderName}: "${cleanText}"`);
+
+          let targetInvoiceNo = quotedInvoiceNo || quotedBankResult.invoiceNo || null;
+          let matchedReceivable = null;
+
+          // 1. Cek nomor invoice di teks balasan
+          const directInvMatch = cleanText.match(/(?:Invoice|Faktur|INVOICE|FAKTUR)\s*#?\s*(\d{2,6})/i) || cleanText.match(/#(\d{2,6})\b/);
+          if (directInvMatch) {
+            targetInvoiceNo = directInvMatch[1];
+          }
+
+          // 2. Jika belum ada nomor invoice, cocokkan teks balasan (nama toko) + nominal struk ke piutang / faktur
+          const slipAmount = quotedBankResult.amount || 0;
+          if (!targetInvoiceNo && slipAmount > 0) {
+            try {
+              const combinedHint = [cleanText, quotedBankResult.customerHint, quotedBankResult.senderNameFromSlip, quotedBankResult.berita].filter(Boolean).join(' ');
+              matchedReceivable = await firebaseAdapter.findMatchingReceivable(combinedHint, slipAmount, quotedOcrText);
+              if (matchedReceivable) {
+                targetInvoiceNo = matchedReceivable.noInvoice;
+                quotedBankResult.invoiceNo = matchedReceivable.noInvoice;
+                quotedBankResult.matchedToko = matchedReceivable.toko;
+                quotedBankResult.isAutoMatched = true;
+                console.log(`[TRANSFER SLIP REPLY MATCH] 🎯 Balasan "${cleanText}" berhasil mencocokkan Faktur #${targetInvoiceNo} (${matchedReceivable.toko})!`);
+              }
+            } catch (mErr) {
+              console.warn('[TRANSFER SLIP REPLY MATCH ERROR]', mErr.message);
+            }
+          }
+
+          // 3. Jika nomor faktur teridentifikasi -> LUNASI / CICIL OTOMATIS
+          let isAutoSettled = false;
+          let isPartial = false;
+          let remainingAmount = 0;
+
+          if (autoSettleTransferSlips && targetInvoiceNo) {
+            try {
+              const settleRes = await firebaseAdapter.settleInvoicePayment(targetInvoiceNo, {
+                amount: slipAmount,
+                bank: quotedBankResult.bank || 'TRANSFER',
+                imageUrl: quotedImageUrl || '',
+                berita: quotedBankResult.berita || cleanText,
+                refNo: quotedBankResult.refNo || '',
+                rawDate: quotedBankResult.rawDate || '',
+                rawOcrText: quotedOcrText,
+                receivedAt: new Date(msgTimeMs),
+                senderName: matchedReceivable?.toko || cleanText || senderName
+              });
+              if (settleRes) {
+                isAutoSettled = (settleRes.success === true || settleRes === true);
+                isPartial = (settleRes.isLunas === false);
+                remainingAmount = settleRes.remaining || 0;
+              }
+            } catch (setErr) {
+              console.warn('[TRANSFER SLIP REPLY SETTLE ERROR]', setErr.message);
+            }
+
+            // Simpan memori aturan ke ai_knowledge_rules (Engine Self-Learning)
+            if (matchedReceivable?.toko && cleanText) {
+              await firebaseAdapter.saveAiKnowledgeRule({
+                type: 'customer_alias',
+                keyword: cleanText,
+                mappedValue: matchedReceivable.toko,
+                source: 'WA_GATEWAY_TRANSFER_REPLY'
+              });
+            }
+
+            // Perbarui dokumen chat struk transfer aslinya agar statusnya 'processed'
+            try {
+              let origChat = quotedStanzaId ? await firebaseAdapter.findChatByMessageId(quotedStanzaId) : null;
+              if (!origChat) {
+                origChat = await firebaseAdapter.findRecentPendingTransferSlip(senderPhone, remoteJid, slipAmount);
+              }
+              if (origChat) {
+                await firebaseAdapter.updateChatDocument(origChat.id, {
+                  status: 'processed',
+                  isPaymentApplied: true,
+                  matchedInvoiceNo: targetInvoiceNo,
+                  processedAt: new Date(),
+                  'transferInfo.invoiceNo': targetInvoiceNo,
+                  'transferInfo.matchedToko': matchedReceivable?.toko || cleanText,
+                  'transferInfo.isAutoMatched': true,
+                  'transferInfo.customerHint': cleanText
+                });
+                console.log(`[TRANSFER SLIP ORIGINAL UPDATED] ✅ Dokumen struk ${origChat.id} diperbarui ke PROCESSED (#${targetInvoiceNo})!`);
+              }
+            } catch (upOrigErr) {
+              console.warn('[UPDATE ORIGINAL SLIP ERROR]', upOrigErr.message);
+            }
+          }
+
+          const replyStatus = (isAutoSettled || targetInvoiceNo) ? 'processed' : 'pending';
+          const replyPayload = {
+            senderJid: remoteJid,
+            senderPhone,
+            senderName,
+            messageText: cleanText,
+            isOrderDetected: false,
+            messageType: 'TRANSFER_SLIP_REPLY',
+            hasImage: false,
+            imageUrl: null,
+            transferInfo: {
+              ...quotedBankResult,
+              invoiceNo: targetInvoiceNo,
+              matchedToko: matchedReceivable?.toko || cleanText,
+              isAutoMatched: !!matchedReceivable,
+              customerHint: cleanText,
+              isPartial,
+              remainingAmount
+            },
+            matchedInvoiceNo: targetInvoiceNo || null,
+            quotedInvoiceNo: targetInvoiceNo || null,
+            quotedOcrText: quotedOcrText || '',
+            quotedImageUrl: quotedImageUrl || null,
+            quotedMessageText: quotedMessageText || '',
+            quotedStanzaId: quotedStanzaId || null,
+            isForwarded: false,
+            isQuotedReply: true,
+            caption: cleanText,
+            rawOcrText: '',
+            status: replyStatus,
+            isPaymentApplied: isAutoSettled,
+            isPartialPayment: isPartial,
+            remainingAmount: remainingAmount,
+            dismissReason: replyStatus === 'processed' ? 'TRANSFER_REPLY_RESOLVED' : null,
+            messageCount: 1,
+            messageId: msgId || '',
+            messageIds: msgId ? [msgId] : [],
+            receivedAt: new Date(msgTimeMs),
+            processedAt: replyStatus === 'processed' ? new Date() : null
+          };
+
+          recentChats.unshift({
+            ...replyPayload,
+            receivedAt: new Date()
+          });
+          if (recentChats.length > 20) recentChats.pop();
+
+          await firebaseAdapter.saveIncomingChat(replyPayload);
+          return; // Selesai!
+        }
+
         // Flush buffer lama dari sender ini dulu (kalau ada pesan biasa sebelumnya)
         const existingBufKey = senderPhone || rawJidDigits || remoteJid;
         if (pendingMessageBuffers.has(existingBufKey)) {
@@ -1171,6 +1355,89 @@ async function startBaileys() {
           });
         }
         return; // Selesai! Langsung keluar agar tidak masuk buffer
+      }
+
+      // =========================================================================
+      // CEK SUSULAN TEKS BIASA KE BUKTI TRANSFER PENDING:
+      // Jika pengguna baru saja mengirim foto bukti transfer (status pending),
+      // lalu dalam 3 menit mengirim teks singkat nama toko (tanpa quote),
+      // otomatis tautkan & lunasi tanpa membuat order PO!
+      // =========================================================================
+      const hasOrderIndicators = /\b(\d+\s*(?:ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol))\b/i.test(cleanText) ||
+                                 /\b(po|order|pesanan|pesan|kirim)\b/i.test(cleanText);
+      if (!isImageMessage && !isForwardedMessage && !isQuotedReply && cleanText.length <= 40 && !hasOrderIndicators) {
+        try {
+          const recentPending = await firebaseAdapter.findRecentPendingTransferSlip(senderPhone, remoteJid);
+          if (recentPending && !recentPending.matchedInvoiceNo) {
+            const pAmount = Number(recentPending.transferInfo?.amount || 0);
+            if (pAmount > 0) {
+              const matchedRec = await firebaseAdapter.findMatchingReceivable(cleanText, pAmount, recentPending.rawOcrText || '');
+              if (matchedRec) {
+                console.log(`[FOLLOW-UP TEXT MATCH] 🎯 Teks "${cleanText}" menyusul Bukti Transfer pending (${pAmount}) -> Faktur #${matchedRec.noInvoice} (${matchedRec.toko})!`);
+                if (autoSettleTransferSlips) {
+                  await firebaseAdapter.settleInvoicePayment(matchedRec.noInvoice, {
+                    amount: pAmount,
+                    bank: recentPending.transferInfo?.bank || 'TRANSFER',
+                    imageUrl: recentPending.imageUrl || '',
+                    berita: cleanText,
+                    senderName: matchedRec.toko || cleanText
+                  });
+                  await firebaseAdapter.saveAiKnowledgeRule({
+                    type: 'customer_alias',
+                    keyword: cleanText,
+                    mappedValue: matchedRec.toko,
+                    source: 'WA_GATEWAY_FOLLOW_UP_TEXT'
+                  });
+                  await firebaseAdapter.updateChatDocument(recentPending.id, {
+                    status: 'processed',
+                    isPaymentApplied: true,
+                    matchedInvoiceNo: matchedRec.noInvoice,
+                    processedAt: new Date(),
+                    'transferInfo.invoiceNo': matchedRec.noInvoice,
+                    'transferInfo.matchedToko': matchedRec.toko,
+                    'transferInfo.isAutoMatched': true,
+                    'transferInfo.customerHint': cleanText
+                  });
+                }
+
+                const followUpPayload = {
+                  senderJid: remoteJid,
+                  senderPhone,
+                  senderName,
+                  messageText: cleanText,
+                  isOrderDetected: false,
+                  messageType: 'TRANSFER_SLIP_REPLY',
+                  hasImage: false,
+                  imageUrl: null,
+                  transferInfo: {
+                    ...recentPending.transferInfo,
+                    invoiceNo: matchedRec.noInvoice,
+                    matchedToko: matchedRec.toko,
+                    isAutoMatched: true,
+                    customerHint: cleanText
+                  },
+                  matchedInvoiceNo: matchedRec.noInvoice,
+                  status: 'processed',
+                  isPaymentApplied: true,
+                  dismissReason: 'TRANSFER_REPLY_RESOLVED',
+                  messageCount: 1,
+                  messageId: msgId || '',
+                  messageIds: msgId ? [msgId] : [],
+                  receivedAt: new Date(msgTimeMs),
+                  processedAt: new Date()
+                };
+
+                recentChats.unshift({ ...followUpPayload, receivedAt: new Date() });
+                if (recentChats.length > 20) recentChats.pop();
+
+                await firebaseAdapter.saveIncomingChat(followUpPayload);
+                return; // Langsung keluar!
+              }
+            }
+          }
+        } catch (fuErr) {
+          console.warn('[FOLLOW-UP TEXT NOTICE]', fuErr.message);
+        }
       }
 
       // =========================================================================

@@ -354,8 +354,8 @@ class _WaGatewayViewState extends State<WaGatewayView> {
   }
 
   bool _isBankSlipLike(IncomingPoChat chat) {
-    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') return true;
-    final text = ('${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''}').toUpperCase();
+    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP' || chat.messageType == 'TRANSFER_SLIP_REPLY') return true;
+    final text = ('${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''} ${chat.quotedOcrText ?? ''}').toUpperCase();
     return text.contains('SETORAN TUNAI') ||
            text.contains('BUKTI SETORAN') ||
            text.contains('SETOR TUNAI') ||
@@ -2926,13 +2926,27 @@ Kirim besok pagi ya pak bc''';
         }
       }
     }
+    if (detectedHint.isEmpty && (chat.messageType == 'TRANSFER_SLIP_REPLY' || chat.isQuotedReply || chat.messageText.length <= 40)) {
+      final mt = chat.messageText.trim();
+      final up = mt.toUpperCase();
+      if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('BUKTI') && !up.contains('TRANSFER')) {
+        detectedHint = mt;
+      }
+    }
 
     final initialQuery = (chat.matchedInvoiceNo != null && chat.matchedInvoiceNo!.isNotEmpty)
         ? chat.matchedInvoiceNo!
         : detectedHint;
     final searchCtrl = TextEditingController(text: initialQuery);
     String selectedInv = chat.matchedInvoiceNo ?? '';
-    final double targetAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
+    double targetAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
+    if (targetAmount <= 0 && chat.quotedOcrText != null && chat.quotedOcrText!.isNotEmpty) {
+      final amtMatch = RegExp(r'Rp\s*([0-9.,]+)', caseSensitive: false).firstMatch(chat.quotedOcrText!);
+      if (amtMatch != null) {
+        final rawNum = amtMatch.group(1)!.replaceAll('.', '').replaceAll(',', '.');
+        targetAmount = double.tryParse(rawNum) ?? 0;
+      }
+    }
 
     // Trigger sinkronisasi piutang agar data selalu terbaru
     final recProvider = Provider.of<ReceivableProvider>(context, listen: false);
@@ -4614,7 +4628,7 @@ Kirim besok pagi ya pak bc''';
                         label: const Text('Abaikan', style: TextStyle(fontSize: 11)),
                       ),
                       const SizedBox(width: 8),
-                      if (chat.hasImage && _isBankSlipLike(chat)) ...[
+                      if (_isBankSlipLike(chat) || chat.messageType == 'TRANSFER_SLIP_REPLY') ...[
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0284C7),

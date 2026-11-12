@@ -63,7 +63,7 @@ class IncomingPoChat {
     this.rawOcrText,
   });
 
-  bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || transferInfo != null;
+  bool get isTransferSlip => messageType == 'TRANSFER_SLIP' || messageType == 'TRANSFER_SLIP_REPLY' || transferInfo != null;
   bool get isExpense => transferInfo?['isExpense'] == true;
   String? get expenseCategory => transferInfo?['expenseCategory']?.toString();
   String? get recipientName => transferInfo?['recipient']?.toString();

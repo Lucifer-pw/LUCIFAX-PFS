@@ -355,6 +355,104 @@ class FirebaseAdapter {
     return null;
   }
 
+  async updateChatDocument(chatId, updateData) {
+    if (!chatId || !updateData) return false;
+    try {
+      if (this.mode === 'admin' && this.db) {
+        await this.db.collection('incoming_po_chats').doc(chatId).update(updateData);
+        return true;
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { doc, updateDoc } = this.clientSdk;
+        await updateDoc(doc(this.clientDb, 'incoming_po_chats', chatId), updateData);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[FIREBASE] updateChatDocument notice:', e.message);
+    }
+    return false;
+  }
+
+  async findRecentPendingTransferSlip(senderPhone, senderJid, amount = 0) {
+    try {
+      if (this.mode === 'admin' && this.db) {
+        const snap = await this.db.collection('incoming_po_chats')
+          .where('messageType', '==', 'TRANSFER_SLIP')
+          .where('status', '==', 'pending')
+          .limit(10)
+          .get();
+        if (!snap.empty) {
+          const match = snap.docs.find(d => {
+            const data = d.data();
+            const phoneMatch = senderPhone && (data.senderPhone === senderPhone);
+            const jidMatch = senderJid && (data.senderJid === senderJid);
+            const amountMatch = (!amount || amount <= 0) || (data.transferInfo && Math.abs(Number(data.transferInfo.amount || 0) - amount) <= 100);
+            return (phoneMatch || jidMatch) && amountMatch;
+          });
+          if (match) return { id: match.id, ...match.data() };
+        }
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { collection, query, where, limit, getDocs } = this.clientSdk;
+        const q = query(collection(this.clientDb, 'incoming_po_chats'), where('messageType', '==', 'TRANSFER_SLIP'), where('status', '==', 'pending'), limit(10));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const match = snap.docs.find(d => {
+            const data = d.data();
+            const phoneMatch = senderPhone && (data.senderPhone === senderPhone);
+            const jidMatch = senderJid && (data.senderJid === senderJid);
+            const amountMatch = (!amount || amount <= 0) || (data.transferInfo && Math.abs(Number(data.transferInfo.amount || 0) - amount) <= 100);
+            return (phoneMatch || jidMatch) && amountMatch;
+          });
+          if (match) return { id: match.id, ...match.data() };
+        }
+      }
+    } catch (e) {
+      console.warn('[FIREBASE] findRecentPendingTransferSlip notice:', e.message);
+    }
+    return null;
+  }
+
+  async saveAiKnowledgeRule(rule) {
+    if (!rule || !rule.keyword || !rule.mappedValue) return false;
+    try {
+      const payload = {
+        type: rule.type || 'customer_alias',
+        keyword: String(rule.keyword).trim().toUpperCase(),
+        mappedValue: String(rule.mappedValue).trim().toUpperCase(),
+        source: rule.source || 'WA_GATEWAY_ESL',
+        createdAt: new Date()
+      };
+      if (this.mode === 'admin' && this.db) {
+        const existing = await this.db.collection('ai_knowledge_rules')
+          .where('keyword', '==', payload.keyword)
+          .where('mappedValue', '==', payload.mappedValue)
+          .limit(1)
+          .get();
+        if (existing.empty) {
+          await this.db.collection('ai_knowledge_rules').add(payload);
+          console.log(`[ESL LEARN] 🧠 Aturan baru dipelajari: "${payload.keyword}" -> "${payload.mappedValue}"`);
+        }
+        return true;
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { collection, query, where, limit, getDocs, addDoc } = this.clientSdk;
+        const q = query(
+          collection(this.clientDb, 'ai_knowledge_rules'),
+          where('keyword', '==', payload.keyword),
+          where('mappedValue', '==', payload.mappedValue),
+          limit(1)
+        );
+        const existing = await getDocs(q);
+        if (existing.empty) {
+          await addDoc(collection(this.clientDb, 'ai_knowledge_rules'), payload);
+          console.log(`[ESL LEARN] 🧠 Aturan baru dipelajari: "${payload.keyword}" -> "${payload.mappedValue}"`);
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn('[ESL LEARN NOTICE]:', e.message);
+    }
+    return false;
+  }
+
   listenToCommands(onCommand) {
     let isExecuting = false;
     if (this.mode === 'admin') {
