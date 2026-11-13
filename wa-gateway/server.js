@@ -263,10 +263,27 @@ async function flushMessageBuffer(bufferKey) {
   const savedId = await firebaseAdapter.saveIncomingChat(chatPayload);
 
   // Autonomous Auto-PO execution (khusus Termux saat laptop kasir mati / background)
+  // DELAY 2 MENIT: Beri kesempatan Flutter (web/mobile) untuk proses duluan.
+  // Jika Flutter sudah handle (status = processed), Termux SKIP.
+  // Jika setelah 2 menit masih pending, Termux buat PO sendiri (dengan customer history pricing).
   if (autoPoEnabled && chatPayload.messageType === 'ORDER_PO' && !chatPayload.isQuotedReply) {
-    autoPoProcessor.processAutonomousPo(savedId, chatPayload).catch(err => {
-      console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
-    });
+    const DELAY_MS = 2 * 60 * 1000; // 2 menit
+    console.log(`[AUTONOMOUS PO] ⏱️ Menunggu ${DELAY_MS / 1000} detik sebelum proses PO otonom (memberi prioritas Flutter)...`);
+    setTimeout(async () => {
+      try {
+        // Cek apakah Flutter sudah proses chat ini
+        const chatDoc = await firebaseAdapter.getChatDocument(savedId);
+        if (chatDoc && chatDoc.status === 'processed') {
+          console.log(`[AUTONOMOUS PO] ⏭️ Chat ${savedId} sudah diproses oleh Flutter (Invoice #${chatDoc.createdInvoiceNo || '?'}). SKIP.`);
+          return;
+        }
+        // Masih pending → Termux handle
+        console.log(`[AUTONOMOUS PO] 🤖 Chat ${savedId} masih pending setelah ${DELAY_MS / 1000}s. Termux ambil alih proses PO...`);
+        await autoPoProcessor.processAutonomousPo(savedId, chatPayload);
+      } catch (err) {
+        console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
+      }
+    }, DELAY_MS);
   }
 }
 
@@ -1350,10 +1367,23 @@ async function startBaileys() {
         const savedBypassId = await firebaseAdapter.saveIncomingChat(bypassPayload);
 
         // Autonomous Auto-PO execution untuk pesan forwarded pesanan (khusus Termux saat laptop kasir mati)
+        // DELAY 2 MENIT: Sama seperti pesan biasa, beri prioritas Flutter dulu.
         if (autoPoEnabled && bypassPayload.messageType === 'ORDER_PO' && !bypassPayload.isQuotedReply) {
-          autoPoProcessor.processAutonomousPo(savedBypassId, bypassPayload).catch(err => {
-            console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
-          });
+          const DELAY_MS = 2 * 60 * 1000;
+          console.log(`[AUTONOMOUS PO] ⏱️ Forwarded order: Menunggu ${DELAY_MS / 1000}s sebelum proses PO otonom...`);
+          setTimeout(async () => {
+            try {
+              const chatDoc = await firebaseAdapter.getChatDocument(savedBypassId);
+              if (chatDoc && chatDoc.status === 'processed') {
+                console.log(`[AUTONOMOUS PO] ⏭️ Forwarded chat ${savedBypassId} sudah diproses Flutter. SKIP.`);
+                return;
+              }
+              console.log(`[AUTONOMOUS PO] 🤖 Forwarded chat ${savedBypassId} masih pending. Termux proses PO...`);
+              await autoPoProcessor.processAutonomousPo(savedBypassId, bypassPayload);
+            } catch (err) {
+              console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
+            }
+          }, DELAY_MS);
         }
         return; // Selesai! Langsung keluar agar tidak masuk buffer
       }

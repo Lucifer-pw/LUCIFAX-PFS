@@ -932,6 +932,141 @@ class FirebaseAdapter {
     }
   }
 
+  async getChatDocument(chatDocId) {
+    if (!chatDocId) return null;
+    try {
+      if (this.mode === 'admin' && this.db) {
+        const doc = await this.db.collection('incoming_po_chats').doc(chatDocId).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { doc: docRef, getDoc } = this.clientSdk;
+        const snap = await getDoc(docRef(this.clientDb, 'incoming_po_chats', chatDocId));
+        return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      }
+    } catch (e) {
+      console.warn('[FIREBASE] getChatDocument error:', e.message);
+    }
+    return null;
+  }
+
+  async getCustomerProductMemory(customerId, customerName, aliasName) {
+    try {
+      const cleanCustId = (customerId || '').trim();
+      const cleanCust = (customerName || '').trim().toLowerCase();
+      const cleanAlias = (aliasName || '').trim().toLowerCase();
+
+      if (this.mode === 'admin' && this.db) {
+        // 1. Cek by customerId langsung
+        if (cleanCustId) {
+          const memDoc = await this.db.collection('customer_product_memory').doc(cleanCustId).get();
+          if (memDoc.exists && memDoc.data().products) {
+            return memDoc.data().products;
+          }
+          // Cek semua doc kalau ID field cocok
+          const memSnap = await this.db.collection('customer_product_memory').get();
+          for (const d of memSnap.docs) {
+            const mData = d.data();
+            const mCustId = (mData.customerId || '').toString().toLowerCase().trim();
+            if (mCustId === cleanCustId.toLowerCase() || mCustId.replace(/g/g, '') === cleanCustId.toLowerCase().replace(/g/g, '')) {
+              if (mData.products) return mData.products;
+            }
+          }
+        } else {
+          // Unregistered customer: cek by name/alias exact match
+          if (cleanAlias.length >= 3 || cleanCust.length >= 3) {
+            const memSnap = await this.db.collection('customer_product_memory').get();
+            for (const d of memSnap.docs) {
+              const mData = d.data();
+              const mName = (mData.customerName || '').toString().trim().toLowerCase();
+              const mAlias = (mData.aliasName || '').toString().trim().toLowerCase();
+              if ((cleanAlias.length >= 3 && mAlias && cleanAlias === mAlias) ||
+                  (cleanCust.length >= 3 && mName && cleanCust === mName)) {
+                if (mData.products) return mData.products;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[FIREBASE] getCustomerProductMemory error:', e.message);
+    }
+    return [];
+  }
+
+  async getLastCustomerProductPricing(customerName, productId, customerId, productName) {
+    try {
+      const cleanCustId = (customerId || '').trim();
+      const cleanCust = (customerName || '').trim().toLowerCase();
+      const cleanProdId = (productId || '').trim().toLowerCase();
+      const cleanProdName = (productName || '').trim().toLowerCase();
+
+      if (this.mode === 'admin' && this.db) {
+        const snap = await this.db.collection('transactions')
+          .orderBy('createdAt', 'desc')
+          .limit(350)
+          .get();
+
+        for (const doc of snap.docs) {
+          const data = doc.data();
+          const docCustId = (data.customerId || '').toString().trim().toLowerCase();
+          const cName = (data.customerName || '').toString().trim().toLowerCase();
+          const cAlias = (data.aliasName || '').toString().trim().toLowerCase();
+
+          let matchCust = false;
+          if (cleanCustId) {
+            if (docCustId) {
+              matchCust = (docCustId === cleanCustId.toLowerCase() || docCustId.replace(/g/g, '') === cleanCustId.toLowerCase().replace(/g/g, ''));
+            } else if (cleanCust.length >= 4 && cName && (cName === cleanCust || cAlias === cleanCust)) {
+              matchCust = true;
+            }
+          } else {
+            if (cleanCust.length >= 3 && cName && cName === cleanCust) matchCust = true;
+            else if (cleanCust.length >= 3 && cAlias && cAlias === cleanCust) matchCust = true;
+          }
+
+          if (matchCust) {
+            const itemsRaw = data.items || [];
+            for (const itemMap of itemsRaw) {
+              if (!itemMap || typeof itemMap !== 'object') continue;
+              const pId = (itemMap.productId || '').toString().trim().toLowerCase();
+              const pName = (itemMap.productName || '').toString().trim().toLowerCase();
+              const itemPrice = Number(itemMap.price) || 0;
+              const isBonus = itemMap.isBonus === true || pName.includes('(bonus)');
+              if (itemPrice <= 0 || isBonus) continue;
+
+              let matchProd = false;
+              if (cleanProdId && pId === cleanProdId) {
+                matchProd = true;
+              } else if (cleanProdName) {
+                if (pName === cleanProdName || pName.startsWith(cleanProdName) || cleanProdName.startsWith(pName)) {
+                  matchProd = true;
+                } else {
+                  // Variant family normalization
+                  const pNorm = pName.replace(/[^a-z0-9]/g, '').replace(/24s/g, '24').replace(/13s/g, '13').replace(/7s/g, '7');
+                  const targetNorm = cleanProdName.replace(/[^a-z0-9]/g, '').replace(/24s/g, '24').replace(/13s/g, '13').replace(/7s/g, '7');
+                  if (pNorm && pNorm === targetNorm) matchProd = true;
+                }
+              }
+
+              if (matchProd) {
+                return {
+                  price: itemPrice,
+                  discountPercent: Number(itemMap.discountPercent) || 0,
+                  discountAmount: Number(itemMap.discountAmount) || 0,
+                  invoiceNo: data.invoiceNo || '',
+                  productName: itemMap.productName || '',
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[FIREBASE] getLastCustomerProductPricing error:', e.message);
+    }
+    return null;
+  }
+
   async markChatAsProcessed(chatDocId, invoiceNo) {
     if (!chatDocId) return;
     const invStr = String(invoiceNo);
