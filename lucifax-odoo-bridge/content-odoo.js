@@ -42,7 +42,7 @@ console.log('[Lucifax-Odoo] L.O.R.A (Lucifax Odoo Robotic Assistant) loaded on O
           <span style="font-size: 18px; line-height: 1;">⚡</span>
           <div style="display: flex; flex-direction: column; line-height: 1.2;">
             <strong style="color: #38BDF8; font-size: 13.5px; font-weight: 800; letter-spacing: 0.5px;">L.O.R.A</strong>
-            <span style="color: #94A3B8; font-size: 9.5px; font-weight: normal; margin-top: 1px;">(Lucifax Odoo Robotic Assistant) v.1.2.10</span>
+            <span style="color: #94A3B8; font-size: 9.5px; font-weight: normal; margin-top: 1px;">(Lucifax Odoo Robotic Assistant) v.1.2.11</span>
           </div>
         </div>
         <div style="display: flex; gap: 6px;">
@@ -1207,7 +1207,8 @@ console.log('[Lucifax-Odoo] L.O.R.A (Lucifax Odoo Robotic Assistant) loaded on O
         // PT SO: Quotation (Sales PT)
         logMessage('1. Mengisi Customer PT SO...');
         await setMany2OneField('partner_id', p.ptSoCustomer || `${p.customerAlias} (${p.customerName})`, ['customer', 'pelanggan']);
-        await setMany2OneField('pricelist_id', 'PFS Customer (IDP)', ['pricelist', 'daftar harga']);
+        logMessage('⏳ Menunggu Odoo memuat default alamat & pricelist...');
+        await waitForOdooRpcSettled(500);
 
         // 2. Tab Other Info: Tags -> "Joko Setiawan" & Analytic Account -> "PFS-Jateng"
         logMessage('2. Membuka tab Other Info...');
