@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.270'; // v3.3.270 - Anti-duplikat PO + Termux Smart Pricing (Customer History)
+const GATEWAY_VERSION = '3.3.271'; // v3.3.271 - Screenshot filter (foto terminal/log tidak jadi PO)
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -214,6 +214,31 @@ function storeRawMessage(jid, id, message) {
     rawMessageCache.delete(firstKey);
   }
   rawMessageCache.set(key, message);
+}
+
+// Helper: Deteksi apakah teks OCR adalah screenshot terminal / log / kode program
+// Mencegah foto screenshot terminal (yang mengandung kata produk di dalam log) diproses sebagai pesanan
+function _looksLikeScreenshot(t) {
+  const indicators = [
+    '[autonomous po]', '[buffer wa', '[chat masuk]', '[firebase]',
+    '[update check]', '[settings sync]', '[cache init]', '[baileys]',
+    '[local ocr]', '[media]', '[lid resolved]', '[auto-learn lid]',
+    '[gateway process', '[device identifier]', 'node server.js',
+    'version.json', '~/wa-gateway', 'curl -o', 'curl -l',
+    'npm install', 'pm2 restart', 'console.log', 'require(',
+    'module.exports', 'async function', 'firebase admin sdk',
+    'serviceaccountkey', 'berhasil dibuat dari termux',
+    'l-w.a.v.i.s', 'lucifax-pfs gateway', 'gateway updater',
+    'update tersedia', 'gateway berhasil diupdate',
+    'faktur #', 'grand total: rp', 'history match:',
+    'autonomous po success', 'menunggu 120 detik',
+  ];
+  const matchCount = indicators.filter(ind => t.includes(ind)).length;
+  if (matchCount >= 2) {
+    console.log(`[SCREENSHOT FILTER] 🖼️ Teks terdeteksi sebagai screenshot terminal/log (${matchCount} indikator). Diabaikan sebagai bukan pesanan.`);
+    return true;
+  }
+  return false;
 }
 
 async function flushMessageBuffer(bufferKey) {
@@ -1304,9 +1329,16 @@ async function startBaileys() {
           await flushMessageBuffer(existingBufKey);
         }
 
+        // Helper: Deteksi apakah teks adalah screenshot terminal / log / kode program
+        // → Fungsi _looksLikeScreenshot() sudah didefinisikan di level global
+
         const detectOrder = (text, isImg, bRes) => {
           if (bRes && bRes.isOrderDocument) return true;
           const t = (text || '').toLowerCase();
+
+          // FILTER: Abaikan screenshot terminal / log / kode program
+          if (_looksLikeScreenshot(t)) return false;
+
           const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice|krm|kirim|antar|muat)\b/i.test(t);
           const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
           const hasProductWord = /\b(rolade|rollade|kornet|fiva|sosis|baso|bakso|beres|brs|nugget|tempura|siomay|otak|kaki naga|scallop|miniku)\b/i.test(t);
@@ -1400,6 +1432,10 @@ async function startBaileys() {
       const detectOrderRegular = (text, isImg, bRes) => {
         if (bRes && bRes.isOrderDocument) return true;
         const t = (text || '').toLowerCase();
+
+        // FILTER: Abaikan screenshot terminal / log / kode program
+        if (_looksLikeScreenshot(t)) return false;
+
         const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
         const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
         const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso|beres|brs|nugget|tempura|siomay|otak|kaki naga|scallop|miniku)\b/i.test(t);
