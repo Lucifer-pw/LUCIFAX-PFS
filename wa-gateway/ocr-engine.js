@@ -1,3 +1,4 @@
+const OCR_VERSION = '3.3.270'; // v3.3.270
 const { createWorker } = require('tesseract.js');
 
 let worker = null;

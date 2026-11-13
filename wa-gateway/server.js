@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.4'; // v3.3.4 - Auto-Match Bank Slips & Client SDK Firestore Query Fix
+const GATEWAY_VERSION = '3.3.270'; // v3.3.270 - Anti-duplikat PO + Termux Smart Pricing (Customer History)
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -1806,5 +1806,96 @@ app.get('/', (req, res) => {
 // Start Express server & Baileys
 app.listen(PORT, () => {
   console.log(`[WA GATEWAY SERVER] 🚀 v${GATEWAY_VERSION} | Berjalan di http://localhost:${PORT}`);
+  printAllVersions();
   startBaileys();
+  // Auto-update checker: cek setiap 30 menit apakah ada versi baru di GitHub
+  checkForUpdates();
+  setInterval(checkForUpdates, 30 * 60 * 1000);
 });
+
+// ============================================================
+// VERSION DISPLAY & AUTO-UPDATE CHECKER
+// ============================================================
+
+function printAllVersions() {
+  try {
+    const versionFile = path.join(__dirname, 'version.json');
+    if (fs.existsSync(versionFile)) {
+      const vInfo = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+      console.log(`\n╔══════════════════════════════════════════════════╗`);
+      console.log(`║  L-W.A.V.I.S • Lucifax-PFS Gateway v${vInfo.gateway || GATEWAY_VERSION}     ║`);
+      console.log(`╠══════════════════════════════════════════════════╣`);
+      if (vInfo.files) {
+        for (const [file, ver] of Object.entries(vInfo.files)) {
+          const padFile = file.padEnd(32);
+          console.log(`║  ${padFile} v${ver}       ║`);
+        }
+      }
+      console.log(`╠══════════════════════════════════════════════════╣`);
+      console.log(`║  Updated: ${(vInfo.updatedAt || '-').padEnd(38)}║`);
+      console.log(`╚══════════════════════════════════════════════════╝\n`);
+    } else {
+      console.log(`[VERSION] ⚠️ version.json tidak ditemukan. Jalankan update untuk mendapatkannya.`);
+    }
+  } catch (e) {
+    console.warn('[VERSION] Gagal membaca version.json:', e.message);
+  }
+}
+
+async function checkForUpdates() {
+  try {
+    const https = require('https');
+    const remoteUrl = 'https://raw.githubusercontent.com/Lucifer-pw/LUCIFAX-PFS/main/wa-gateway/version.json';
+
+    const remoteData = await new Promise((resolve, reject) => {
+      https.get(remoteUrl, { headers: { 'User-Agent': 'Lucifax-Gateway' } }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          https.get(res.headers.location, { headers: { 'User-Agent': 'Lucifax-Gateway' } }, (res2) => {
+            let data = '';
+            res2.on('data', chunk => data += chunk);
+            res2.on('end', () => resolve(data));
+          }).on('error', reject);
+          return;
+        }
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+
+    const remote = JSON.parse(remoteData);
+    const localVersionFile = path.join(__dirname, 'version.json');
+    let local = { gateway: '0.0.0', files: {} };
+    if (fs.existsSync(localVersionFile)) {
+      local = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
+    }
+
+    if (remote.gateway !== local.gateway) {
+      console.log(`\n╔══════════════════════════════════════════════════╗`);
+      console.log(`║  🔔 UPDATE TERSEDIA!                             ║`);
+      console.log(`║  Lokal : v${(local.gateway || '?').padEnd(38)}║`);
+      console.log(`║  Remote: v${(remote.gateway || '?').padEnd(38)}║`);
+      console.log(`║  ${(remote.changelog || '').substring(0, 48).padEnd(48)}║`);
+      console.log(`╠══════════════════════════════════════════════════╣`);
+      console.log(`║  Jalankan perintah berikut untuk update:         ║`);
+      console.log(`║  cd ~/wa-gateway && ./update.sh                  ║`);
+      console.log(`╚══════════════════════════════════════════════════╝\n`);
+
+      // Simpan info update ke Firestore agar bisa dibaca oleh app Flutter
+      try {
+        await firebaseAdapter.updateGatewaySession({
+          updateAvailable: true,
+          currentVersion: local.gateway,
+          latestVersion: remote.gateway,
+          updateChangelog: remote.changelog || '',
+          updateCheckedAt: new Date()
+        });
+      } catch (_) {}
+    } else {
+      console.log(`[UPDATE CHECK] ✅ Gateway sudah versi terbaru (v${local.gateway})`);
+    }
+  } catch (e) {
+    // Silent fail - jangan ganggu operasi gateway kalau check gagal
+    console.log(`[UPDATE CHECK] ⚠️ Gagal cek update: ${e.message}`);
+  }
+}

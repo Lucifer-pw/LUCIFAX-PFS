@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const FA_VERSION = '3.3.270'; // v3.3.270 - getChatDocument, getCustomerProductMemory, getLastCustomerProductPricing
 
 class FirebaseAdapter {
   constructor() {

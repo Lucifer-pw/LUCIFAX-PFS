@@ -3,6 +3,7 @@
  * Memungkinkan pembuatan PO / Faktur Penjualan secara mandiri dari HP (Termux)
  * saat laptop kasir mati / aplikasi Flutter belum dibuka.
  */
+const APO_VERSION = '3.3.270'; // v3.3.270 - Customer History Pricing, Variant Matching, Bonus Rules
 
 class AutonomousPoProcessor {
   constructor(firebaseAdapter) {

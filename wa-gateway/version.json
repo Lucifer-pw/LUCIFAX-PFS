@@ -1,0 +1,12 @@
+{
+  "gateway": "3.3.270",
+  "files": {
+    "server.js": "3.3.270",
+    "autonomous-po-processor.js": "3.3.270",
+    "firebase-adapter.js": "3.3.270",
+    "ocr-engine.js": "3.3.270",
+    "bank-slip-parser.js": "3.3.270"
+  },
+  "updatedAt": "2026-11-13",
+  "changelog": "Anti-duplikat PO + Termux smart pricing (customer history, diskon, bonus, variant matching)"
+}
