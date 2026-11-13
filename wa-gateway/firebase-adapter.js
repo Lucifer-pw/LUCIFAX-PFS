@@ -630,7 +630,9 @@ class FirebaseAdapter {
       }
 
       // Fallback: Jika ada tepat 1 invoice belum lunas dengan nominal persis sama, gunakan sebagai match!
-      if (candidates.length === 0 && exactAmountUnpaidList.length > 0) {
+      // GUARD: Hanya gunakan fallback ini jika customerHint kosong (artinya dari OCR berita transfer).
+      // Jika customerHint non-empty tapi tidak cocok nama toko manapun, jangan paksa match!
+      if (candidates.length === 0 && exactAmountUnpaidList.length > 0 && (!cleanHint || cleanHint.length === 0)) {
         const unpaidExact = exactAmountUnpaidList.filter(c => !c.isLunas);
         if (unpaidExact.length === 1) {
           console.log(`[AUTO-MATCH UNIQUE AMOUNT] 🎯 Hanya ada 1 faktur tertunggak (#${unpaidExact[0].noInvoice} - ${unpaidExact[0].toko}) dengan nominal Rp ${amount.toLocaleString('id-ID')}!`);

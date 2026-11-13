@@ -82,11 +82,16 @@ class AutonomousPoProcessor {
 
       // Cek rule alias
       const ruleMatch = custRules.find(r => {
-        const from = (r.from || '').toLowerCase().trim();
+        const from = (r.keyword || r.from || '').toLowerCase().trim();
         return from && (lineClean === from || lineClean.startsWith(from + ' ') || lineClean.endsWith(' ' + from));
       });
       if (ruleMatch) {
-        const targetName = (ruleMatch.to || '').toLowerCase().trim();
+        // Cek targetId dulu
+        if (ruleMatch.targetId) {
+          const byId = this.cachedCustomers.find(c => c.id === ruleMatch.targetId);
+          if (byId) return byId;
+        }
+        const targetName = (ruleMatch.mappedValue || ruleMatch.to || '').toLowerCase().trim();
         const found = this.cachedCustomers.find(c =>
           (c.customerName || '').toLowerCase().includes(targetName) ||
           (c.aliasName || '').toLowerCase().includes(targetName)
@@ -151,19 +156,37 @@ class AutonomousPoProcessor {
 
     // Bersihkan teks barang dari kuantiti
     let cleanProd = lower
-      .replace(/(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pcs|bal|ball|roll)\b/gi, ' ')
+      .replace(/(?:^|\s|\.\.\.)(\d+(?:[.,]\d+)?)\s*(k|ktn|karton|dus|box|pack|pcs|bal|ball|roll)\b/gi, ' ')
       .replace(/^[0-9]+[.)]\s*/, '')
       .replace(/\.\.\..*$/, '')
       .replace(/[^a-zA-Z0-9\s]/g, ' ')
       .trim();
 
+    // Normalisasi slang produk frozen food
+    cleanProd = cleanProd
+      .replace(/\bberes\b/g, 'brs')
+      .replace(/\bberas\b/g, 'brs')
+      .replace(/\bbratwust\b/g, 'bratwurst');
+
     // 2. Cocokkan dengan rules produk
     const prodRules = this.cachedRules.filter(r => r.type === 'product_alias');
     for (const r of prodRules) {
-      const from = (r.from || '').toLowerCase().trim();
+      let from = (r.keyword || r.from || '').toLowerCase().trim();
+      from = from.replace(/\bberes\b/g, 'brs').replace(/\bberas\b/g, 'brs');
       if (from && cleanProd.includes(from)) {
-        const to = (r.to || '').toLowerCase().trim();
-        const p = this.cachedProducts.find(prod => (prod.productName || '').toLowerCase().includes(to));
+        // Jika rule punya targetId, gunakan langsung
+        if (r.targetId) {
+          const p = this.cachedProducts.find(prod => prod.id === r.targetId);
+          if (p) {
+            return this.buildTransactionItem(p, qtyInput, qtyUnit);
+          }
+        }
+        // Fallback ke nama produk (normalize spaces for matching)
+        const to = (r.mappedValue || r.to || '').toLowerCase().trim().replace(/\s+/g, '');
+        const p = this.cachedProducts.find(prod => {
+          const pn = (prod.productName || prod.name || '').toLowerCase().replace(/\s+/g, '');
+          return pn.includes(to) || to.includes(pn);
+        });
         if (p) {
           return this.buildTransactionItem(p, qtyInput, qtyUnit);
         }
@@ -173,12 +196,11 @@ class AutonomousPoProcessor {
     // 3. Cocokkan dengan katalog produk langsung
     const words = cleanProd.split(/\s+/).filter(w => w.length >= 3);
     if (words.length > 0) {
-      // Skor kecocokan kata
       let bestProduct = null;
       let maxScore = 0;
 
       for (const p of this.cachedProducts) {
-        const pName = (p.productName || '').toLowerCase();
+        const pName = (p.productName || p.name || '').toLowerCase();
         let score = 0;
         for (const w of words) {
           if (pName.includes(w)) score++;
@@ -197,17 +219,25 @@ class AutonomousPoProcessor {
     return null;
   }
 
+
   buildTransactionItem(prod, qtyInput, qtyUnit) {
     const sizeGrams = Number(prod.sizeGrams) || 500;
-    let pcsPerKtn = 15;
-    if (sizeGrams >= 1000) {
-      pcsPerKtn = 10;
-    } else if (prod.productName && prod.productName.includes('24S')) {
-      pcsPerKtn = 24;
-    } else if (prod.productName && prod.productName.includes('13S')) {
-      pcsPerKtn = 13;
-    } else if (prod.productName && prod.productName.includes('7S')) {
-      pcsPerKtn = 15;
+    let pcsPerKtn = Number(prod.isiKarton) || 0;
+
+    // Fallback: Deteksi isi karton dari nama produk jika isiKarton tidak ada di DB
+    if (pcsPerKtn <= 0) {
+      const pname = prod.productName || prod.name || '';
+      if (sizeGrams >= 1000) {
+        pcsPerKtn = 10;
+      } else if (/\b24S?\b/i.test(pname)) {
+        pcsPerKtn = 24;
+      } else if (/\b13S?\b/i.test(pname)) {
+        pcsPerKtn = 13;
+      } else if (/\b7S?\b/i.test(pname)) {
+        pcsPerKtn = 7;
+      } else {
+        pcsPerKtn = 15;
+      }
     }
 
     let qtyPcs = qtyInput;
@@ -222,12 +252,13 @@ class AutonomousPoProcessor {
 
     return {
       productId: prod.id || '',
-      productName: prod.productName || 'PRODUK',
+      productName: prod.productName || prod.name || 'PRODUK',
       price: price,
       qty: qtyPcs,
       discountPercent: 0,
       subtotal: subtotal,
       sizeGrams: sizeGrams,
+      weightKg: Math.round(qtyPcs * sizeGrams / 1000 * 100) / 100,
       isBonus: false
     };
   }

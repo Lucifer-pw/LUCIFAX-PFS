@@ -1290,10 +1290,10 @@ async function startBaileys() {
         const detectOrder = (text, isImg, bRes) => {
           if (bRes && bRes.isOrderDocument) return true;
           const t = (text || '').toLowerCase();
-          const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
-          const hasUnitWord = /\b(karton|ktn|dus|box|roll|rol|pack|pak|pcs|bal|ball)\b/i.test(t);
-          const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso)\b/i.test(t);
-          const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol)\b/i.test(t);
+          const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice|krm|kirim|antar|muat)\b/i.test(t);
+          const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
+          const hasProductWord = /\b(rolade|rollade|kornet|fiva|sosis|baso|bakso|beres|brs|nugget|tempura|siomay|otak|kaki naga|scallop|miniku)\b/i.test(t);
+          const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol|bks|bungkus)\b/i.test(t);
 
           if (isImg) {
             if (hasOrderWord && (hasProductWord || hasUnitWord)) return true;
@@ -1302,8 +1302,9 @@ async function startBaileys() {
           }
 
           if (hasOrderWord) return true;
-          if (hasUnitWord && (hasQtyPattern || hasProductWord || t.includes('kirim'))) return true;
-          if (hasProductWord && (hasQtyPattern || t.includes('kirim') || hasOrderWord)) return true;
+          if (hasUnitWord && (hasQtyPattern || hasProductWord || t.includes('kirim') || t.includes('krm'))) return true;
+          if (hasProductWord && (hasQtyPattern || t.includes('kirim') || t.includes('krm') || hasOrderWord || hasUnitWord)) return true;
+          if (hasProductWord && /\d+/.test(t)) return true;
           return false;
         };
 
@@ -1358,98 +1359,22 @@ async function startBaileys() {
       }
 
       // =========================================================================
-      // CEK SUSULAN TEKS BIASA KE BUKTI TRANSFER PENDING:
-      // Jika pengguna baru saja mengirim foto bukti transfer (status pending),
-      // lalu dalam 3 menit mengirim teks singkat nama toko (tanpa quote),
-      // otomatis tautkan & lunasi tanpa membuat order PO!
-      // =========================================================================
-      const hasOrderIndicators = /\b(\d+\s*(?:ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol))\b/i.test(cleanText) ||
-                                 /\b(po|order|pesanan|pesan|kirim)\b/i.test(cleanText);
-      if (!isImageMessage && !isForwardedMessage && !isQuotedReply && cleanText.length <= 40 && !hasOrderIndicators) {
-        try {
-          const recentPending = await firebaseAdapter.findRecentPendingTransferSlip(senderPhone, remoteJid);
-          if (recentPending && !recentPending.matchedInvoiceNo) {
-            const pAmount = Number(recentPending.transferInfo?.amount || 0);
-            if (pAmount > 0) {
-              const matchedRec = await firebaseAdapter.findMatchingReceivable(cleanText, pAmount, recentPending.rawOcrText || '');
-              if (matchedRec) {
-                console.log(`[FOLLOW-UP TEXT MATCH] 🎯 Teks "${cleanText}" menyusul Bukti Transfer pending (${pAmount}) -> Faktur #${matchedRec.noInvoice} (${matchedRec.toko})!`);
-                if (autoSettleTransferSlips) {
-                  await firebaseAdapter.settleInvoicePayment(matchedRec.noInvoice, {
-                    amount: pAmount,
-                    bank: recentPending.transferInfo?.bank || 'TRANSFER',
-                    imageUrl: recentPending.imageUrl || '',
-                    berita: cleanText,
-                    senderName: matchedRec.toko || cleanText
-                  });
-                  await firebaseAdapter.saveAiKnowledgeRule({
-                    type: 'customer_alias',
-                    keyword: cleanText,
-                    mappedValue: matchedRec.toko,
-                    source: 'WA_GATEWAY_FOLLOW_UP_TEXT'
-                  });
-                  await firebaseAdapter.updateChatDocument(recentPending.id, {
-                    status: 'processed',
-                    isPaymentApplied: true,
-                    matchedInvoiceNo: matchedRec.noInvoice,
-                    processedAt: new Date(),
-                    'transferInfo.invoiceNo': matchedRec.noInvoice,
-                    'transferInfo.matchedToko': matchedRec.toko,
-                    'transferInfo.isAutoMatched': true,
-                    'transferInfo.customerHint': cleanText
-                  });
-                }
-
-                const followUpPayload = {
-                  senderJid: remoteJid,
-                  senderPhone,
-                  senderName,
-                  messageText: cleanText,
-                  isOrderDetected: false,
-                  messageType: 'TRANSFER_SLIP_REPLY',
-                  hasImage: false,
-                  imageUrl: null,
-                  transferInfo: {
-                    ...recentPending.transferInfo,
-                    invoiceNo: matchedRec.noInvoice,
-                    matchedToko: matchedRec.toko,
-                    isAutoMatched: true,
-                    customerHint: cleanText
-                  },
-                  matchedInvoiceNo: matchedRec.noInvoice,
-                  status: 'processed',
-                  isPaymentApplied: true,
-                  dismissReason: 'TRANSFER_REPLY_RESOLVED',
-                  messageCount: 1,
-                  messageId: msgId || '',
-                  messageIds: msgId ? [msgId] : [],
-                  receivedAt: new Date(msgTimeMs),
-                  processedAt: new Date()
-                };
-
-                recentChats.unshift({ ...followUpPayload, receivedAt: new Date() });
-                if (recentChats.length > 20) recentChats.pop();
-
-                await firebaseAdapter.saveIncomingChat(followUpPayload);
-                return; // Langsung keluar!
-              }
-            }
-          }
-        } catch (fuErr) {
-          console.warn('[FOLLOW-UP TEXT NOTICE]', fuErr.message);
-        }
-      }
-
-      // =========================================================================
       // ALUR PESANAN TEKS BIASA: Tetap menggunakan Debounce Buffer (Jeda 8 detik)
+      // =========================================================================
+      // CATATAN: Block "CEK SUSULAN TEKS BIASA KE BUKTI TRANSFER PENDING" sudah
+      // dihapus permanen karena menyebabkan bug kritis:
+      // 1. Teks "p" (atau teks pendek apapun) bisa hijack bukti transfer lama
+      // 2. Membuat rule sampah di ai_knowledge_rules yang meracuni customer resolver
+      // Transfer slip WAJIB dilunasi hanya via QUOTED REPLY yang eksplisit.
       // =========================================================================
       const detectOrderRegular = (text, isImg, bRes) => {
         if (bRes && bRes.isOrderDocument) return true;
         const t = (text || '').toLowerCase();
         const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
-        const hasUnitWord = /\b(karton|ktn|dus|box|roll|rol|pack|pak|pcs|bal|ball)\b/i.test(t);
-        const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso)\b/i.test(t);
-        const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol)\b/i.test(t);
+        const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
+        const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso|beres|brs|nugget|tempura|siomay|otak|kaki naga|scallop|miniku)\b/i.test(t);
+        const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol|bks|bungkus|ikat)\b/i.test(t);
+        const hasVerb = /\b(krm|kirim|antar|muat)\b/i.test(t);
 
         if (isImg) {
           if (hasOrderWord && (hasProductWord || hasUnitWord)) return true;
@@ -1458,8 +1383,8 @@ async function startBaileys() {
         }
 
         if (hasOrderWord) return true;
-        if (hasUnitWord && (hasQtyPattern || hasProductWord || t.includes('kirim'))) return true;
-        if (hasProductWord && (hasQtyPattern || t.includes('kirim') || hasOrderWord)) return true;
+        if (hasUnitWord && (hasQtyPattern || hasProductWord || hasVerb)) return true;
+        if (hasProductWord && (hasQtyPattern || hasVerb || hasOrderWord)) return true;
         return false;
       };
 
