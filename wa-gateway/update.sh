@@ -28,7 +28,7 @@ echo "⬇️  Mengunduh file terbaru dari GitHub..."
 echo ""
 
 # Download semua file gateway
-FILES="server.js autonomous-po-processor.js firebase-adapter.js ocr-engine.js bank-slip-parser.js version.json"
+FILES="server.js autonomous-po-processor.js firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js version.json"
 
 for f in $FILES; do
   echo -n "  📥 $f ... "

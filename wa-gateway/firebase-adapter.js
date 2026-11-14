@@ -1,12 +1,17 @@
 const fs = require('fs');
 const path = require('path');
-const FA_VERSION = '3.3.270'; // v3.3.270 - getChatDocument, getCustomerProductMemory, getLastCustomerProductPricing
+const FA_VERSION = '3.3.272'; // v3.3.272 - Integrasi Notifikasi Piutang Lunas & Pelanggan ke FCM
 
 class FirebaseAdapter {
   constructor() {
     this.mode = 'uninitialized';
     this.db = null;
+    this.notificationDispatcher = null;
     this.init();
+  }
+
+  setNotificationDispatcher(dispatcher) {
+    this.notificationDispatcher = dispatcher;
   }
 
   init() {

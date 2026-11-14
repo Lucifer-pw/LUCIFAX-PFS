@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.271'; // v3.3.271 - Screenshot filter (foto terminal/log tidak jadi PO)
+const GATEWAY_VERSION = '3.3.272'; // v3.3.272 - 2 Notifikasi Bertahap L-W.A.V.I.S (Pesan Masuk & Hasil PO FCM)
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -19,8 +19,13 @@ const ocrEngine = require('./ocr-engine');
 const bankSlipParser = require('./bank-slip-parser');
 
 const firebaseAdapter = require('./firebase-adapter');
+const { NotificationDispatcher, NOTIF_VERSION } = require('./notification-dispatcher');
+const notificationDispatcher = new NotificationDispatcher(firebaseAdapter);
 const AutonomousPoProcessor = require('./autonomous-po-processor');
-const autoPoProcessor = new AutonomousPoProcessor(firebaseAdapter);
+const autoPoProcessor = new AutonomousPoProcessor(firebaseAdapter, notificationDispatcher);
+if (firebaseAdapter && typeof firebaseAdapter.setNotificationDispatcher === 'function') {
+  firebaseAdapter.setNotificationDispatcher(notificationDispatcher);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -286,6 +291,15 @@ async function flushMessageBuffer(bufferKey) {
   if (recentChats.length > 20) recentChats.pop();
 
   const savedId = await firebaseAdapter.saveIncomingChat(chatPayload);
+
+  // NOTIFIKASI TAHAP 1: PESAN / FOTO MASUK (REAL-TIME FCM KE HP)
+  notificationDispatcher.sendIncomingMessageAlert({
+    senderName: buf.senderName,
+    senderPhone: buf.senderPhone,
+    messageText: combinedText,
+    hasImage: !!buf.hasImage,
+    isTransfer: isTransfer
+  });
 
   // Autonomous Auto-PO execution (khusus Termux saat laptop kasir mati / background)
   // DELAY 2 MENIT: Beri kesempatan Flutter (web/mobile) untuk proses duluan.
@@ -1098,6 +1112,26 @@ async function startBaileys() {
         if (recentChats.length > 20) recentChats.pop();
 
         await firebaseAdapter.saveIncomingChat(slipPayload);
+
+        // NOTIFIKASI TAHAP 1: BUKTI TRANSFER MASUK (REAL-TIME FCM KE HP)
+        notificationDispatcher.sendIncomingMessageAlert({
+          senderName: senderName,
+          senderPhone: senderPhone,
+          messageText: cleanText,
+          hasImage: true,
+          isTransfer: true
+        });
+
+        // NOTIFIKASI TAHAP 2: JIKA SUDAH AUTO-SETTLED (LUNAS)
+        if (isAutoSettled && bankResult.invoiceNo) {
+          notificationDispatcher.sendReceivablePaidAlert({
+            bankName: bankResult.bank,
+            amount: bankResult.amount,
+            invoiceNo: bankResult.invoiceNo,
+            customerName: bankResult.matchedToko || senderName
+          });
+        }
+
         return; // Selesai! Langsung keluar agar tidak masuk buffer chat teks pesanan
       }
 

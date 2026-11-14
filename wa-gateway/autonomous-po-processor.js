@@ -3,11 +3,12 @@
  * Memungkinkan pembuatan PO / Faktur Penjualan secara mandiri dari HP (Termux)
  * saat laptop kasir mati / aplikasi Flutter belum dibuka.
  */
-const APO_VERSION = '3.3.270'; // v3.3.270 - Customer History Pricing, Variant Matching, Bonus Rules
+const APO_VERSION = '3.3.272'; // v3.3.272 - Notifikasi Tahap 2 PO Sukses & Review Needed via FCM
 
 class AutonomousPoProcessor {
-  constructor(firebaseAdapter) {
+  constructor(firebaseAdapter, notificationDispatcher = null) {
     this.firebaseAdapter = firebaseAdapter;
+    this.notificationDispatcher = notificationDispatcher;
     this.cachedCustomers = [];
     this.cachedProducts = [];
     this.cachedRules = [];
@@ -783,6 +784,13 @@ class AutonomousPoProcessor {
 
       if (!parsed || parsed.items.length === 0) {
         console.log(`[AUTONOMOUS PO] ⏳ Format pesanan belum lengkap atau butuh verifikasi manual. Chat disimpan sebagai pending.`);
+        if (this.notificationDispatcher) {
+          this.notificationDispatcher.sendReviewNeededAlert({
+            senderName: chatPayload.senderName,
+            reason: 'Format pesanan belum lengkap / produk tidak cocok',
+            rawChat: chatPayload.messageText
+          });
+        }
         return null;
       }
 
@@ -834,6 +842,16 @@ class AutonomousPoProcessor {
       }
 
       console.log(`[AUTONOMOUS PO SUCCESS] 🚀🎉 FAKTUR #${invoiceNo} (${parsed.customer.customerName}) BERHASIL DIBUAT DARI TERMUX! Grand Total: Rp ${parsed.grandTotal.toLocaleString('id-ID')}`);
+
+      // NOTIFIKASI TAHAP 2: PO BERHASIL DIBUAT (RINCIAN LENGKAP VIA FCM KE HP)
+      if (this.notificationDispatcher) {
+        this.notificationDispatcher.sendPoSuccessAlert({
+          invoiceNo: String(invoiceNo),
+          customerName: parsed.customer.customerName,
+          items: parsed.items,
+          grandTotal: parsed.grandTotal
+        });
+      }
       return {
         success: true,
         invoiceNo: String(invoiceNo),

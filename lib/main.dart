@@ -17,6 +17,7 @@ import 'providers/attendance_provider.dart';
 import 'providers/role_permissions_provider.dart';
 import 'views/login_view.dart';
 import 'views/shell_view.dart';
+import 'services/wavis_fcm_service.dart';
 
 final globalErrorNotifier = ValueNotifier<String?>(null);
 
@@ -49,6 +50,13 @@ void main() async {
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
+    }
+
+    // Initialize W.A.V.I.S Push Notification Service
+    try {
+      await WavisFcmService.instance.initialize();
+    } catch (e) {
+      debugPrint("WAVIS FCM Service init warning: $e");
     }
   } catch (e) {
     debugPrint("Firebase initialization warning: $e");

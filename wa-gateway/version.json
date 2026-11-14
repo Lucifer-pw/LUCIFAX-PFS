@@ -1,12 +1,13 @@
 {
-  "gateway": "3.3.271",
+  "gateway": "3.3.272",
   "files": {
-    "server.js": "3.3.271",
-    "autonomous-po-processor.js": "3.3.270",
-    "firebase-adapter.js": "3.3.270",
+    "server.js": "3.3.272",
+    "autonomous-po-processor.js": "3.3.272",
+    "firebase-adapter.js": "3.3.272",
+    "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.270"
   },
-  "updatedAt": "2026-11-13",
-  "changelog": "Screenshot filter - foto terminal/log tidak lagi salah diproses jadi PO"
+  "updatedAt": "2026-11-14",
+  "changelog": "Fitur 2 Notifikasi Bertahap L-W.A.V.I.S (Pesan Masuk & Rincian PO/Pelunasan FCM)"
 }
