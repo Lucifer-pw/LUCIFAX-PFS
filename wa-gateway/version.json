@@ -1,5 +1,5 @@
 {
-  "gateway": "3.3.273",
+  "gateway": "3.3.274",
   "files": {
     "server.js": "3.3.273",
     "autonomous-po-processor.js": "3.3.273",
@@ -9,5 +9,5 @@
     "bank-slip-parser.js": "3.3.270"
   },
   "updatedAt": "2026-11-15",
-  "changelog": "Filter menu restoran, wajib produk frozen food pada gambar, dan pengaman substring nama customer"
+  "changelog": "Perapian UI Kelola Nomor Whitelist di Android (responsif mobile, layout nama & nomor vertikal, tombol aksi ramping)"
 }

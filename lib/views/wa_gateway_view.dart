@@ -430,10 +430,54 @@ class _WaGatewayViewState extends State<WaGatewayView> {
         builder: (dialogCtx, setDialogState) {
           final contacts = List<Map<String, String>>.from(localSettings.whitelistContacts);
           final isEditing = editingIndex != null && editingIndex! < contacts.length;
+          final screenSize = MediaQuery.of(dialogCtx).size;
+          final isMobile = screenSize.width < 600;
+
+          Future<void> saveContact() async {
+            final name = nameController.text.trim();
+            final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+            if (phone.isEmpty) return;
+
+            try {
+              final updatedContacts = List<Map<String, String>>.from(
+                localSettings.whitelistContacts.map((c) => Map<String, String>.from(c)),
+              );
+              if (isEditing) {
+                final currentEnabled = updatedContacts[editingIndex!]['enabled'] ?? 'true';
+                updatedContacts[editingIndex!] = {
+                  'name': name.isNotEmpty ? name : 'Kontak #${editingIndex! + 1}',
+                  'phone': phone,
+                  'enabled': currentEnabled,
+                };
+              } else {
+                updatedContacts.add({
+                  'name': name.isNotEmpty ? name : 'Kontak #${updatedContacts.length + 1}',
+                  'phone': phone,
+                  'enabled': 'true',
+                });
+              }
+
+              final updated = localSettings.copyWith(whitelistContacts: updatedContacts);
+              await _firebaseService.saveWaAutoPoSettings(updated);
+
+              nameController.clear();
+              phoneController.clear();
+              setDialogState(() {
+                localSettings = updated;
+                editingIndex = null;
+              });
+            } catch (e) {
+              debugPrint('Gagal simpan kontak whitelist: $e');
+            }
+          }
 
           return AlertDialog(
             backgroundColor: const Color(0xFF1E293B),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 40,
+              vertical: isMobile ? 16 : 24,
+            ),
             title: Row(
               children: [
                 Container(
@@ -442,18 +486,27 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                   child: const Icon(Icons.security_rounded, color: Color(0xFF38BDF8), size: 22),
                 ),
                 const SizedBox(width: 10),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Kelola Nomor Whitelist', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Hanya chat dari nomor ini yang akan ditangkap ke database', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                  ],
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Kelola Nomor Whitelist', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 2),
+                      Text(
+                        'Hanya chat dari nomor ini yang akan ditangkap ke database',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
             content: SizedBox(
-              width: 580,
-              height: 520,
+              width: isMobile ? double.maxFinite : 580,
+              height: isMobile ? (screenSize.height * 0.72).clamp(420.0, 580.0) : 520,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -487,9 +540,11 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 6),
                         Switch(
                           value: localSettings.strictWhitelistOnly,
                           activeColor: Colors.tealAccent,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           onChanged: (val) async {
                             try {
                               final updated = localSettings.copyWith(strictWhitelistOnly: val);
@@ -505,7 +560,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // Add / Edit Whitelist Contact Form
                   Container(
@@ -525,118 +580,162 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                               children: [
                                 const Icon(Icons.edit_rounded, color: Color(0xFF38BDF8), size: 14),
                                 const SizedBox(width: 6),
-                                Text(
-                                  'Mode Edit Kontak: "${contacts[editingIndex!]['name']}"',
-                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                Expanded(
+                                  child: Text(
+                                    'Mode Edit: "${contacts[editingIndex!]['name'] ?? 'Kontak'}"',
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 5,
-                              child: TextField(
-                                controller: nameController,
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                                decoration: InputDecoration(
-                                  hintText: 'Nama Kontak (e.g. Pak BC)',
-                                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                  filled: true,
-                                  fillColor: const Color(0xFF1E293B),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        if (isMobile) ...[
+                          TextField(
+                            controller: nameController,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: 'Nama Kontak (e.g. Pak BC)',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF64748B), size: 16),
+                              prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              filled: true,
+                              fillColor: const Color(0xFF1E293B),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: 'Nomor WA (0812...)',
+                                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                                    prefixIcon: const Icon(Icons.phone_outlined, color: Color(0xFF64748B), size: 16),
+                                    prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                    filled: true,
+                                    fillColor: const Color(0xFF1E293B),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 5,
-                              child: TextField(
-                                controller: phoneController,
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                                decoration: InputDecoration(
-                                  hintText: 'Nomor WA (e.g. 081234567890)',
-                                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                  filled: true,
-                                  fillColor: const Color(0xFF1E293B),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isEditing ? const Color(0xFF10B981) : const Color(0xFF0284C7),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: () async {
-                                final name = nameController.text.trim();
-                                final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
-                                if (phone.isEmpty) return;
-
-                                try {
-                                  final updatedContacts = List<Map<String, String>>.from(
-                                    localSettings.whitelistContacts.map((c) => Map<String, String>.from(c)),
-                                  );
-                                  if (isEditing) {
-                                    final currentEnabled = updatedContacts[editingIndex!]['enabled'] ?? 'true';
-                                    updatedContacts[editingIndex!] = {
-                                      'name': name.isNotEmpty ? name : 'Kontak WA',
-                                      'phone': phone,
-                                      'enabled': currentEnabled,
-                                    };
-                                  } else {
-                                    updatedContacts.add({
-                                      'name': name.isNotEmpty ? name : 'Kontak WA',
-                                      'phone': phone,
-                                      'enabled': 'true',
-                                    });
-                                  }
-
-                                  final updated = localSettings.copyWith(whitelistContacts: updatedContacts);
-                                  await _firebaseService.saveWaAutoPoSettings(updated);
-
-                                  nameController.clear();
-                                  phoneController.clear();
-                                  setDialogState(() {
-                                    localSettings = updated;
-                                    editingIndex = null;
-                                  });
-                                } catch (e) {
-                                  debugPrint('Gagal simpan kontak whitelist: $e');
-                                }
-                              },
-                              child: Text(
-                                isEditing ? 'Simpan' : '+ Tambah',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                            ),
-                            if (isEditing) ...[
-                              const SizedBox(width: 6),
-                              OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF94A3B8),
-                                  side: const BorderSide(color: Color(0xFF475569)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isEditing ? const Color(0xFF10B981) : const Color(0xFF0284C7),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
-                                onPressed: () {
-                                  nameController.clear();
-                                  phoneController.clear();
-                                  setDialogState(() {
-                                    editingIndex = null;
-                                  });
-                                },
-                                child: const Text('Batal', style: TextStyle(fontSize: 12)),
+                                onPressed: saveContact,
+                                child: Text(
+                                  isEditing ? 'Simpan' : '+ Tambah',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
                               ),
+                              if (isEditing) ...[
+                                const SizedBox(width: 6),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF94A3B8),
+                                    side: const BorderSide(color: Color(0xFF475569)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () {
+                                    nameController.clear();
+                                    phoneController.clear();
+                                    setDialogState(() {
+                                      editingIndex = null;
+                                    });
+                                  },
+                                  child: const Text('Batal', style: TextStyle(fontSize: 12)),
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: TextField(
+                                  controller: nameController,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Nama Kontak (e.g. Pak BC)',
+                                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                    filled: true,
+                                    fillColor: const Color(0xFF1E293B),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 5,
+                                child: TextField(
+                                  controller: phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Nomor WA (e.g. 081234567890)',
+                                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                    filled: true,
+                                    fillColor: const Color(0xFF1E293B),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isEditing ? const Color(0xFF10B981) : const Color(0xFF0284C7),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: saveContact,
+                                child: Text(
+                                  isEditing ? 'Simpan' : '+ Tambah',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              if (isEditing) ...[
+                                const SizedBox(width: 6),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF94A3B8),
+                                    side: const BorderSide(color: Color(0xFF475569)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () {
+                                    nameController.clear();
+                                    phoneController.clear();
+                                    setDialogState(() {
+                                      editingIndex = null;
+                                    });
+                                  },
+                                  child: const Text('Batal', style: TextStyle(fontSize: 12)),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -649,7 +748,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                         'Daftar Nomor Terdaftar (${contacts.length}):',
                         style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold),
                       ),
-                      if (contacts.isNotEmpty)
+                      if (contacts.isNotEmpty && !isMobile)
                         const Text(
                           'Klik ✏️ untuk edit, 🗑️ untuk hapus',
                           style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
@@ -671,9 +770,11 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                               final item = contacts[idx];
                               final isCurrentEdit = editingIndex == idx;
                               final isEnabled = item['enabled'] != 'false';
+                              final hasName = item['name'] != null && item['name']!.trim().isNotEmpty;
+                              final displayName = hasName ? item['name']!.trim() : 'Kontak #${idx + 1}';
 
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: isCurrentEdit
                                       ? const Color(0xFF0284C7).withOpacity(0.15)
@@ -686,60 +787,60 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                   ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: isEnabled ? const Color(0xFF0284C7).withOpacity(0.15) : const Color(0xFF334155).withOpacity(0.3),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.phone_android_rounded,
+                                        color: isEnabled ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                        size: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
                                     Expanded(
-                                      child: Row(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(
-                                            Icons.phone_android_rounded,
-                                            color: isEnabled ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Flexible(
-                                            child: Text(
-                                              item['name'] ?? '',
-                                              style: TextStyle(
-                                                color: isEnabled ? Colors.white : const Color(0xFF94A3B8),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                                decoration: isEnabled ? TextDecoration.none : TextDecoration.lineThrough,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
                                           Text(
-                                            '(+${_maskPhone(item['phone'])})',
+                                            displayName,
                                             style: TextStyle(
-                                              color: isEnabled ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                              fontSize: 12,
+                                              color: isEnabled ? Colors.white : const Color(0xFF94A3B8),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                              decoration: isEnabled ? TextDecoration.none : TextDecoration.lineThrough,
                                             ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          if (!isEnabled) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: Colors.red.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(4),
-                                                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
-                                              ),
-                                              child: const Text('OFF', style: TextStyle(color: Colors.redAccent, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '+${_maskPhone(item['phone'])}',
+                                            style: TextStyle(
+                                              color: isEnabled ? const Color(0xFF38BDF8).withOpacity(0.9) : const Color(0xFF64748B),
+                                              fontSize: 11,
+                                              fontFamily: 'monospace',
                                             ),
-                                          ],
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ],
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         // ON / OFF Toggle Pill
                                         Tooltip(
-                                          message: isEnabled ? 'Klik untuk NONAKTIFKAN pesan dari nomor ini' : 'Klik untuk AKTIFKAN pesan dari nomor ini',
+                                          message: isEnabled ? 'Klik untuk NONAKTIFKAN nomor ini' : 'Klik untuk AKTIFKAN nomor ini',
                                           child: InkWell(
-                                            borderRadius: BorderRadius.circular(16),
+                                            borderRadius: BorderRadius.circular(14),
                                             onTap: () async {
                                               try {
                                                 final updatedContacts = List<Map<String, String>>.from(
@@ -758,13 +859,12 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                               }
                                             },
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              margin: const EdgeInsets.only(right: 6),
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
                                               decoration: BoxDecoration(
                                                 color: isEnabled
                                                     ? const Color(0xFF065F46).withOpacity(0.4)
                                                     : const Color(0xFF334155).withOpacity(0.5),
-                                                borderRadius: BorderRadius.circular(16),
+                                                borderRadius: BorderRadius.circular(14),
                                                 border: Border.all(
                                                   color: isEnabled ? const Color(0xFF10B981) : const Color(0xFF64748B),
                                                   width: 1,
@@ -774,8 +874,8 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Container(
-                                                    width: 7,
-                                                    height: 7,
+                                                    width: 6,
+                                                    height: 6,
                                                     decoration: BoxDecoration(
                                                       shape: BoxShape.circle,
                                                       color: isEnabled ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
@@ -795,9 +895,13 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                             ),
                                           ),
                                         ),
+                                        const SizedBox(width: 2),
                                         // Edit Button
                                         IconButton(
-                                          icon: const Icon(Icons.edit_rounded, color: Color(0xFF38BDF8), size: 18),
+                                          visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.all(5),
+                                          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                          icon: const Icon(Icons.edit_rounded, color: Color(0xFF38BDF8), size: 17),
                                           tooltip: 'Edit Kontak',
                                           onPressed: () {
                                             setDialogState(() {
@@ -809,16 +913,20 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                         ),
                                         // Delete Button
                                         IconButton(
-                                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                          visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.all(5),
+                                          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 17),
                                           tooltip: 'Hapus Kontak',
                                           onPressed: () async {
                                             final confirm = await showDialog<bool>(
                                               context: dialogCtx,
                                               builder: (confCtx) => AlertDialog(
                                                 backgroundColor: const Color(0xFF1E293B),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                                 title: const Text('Hapus Kontak Whitelist?', style: TextStyle(color: Colors.white, fontSize: 15)),
                                                 content: Text(
-                                                  'Hapus ${item['name']} (+${item['phone']}) dari daftar whitelist?',
+                                                  'Hapus $displayName (+${item['phone']}) dari daftar whitelist?',
                                                   style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                                                 ),
                                                 actions: [
