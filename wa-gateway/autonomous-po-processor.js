@@ -3,7 +3,7 @@
  * Memungkinkan pembuatan PO / Faktur Penjualan secara mandiri dari HP (Termux)
  * saat laptop kasir mati / aplikasi Flutter belum dibuka.
  */
-const APO_VERSION = '3.3.272'; // v3.3.272 - Notifikasi Tahap 2 PO Sukses & Review Needed via FCM
+const APO_VERSION = '3.3.273'; // v3.3.273 - Safe customer matching (anti short token noise) & filter menu resto
 
 class AutonomousPoProcessor {
   constructor(firebaseAdapter, notificationDispatcher = null) {
@@ -101,12 +101,25 @@ class AutonomousPoProcessor {
         if (found) return found;
       }
 
-      // Cek nama customer / alias langsung
+      // Cek nama customer / alias langsung dengan proteksi kata pendek
+      const isSafeCustomerMatch = (targetName, queryLine) => {
+        if (!targetName || !queryLine || queryLine.length < 3) return false;
+        if (targetName === queryLine) return true;
+        if (queryLine.includes(targetName)) return true;
+        // targetName mengandung queryLine HANYA jika queryLine >= 4 huruf dan cocok kata utuh
+        if (queryLine.length >= 4) {
+          const words = targetName.split(/\s+/);
+          if (words.some(w => w === queryLine || (queryLine.length >= 5 && w.includes(queryLine)))) {
+            return true;
+          }
+        }
+        return false;
+      };
+
       const directMatch = this.cachedCustomers.find(c => {
         const cn = (c.customerName || '').toLowerCase().trim();
         const an = (c.aliasName || '').toLowerCase().trim();
-        return (cn && (lineClean.includes(cn) || cn.includes(lineClean))) ||
-               (an && (lineClean.includes(an) || an.includes(lineClean)));
+        return isSafeCustomerMatch(cn, lineClean) || isSafeCustomerMatch(an, lineClean);
       });
       if (directMatch) return directMatch;
     }
@@ -287,6 +300,18 @@ class AutonomousPoProcessor {
 
     const cleanQ = productText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
     if (!cleanQ) return null;
+
+    // Filter makanan / minuman matang restoran (ayam bakar, nasi goreng, es teh, dll)
+    if (/\b(bakar|godog|lalapan|sambal|cething|porsi|kangkung|wader|lele|gurami|bawal|aqua|es teh|lemon tea|soda|sekoteng)\b/i.test(cleanQ)) {
+      return null;
+    }
+
+    // PROTEIN MODIFIER GUARD: Kata 'ayam' atau 'sapi' saja TIDAK BISA mencocokkan produk
+    // jika tidak ada kata kategori olahan frozen food (kornet, rollade, sosis, nugget, baso, brs, dll)
+    const hasCategoryWord = /\b(kornet|rollade|rolade|sosis|nugget|baso|bakso|beres|brs|tempura|siomay|otak|scallop|miniku|kaki naga|burger|patty|dimsum)\b/i.test(cleanQ);
+    if (!hasCategoryWord) {
+      return null;
+    }
 
     // 1. Direct name match
     for (const h of customerHistory) {
@@ -554,6 +579,10 @@ class AutonomousPoProcessor {
           lower.startsWith('siang') || lower.startsWith('catatan') || lower.startsWith('note') ||
           lower.startsWith('nb:') || lower.startsWith('jadwal') || lower.startsWith('titip') ||
           lower.startsWith('masuk erp') || lower.startsWith('faktur')) {
+        continue;
+      }
+      // Skip makanan / minuman matang restoran (ayam bakar, nasi goreng, es teh, dll)
+      if (/\b(bakar|godog|lalapan|sambal|cething|porsi|kangkung|wader|lele|gurami|bawal|aqua|es teh|lemon tea|soda|sekoteng|es batu)\b/i.test(lower)) {
         continue;
       }
       if (customer.aliasName && lower.includes(customer.aliasName.toLowerCase())) continue;

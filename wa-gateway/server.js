@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.272'; // v3.3.272 - 2 Notifikasi Bertahap L-W.A.V.I.S (Pesan Masuk & Hasil PO FCM)
+const GATEWAY_VERSION = '3.3.273'; // v3.3.273 - Filter menu restoran & perketat deteksi PO gambar (wajib produk frozen food)
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -241,6 +241,26 @@ function _looksLikeScreenshot(t) {
   const matchCount = indicators.filter(ind => t.includes(ind)).length;
   if (matchCount >= 2) {
     console.log(`[SCREENSHOT FILTER] 🖼️ Teks terdeteksi sebagai screenshot terminal/log (${matchCount} indikator). Diabaikan sebagai bukan pesanan.`);
+    return true;
+  }
+  return false;
+}
+
+// Helper: Deteksi apakah teks OCR adalah daftar menu restoran / rumah makan / warung
+// Mencegah foto daftar menu makanan matang (ayam bakar, nasi goreng, es teh, dll) diproses sebagai pesanan frozen food
+function _looksLikeRestaurantMenu(t) {
+  const indicators = [
+    'daftar menu', 'menu makanan', 'menu minuman', 'porsi', 'cething',
+    'lalapan', 'sambal', 'ayam bakar', 'ayam goreng', 'bakmi godog',
+    'bakmi goreng', 'nasi goreng', 'wader', 'lele', 'gurami', 'bawal',
+    'teh hangat', 'jeruk hangat', 'es lemon tea', 'soda gembira',
+    'kopi susu', 'sekoteng', 'es batu', 'rowo jombor', 'rumah makan', 'resto',
+    'ikan bakar', 'ikan goreng', 'udang goreng', 'tahu goreng', 'tempe goreng',
+    'menerima pesanan untuk ultah', 'speed boat', 'perahu wisata'
+  ];
+  const matchCount = indicators.filter(ind => t.includes(ind)).length;
+  if (matchCount >= 2) {
+    console.log(`[MENU RESTO FILTER] 🍽️ Teks terdeteksi sebagai daftar menu restoran/rumah makan (${matchCount} indikator). Diabaikan sebagai bukan pesanan.`);
     return true;
   }
   return false;
@@ -1372,6 +1392,8 @@ async function startBaileys() {
 
           // FILTER: Abaikan screenshot terminal / log / kode program
           if (_looksLikeScreenshot(t)) return false;
+          // FILTER: Abaikan foto daftar menu restoran / warung makan
+          if (isImg && _looksLikeRestaurantMenu(t)) return false;
 
           const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice|krm|kirim|antar|muat)\b/i.test(t);
           const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
@@ -1379,8 +1401,9 @@ async function startBaileys() {
           const hasQtyPattern = /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol|bks|bungkus)\b/i.test(t);
 
           if (isImg) {
-            if (hasOrderWord && (hasProductWord || hasUnitWord)) return true;
-            if (hasQtyPattern && (hasProductWord || hasOrderWord)) return true;
+            // Gambar/Foto WAJIB mengandung kata produk frozen food yang sah!
+            // Kata "pesanan" + huruf "k" (dari daftar menu restoran/nota umum) TIDAK BOLEH jadi PO.
+            if (hasProductWord && (hasQtyPattern || hasOrderWord || hasUnitWord)) return true;
             return false;
           }
 
@@ -1469,6 +1492,8 @@ async function startBaileys() {
 
         // FILTER: Abaikan screenshot terminal / log / kode program
         if (_looksLikeScreenshot(t)) return false;
+        // FILTER: Abaikan foto daftar menu restoran / warung makan
+        if (isImg && _looksLikeRestaurantMenu(t)) return false;
 
         const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
         const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
@@ -1477,8 +1502,9 @@ async function startBaileys() {
         const hasVerb = /\b(krm|kirim|antar|muat)\b/i.test(t);
 
         if (isImg) {
-          if (hasOrderWord && (hasProductWord || hasUnitWord)) return true;
-          if (hasQtyPattern && (hasProductWord || hasOrderWord)) return true;
+          // Gambar/Foto WAJIB mengandung kata produk frozen food yang sah!
+          // Kata "pesanan" + huruf "k" (dari daftar menu restoran/nota umum) TIDAK BOLEH jadi PO.
+          if (hasProductWord && (hasQtyPattern || hasOrderWord || hasUnitWord)) return true;
           return false;
         }
 
