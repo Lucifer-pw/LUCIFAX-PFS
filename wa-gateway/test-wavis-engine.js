@@ -83,6 +83,11 @@ console.log('✅ Test 1 PASSED: Format PO 2-Baris Padat + Status Paid + GrandTot
 
 // 2. UJI INTENT CLASSIFICATION
 console.log('\n--- Test 2: Klasifikasi Maksud / Intent ---');
+const mockProductsForIntent = [
+  { id: 'p1', productName: 'BERES MERAH 24', name: 'BERES MERAH 24', price: 34549 },
+  { id: 'p2', productName: 'BRATWURST MINI', name: 'BRATWURST MINI', price: 45838 }
+];
+
 const intentTests = [
   { text: 'piutang AFM', expected: 'QUERY_RECEIVABLES' },
   { text: 'utang e afm piro mas?', expected: 'QUERY_RECEIVABLES' },
@@ -91,6 +96,12 @@ const intentTests = [
   { text: 'stok bratwurst ori ready ga?', expected: 'QUERY_STOCK' },
   { text: 'stock rolade sapi sisa berapa', expected: 'QUERY_STOCK' },
   { text: 'ready beres merah 24', expected: 'QUERY_STOCK' },
+  { text: 'stok', expected: 'QUERY_STOCK' },
+  { text: 'ready stok?', expected: 'QUERY_STOCK' },
+  { text: 'ready gak?', expected: 'QUERY_STOCK' },
+  { text: 'Are you ready?', expected: 'UNKNOWN' },
+  { text: 'sudah ready?', expected: 'UNKNOWN' },
+  { text: 'aku dah ready nih', expected: 'UNKNOWN' },
   { text: 'halo mas', expected: 'GREETING_MENU' },
   { text: 'pagi admin', expected: 'GREETING_MENU' },
   { text: 'assalamualaikum wavis', expected: 'GREETING_MENU' },
@@ -98,11 +109,11 @@ const intentTests = [
 ];
 
 intentTests.forEach(({ text, expected }) => {
-  const actual = engine.classifyIntent(text);
+  const actual = engine.classifyIntent(text, mockProductsForIntent);
   assert.strictEqual(actual, expected, `Intent untuk "${text}" harus "${expected}", tapi didapat "${actual}"`);
   console.log(`  ✓ "${text}" → [${actual}]`);
 });
-console.log('✅ Test 2 PASSED: Klasifikasi Intent 100% Akurat!');
+console.log('✅ Test 2 PASSED: Klasifikasi Intent 100% Akurat (Termasuk filter "Are you ready?")!');
 
 // 3. UJI CUSTOMER & PRODUCT MATCHER
 console.log('\n--- Test 3: Customer & Product Matcher ---');
@@ -146,4 +157,33 @@ assert(greeting.includes('3. Cek Stok Barang Gudang'), 'Menu 3 Stok harus ada');
 console.log(greeting);
 console.log('✅ Test 4 PASSED: Menu Bantuan L-W.A.V.I.S Sempurna!');
 
-console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
+// 5. UJI SEND REPLY (GROUP BLOCK & LID RESOLUTION)
+console.log('\n--- Test 5: Pengujian sendReply (Filter Grup & Resolusi LID) ---');
+let capturedTargetJid = null;
+let capturedPayload = null;
+
+engine.setSocketGetter(() => ({
+  sendPresenceUpdate: async () => {},
+  sendMessage: async (jid, payload) => {
+    capturedTargetJid = jid;
+    capturedPayload = payload;
+    return true;
+  }
+}));
+
+(async () => {
+  // 5A: Coba kirim ke Grup WhatsApp (@g.us) -> WAJIB DITOLAK
+  const groupRes = await engine.sendReply('120363402777174624@g.us', 'Halo grup');
+  assert.strictEqual(groupRes, false, 'sendReply ke grup harus ditolak');
+  console.log('  ✓ sendReply ke grup WhatsApp (@g.us) berhasil diblokir');
+
+  // 5B: Coba kirim ke LID (@lid) dengan nomor telepon -> WAJIB DIALIHKAN KE @s.whatsapp.net
+  const lidRes = await engine.sendReply('33668835856433@lid', 'Halo Rogue', null, '087789733632');
+  assert.strictEqual(lidRes, true, 'sendReply harus berhasil');
+  assert.strictEqual(capturedTargetJid, '6287789733632@s.whatsapp.net', 'Target JID harus dialihkan ke 6287789733632@s.whatsapp.net');
+  console.log(`  ✓ sendReply ke LID berhasil dialihkan ke: ${capturedTargetJid}`);
+
+  console.log('✅ Test 5 PASSED: Filter Grup & Resolusi LID Bekerja Sempurna!');
+
+  console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
+})();

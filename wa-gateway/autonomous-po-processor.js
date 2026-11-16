@@ -1044,9 +1044,9 @@ class AutonomousPoProcessor {
               items: parsed.items,
               grandTotal: parsed.grandTotal,
               note: parsed.bonusNote || ''
-            }, chatPayload.senderName || 'Pak');
+            }, chatPayload.senderName || 'Kak');
 
-            await this.wavisEngine.sendReply(remoteJid, replyText, chatPayload.rawMessage || null);
+            await this.wavisEngine.sendReply(remoteJid, replyText, chatPayload.rawMessage || null, phone);
           } catch (replyErr) {
             console.warn('[L-W.A.V.I.S REPLY WARNING]', replyErr.message);
           }

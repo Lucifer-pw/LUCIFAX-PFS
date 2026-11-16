@@ -1,9 +1,9 @@
 {
-  "gateway": "3.3.280",
+  "gateway": "3.3.281",
   "files": {
-    "server.js": "3.3.277",
-    "autonomous-po-processor.js": "3.3.277",
-    "wavis-interactive-engine.js": "3.3.280",
+    "server.js": "3.3.281",
+    "autonomous-po-processor.js": "3.3.281",
+    "wavis-interactive-engine.js": "3.3.281",
     "firebase-adapter.js": "3.3.272",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
@@ -11,5 +11,5 @@
     "update.sh": "3.3.278"
   },
   "updatedAt": "2026-11-16",
-  "changelog": "Perbaikan query piutang dari koleksi transactions dan penyempurnaan matcher alias toko multi-kata / singkatan (AW, AW FF, GRIYA FF, AFM)"
+  "changelog": "Perbaikan proteksi grup WhatsApp (WAVIS dilarang balas di grup), perbaikan intent 'ready' agar tidak false-positive pada obrolan santai, resolusi JID phone vs LID untuk menghilangkan delay enkripsi 'Menunggu pesan ini', dan penyempurnaan sapaan ramah gender-neutral."
 }

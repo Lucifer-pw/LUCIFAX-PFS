@@ -372,8 +372,8 @@ async function flushMessageBuffer(bufferKey) {
                     if (snap.exists()) invData = snap.data();
                   }
                   if (invData) {
-                    const replyText = wavisEngine.formatPoConfirmation(invData, chatPayload.senderName || 'Pak');
-                    await wavisEngine.sendReply(chatPayload.senderJid, replyText);
+                    const replyText = wavisEngine.formatPoConfirmation(invData, chatPayload.senderName || 'Kak');
+                    await wavisEngine.sendReply(chatPayload.senderJid, replyText, null, chatPayload.senderPhone);
                     await firebaseAdapter.updateChatDocument(savedId, { isReplySent: true });
                   }
                 }
@@ -394,16 +394,24 @@ async function flushMessageBuffer(bufferKey) {
   }
 
   // L-W.A.V.I.S INTERACTIVE QUERY HANDLER (TAHAP 3: Tanya Piutang, Tanya Stok, Sapaan)
+  // STRICT: WAVIS HANYA aktif untuk chat pribadi (1-on-1 private chat).
+  // JANGAN PERNAH merespons query interaktif di dalam Grup WhatsApp (@g.us)!
+  const isGroupChat = (buf.senderJid && buf.senderJid.endsWith('@g.us')) || (chatPayload.senderJid && chatPayload.senderJid.endsWith('@g.us'));
+  if (isGroupChat) {
+    return;
+  }
+
   const isInteractive = isInteractiveAllowed(buf.senderPhone, buf.senderJid);
   if (isInteractive && !isTransfer && chatPayload.messageType !== 'ORDER_PO') {
-    const intent = wavisEngine.classifyIntent(combinedText);
+    const products = autoPoProcessor?.cachedProducts || [];
+    const intent = wavisEngine.classifyIntent(combinedText, products);
     console.log(`[L-W.A.V.I.S CLASSIFY] 🧠 Intent dari ${buf.senderName}: ${intent}`);
 
     if (intent === 'QUERY_RECEIVABLES') {
       setTimeout(async () => {
         try {
           const res = await wavisEngine.handleReceivablesQuery(combinedText, buf.senderName);
-          await wavisEngine.sendReply(buf.senderJid, res);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
         } catch (err) {
           console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
         }
@@ -412,7 +420,7 @@ async function flushMessageBuffer(bufferKey) {
       setTimeout(async () => {
         try {
           const res = await wavisEngine.handleStockQuery(combinedText, buf.senderName);
-          await wavisEngine.sendReply(buf.senderJid, res);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
         } catch (err) {
           console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
         }
@@ -422,7 +430,7 @@ async function flushMessageBuffer(bufferKey) {
         setTimeout(async () => {
           try {
             const res = wavisEngine.handleGreetingMenu(buf.senderName);
-            await wavisEngine.sendReply(buf.senderJid, res);
+            await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
           } catch (err) {
             console.warn('[L-W.A.V.I.S GREETING ERROR]', err.message);
           }

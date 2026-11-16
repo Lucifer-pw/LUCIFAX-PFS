@@ -38,7 +38,7 @@ class WavisInteractiveEngine {
   /**
    * Format Konfirmasi Faktur PO (Format 2-Baris Padat + Status Paid + GrandTotal)
    */
-  formatPoConfirmation(invoiceData, senderName = 'Pak') {
+  formatPoConfirmation(invoiceData, senderName = 'Kak') {
     const {
       invoiceNo,
       customerName,
@@ -131,8 +131,9 @@ class WavisInteractiveEngine {
 
   /**
    * Klasifikasi Maksud Chat (Intent Recognition Lokal)
+   * Mendukung validasi produk lokal agar kata "ready" tidak bentrok dengan percakapan santai.
    */
-  classifyIntent(text) {
+  classifyIntent(text, products = []) {
     const clean = normalizeText(text);
     if (!clean) return 'UNKNOWN';
 
@@ -142,10 +143,21 @@ class WavisInteractiveEngine {
       return 'QUERY_RECEIVABLES';
     }
 
-    // 2. Cek Pola Tanya Stok
-    const stockPattern = /\b(stok|stock|ready|sisa berapa|ada ga|ada gak|masih ada)\b/i;
-    if (stockPattern.test(clean)) {
+    // 2. Cek Pola Tanya Stok:
+    // Pastikan tidak false-positive pada bahasa percakapan santai seperti "Are you ready?", "Aku ready", dll.
+    const stockExplicitPattern = /\b(stok|stock|sisa berapa|sisa stok|info stok|cek stok)\b|\b(ada|masih ada)\s+(ga|gak|nggak|kah|blm|belum|ndak|ora)\b/i;
+    const readyWithContextPattern = /\bready\s+(stok|stock|ga|gak|nggak|kah|ta|po|dong|blm|belum)\b|\b(stok|stock|masih|apakah|apa)\s+ready\b/i;
+
+    if (stockExplicitPattern.test(clean) || readyWithContextPattern.test(clean)) {
       return 'QUERY_STOCK';
+    }
+
+    // Jika pesan mengandung kata 'ready' standalone, cek apakah diikuti produk nyata dari katalog
+    if (/\bready\b/i.test(clean) && Array.isArray(products) && products.length > 0) {
+      const prod = this.matchProductFromQuery(clean, products);
+      if (prod) {
+        return 'QUERY_STOCK';
+      }
     }
 
     // 3. Cek Pola Sapaan / Menu Bantuan
@@ -248,14 +260,14 @@ class WavisInteractiveEngine {
   /**
    * Menjawab Pertanyaan Piutang
    */
-  async handleReceivablesQuery(text, senderName = 'Pak') {
+  async handleReceivablesQuery(text, senderName = 'Kak') {
     await this.autoPoProcessor.refreshCacheIfNeeded();
     const customers = this.autoPoProcessor.cachedCustomers || [];
     const matchedCustomer = this.matchCustomerFromQuery(text, customers);
 
     if (!matchedCustomer) {
       return `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Halo ${senderName}! Untuk mengecek kartu piutang, mohon sebutkan nama toko / pelanggannya ya Pak.\n\n` +
+        `Halo ${senderName}! Untuk mengecek kartu piutang, mohon sebutkan nama toko / pelanggannya ya.\n\n` +
         `💡 *Contoh:* ketik \`piutang AFM\` atau \`tagihan Maju Market\`.`;
     }
 
@@ -357,26 +369,26 @@ class WavisInteractiveEngine {
       }
 
       resText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      resText += `ℹ️ _Ketik \`order\` atau kirimkan list pesanan jika toko ini mau ambil barang lagi ya Pak!_`;
+      resText += `ℹ️ _Ketik \`order\` atau kirimkan list pesanan jika toko ini mau ambil barang lagi ya!_`;
 
       return resText;
     } catch (e) {
       console.error('[WAVIS RECEIVABLES ERROR]', e.message);
-      return `🤖 *[L-W.A.V.I.S]*\nMaaf ${senderName}, terjadi kendala saat membaca database piutang. Silakan ulangi sesaat lagi ya Pak.`;
+      return `🤖 *[L-W.A.V.I.S]*\nMaaf ${senderName}, terjadi kendala saat membaca database piutang. Silakan ulangi sesaat lagi ya.`;
     }
   }
 
   /**
    * Menjawab Pertanyaan Stok
    */
-  async handleStockQuery(text, senderName = 'Pak') {
+  async handleStockQuery(text, senderName = 'Kak') {
     await this.autoPoProcessor.refreshCacheIfNeeded();
     const products = this.autoPoProcessor.cachedProducts || [];
     const matchedProduct = this.matchProductFromQuery(text, products);
 
     if (!matchedProduct) {
       return `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Halo ${senderName}! Untuk mengecek stok gudang, mohon sebutkan nama produknya ya Pak.\n\n` +
+        `Halo ${senderName}! Untuk mengecek stok gudang, mohon sebutkan nama produknya ya.\n\n` +
         `💡 *Contoh:* ketik \`stok bratwurst mini\` atau \`ready beres merah 24\`.`;
     }
 
@@ -393,7 +405,7 @@ class WavisInteractiveEngine {
     resText += `💰 *Harga Standar:* Rp ${price.toLocaleString('id-ID')} / pcs\n`;
     resText += `🏷️ *Status:* ${stockPcs > 0 ? '✅ Ready / Siap Kirim' : '⚠️ Stok Kosong / Habis'}\n\n`;
     resText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    resText += `ℹ️ _Langsung kirim format PO jika ingin langsung dibuatkan draft faktur ya Pak!_`;
+    resText += `ℹ️ _Langsung kirim format PO jika ingin langsung dibuatkan draft faktur ya!_`;
 
     return resText;
   }
@@ -401,11 +413,11 @@ class WavisInteractiveEngine {
   /**
    * Menjawab Sapaan & Menampilkan Menu Edukasi
    */
-  handleGreetingMenu(senderName = 'Pak') {
+  handleGreetingMenu(senderName = 'Kak') {
     let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     resText += `Halo ${senderName}! 👋\n\n`;
     resText += `Admin / Developer saat ini sedang tidak standby di tempat. \n`;
-    resText += `Namun jangan khawatir, selagi menunggu beliau online, apa yang bisa *L-W.A.V.I.S* bantu untuk operasional Bapak?\n\n`;
+    resText += `Namun jangan khawatir, selagi menunggu beliau online, apa yang bisa *L-W.A.V.I.S* bantu untuk kelancaran operasional Anda hari ini?\n\n`;
     resText += `Saya bisa langsung melayani:\n`;
     resText += `📝 *1. Buat Pesanan Baru (PO)*\n`;
     resText += `   Langsung kirim list order toko di sini, faktur akan langsung saya buatkan otomatis.\n\n`;
@@ -414,7 +426,7 @@ class WavisInteractiveEngine {
     resText += `📦 *3. Cek Stok Barang Gudang*\n`;
     resText += `   Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst*)\n\n`;
     resText += `────────────────────────────\n`;
-    resText += `Silakan ketik apa yang Bapak perlukan. Untuk pesan pribadi atau urusan di luar sistem, akan tetap dibalas langsung oleh Admin setelah aktif kembali ya Pak! 😊`;
+    resText += `Silakan ketik apa yang diperlukan. Untuk pesan pribadi atau urusan di luar sistem, akan tetap dibalas langsung oleh Admin setelah aktif kembali ya! 😊`;
 
     return resText;
   }
@@ -422,7 +434,7 @@ class WavisInteractiveEngine {
   /**
    * Kirim Pesan Balasan WhatsApp via Baileys Socket
    */
-  async sendReply(remoteJid, text, quotedMsg = null) {
+  async sendReply(remoteJid, text, quotedMsg = null, senderPhone = null) {
     if (!remoteJid || !text) return false;
     const sock = this.sockGetter ? this.sockGetter() : null;
     if (!sock) {
@@ -430,12 +442,31 @@ class WavisInteractiveEngine {
       return false;
     }
 
+    // STRICT: JANGAN PERNAH mengirim balasan interaktif bot ke grup WhatsApp (@g.us)!
+    if (remoteJid.endsWith('@g.us')) {
+      console.log(`[L-W.A.V.I.S SKIP] 🛑 Membatalkan pengiriman balasan interaktif ke grup WhatsApp (${remoteJid}).`);
+      return false;
+    }
+
+    // Resolusi Target JID:
+    // Jika target adalah WhatsApp LID (@lid) tapi nomor telepon (@s.whatsapp.net) diketahui,
+    // prioritaskan kirim ke nomor HP (@s.whatsapp.net) agar tidak terkena delay enkripsi WhatsApp
+    // "Menunggu pesan ini. Ini mungkin membutuhkan waktu beberapa saat."
+    let targetJid = remoteJid;
+    let cleanP = senderPhone ? String(senderPhone).replace(/\D/g, '') : '';
+    if (cleanP.startsWith('08')) cleanP = '628' + cleanP.slice(2);
+
+    if (cleanP && cleanP.length >= 8 && targetJid.endsWith('@lid')) {
+      targetJid = `${cleanP}@s.whatsapp.net`;
+      console.log(`[L-W.A.V.I.S JID RESOLVED] 🔄 Mengalihkan target dari LID ${remoteJid} ke nomor WhatsApp ${targetJid} untuk mencegah delay enkripsi.`);
+    }
+
     try {
       // 1. Simulasi status mengetik ("composing presence")
       try {
-        await sock.sendPresenceUpdate('composing', remoteJid);
+        await sock.sendPresenceUpdate('composing', targetJid);
         await new Promise(r => setTimeout(r, 1200)); // jeda 1.2 detik agar natural
-        await sock.sendPresenceUpdate('paused', remoteJid);
+        await sock.sendPresenceUpdate('paused', targetJid);
       } catch (_) {}
 
       // 2. Kirim pesan balasan
@@ -444,8 +475,8 @@ class WavisInteractiveEngine {
         options.quoted = quotedMsg;
       }
 
-      await sock.sendMessage(remoteJid, { text }, options);
-      console.log(`[L-W.A.V.I.S SUCCESS] 🤖 Pesan interaktif berhasil dikirim ke ${remoteJid}!`);
+      await sock.sendMessage(targetJid, { text }, options);
+      console.log(`[L-W.A.V.I.S SUCCESS] 🤖 Pesan interaktif berhasil dikirim ke ${targetJid}!`);
       return true;
     } catch (err) {
       console.error('[L-W.A.V.I.S SEND ERROR]', err.message);
