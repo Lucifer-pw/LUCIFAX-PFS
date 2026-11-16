@@ -113,7 +113,7 @@ class WavisInteractiveEngine {
   /**
    * Format Konfirmasi Faktur PO (Format 2-Baris Padat + Status Paid + GrandTotal)
    */
-  formatPoConfirmation(invoiceData, senderName = 'Kak') {
+  formatPoConfirmation(invoiceData, senderName = 'Kak', options = {}) {
     const {
       invoiceNo,
       customerName,
@@ -127,6 +127,11 @@ class WavisInteractiveEngine {
       grandTotal = 0,
       note
     } = invoiceData;
+
+    const title = options.title || 'PESAN OTOMATIS: L-W.A.V.I.S';
+    const subtitle = options.subtitle || `Draft pesanan berhasil diproses ke sistem:`;
+    const isRevised = !!options.isRevised;
+    const isQuery = !!options.isQuery;
 
     const displayCust = aliasName ? `${aliasName} (${customerName})` : customerName;
     const cleanCity = city || 'SEMARANG';
@@ -166,10 +171,10 @@ class WavisInteractiveEngine {
 
     const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
-    let text = `🤖 *[PESAN OTOMATIS: L-W.A.V.I.S]*\n`;
+    let text = `🤖 *[${title}]*\n`;
     text += `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `Halo ${senderName}! Draft pesanan berhasil diproses ke sistem:\n\n`;
+    text += `Halo ${senderName}! ${subtitle}\n\n`;
     text += `🏢 *Pelanggan:* ${displayCust}\n`;
     text += `📍 *Kota:* ${cleanCity}, ${cleanProv}\n`;
     text += `📄 *No. Invoice:* #${invoiceNo}\n`;
@@ -183,6 +188,7 @@ class WavisInteractiveEngine {
       const num = idx < 10 ? numberEmojis[idx] : `${idx + 1}.`;
       const pName = it.productName || 'PRODUK';
       const weightStr = it.weightKg ? ` (${Number(it.weightKg).toFixed(2)} kg)` : '';
+      const revisedTag = it._isRevised ? ' 🔄 *(DIREVISI)*' : '';
       
       const pcsPerKtn = getIsiKtn(it);
       const ktnVal = it.cartonCount || (pcsPerKtn ? Math.round(it.qty / pcsPerKtn * 10) / 10 : null);
@@ -198,7 +204,7 @@ class WavisInteractiveEngine {
 
       const subtotalStr = (it.subtotal || 0).toLocaleString('id-ID');
 
-      text += `${num} *${pName}*${weightStr}\n`;
+      text += `${num} *${pName}*${weightStr}${revisedTag}\n`;
       text += `   ${ktnStr} (${it.qty} pcs) @${priceStr}${discStr} = *Rp ${subtotalStr}*\n\n`;
     });
 
@@ -210,15 +216,24 @@ class WavisInteractiveEngine {
     }
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `ℹ️ *Catatan Sistem:*\n`;
-    text += `• Faktur sudah aman masuk Database Transaksi.\n`;
-    text += `• Jika ada pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali. 😊`;
+    if (isRevised) {
+      text += `• Perubahan data barang dan total faktur telah tersinkronisasi otomatis.\n`;
+      text += `• Status faktur tetap ${status || 'PENDING'} menunggu proses armada logistik.\n`;
+      text += `• Jika ada pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali. 😊`;
+    } else if (isQuery) {
+      text += `• Data faktur diambil langsung dari Database Transaksi.\n`;
+      text += `• Selagi Admin belum standby, L-W.A.V.I.S siap bantu cek stok barang atau proses pesanan lainnya. 😊`;
+    } else {
+      text += `• Faktur sudah aman masuk Database Transaksi.\n`;
+      text += `• Jika ada pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali. 😊`;
+    }
 
     return text;
   }
 
   /**
    * Klasifikasi Maksud Chat (Intent Recognition Lokal)
-   * Mendukung validasi produk lokal agar kata "ready" tidak bentrok dengan percakapan santai.
+   * Mendukung query piutang, stok, faktur/invoice, revisi PO, sapaan/menu, dan fallback cerdas.
    */
   classifyIntent(text, products = []) {
     const clean = normalizeText(text);
@@ -231,7 +246,6 @@ class WavisInteractiveEngine {
     }
 
     // 2. Cek Pola Tanya Stok:
-    // Pastikan tidak false-positive pada bahasa percakapan santai seperti "Are you ready?", "Aku ready", dll.
     const stockExplicitPattern = /\b(stok|stock|sisa berapa|sisa stok|info stok|cek stok)\b|\b(ada|masih ada)\s+(ga|gak|nggak|kah|blm|belum|ndak|ora)\b/i;
     const readyWithContextPattern = /\bready\s+(stok|stock|ga|gak|nggak|kah|ta|po|dong|blm|belum)\b|\b(stok|stock|masih|apakah|apa)\s+ready\b/i;
 
@@ -247,10 +261,31 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 3. Cek Pola Sapaan / Menu Bantuan / Pertanyaan Kemampuan AI
+    // 3. Cek Pola Query Faktur / Invoice
+    const invoicePattern = /\b(faktur|invoice|nota)\b/i;
+    if (invoicePattern.test(clean)) {
+      if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit)\b/i.test(clean)) {
+        return 'REVISE_PO';
+      }
+      return 'QUERY_INVOICE';
+    }
+
+    // 4. Cek Pola Revisi PO
+    const revisionPattern = /\b(revisi|ubah|ganti|tambah|kurang|batal|edit)\b.*?\b(po|order|pesanan|karton|ktn|dus|box|jadi|pcs)\b|\b(revisi|ubah|ganti)\s+po\b/i;
+    if (revisionPattern.test(clean)) {
+      return 'REVISE_PO';
+    }
+
+    // 5. Cek Pola Sapaan / Menu Bantuan / Pertanyaan Kemampuan AI
     const greetingPattern = /\b(halo|hello|pagi|siang|sore|malam|assalamualaikum|bantuan|menu|wavis|hai|bisa apa|bisa bantu apa|tugasmu|fungsi wavis|siapa kamu|fitur|cara pakai|standby)\b/i;
     if (greetingPattern.test(clean)) {
       return 'GREETING_MENU';
+    }
+
+    // 6. Cek Pola Pertanyaan / Instruksi Operasional Umum (Smart Fallback agar bot TIDAK BISU)
+    const inquiryPattern = /\b(apakah|bisa|bisakah|tolong|bagaimana|gimana|tampilkan|kirimkan|cek|info|tanya|minta|adakah)\b|\?/i;
+    if (inquiryPattern.test(clean)) {
+      return 'SMART_FALLBACK';
     }
 
     return 'UNKNOWN';
@@ -672,6 +707,418 @@ class WavisInteractiveEngine {
     resText += `   ↳ Atau ketik: \`stok keseluruhan\` untuk melihat rekap total gudang.\n\n`;
     resText += `────────────────────────────\n`;
     resText += `Ada hal operasional yang ingin dicek hari ini ${senderName}? Silakan ketik langsung ya! Untuk pesan pribadi, Admin akan tetap membalas segera setelah aktif kembali. 😊`;
+
+    return resText;
+  }
+
+  /**
+   * Menampilkan Data Faktur / Invoice Spesifik (#693, #699, dll)
+   */
+  async handleInvoiceQuery(text, senderName = 'Kak') {
+    const clean = normalizeText(text);
+    const match = clean.match(/(?:invoice|faktur|nota|po|#|nomer|nomor)\s*[:#.]?\s*([a-zA-Z0-9\-_]{2,15})/i) || clean.match(/\b(\d{2,6})\b/);
+    
+    if (!match || !match[1]) {
+      return `🤖 *[L-W.A.V.I.S]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}! Untuk menampilkan rincian data faktur atau invoice, mohon sebutkan nomor fakturnya ya. 😊\n\n` +
+        `💡 *Contoh:* ketik \`faktur 699\` atau \`invoice #693\`.`;
+    }
+
+    const rawInv = match[1].replace(/^[#]/, '').trim();
+    const invNo = rawInv;
+
+    try {
+      const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
+      if (!db) {
+        return `⚠️ Maaf ${senderName}, koneksi database sedang tidak tersedia. Mohon coba beberapa saat lagi.`;
+      }
+
+      let invData = null;
+      if (this.firebaseAdapter.mode === 'admin') {
+        const snap = await db.collection('transactions').doc(invNo).get();
+        if (snap.exists) {
+          invData = snap.data();
+        } else {
+          const qSnap = await db.collection('transactions').where('invoiceNo', '==', invNo).limit(1).get();
+          if (!qSnap.empty) invData = qSnap.docs[0].data();
+        }
+      } else if (this.firebaseAdapter.clientSdk) {
+        const { doc, getDoc, collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
+        const snap = await getDoc(doc(db, 'transactions', invNo));
+        if (snap.exists()) {
+          invData = snap.data();
+        } else {
+          const qSnap = await getDocs(query(collection(db, 'transactions'), where('invoiceNo', '==', invNo), limit(1)));
+          if (!qSnap.empty) invData = qSnap.docs[0].data();
+        }
+      }
+
+      if (!invData) {
+        return `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Data Faktur / Invoice *#${invNo}* tidak ditemukan di dalam sistem database. ❌\n\n` +
+          `Mohon periksa kembali nomor fakturnya ya! Jika butuh bantuan lebih lanjut, Admin akan siap membantu setelah aktif kembali. 😊`;
+      }
+
+      if (!invData.invoiceNo) invData.invoiceNo = invNo;
+
+      return this.formatPoConfirmation(invData, senderName, {
+        title: 'DETAIL FAKTUR: L-W.A.V.I.S',
+        subtitle: `Berikut rincian data Faktur #${invNo} yang tercatat di sistem:`,
+        isQuery: true
+      });
+    } catch (err) {
+      console.error('[L-W.A.V.I.S QUERY INVOICE ERROR]', err.message);
+      return `⚠️ Maaf ${senderName}, terjadi kendala saat mengambil data faktur: ${err.message}`;
+    }
+  }
+
+  /**
+   * Menangani Revisi Pesanan PO (SOP Bisnis: PENDING revisi otomatis, DIKIRIM wajib manual kasir/admin)
+   */
+  async handlePoRevision(payload, senderName = 'Kak') {
+    const text = typeof payload === 'string' ? payload : (payload.messageText || '');
+    const clean = normalizeText(text);
+
+    if (this.autoPoProcessor && typeof this.autoPoProcessor.refreshCacheIfNeeded === 'function') {
+      await this.autoPoProcessor.refreshCacheIfNeeded();
+    }
+    const customers = this.autoPoProcessor?.cachedCustomers || [];
+    const products = this.autoPoProcessor?.cachedProducts || [];
+    const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
+
+    // 1. CARI NOMOR FAKTUR TARGET
+    let targetInvNo = null;
+
+    // A. Eksplisit dari teks (misal: "revisi PO 699", "ubah faktur #693")
+    const explicitInvMatch = text.match(/(?:invoice|faktur|nota|po|#)\s*[:#.]?\s*(\d{2,6})/i);
+    if (explicitInvMatch) {
+      targetInvNo = explicitInvMatch[1];
+    }
+
+    // B. Dari Quoted Reply (quotedStanzaId dicari di incoming_po_chats)
+    if (!targetInvNo && payload && payload.quotedStanzaId && db) {
+      try {
+        let chatSnap = null;
+        if (this.firebaseAdapter.mode === 'admin') {
+          const snap1 = await db.collection('incoming_po_chats').where('messageId', '==', payload.quotedStanzaId).limit(1).get();
+          if (!snap1.empty) {
+            chatSnap = snap1.docs[0].data();
+          } else {
+            const snap2 = await db.collection('incoming_po_chats').where('messageIds', 'array-contains', payload.quotedStanzaId).limit(1).get();
+            if (!snap2.empty) chatSnap = snap2.docs[0].data();
+          }
+        } else if (this.firebaseAdapter.clientSdk) {
+          const { collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
+          const snap1 = await getDocs(query(collection(db, 'incoming_po_chats'), where('messageId', '==', payload.quotedStanzaId), limit(1)));
+          if (!snap1.empty) {
+            chatSnap = snap1.docs[0].data();
+          } else {
+            const snap2 = await getDocs(query(collection(db, 'incoming_po_chats'), where('messageIds', 'array-contains', payload.quotedStanzaId), limit(1)));
+            if (!snap2.empty) chatSnap = snap2.docs[0].data();
+          }
+        }
+
+        if (chatSnap && (chatSnap.createdInvoiceNo || chatSnap.createdTransactionId)) {
+          const rawInv = String(chatSnap.createdInvoiceNo || chatSnap.createdTransactionId);
+          targetInvNo = rawInv.replace(/\D/g, '');
+        }
+      } catch (e) {
+        console.warn('[REVISI QUOTE LOOKUP WARN]', e.message);
+      }
+    }
+
+    // C. Cek apakah ada invoice number di quotedMessageText (misal: "No. Invoice: #699")
+    if (!targetInvNo && payload && payload.quotedMessageText) {
+      const qInvMatch = payload.quotedMessageText.match(/(?:invoice|faktur|nota|po|#)\s*[:#.]?\s*(\d{2,6})/i);
+      if (qInvMatch) {
+        targetInvNo = qInvMatch[1];
+      }
+    }
+
+    // D. Jika belum dapat, cari customer dari quotedMessageText atau text
+    let targetCustomer = null;
+    if (payload && payload.quotedMessageText) {
+      targetCustomer = this.matchCustomerFromQuery(payload.quotedMessageText, customers);
+    }
+    if (!targetCustomer) {
+      targetCustomer = this.matchCustomerFromQuery(text, customers);
+    }
+
+    let invDocRef = null;
+    let invData = null;
+
+    if (targetInvNo && db) {
+      if (this.firebaseAdapter.mode === 'admin') {
+        const snap = await db.collection('transactions').doc(targetInvNo).get();
+        if (snap.exists) {
+          invDocRef = db.collection('transactions').doc(targetInvNo);
+          invData = snap.data();
+        } else {
+          const qSnap = await db.collection('transactions').where('invoiceNo', '==', targetInvNo).limit(1).get();
+          if (!qSnap.empty) {
+            invDocRef = qSnap.docs[0].ref;
+            invData = qSnap.docs[0].data();
+          }
+        }
+      } else if (this.firebaseAdapter.clientSdk) {
+        const { doc, getDoc, collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
+        const snap = await getDoc(doc(db, 'transactions', targetInvNo));
+        if (snap.exists()) {
+          invDocRef = doc(db, 'transactions', targetInvNo);
+          invData = snap.data();
+        } else {
+          const qSnap = await getDocs(query(collection(db, 'transactions'), where('invoiceNo', '==', targetInvNo), limit(1)));
+          if (!qSnap.empty) {
+            invDocRef = qSnap.docs[0].ref;
+            invData = qSnap.docs[0].data();
+          }
+        }
+      }
+    } else if (targetCustomer && db) {
+      try {
+        if (this.firebaseAdapter.mode === 'admin') {
+          const qPending = await db.collection('transactions')
+            .where('customerId', '==', targetCustomer.id)
+            .where('status', '==', 'PENDING')
+            .limit(5)
+            .get();
+          if (!qPending.empty) {
+            invDocRef = qPending.docs[0].ref;
+            invData = qPending.docs[0].data();
+            targetInvNo = invData.invoiceNo || qPending.docs[0].id;
+          } else {
+            const qAny = await db.collection('transactions')
+              .where('customerId', '==', targetCustomer.id)
+              .limit(5)
+              .get();
+            if (!qAny.empty) {
+              invDocRef = qAny.docs[0].ref;
+              invData = qAny.docs[0].data();
+              targetInvNo = invData.invoiceNo || qAny.docs[0].id;
+            }
+          }
+        } else if (this.firebaseAdapter.clientSdk) {
+          const { collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
+          const qPending = await getDocs(query(collection(db, 'transactions'), where('customerId', '==', targetCustomer.id), where('status', '==', 'PENDING'), limit(5)));
+          if (!qPending.empty) {
+            invDocRef = qPending.docs[0].ref;
+            invData = qPending.docs[0].data();
+            targetInvNo = invData.invoiceNo || qPending.docs[0].id;
+          } else {
+            const qAny = await getDocs(query(collection(db, 'transactions'), where('customerId', '==', targetCustomer.id), limit(5)));
+            if (!qAny.empty) {
+              invDocRef = qAny.docs[0].ref;
+              invData = qAny.docs[0].data();
+              targetInvNo = invData.invoiceNo || qAny.docs[0].id;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[REVISI CUSTOMER LOOKUP WARN]', e.message);
+      }
+    }
+
+    // Fallback untuk unit testing tanpa live db: dukung payload.mockInvoice
+    if (!invData && payload && payload.mockInvoice) {
+      invData = payload.mockInvoice;
+      targetInvNo = invData.invoiceNo || 'MOCK';
+    }
+
+    if (!invData || !targetInvNo) {
+      return `🤖 *[L-W.A.V.I.S]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}! Untuk merevisi pesanan, mohon sebutkan nomor fakturnya atau quote (balas) pesan PO yang ingin direvisi ya. 😊\n\n` +
+        `💡 *Contoh:* \`revisi PO 699 brs merah jadi 35 karton\`\n` +
+        `Atau quote chat rincian order sebelumnya dengan ketik \`revisi brs merah jadi 35 karton\`.`;
+    }
+
+    // 2. SOP BISNIS MUTLAK: CEK STATUS FAKTUR (DIKIRIM VS PENDING)
+    const statusFaktur = String(invData.status || 'PENDING').toUpperCase();
+    const customerDisplay = invData.aliasName ? `${invData.aliasName} (${invData.customerName})` : (invData.customerName || 'Toko Pelanggan');
+
+    if (statusFaktur === 'DIKIRIM') {
+      return `⚠️ *[REVISI PO DITOLAK: SUDAH DIKIRIM]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}!\n\n` +
+        `Mohon maaf, Faktur *#${targetInvNo}* untuk *${customerDisplay}* saat ini sudah berstatus *DIKIRIM* 🚚 (barang sudah diserahkan ke armada pengiriman / logistik).\n\n` +
+        `⛔ Sesuai SOP operasional, pesanan yang sudah *DIKIRIM* tidak dapat direvisi secara otomatis oleh L-W.A.V.I.S.\n\n` +
+        `📞 *Tindakan Selanjutnya:*\n` +
+        `Silakan hubungi Admin / Kasir secara langsung untuk penyesuaian manual (surat jalan susulan atau retur ya). 🙏\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        this.generateSmartFooter('PO_REVISION_REJECTED', { senderName });
+    }
+
+    // 3. JIKA STATUS PENDING -> LAKUKAN PARSING & REVISI
+    const items = Array.isArray(invData.items) ? [...invData.items] : [];
+    if (items.length === 0) {
+      return `⚠️ Faktur #${targetInvNo} tidak memiliki daftar barang yang dapat direvisi.`;
+    }
+
+    // Ekstrak kuantiti karton baru
+    let newCartonQty = null;
+    const m1 = text.match(/(?:jadi|menjadi|ganti|ubah|revisi)\s*(\d+)/i);
+    if (m1) {
+      newCartonQty = parseInt(m1[1], 10);
+    } else {
+      const m2 = text.match(/(\d+)\s*(?:karton|ktn|dus|box|bal|ball)\b/i);
+      if (m2) newCartonQty = parseInt(m2[1], 10);
+    }
+
+    if (!newCartonQty || newCartonQty <= 0) {
+      return `🤖 *[L-W.A.V.I.S]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}! Jumlah karton baru belum terdeteksi dengan jelas pada Faktur #${targetInvNo}.\n\n` +
+        `💡 *Contoh format:* \`revisi PO brs merah jadi 35 karton\``;
+    }
+
+    // Cocokkan produk yang ingin diubah di dalam items
+    const queryProdText = clean
+      .replace(/\b(revisi|ubah|ganti|tambah|kurang|edit|batal|po|faktur|invoice|jadi|menjadi|karton|ktn|dus|box|pcs|pack|pak|\d+)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    let matchedItemIndex = -1;
+    let maxItemScore = 0;
+    const prodWords = queryProdText.split(/\s+/).filter(w => w.length >= 2);
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const itName = normalizeText(it.productName || '');
+      let score = 0;
+      for (const pw of prodWords) {
+        const pwNorm = pw.replace(/^beres$/, 'brs').replace(/^brs$/, 'beres');
+        if (itName.includes(pw) || itName.includes(pwNorm)) {
+          score += 5;
+        }
+      }
+      if (score > maxItemScore && score >= 5) {
+        maxItemScore = score;
+        matchedItemIndex = i;
+      }
+    }
+
+    if (matchedItemIndex === -1) {
+      const currentItemList = items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n');
+      return `🤖 *[L-W.A.V.I.S]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}! Barang yang ingin direvisi pada Faktur *#${targetInvNo}* tidak cocok dengan daftar faktur saat ini.\n\n` +
+        `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
+        `💡 *Contoh:* \`revisi PO brs merah jadi ${newCartonQty} karton\``;
+    }
+
+    // Update item yang cocok
+    const targetItem = { ...items[matchedItemIndex] };
+    const getIsiKtn = (it) => {
+      if (typeof it.isiKarton === 'number' && it.isiKarton > 0) return it.isiKarton;
+      const found = products.find(p => (it.productId && p.id === it.productId) || (it.productName && (p.productName === it.productName || p.name === it.productName)));
+      if (found && found.isiKarton) return Number(found.isiKarton);
+      if (it.cartonCount > 0 && it.qty > 0) return Math.round(it.qty / it.cartonCount);
+      return 15;
+    };
+
+    const isiKtn = getIsiKtn(targetItem);
+    const newQtyPcs = newCartonQty * isiKtn;
+    const unitPrice = Number(targetItem.price) || 0;
+    const discPct = Number(targetItem.discountPercent) || 0;
+    const discAmt = Number(targetItem.discountAmount) || 0;
+    const grossTotal = newQtyPcs * unitPrice;
+    const calcDiscAmt = discPct > 0 ? (grossTotal * discPct / 100) : (discAmt > 0 ? discAmt : 0);
+    const newSubtotal = Math.round(grossTotal - calcDiscAmt);
+
+    targetItem.cartonCount = newCartonQty;
+    targetItem.qty = newQtyPcs;
+    targetItem.subtotal = newSubtotal;
+    if (targetItem.sizeGrams) {
+      targetItem.weightKg = (newQtyPcs * Number(targetItem.sizeGrams)) / 1000;
+    }
+    targetItem._isRevised = true;
+
+    items[matchedItemIndex] = targetItem;
+
+    // Hitung ulang grand total invoice
+    let newGrandTotal = 0;
+    for (const it of items) {
+      newGrandTotal += (it.isBonus ? 0 : Number(it.subtotal || 0));
+    }
+    invData.items = items;
+    invData.grandTotal = Math.round(newGrandTotal);
+
+    // Simpan pembaruan ke Firestore jika terhubung
+    const cleanItemsForDb = items.map(it => {
+      const c = { ...it };
+      delete c._isRevised;
+      return c;
+    });
+
+    const revisionNote = `Revisi WA L-W.A.V.I.S: ${targetItem.productName} -> ${newCartonQty} ktn`;
+    const existingNote = invData.note ? invData.note.trim() : '';
+    const updatedNote = existingNote ? `${existingNote} | ${revisionNote}` : revisionNote;
+
+    try {
+      if (invDocRef) {
+        const updatePayload = {
+          items: cleanItemsForDb,
+          grandTotal: invData.grandTotal,
+          note: updatedNote,
+          updatedAt: new Date()
+        };
+        if (this.firebaseAdapter?.mode === 'admin') {
+          await invDocRef.update(updatePayload);
+        } else if (this.firebaseAdapter?.clientSdk) {
+          const { updateDoc } = this.firebaseAdapter.clientSdk;
+          await updateDoc(invDocRef, updatePayload);
+        }
+      }
+
+      if (payload && payload.chatDocId && this.firebaseAdapter?.updateChatDocument) {
+        await this.firebaseAdapter.updateChatDocument(payload.chatDocId, {
+          status: 'processed',
+          createdInvoiceNo: `${targetInvNo} (UPDATED)`,
+          createdTransactionId: targetInvNo,
+          isReplySent: true
+        });
+      }
+
+      // Format balasan konfirmasi resmi revisi
+      return this.formatPoConfirmation(invData, senderName, {
+        title: 'REVISI PO BERHASIL DIPROSES: L-W.A.V.I.S',
+        subtitle: `Revisi pesanan Faktur #${targetInvNo} berhasil diperbarui di sistem:`,
+        isRevised: true
+      });
+    } catch (err) {
+      console.error('[L-W.A.V.I.S UPDATE TRANSACTION ERROR]', err.message);
+      return `⚠️ Gagal memperbarui transaksi #${targetInvNo}: ${err.message}`;
+    }
+  }
+
+  /**
+   * Menjawab Pertanyaan / Instruksi Umum Edukatif (Anti Bot Diam / Bisu)
+   */
+  handleSmartFallback(text, senderName = 'Kak') {
+    let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    resText += `Halo ${senderName}! 👋\n\n`;
+    resText += `Saya memahami pesan Anda, namun saat ini perintah tersebut belum terhubung ke sistem otomatis saya.\n\n`;
+    resText += `*5 LAYANAN UTAMA YANG DAPAT SAYA PROSES OTOMATIS:*\n`;
+    resText += `📝 *1. Buat Pesanan Baru (PO)*\n`;
+    resText += `   ↳ Kirimkan rincian order toko di sini untuk langsung dibuatkan draft faktur.\n\n`;
+    resText += `🔄 *2. Revisi PO (Khusus Status PENDING)*\n`;
+    resText += `   ↳ Quote/balas pesanan dengan: \`revisi PO [nama barang] jadi [jumlah] karton\`.\n\n`;
+    resText += `💳 *3. Cek Kartu Piutang Toko*\n`;
+    resText += `   ↳ Ketik: \`piutang [nama toko]\` (contoh: *piutang AFM* atau *piutang SJJ*).\n\n`;
+    resText += `📦 *4. Cek Stok Fisik Gudang*\n`;
+    resText += `   ↳ Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst*) atau \`stok keseluruhan\`.\n\n`;
+    resText += `📄 *5. Cek Rincian Faktur / Invoice*\n`;
+    resText += `   ↳ Ketik: \`faktur [nomor]\` (contoh: *faktur 699* atau *invoice #693*).\n\n`;
+    resText += `────────────────────────────\n`;
+    resText += `Untuk hal-hal di luar 5 layanan otomatis di atas atau pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali ya! 😊`;
 
     return resText;
   }

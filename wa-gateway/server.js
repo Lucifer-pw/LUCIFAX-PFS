@@ -426,6 +426,24 @@ async function flushMessageBuffer(bufferKey) {
           console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
         }
       }, 1000);
+    } else if (intent === 'QUERY_INVOICE') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handleInvoiceQuery(combinedText, buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S INVOICE QUERY ERROR]', err.message);
+        }
+      }, 1000);
+    } else if (intent === 'REVISE_PO') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handlePoRevision(chatPayload, buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S REVISION ERROR]', err.message);
+        }
+      }, 1000);
     } else if (intent === 'GREETING_MENU') {
       if (!wavisEngine.isAdminStandby()) {
         setTimeout(async () => {
@@ -434,6 +452,17 @@ async function flushMessageBuffer(bufferKey) {
             await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
           } catch (err) {
             console.warn('[L-W.A.V.I.S GREETING ERROR]', err.message);
+          }
+        }, 1500);
+      }
+    } else if (intent === 'SMART_FALLBACK') {
+      if (!wavisEngine.isAdminStandby()) {
+        setTimeout(async () => {
+          try {
+            const res = wavisEngine.handleSmartFallback(combinedText, buf.senderName);
+            await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+          } catch (err) {
+            console.warn('[L-W.A.V.I.S FALLBACK ERROR]', err.message);
           }
         }, 1500);
       }
@@ -627,10 +656,20 @@ function initProcessedPoListener() {
     const db = firebaseAdapter.db || firebaseAdapter.clientDb;
     if (!db) return;
 
+    let isInitialSnapshot = true;
+    const initialIgnoredDocIds = new Set();
+
     if (firebaseAdapter.mode === 'admin') {
       db.collection('incoming_po_chats')
         .where('status', '==', 'processed')
         .onSnapshot(snapshot => {
+          if (isInitialSnapshot) {
+            snapshot.docs.forEach(d => initialIgnoredDocIds.add(d.id));
+            isInitialSnapshot = false;
+            console.log(`[PO CONFIRM LISTENER] 🚀 Inisialisasi listener aktif (${initialIgnoredDocIds.size} chat historis dilewati agar tidak spam faktur lama).`);
+            return;
+          }
+
           snapshot.docChanges().forEach(change => {
             if (change.type === 'added' || change.type === 'modified') {
               const data = change.doc.data();
@@ -647,6 +686,13 @@ function initProcessedPoListener() {
         where('status', '==', 'processed')
       );
       onSnapshot(q, snapshot => {
+        if (isInitialSnapshot) {
+          snapshot.docs.forEach(d => initialIgnoredDocIds.add(d.id));
+          isInitialSnapshot = false;
+          console.log(`[PO CONFIRM LISTENER] 🚀 Inisialisasi client listener aktif (${initialIgnoredDocIds.size} chat historis dilewati).`);
+          return;
+        }
+
         snapshot.docChanges().forEach(change => {
           if (change.type === 'added' || change.type === 'modified') {
             const data = change.doc.data();
@@ -1692,6 +1738,26 @@ async function startBaileys() {
         if (recentChats.length > 20) recentChats.pop();
 
         const savedBypassId = await firebaseAdapter.saveIncomingChat(bypassPayload);
+        bypassPayload.chatDocId = savedBypassId;
+
+        // CEK APAKAH INI QUOTED REPLY UNTUK REVISI PO?
+        if (isQuotedReply && isInteractiveAllowed(senderPhone, remoteJid)) {
+          const isRevision = /\b(revisi|ubah|ganti|tambah|kurang|edit|batal|update)\b/i.test(cleanText);
+          if (isRevision) {
+            console.log(`[L-W.A.V.I.S REVISI] 🔄 Menerima quoted reply revisi PO dari ${senderName}: "${cleanText}"`);
+            setTimeout(async () => {
+              try {
+                const replyText = await wavisEngine.handlePoRevision(bypassPayload, senderName);
+                if (replyText) {
+                  await wavisEngine.sendReply(remoteJid, replyText, null, senderPhone);
+                }
+              } catch (err) {
+                console.error('[L-W.A.V.I.S REVISI ERROR]', err.message);
+              }
+            }, 1000);
+            return; // Selesai diproses oleh engine revisi
+          }
+        }
 
         // Autonomous Auto-PO execution untuk pesan forwarded pesanan (khusus Termux saat laptop kasir mati)
         // DELAY 2 MENIT: Sama seperti pesan biasa, beri prioritas Flutter dulu.

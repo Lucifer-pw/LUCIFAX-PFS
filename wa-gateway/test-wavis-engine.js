@@ -105,6 +105,11 @@ const intentTests = [
   { text: 'halo mas', expected: 'GREETING_MENU' },
   { text: 'pagi admin', expected: 'GREETING_MENU' },
   { text: 'assalamualaikum wavis', expected: 'GREETING_MENU' },
+  { text: 'apakah kamu bisa menampilkan data faktur atau invoice nomer 693', expected: 'QUERY_INVOICE' },
+  { text: 'faktur 699', expected: 'QUERY_INVOICE' },
+  { text: 'revisi PO brs merah jadi 35 karton', expected: 'REVISE_PO' },
+  { text: 'revisi faktur 699 brs merah jadi 35 dus', expected: 'REVISE_PO' },
+  { text: 'tolong bantu cek toko', expected: 'SMART_FALLBACK' },
   { text: 'tadi saya lihat ada kucing di gudang', expected: 'UNKNOWN' }
 ];
 
@@ -244,6 +249,53 @@ engine.setRawMessageStore((jid, id, msg) => {
   console.log('  ✓ Intent extended (pertanyaan bantuan/kemampuan) sukses diklasifikasikan');
 
   console.log('✅ Test 6 PASSED: Smart Footer & Extended Intent Berhasil!');
+
+  // 7. UJI SOP REVISI PO (PENDING VS DIKIRIM) & SMART FALLBACK
+  console.log('\n--- Test 7: Uji SOP Revisi PO Otomatis & Smart Fallback ---');
+  
+  // 7A: Revisi Faktur status PENDING (Wajib Berhasil diperbarui)
+  const pendingInvoiceMock = JSON.parse(JSON.stringify(mockInvoice)); // invoiceNo: 696, status: PENDING
+  const revisionPayloadPending = {
+    messageText: 'revisi PO brs merah jadi 35 karton',
+    isQuotedReply: true,
+    quotedMessageText: 'Orderan fiva bulan November 2026 aw ff...',
+    mockInvoice: pendingInvoiceMock
+  };
+
+  const revisionResPending = await engine.handlePoRevision(revisionPayloadPending, 'Rogue');
+  console.log(revisionResPending);
+  assert(revisionResPending.includes('REVISI PO BERHASIL DIPROSES: L-W.A.V.I.S'), 'Header revisi berhasil harus ada');
+  assert(revisionResPending.includes('🔄 *(DIREVISI)*'), 'Label item direvisi harus ada');
+  assert(revisionResPending.includes('35 Ktn (525 pcs)'), 'Jumlah karton baru harus 35 Ktn (525 pcs)');
+  assert(revisionResPending.includes('GrandTotal Karton:* 80 Ktn'), 'GrandTotal Karton harus 80 Ktn (10+30+5+35)');
+  assert(revisionResPending.includes('GRAND TOTAL:* *Rp 37.053.375*'), 'GrandTotal rupiah harus terhitung ulang 37.053.375');
+  console.log('  ✓ 7A PASSED: Revisi PO status PENDING berhasil dihitung ulang dan diperbarui');
+
+  // 7B: Revisi Faktur status DIKIRIM (Wajib DITOLAK secara sopan & tegas)
+  const shippedInvoiceMock = JSON.parse(JSON.stringify(mockInvoice));
+  shippedInvoiceMock.status = 'DIKIRIM';
+  const revisionPayloadShipped = {
+    messageText: 'revisi PO brs merah jadi 35 karton',
+    isQuotedReply: true,
+    quotedMessageText: 'Orderan fiva bulan November 2026 aw ff...',
+    mockInvoice: shippedInvoiceMock
+  };
+
+  const revisionResShipped = await engine.handlePoRevision(revisionPayloadShipped, 'Rogue');
+  console.log(revisionResShipped);
+  assert(revisionResShipped.includes('⚠️ *[REVISI PO DITOLAK: SUDAH DIKIRIM]*'), 'Header penolakan harus ada');
+  assert(revisionResShipped.includes('berstatus *DIKIRIM*'), 'Penjelasan status dikirim harus ada');
+  assert(revisionResShipped.includes('Admin / Kasir secara langsung'), 'Petunjuk manual ke admin kasir harus ada');
+  console.log('  ✓ 7B PASSED: Revisi PO status DIKIRIM sukses DITOLAK sesuai SOP');
+
+  // 7C: Uji Smart Fallback (Anti Bot Diam)
+  const fallbackText = engine.handleSmartFallback('tolong bantu cek toko', 'Rogue');
+  assert(fallbackText.includes('5 LAYANAN UTAMA YANG DAPAT SAYA PROSES OTOMATIS'), '5 layanan harus tercantum');
+  assert(fallbackText.includes('Revisi PO (Khusus Status PENDING)'), 'Panduan revisi harus ada');
+  assert(fallbackText.includes('Cek Rincian Faktur / Invoice'), 'Panduan faktur harus ada');
+  console.log('  ✓ 7C PASSED: Smart Fallback edukatif dan anti bisu');
+
+  console.log('✅ Test 7 PASSED: SOP Revisi PO (Pending vs Dikirim) & Smart Fallback Sempurna!');
 
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();
