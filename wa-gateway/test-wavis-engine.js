@@ -109,7 +109,8 @@ console.log('\n--- Test 3: Customer & Product Matcher ---');
 const mockCustomers = [
   { id: 'c1', customerName: 'AHYAR', aliasName: 'AFM' },
   { id: 'c2', customerName: 'MAJU MARKET MANDIRI', aliasName: 'MMM' },
-  { id: 'c3', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF' }
+  { id: 'c3', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF' },
+  { id: 'H002', customerName: 'AW FROZEN FOOD', aliasName: 'AW FF' }
 ];
 
 const mockProducts = [
@@ -121,6 +122,14 @@ const mockProducts = [
 const custMatch = engine.matchCustomerFromQuery('tolong cek sisa utang afm mas', mockCustomers);
 assert(custMatch && custMatch.aliasName === 'AFM', 'Harus cocok dengan AFM');
 console.log(`  ✓ Cocok Pelanggan: "${custMatch.aliasName} (${custMatch.customerName})"`);
+
+const custMatchAw = engine.matchCustomerFromQuery('saya ingin cek kartu piutang nya AW', mockCustomers);
+assert(custMatchAw && custMatchAw.aliasName === 'AW FF', 'Harus cocok dengan AW FF');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchAw.aliasName} (${custMatchAw.customerName})"`);
+
+const custMatchAw2 = engine.matchCustomerFromQuery('piutang AW FF', mockCustomers);
+assert(custMatchAw2 && custMatchAw2.aliasName === 'AW FF', 'Harus cocok dengan AW FF');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchAw2.aliasName} (${custMatchAw2.customerName})"`);
 
 const prodMatch = engine.matchProductFromQuery('stok bratwurst mini sisa berapa', mockProducts);
 assert(prodMatch && prodMatch.productName.includes('BRATWURST SAPI MINI'), 'Harus cocok dengan Bratwurst Mini');

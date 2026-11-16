@@ -164,70 +164,46 @@ class WavisInteractiveEngine {
     const clean = normalizeText(text);
     if (!clean || !Array.isArray(customers) || customers.length === 0) return null;
 
-    // Buang kata kunci tanya piutang agar fokus ke nama toko
-    const queryWithoutKw = clean
-      .replace(/\b(piutang|utang|bon|tagihan|sisa|berapa|belum|bayar|toko|cek|tolong|dong|mas|pak|ya)\b/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!queryWithoutKw) return null;
-
-    const words = queryWithoutKw.split(/\s+/).filter(w => w.length >= 2);
-
-    // 1. Cek Exact Alias (minimal 3 huruf, misal "AFM", "MMM")
+    // 1. Cek Exact Alias (e.g. 'aw ff', 'griya ff', 'afm')
     for (const c of customers) {
-      const alias = normalizeText(c.aliasName || '');
-      if (alias.length >= 3 && words.includes(alias)) {
-        return c;
-      }
-    }
+      const alias = normalizeText(c.aliasName || c.alias || '');
+      if (alias.length >= 2) {
+        const aliasPattern = new RegExp('(^|\\s)' + alias.replace(/\s+/g, '\\s+') + '(\\s|$)', 'i');
+        if (aliasPattern.test(clean)) return c;
 
-    // 2. Cek Inisial Nama (minimal 3 huruf)
-    for (const c of customers) {
-      const name = normalizeText(c.customerName || '');
-      const nameWords = name.split(/\s+/).filter(Boolean);
-      const initials = nameWords.map(w => w[0]).join('');
-      if (initials.length >= 3 && words.includes(initials)) {
-        return c;
-      }
-    }
-
-    // 3. Cek Substring Nama
-    for (const c of customers) {
-      const name = normalizeText(c.customerName || '');
-      if (name.length >= 3 && queryWithoutKw.includes(name)) {
-        return c;
-      }
-    }
-
-    // 4. Word overlap score
-    let best = null;
-    let maxScore = 0;
-    for (const c of customers) {
-      const name = normalizeText(c.customerName || '');
-      const alias = normalizeText(c.aliasName || '');
-      const cWords = (name + ' ' + alias).split(/\s+/);
-      let score = 0;
-      for (const qw of words) {
-        if (qw.length >= 3 && cWords.includes(qw)) score += 5;
-      }
-      if (score > maxScore && score >= 5) {
-        maxScore = score;
-        best = c;
-      }
-    }
-
-    // Fallback untuk alias 2 huruf jika benar-benar ada di kata
-    if (!best) {
-      for (const c of customers) {
-        const alias = normalizeText(c.aliasName || '');
-        if (alias.length === 2 && words.includes(alias)) {
-          return c;
+        // Root alias tanpa 'ff' / 'frozen food' (e.g. 'aw' dari 'aw ff', 'griya' dari 'griya ff')
+        const rootAlias = alias.replace(/\b(ff|frozen|food)\b/g, '').trim();
+        if (rootAlias.length >= 2) {
+          const rootPattern = new RegExp('(^|\\s)' + rootAlias + '(\\s|$)', 'i');
+          if (rootPattern.test(clean)) return c;
         }
       }
     }
 
-    return best;
+    // 2. Cek Nama Pelanggan (e.g. 'aw frozen food' -> 'aw')
+    for (const c of customers) {
+      const name = normalizeText(c.customerName || c.name || '');
+      if (name.length >= 3 && clean.includes(name)) return c;
+      const rootName = name.replace(/\b(ff|frozen|food|toko|cv|pt)\b/g, '').trim();
+      if (rootName.length >= 2) {
+        const rootPattern = new RegExp('(^|\\s)' + rootName + '(\\s|$)', 'i');
+        if (rootPattern.test(clean)) return c;
+      }
+    }
+
+    // 3. Word overlap fallback (abaikan kata umum piutang & stop words)
+    const stopWords = ['piutang', 'utang', 'bon', 'tagihan', 'cek', 'kartu', 'saya', 'ingin', 'mau', 'nya', 'mas', 'pak', 'dong', 'tolong', 'info'];
+    const words = clean.split(/\s+/).filter(w => !stopWords.includes(w) && w.length >= 2);
+    for (const c of customers) {
+      const name = normalizeText(c.customerName || c.name || '');
+      const alias = normalizeText(c.aliasName || c.alias || '');
+      const cWords = (name + ' ' + alias).split(/\s+/);
+      for (const qw of words) {
+        if (cWords.includes(qw)) return c;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -287,49 +263,77 @@ class WavisInteractiveEngine {
     const alias = matchedCustomer.aliasName ? ` (${matchedCustomer.aliasName})` : '';
 
     try {
-      // Ambil transaksi belum lunas untuk customer ini
+      // Ambil transaksi untuk customer ini dari koleksi transactions
       const db = this.firebaseAdapter.db || this.firebaseAdapter.clientDb;
-      let unpaidInvoices = [];
+      let allCustomerTransactions = [];
 
-      if (this.firebaseAdapter.mode === 'admin' && db) {
-        const snap = await db.collection('invoices')
-          .where('customerName', '==', custName)
-          .get();
-        unpaidInvoices = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(inv => (inv.statusTransfer || '').toUpperCase() !== 'PAID');
-      } else if (this.firebaseAdapter.clientSdk && db) {
-        const { collection, query, where, getDocs } = this.firebaseAdapter.clientSdk;
-        const snap = await getDocs(query(collection(db, 'invoices'), where('customerName', '==', custName)));
-        unpaidInvoices = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(inv => (inv.statusTransfer || '').toUpperCase() !== 'PAID');
+      const queryCol = async (field, val) => {
+        if (!val) return [];
+        if (this.firebaseAdapter.mode === 'admin' && db) {
+          const snap = await db.collection('transactions').where(field, '==', val).get();
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } else if (this.firebaseAdapter.clientSdk && db) {
+          const { collection, query, where, getDocs } = this.firebaseAdapter.clientSdk;
+          const snap = await getDocs(query(collection(db, 'transactions'), where(field, '==', val)));
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        return [];
+      };
+
+      if (matchedCustomer.id) {
+        allCustomerTransactions = await queryCol('customerId', matchedCustomer.id);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.customerName) {
+        allCustomerTransactions = await queryCol('customerName', matchedCustomer.customerName);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.aliasName) {
+        allCustomerTransactions = await queryCol('aliasName', matchedCustomer.aliasName);
       }
 
-      let totalRemaining = 0;
-      let lastPaymentInfo = null;
+      // Filter invoice yang belum lunas
+      const unpaidInvoices = allCustomerTransactions.filter(inv => {
+        const st = (inv.statusTransfer || '').toUpperCase();
+        return st !== 'PAID' && (Number(inv.grandTotal) || 0) > 0;
+      });
 
+      let totalRemaining = 0;
       unpaidInvoices.forEach(inv => {
         const grand = Number(inv.grandTotal) || 0;
-        const paid = Number(inv.paidAmount) || 0;
-        const remaining = grand - paid;
-        if (remaining > 0) totalRemaining += remaining;
+        const paid = Number(inv.transferBankDetails?.totalPaid || inv.transferBankDetails?.amount || inv.paidAmount || 0);
+        const remaining = Math.max(0, grand - paid);
+        totalRemaining += remaining;
+      });
 
+      // Cari info cicilan / pembayaran terakhir dari transaksi customer
+      let lastPaymentInfo = null;
+      for (const inv of allCustomerTransactions) {
+        const paid = Number(inv.transferBankDetails?.totalPaid || inv.transferBankDetails?.amount || inv.paidAmount || 0);
         if (paid > 0) {
+          const rawDate = inv.transferBankDetails?.rawDate || inv.transferBankDetails?.transferDate || inv.transferDate || inv.date;
           lastPaymentInfo = {
             amount: paid,
-            date: inv.transferDate || inv.date || null
+            date: rawDate
           };
+          break;
         }
-      });
+      }
 
       let lastPayStr = '-';
       if (lastPaymentInfo && lastPaymentInfo.amount > 0) {
         let tgl = '';
-        try {
-          const d = lastPaymentInfo.date ? (lastPaymentInfo.date.toDate ? lastPaymentInfo.date.toDate() : new Date(lastPaymentInfo.date)) : null;
-          if (d) tgl = ` (Tgl: ${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()})`;
-        } catch (_) {}
+        if (typeof lastPaymentInfo.date === 'string' && lastPaymentInfo.date.length >= 8) {
+          if (lastPaymentInfo.date.includes('/')) {
+            tgl = ` (Tgl: ${lastPaymentInfo.date})`;
+          } else {
+            try {
+              const d = new Date(lastPaymentInfo.date);
+              tgl = ` (Tgl: ${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()})`;
+            } catch (_) {}
+          }
+        } else if (lastPaymentInfo.date?._seconds) {
+          const d = new Date(lastPaymentInfo.date._seconds * 1000);
+          tgl = ` (Tgl: ${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()})`;
+        }
         lastPayStr = `Rp ${lastPaymentInfo.amount.toLocaleString('id-ID')}${tgl}`;
       }
 
