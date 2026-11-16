@@ -1,5 +1,5 @@
 {
-  "gateway": "3.3.277",
+  "gateway": "3.3.278",
   "files": {
     "server.js": "3.3.277",
     "autonomous-po-processor.js": "3.3.277",
@@ -7,8 +7,9 @@
     "firebase-adapter.js": "3.3.272",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
-    "bank-slip-parser.js": "3.3.270"
+    "bank-slip-parser.js": "3.3.270",
+    "update.sh": "3.3.278"
   },
   "updatedAt": "2026-11-16",
-  "changelog": "W.A.V.I.S Tahap 3 (Interactive): Auto-Reply PO 2-baris padat + GrandTotal + Status Paid, Toggle I di Whitelist, Cek Piutang, Cek Stok, dan Sapaan Bantuan"
+  "changelog": "Menambahkan wavis-interactive-engine.js ke daftar unduhan update.sh"
 }
