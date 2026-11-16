@@ -28,12 +28,15 @@ class WaAutoPoSettings {
         final name = (it['name'] ?? '').toString().trim();
         final enabled = (it['enabled'] ?? 'true').toString();
         final isEnabled = enabled != 'false';
+        final interactive = (it['interactive'] ?? 'true').toString();
+        final isInteractive = interactive != 'false';
         if (phone.isNotEmpty) {
           final clean = phone.replaceAll(RegExp(r'\D'), '');
           contacts.add({
             'phone': phone,
             'name': name.isNotEmpty ? name : 'Kontak WA',
             'enabled': isEnabled ? 'true' : 'false',
+            'interactive': isInteractive ? 'true' : 'false',
           });
           if (isEnabled && clean.isNotEmpty && !numbers.contains(clean)) {
             numbers.add(clean);
@@ -98,5 +101,24 @@ class WaAutoPoSettings {
       whitelistNumbers: newNumbers,
       whitelistContacts: newContacts,
     );
+  }
+
+  static String normalizePhoneDigits(String p) {
+    var s = p.replaceAll(RegExp(r'\D'), '');
+    if (s.startsWith('08')) s = '628${s.substring(2)}';
+    return s;
+  }
+
+  /// Mengecek apakah suatu nomor memiliki status Interactive (I) aktif
+  bool isInteractiveForPhone(String phone) {
+    final clean = normalizePhoneDigits(phone);
+    if (clean.isEmpty) return false;
+    for (final c in whitelistContacts) {
+      final cp = normalizePhoneDigits(c['phone'] ?? '');
+      if (cp.isNotEmpty && (clean.endsWith(cp) || cp.endsWith(clean) || clean == cp)) {
+        return c['interactive'] != 'false';
+      }
+    }
+    return false;
   }
 }

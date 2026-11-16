@@ -1,13 +1,14 @@
 {
-  "gateway": "3.3.276",
+  "gateway": "3.3.277",
   "files": {
-    "server.js": "3.3.275",
-    "autonomous-po-processor.js": "3.3.275",
+    "server.js": "3.3.277",
+    "autonomous-po-processor.js": "3.3.277",
+    "wavis-interactive-engine.js": "3.3.277",
     "firebase-adapter.js": "3.3.272",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.270"
   },
   "updatedAt": "2026-11-16",
-  "changelog": "Menampilkan tanggal transfer / cicilan pembayaran faktur di Kartu Piutang (PDF & Layar Aplikasi)"
+  "changelog": "W.A.V.I.S Tahap 3 (Interactive): Auto-Reply PO 2-baris padat + GrandTotal + Status Paid, Toggle I di Whitelist, Cek Piutang, Cek Stok, dan Sapaan Bantuan"
 }

@@ -23,6 +23,10 @@ const { NotificationDispatcher, NOTIF_VERSION } = require('./notification-dispat
 const notificationDispatcher = new NotificationDispatcher(firebaseAdapter);
 const AutonomousPoProcessor = require('./autonomous-po-processor');
 const autoPoProcessor = new AutonomousPoProcessor(firebaseAdapter, notificationDispatcher);
+const WavisInteractiveEngine = require('./wavis-interactive-engine');
+const wavisEngine = new WavisInteractiveEngine(firebaseAdapter, autoPoProcessor);
+wavisEngine.setSocketGetter(() => currentSock);
+autoPoProcessor.setWavisEngine(wavisEngine);
 if (firebaseAdapter && typeof firebaseAdapter.setNotificationDispatcher === 'function') {
   firebaseAdapter.setNotificationDispatcher(notificationDispatcher);
 }
@@ -187,6 +191,23 @@ let lidToPhoneMap = new Map(); // '33668835856433' -> '6287789733632'
 let phoneToLidMap = new Map(); // '6287789733632' -> '33668835856433'
 let autoPoEnabled = false;
 let autoSettleTransferSlips = true; // Opsi B (100% Otomatis Penuh) default true
+let interactiveNumbers = new Set(); // Set of numbers allowed to receive L-W.A.V.I.S interactive replies
+
+function isInteractiveAllowed(senderPhone, rawJidDigits) {
+  if (!senderPhone && !rawJidDigits) return false;
+  const p = cleanPhone(senderPhone);
+  if (p && Array.from(interactiveNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
+    return true;
+  }
+  if (rawJidDigits && lidToPhoneMap.has(rawJidDigits)) {
+    const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
+    if (mappedPhone && Array.from(interactiveNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
+      return true;
+    }
+  }
+  return false;
+}
+autoPoProcessor.setIsInteractiveChecker((phone, jid) => isInteractiveAllowed(phone, jid));
 
 // Processed message IDs to prevent duplicates across restarts and history sync
 const processedMessageIds = new Set();
@@ -333,7 +354,34 @@ async function flushMessageBuffer(bufferKey) {
         // Cek apakah Flutter sudah proses chat ini
         const chatDoc = await firebaseAdapter.getChatDocument(savedId);
         if (chatDoc && chatDoc.status === 'processed') {
-          console.log(`[AUTONOMOUS PO] ⏭️ Chat ${savedId} sudah diproses oleh Flutter (Invoice #${chatDoc.createdInvoiceNo || '?'}). SKIP.`);
+          console.log(`[AUTONOMOUS PO] ⏭️ Chat ${savedId} sudah diproses oleh Flutter (Invoice #${chatDoc.createdInvoiceNo || '?'}).`);
+          // Cek apakah konfirmasi L-W.A.V.I.S perlu dikirim (jika belum pernah dikirim)
+          if (!chatDoc.isReplySent && isInteractiveAllowed(chatPayload.senderPhone, chatPayload.senderJid)) {
+            try {
+              const invNo = String(chatDoc.createdInvoiceNo || '').replace(/\D/g, '');
+              if (invNo) {
+                const db = firebaseAdapter.db || firebaseAdapter.clientDb;
+                if (db) {
+                  let invData = null;
+                  if (firebaseAdapter.mode === 'admin') {
+                    const snap = await db.collection('invoices').doc(invNo).get();
+                    if (snap.exists) invData = snap.data();
+                  } else if (firebaseAdapter.clientSdk) {
+                    const { doc, getDoc } = firebaseAdapter.clientSdk;
+                    const snap = await getDoc(doc(db, 'invoices', invNo));
+                    if (snap.exists()) invData = snap.data();
+                  }
+                  if (invData) {
+                    const replyText = wavisEngine.formatPoConfirmation(invData, chatPayload.senderName || 'Pak');
+                    await wavisEngine.sendReply(chatPayload.senderJid, replyText);
+                    await firebaseAdapter.updateChatDocument(savedId, { isReplySent: true });
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[WAVIS FLUTTER INVOICE CONFIRM ERROR]', e.message);
+            }
+          }
           return;
         }
         // Masih pending → Termux handle
@@ -343,6 +391,44 @@ async function flushMessageBuffer(bufferKey) {
         console.warn('[AUTONOMOUS PO BG ERROR]', err.message);
       }
     }, DELAY_MS);
+  }
+
+  // L-W.A.V.I.S INTERACTIVE QUERY HANDLER (TAHAP 3: Tanya Piutang, Tanya Stok, Sapaan)
+  const isInteractive = isInteractiveAllowed(buf.senderPhone, buf.senderJid);
+  if (isInteractive && !isTransfer && chatPayload.messageType !== 'ORDER_PO') {
+    const intent = wavisEngine.classifyIntent(combinedText);
+    console.log(`[L-W.A.V.I.S CLASSIFY] 🧠 Intent dari ${buf.senderName}: ${intent}`);
+
+    if (intent === 'QUERY_RECEIVABLES') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handleReceivablesQuery(combinedText, buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
+        }
+      }, 1000);
+    } else if (intent === 'QUERY_STOCK') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handleStockQuery(combinedText, buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
+        }
+      }, 1000);
+    } else if (intent === 'GREETING_MENU') {
+      if (!wavisEngine.isAdminStandby()) {
+        setTimeout(async () => {
+          try {
+            const res = wavisEngine.handleGreetingMenu(buf.senderName);
+            await wavisEngine.sendReply(buf.senderJid, res);
+          } catch (err) {
+            console.warn('[L-W.A.V.I.S GREETING ERROR]', err.message);
+          }
+        }, 1500);
+      }
+    }
   }
 }
 
@@ -413,9 +499,11 @@ firebaseAdapter.listenToSettings((settings) => {
     );
     const newDisabledNumbers = new Set();
     const newDisabledLids = new Set();
+    const newInteractiveNumbers = new Set();
 
     settings.whitelistContacts.forEach(it => {
       const isEnabled = it.enabled !== false && it.enabled !== 'false';
+      const isInteractive = it.interactive !== false && it.interactive !== 'false';
       const c = cleanPhone(it.phone || it.number);
       const name = (it.name || '').trim();
       if (!c) return;
@@ -431,7 +519,10 @@ firebaseAdapter.listenToSettings((settings) => {
       }
 
       newNumbers.add(c);
-      whitelistContactsList.push({ name, phone: c });
+      if (isInteractive) {
+        newInteractiveNumbers.add(c);
+      }
+      whitelistContactsList.push({ name, phone: c, interactive: isInteractive });
       if (phoneToLidMap.has(c)) {
         const mappedLid = phoneToLidMap.get(c);
         whitelistLids.add(mappedLid);
@@ -441,6 +532,7 @@ firebaseAdapter.listenToSettings((settings) => {
     whitelistNumbers = newNumbers;
     disabledNumbers = newDisabledNumbers;
     disabledLids = newDisabledLids;
+    interactiveNumbers = newInteractiveNumbers;
   } else if (Array.isArray(settings.whitelistNumbers)) {
     whitelistContactsList = [];
     const newNumbers = new Set(
@@ -690,7 +782,10 @@ async function startBaileys() {
     // Process a single incoming or history sync message
     async function processSingleMessage(m, isHistorySync = false) {
       if (!m || !m.message) return;
-      if (m.key?.fromMe) return;
+      if (m.key?.fromMe) {
+        wavisEngine.recordAdminActivity();
+        return;
+      }
 
       const msgId = m.key?.id;
       if (msgId && processedMessageIds.has(msgId)) {

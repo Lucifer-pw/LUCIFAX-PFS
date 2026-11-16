@@ -444,16 +444,19 @@ class _WaGatewayViewState extends State<WaGatewayView> {
               );
               if (isEditing) {
                 final currentEnabled = updatedContacts[editingIndex!]['enabled'] ?? 'true';
+                final currentInteractive = updatedContacts[editingIndex!]['interactive'] ?? 'true';
                 updatedContacts[editingIndex!] = {
                   'name': name.isNotEmpty ? name : 'Kontak #${editingIndex! + 1}',
                   'phone': phone,
                   'enabled': currentEnabled,
+                  'interactive': currentInteractive,
                 };
               } else {
                 updatedContacts.add({
                   'name': name.isNotEmpty ? name : 'Kontak #${updatedContacts.length + 1}',
                   'phone': phone,
                   'enabled': 'true',
+                  'interactive': 'true',
                 });
               }
 
@@ -770,6 +773,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                               final item = contacts[idx];
                               final isCurrentEdit = editingIndex == idx;
                               final isEnabled = item['enabled'] != 'false';
+                              final isInteractive = item['interactive'] != 'false';
                               final hasName = item['name'] != null && item['name']!.trim().isNotEmpty;
                               final displayName = hasName ? item['name']!.trim() : 'Kontak #${idx + 1}';
 
@@ -836,9 +840,9 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // ON / OFF Toggle Pill
+                                        // 1. PO Auto-Draft ON / OFF Toggle Pill
                                         Tooltip(
-                                          message: isEnabled ? 'Klik untuk NONAKTIFKAN nomor ini' : 'Klik untuk AKTIFKAN nomor ini',
+                                          message: isEnabled ? 'PO Auto-Draft: AKTIF (Nomor ini ditangkap jadi invoice)' : 'PO Auto-Draft: NONAKTIF',
                                           child: InkWell(
                                             borderRadius: BorderRadius.circular(14),
                                             onTap: () async {
@@ -859,7 +863,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                               }
                                             },
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
                                               decoration: BoxDecoration(
                                                 color: isEnabled
                                                     ? const Color(0xFF065F46).withOpacity(0.4)
@@ -883,9 +887,69 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                                   ),
                                                   const SizedBox(width: 4),
                                                   Text(
-                                                    isEnabled ? 'ON' : 'OFF',
+                                                    isEnabled ? 'PO: ON' : 'PO: OFF',
                                                     style: TextStyle(
                                                       color: isEnabled ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+
+                                        // 2. Interactive (I) ON / OFF Toggle Pill
+                                        Tooltip(
+                                          message: isInteractive
+                                              ? 'Interactive L-W.A.V.I.S: AKTIF (Bisa auto-reply nota & interaksi)'
+                                              : 'Interactive L-W.A.V.I.S: NONAKTIF (Mode senyap / silent)',
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(14),
+                                            onTap: () async {
+                                              try {
+                                                final updatedContacts = List<Map<String, String>>.from(
+                                                  localSettings.whitelistContacts.map((c) => Map<String, String>.from(c)),
+                                                );
+                                                updatedContacts[idx]['interactive'] = isInteractive ? 'false' : 'true';
+
+                                                final updated = localSettings.copyWith(whitelistContacts: updatedContacts);
+                                                await _firebaseService.saveWaAutoPoSettings(updated);
+
+                                                setDialogState(() {
+                                                  localSettings = updated;
+                                                });
+                                              } catch (e) {
+                                                debugPrint('Gagal toggle interactive whitelist: $e');
+                                              }
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
+                                              decoration: BoxDecoration(
+                                                color: isInteractive
+                                                    ? const Color(0xFF0369A1).withOpacity(0.4)
+                                                    : const Color(0xFF334155).withOpacity(0.5),
+                                                borderRadius: BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: isInteractive ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.bolt_rounded,
+                                                    color: isInteractive ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                                    size: 11,
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    isInteractive ? 'I: ON' : 'I: OFF',
+                                                    style: TextStyle(
+                                                      color: isInteractive ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
                                                       fontSize: 10,
                                                       fontWeight: FontWeight.bold,
                                                     ),

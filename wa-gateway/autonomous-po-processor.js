@@ -61,6 +61,16 @@ class AutonomousPoProcessor {
     this.cachedRules = [];
     this.lastCacheTime = 0;
     this.CACHE_TTL_MS = 10 * 60 * 1000; // 10 menit cache
+    this.wavisEngine = null;
+    this.isInteractiveChecker = null;
+  }
+
+  setWavisEngine(engine) {
+    this.wavisEngine = engine;
+  }
+
+  setIsInteractiveChecker(fn) {
+    this.isInteractiveChecker = fn;
   }
 
   cleanPhone(p) {
@@ -345,6 +355,8 @@ class AutonomousPoProcessor {
       productName: productName,
       price: price,
       qty: qtyPcs,
+      isiKarton: pcsPerKtn,
+      cartonCount: qtyUnit === 'karton' ? qtyInput : (pcsPerKtn > 0 ? Math.round(qtyPcs / pcsPerKtn * 10) / 10 : 0),
       discountPercent: discountPercent,
       discountAmount: discountAmount,
       subtotal: subtotal,
@@ -1009,6 +1021,38 @@ class AutonomousPoProcessor {
           items: parsed.items,
           grandTotal: parsed.grandTotal
         });
+      }
+
+      // BALASAN INTERAKTIF L-W.A.V.I.S (TAHAP 3)
+      if (this.wavisEngine && chatPayload) {
+        const remoteJid = chatPayload.senderJid || chatPayload.remoteJid;
+        const phone = chatPayload.senderPhone || '';
+        const isInteractive = this.isInteractiveChecker ? this.isInteractiveChecker(phone, remoteJid) : true;
+        
+        if (isInteractive && remoteJid) {
+          try {
+            console.log(`[L-W.A.V.I.S AUTO-REPLY] 🤖 Menyusun konfirmasi faktur #${invoiceNo} untuk ${parsed.customer.customerName}...`);
+            const replyText = this.wavisEngine.formatPoConfirmation({
+              invoiceNo: String(invoiceNo),
+              customerName: parsed.customer.customerName,
+              aliasName: parsed.customer.aliasName,
+              city: parsed.customer.city,
+              province: parsed.customer.province,
+              date: now,
+              status: 'PENDING',
+              statusTransfer: parsed.grandTotal <= 0 ? 'PAID' : 'UNPAID',
+              items: parsed.items,
+              grandTotal: parsed.grandTotal,
+              note: parsed.bonusNote || ''
+            }, chatPayload.senderName || 'Pak');
+
+            await this.wavisEngine.sendReply(remoteJid, replyText, chatPayload.rawMessage || null);
+          } catch (replyErr) {
+            console.warn('[L-W.A.V.I.S REPLY WARNING]', replyErr.message);
+          }
+        } else {
+          console.log(`[L-W.A.V.I.S SILENT] 🤫 Nomor ${phone} memiliki status Interactive OFF. Tidak mengirim balasan WA.`);
+        }
       }
       return {
         success: true,
