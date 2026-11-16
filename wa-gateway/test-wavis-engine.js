@@ -180,25 +180,33 @@ console.log('\n--- Test 4: Cek Stok Fisik Keseluruhan ---');
 console.log('\n--- Test 4: Menu Bantuan L-W.A.V.I.S ---');
 const greeting = engine.handleGreetingMenu('Pak Joko');
 assert(greeting.includes('Halo Pak Joko!'), 'Harus menyapa Pak Joko');
-assert(greeting.includes('1. Buat Pesanan Baru (PO)'), 'Menu 1 PO harus ada');
-assert(greeting.includes('2. Cek Piutang Toko'), 'Menu 2 Piutang harus ada');
-assert(greeting.includes('3. Cek Stok Barang Gudang'), 'Menu 3 Stok harus ada');
+assert(greeting.includes('1. Buat Pesanan Baru'), 'Menu 1 PO harus ada');
+assert(greeting.includes('2. Cek') && greeting.includes('Piutang'), 'Menu 2 Piutang harus ada');
+assert(greeting.includes('3. Cek Stok'), 'Menu 3 Stok harus ada');
 console.log(greeting);
 console.log('✅ Test 4 PASSED: Menu Bantuan L-W.A.V.I.S Sempurna!');
 
-// 5. UJI SEND REPLY (GROUP BLOCK & LID RESOLUTION)
-console.log('\n--- Test 5: Pengujian sendReply (Filter Grup & Resolusi LID) ---');
+// 5. UJI SEND REPLY (GROUP BLOCK, LID RESOLUTION, & OUTGOING MESSAGE CACHE)
+console.log('\n--- Test 5: Pengujian sendReply (Filter Grup, Resolusi LID, & Cache Pesan Keluar) ---');
 let capturedTargetJid = null;
 let capturedPayload = null;
+const mockRawCache = new Map();
 
 engine.setSocketGetter(() => ({
   sendPresenceUpdate: async () => {},
   sendMessage: async (jid, payload) => {
     capturedTargetJid = jid;
     capturedPayload = payload;
-    return true;
+    return {
+      key: { id: 'TEST_MSG_ID_999', remoteJid: jid, fromMe: true },
+      message: { conversation: payload.text }
+    };
   }
 }));
+
+engine.setRawMessageStore((jid, id, msg) => {
+  mockRawCache.set(`${jid}_${id}`, msg);
+});
 
 (async () => {
   // 5A: Coba kirim ke Grup WhatsApp (@g.us) -> WAJIB DITOLAK
@@ -212,7 +220,30 @@ engine.setSocketGetter(() => ({
   assert.strictEqual(capturedTargetJid, '6287789733632@s.whatsapp.net', 'Target JID harus dialihkan ke 6287789733632@s.whatsapp.net');
   console.log(`  ✓ sendReply ke LID berhasil dialihkan ke: ${capturedTargetJid}`);
 
-  console.log('✅ Test 5 PASSED: Filter Grup & Resolusi LID Bekerja Sempurna!');
+  // 5C: Cek apakah pesan keluar tersimpan di rawMessageCache untuk pencegahan E2EE delay
+  assert(mockRawCache.has('6287789733632@s.whatsapp.net_TEST_MSG_ID_999'), 'Pesan keluar harus tersimpan di cache targetJid');
+  assert(mockRawCache.has('33668835856433@lid_TEST_MSG_ID_999'), 'Pesan keluar harus tersimpan di cache remoteJid LID');
+  console.log('  ✓ Pesan keluar tersimpan di cache getMessage (Target & LID) untuk instant retry E2EE');
+
+  console.log('✅ Test 5 PASSED: Filter Grup, Resolusi LID, & Cache Pesan Keluar Bekerja Sempurna!');
+
+  // 6. UJI VARIATIF SMART FOOTER & EXTENDED INTENT
+  console.log('\n--- Test 6: Uji Smart Footer & Extended Intent ---');
+  const footerDebt = engine.generateSmartFooter('RECEIVABLES_WITH_DEBT', { senderName: 'Rogue' });
+  assert(footerDebt && footerDebt.length > 20, 'Footer piutang harus terbentuk');
+  console.log('  ✓ Smart Footer Piutang:', footerDebt.split('\n')[0]);
+
+  const footerLunas = engine.generateSmartFooter('RECEIVABLES_LUNAS', { senderName: 'Rogue' });
+  assert(footerLunas && footerLunas.length > 20, 'Footer lunas harus terbentuk');
+  console.log('  ✓ Smart Footer Lunas:', footerLunas.split('\n')[0]);
+
+  const intent1 = engine.classifyIntent('adakah yang bisa wavis bantu selagi admin tidak standby');
+  assert.strictEqual(intent1, 'GREETING_MENU', 'Harus mengenali intent GREETING_MENU');
+  const intent2 = engine.classifyIntent('kamu bisa apa');
+  assert.strictEqual(intent2, 'GREETING_MENU', 'Harus mengenali intent GREETING_MENU');
+  console.log('  ✓ Intent extended (pertanyaan bantuan/kemampuan) sukses diklasifikasikan');
+
+  console.log('✅ Test 6 PASSED: Smart Footer & Extended Intent Berhasil!');
 
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

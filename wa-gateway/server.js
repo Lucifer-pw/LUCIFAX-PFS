@@ -241,6 +241,7 @@ function storeRawMessage(jid, id, message) {
   }
   rawMessageCache.set(key, message);
 }
+wavisEngine.setRawMessageStore(storeRawMessage);
 
 // Helper: Deteksi apakah teks OCR adalah screenshot terminal / log / kode program
 // Mencegah foto screenshot terminal (yang mengandung kata produk di dalam log) diproses sebagai pesanan
@@ -629,7 +630,23 @@ async function startBaileys() {
       getMessage: async (key) => {
         if (!key) return undefined;
         const lookupKey = `${key.remoteJid}_${key.id}`;
-        return rawMessageCache.get(lookupKey) || undefined;
+        if (rawMessageCache.has(lookupKey)) return rawMessageCache.get(lookupKey);
+
+        // Bersihkan device index jika ada (misal :1@s.whatsapp.net -> @s.whatsapp.net)
+        const cleanJid = key.remoteJid ? key.remoteJid.replace(/:\d+@/, '@') : '';
+        if (cleanJid && rawMessageCache.has(`${cleanJid}_${key.id}`)) {
+          return rawMessageCache.get(`${cleanJid}_${key.id}`);
+        }
+
+        // Fallback pencarian berdasarkan ID pesan untuk menyelesaikan retry handshake E2EE
+        if (key.id) {
+          for (const [k, msg] of rawMessageCache.entries()) {
+            if (k.endsWith(`_${key.id}`)) {
+              return msg;
+            }
+          }
+        }
+        return undefined;
       }
     });
 

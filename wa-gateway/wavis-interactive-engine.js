@@ -20,11 +20,16 @@ class WavisInteractiveEngine {
     this.firebaseAdapter = firebaseAdapter;
     this.autoPoProcessor = autoPoProcessor;
     this.sockGetter = null;
+    this.rawMessageStore = null;
     this.lastAdminActivityTime = 0;
   }
 
   setSocketGetter(fn) {
     this.sockGetter = fn;
+  }
+
+  setRawMessageStore(fn) {
+    this.rawMessageStore = fn;
   }
 
   recordAdminActivity() {
@@ -33,6 +38,76 @@ class WavisInteractiveEngine {
 
   isAdminStandby(thresholdMs = 3 * 60 * 1000) {
     return (Date.now() - this.lastAdminActivityTime) < thresholdMs;
+  }
+
+  /**
+   * Generator Kalimat Penutup Interaktif Cerdas & Proaktif (AI Persona Assistant)
+   * Menyediakan variasi pesan luwes, ramah, dan kontekstual agar tidak terkesan kaku seperti robot biasa.
+   */
+  generateSmartFooter(context, options = {}) {
+    const { senderName = 'Kak', hasDebt = false, isReady = true, customerName = '', productName = '' } = options;
+
+    let footers = [];
+
+    switch (context) {
+      case 'RECEIVABLES_WITH_DEBT':
+        footers = [
+          `💡 *Selagi Admin / Developer belum standby di tempat:*\nL-W.A.V.I.S siap bantu cek rincian faktur lain, cek ketersediaan stok barang, atau langsung proses draft PO baru. Ada yang ingin dicek lagi ${senderName}? 😊`,
+          `💬 *Butuh rincian faktur tertentu atau mau titip konfirmasi pembayaran?*\nSilakan ketik nomor faktur atau kirim foto bukti transfer ke sini, nanti saya sinkronkan langsung ke sistem ya ${senderName}. 📝`,
+          `📦 *Toko ini ada rencana ambil barang lagi?*\nL-W.A.V.I.S siap bantu cek stok barang yang sering diorder atau langsung siapkan draft pesanannya! ✨`,
+          `🤝 *Ada yang bisa saya bantu lagi untuk operasional hari ini ${senderName}?*\nKetik saja nama barang untuk cek stok, atau nama toko lain untuk cek kartu piutangnya.`
+        ];
+        break;
+
+      case 'RECEIVABLES_LUNAS':
+        footers = [
+          `🎉 *Toko ini berstatus bersih tanpa tunggakan!*\nSiap ambil barang lagi hari ini ${senderName}? Kirimkan list pesanannya atau ketik nama barang untuk cek stok, L-W.A.V.I.S buatkan fakturnya selagi Admin belum standby. ✨`,
+          `✨ *Mau restok produk favorit untuk toko ini?*\nCukup ketik \`stok [nama barang]\` atau kirim format orderan di sini, sistem siap proses otomatis! 📦`,
+          `🤝 *Senang melihat transaksi toko ini lancar!* 😊\nAda toko lain atau stok gudang yang ingin dicek lagi selagi Admin sedang tidak di tempat? Silakan ketik langsung ya ${senderName}.`
+        ];
+        break;
+
+      case 'STOCK_SPECIFIC_READY':
+        footers = [
+          `📦 *Stok aman dan siap kirim!*\nMau langsung dibuatkan draft faktur penjualannya ${senderName}? Cukup kirim list ordernya di sini ya. Selagi Admin offline, L-W.A.V.I.S siap bantu! 😊`,
+          `✨ Butuh cek ketersediaan produk lainnya atau mau sekalian cek kartu piutang toko tujuan pengiriman? Silakan ketik langsung ya ${senderName}. 💡`,
+          `🤝 Ada produk lain yang ingin dicek juga selagi menunggu Admin online? Ketik saja nama produknya ya ${senderName}.`
+        ];
+        break;
+
+      case 'STOCK_SPECIFIC_EMPTY':
+        footers = [
+          `⚠️ *Stok produk ini sedang kosong di gudang.*\nMau saya bantu cek produk alternatif yang serupa atau cek varian ukuran lain ${senderName}? Ketik nama produk alternatifnya ya. 🔍`,
+          `📝 Ingin titip catatan kebutuhan restok produk ini untuk Admin / Developer? Ketik saja pesannya di sini, akan saya pastikan terbaca saat beliau aktif kembali ya! ✨`,
+          `💡 Butuh cek stok barang lain yang saat ini ready di gudang? Ketik \`stok keseluruhan\` untuk melihat rangkuman produk siap kirim.`
+        ];
+        break;
+
+      case 'STOCK_OVERALL':
+        footers = [
+          `📦 Ingin cek stok detail untuk produk tertentu atau mau langsung input orderan toko ${senderName}? Ketik \`stok [nama barang]\` atau kirimkan list ordernya ya! ✨`,
+          `🤝 Selagi Admin / Developer sedang tidak standby, L-W.A.V.I.S siap melayani cek piutang toko atau pembuatan draft faktur. Ada hal operasional lain yang bisa saya bantu ${senderName}? 😊`,
+          `💡 Butuh buat draft PO untuk toko tertentu? Langsung kirim format pesanannya di sini, sistem akan langsung memprosesnya otomatis!`
+        ];
+        break;
+
+      case 'PO_CONFIRMATION':
+        footers = [
+          `ℹ️ *Layanan Operasional L-W.A.V.I.S:*\n• Faktur sudah aman masuk antrean kasir.\n• Selagi Admin belum standby, L-W.A.V.I.S siap bantu cek stok barang atau proses pesanan toko lainnya. Ada lagi yang ingin diproses ${senderName}? 😊`,
+          `ℹ️ *Layanan Operasional L-W.A.V.I.S:*\n• Draft pesanan sudah tersimpan rapi di sistem.\n• Jika ada pesan personal atau catatan khusus untuk Admin, silakan ketik langsung ya, beliau akan membalas segera setelah aktif kembali! ✨`
+        ];
+        break;
+
+      default:
+        footers = [
+          `🤝 *L-W.A.V.I.S siap siaga!* Selagi Admin belum standby di tempat, silakan manfaatkan layanan cek piutang, cek stok fisik, atau input PO kapan saja. Ada hal lain yang ingin dicek ${senderName}? 😊`,
+          `💡 Ketik apa yang ${senderName} butuhkan: cek piutang toko, stok barang gudang, atau kirimkan list orderan. Saya siap bantu kelancaran operasional Anda!`
+        ];
+        break;
+    }
+
+    const selected = footers[Math.floor(Math.random() * footers.length)];
+    return selected;
   }
 
   /**
@@ -122,9 +197,7 @@ class WavisInteractiveEngine {
       text += `📝 *Catatan:* ${note.trim()}\n`;
     }
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `ℹ️ *Catatan Sistem:*\n`;
-    text += `• Faktur sudah aman masuk antrean kasir.\n`;
-    text += `• Jika ada pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali. 😊`;
+    text += this.generateSmartFooter('PO_CONFIRMATION', { senderName });
 
     return text;
   }
@@ -160,8 +233,8 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 3. Cek Pola Sapaan / Menu Bantuan
-    const greetingPattern = /\b(halo|hello|pagi|siang|sore|malam|assalamualaikum|bantuan|menu|wavis|hai)\b/i;
+    // 3. Cek Pola Sapaan / Menu Bantuan / Pertanyaan Kemampuan AI
+    const greetingPattern = /\b(halo|hello|pagi|siang|sore|malam|assalamualaikum|bantuan|menu|wavis|hai|bisa apa|bisa bantu apa|tugasmu|fungsi wavis|siapa kamu|fitur|cara pakai|standby)\b/i;
     if (greetingPattern.test(clean)) {
       return 'GREETING_MENU';
     }
@@ -442,7 +515,8 @@ class WavisInteractiveEngine {
       }
 
       resText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      resText += `ℹ️ _Ketik \`order\` atau kirimkan list pesanan jika toko ini mau ambil barang lagi ya!_`;
+      const footerCtx = unpaidInvoices.length > 0 ? 'RECEIVABLES_WITH_DEBT' : 'RECEIVABLES_LUNAS';
+      resText += this.generateSmartFooter(footerCtx, { senderName, hasDebt: unpaidInvoices.length > 0, customerName: custName });
 
       return resText;
     } catch (e) {
@@ -501,7 +575,7 @@ class WavisInteractiveEngine {
       }
 
       resText += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      resText += `💡 _Ketik \`stok [nama barang]\` (contoh: \`stok bratwurst\`) untuk cek detail produk spesifik ya!_`;
+      resText += this.generateSmartFooter('STOCK_OVERALL', { senderName });
       return resText;
     }
 
@@ -528,7 +602,8 @@ class WavisInteractiveEngine {
     resText += `💰 *Harga Standar:* Rp ${price.toLocaleString('id-ID')} / pcs\n`;
     resText += `🏷️ *Status:* ${stockPcs > 0 ? '✅ Ready / Siap Kirim' : '⚠️ Stok Kosong / Habis'}\n\n`;
     resText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    resText += `ℹ️ _Langsung kirim format PO jika ingin langsung dibuatkan draft faktur ya!_`;
+    const stockFooterCtx = stockPcs > 0 ? 'STOCK_SPECIFIC_READY' : 'STOCK_SPECIFIC_EMPTY';
+    resText += this.generateSmartFooter(stockFooterCtx, { senderName, isReady: stockPcs > 0, productName: pName });
 
     return resText;
   }
@@ -539,17 +614,18 @@ class WavisInteractiveEngine {
   handleGreetingMenu(senderName = 'Kak') {
     let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     resText += `Halo ${senderName}! 👋\n\n`;
-    resText += `Admin / Developer saat ini sedang tidak standby di tempat. \n`;
-    resText += `Namun jangan khawatir, selagi menunggu beliau online, apa yang bisa *L-W.A.V.I.S* bantu untuk kelancaran operasional Anda hari ini?\n\n`;
-    resText += `Saya bisa langsung melayani:\n`;
+    resText += `Admin / Developer saat ini sedang tidak standby di tempat.\n`;
+    resText += `Namun jangan khawatir! Selagi menunggu beliau online, *L-W.A.V.I.S* siap membantu memastikan seluruh urusan operasional Anda tetap berjalan lancar dan cepat.\n\n`;
+    resText += `*LAYANAN YANG BISA SAYA PROSES OTOMATIS:*\n`;
     resText += `📝 *1. Buat Pesanan Baru (PO)*\n`;
-    resText += `   Langsung kirim list order toko di sini, faktur akan langsung saya buatkan otomatis.\n\n`;
-    resText += `💳 *2. Cek Piutang Toko*\n`;
-    resText += `   Ketik: \`piutang [nama toko]\` (contoh: *piutang AFM*)\n\n`;
+    resText += `   ↳ Langsung kirim list order toko di sini, draft faktur akan langsung dibuatkan otomatis & masuk antrean kasir.\n\n`;
+    resText += `💳 *2. Cek Kartu Piutang Toko*\n`;
+    resText += `   ↳ Ketik: \`piutang [nama toko]\` (contoh: *piutang AFM* atau *piutang SJJ*).\n\n`;
     resText += `📦 *3. Cek Stok Barang Gudang*\n`;
-    resText += `   Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst*)\n\n`;
+    resText += `   ↳ Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst mini*)\n`;
+    resText += `   ↳ Atau ketik: \`stok keseluruhan\` untuk melihat rekap total gudang.\n\n`;
     resText += `────────────────────────────\n`;
-    resText += `Silakan ketik apa yang diperlukan. Untuk pesan pribadi atau urusan di luar sistem, akan tetap dibalas langsung oleh Admin setelah aktif kembali ya! 😊`;
+    resText += `Ada hal operasional yang ingin dicek hari ini ${senderName}? Silakan ketik langsung ya! Untuk pesan pribadi, Admin akan tetap membalas segera setelah aktif kembali. 😊`;
 
     return resText;
   }
@@ -598,8 +674,21 @@ class WavisInteractiveEngine {
         options.quoted = quotedMsg;
       }
 
-      await sock.sendMessage(targetJid, { text }, options);
+      const sentMsg = await sock.sendMessage(targetJid, { text }, options);
       console.log(`[L-W.A.V.I.S SUCCESS] 🤖 Pesan interaktif berhasil dikirim ke ${targetJid}!`);
+
+      // Simpan pesan keluar ke dalam cache getMessage untuk antisipasi retry E2EE ("Menunggu pesan ini...")
+      if (sentMsg && sentMsg.key && sentMsg.message && typeof this.rawMessageStore === 'function') {
+        const msgId = sentMsg.key.id;
+        this.rawMessageStore(targetJid, msgId, sentMsg.message);
+        if (remoteJid && remoteJid !== targetJid) {
+          this.rawMessageStore(remoteJid, msgId, sentMsg.message);
+        }
+        if (sentMsg.key.remoteJid && sentMsg.key.remoteJid !== targetJid) {
+          this.rawMessageStore(sentMsg.key.remoteJid, msgId, sentMsg.message);
+        }
+      }
+
       return true;
     } catch (err) {
       console.error('[L-W.A.V.I.S SEND ERROR]', err.message);

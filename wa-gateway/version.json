@@ -1,9 +1,9 @@
 {
-  "gateway": "3.3.283",
+  "gateway": "3.3.284",
   "files": {
-    "server.js": "3.3.282",
+    "server.js": "3.3.284",
     "autonomous-po-processor.js": "3.3.281",
-    "wavis-interactive-engine.js": "3.3.283",
+    "wavis-interactive-engine.js": "3.3.284",
     "firebase-adapter.js": "3.3.282",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
@@ -11,5 +11,5 @@
     "update.sh": "3.3.278"
   },
   "updatedAt": "2026-11-16",
-  "changelog": "WAVIS AI Upgrade: Cerdas mengenali akronim toko (SJJ -> Sumber Jadi Jaya) & integrasi ai_knowledge_rules, tetap menampilkan info kartu piutang jika sudah lunas (Rp 0), serta menyajikan rekap total stok fisik gudang saat ditanya stok keseluruhan."
+  "changelog": "WAVIS AI Upgrade: Caching getMessage untuk pesan keluar mengatasi delay enkripsi WhatsApp (Menunggu pesan ini...), serta Smart Dynamic Footer variatif & proaktif selagi Admin/Developer tidak standby."
 }
