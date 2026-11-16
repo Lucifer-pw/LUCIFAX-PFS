@@ -1,9 +1,9 @@
 {
-  "gateway": "3.3.278",
+  "gateway": "3.3.279",
   "files": {
     "server.js": "3.3.277",
     "autonomous-po-processor.js": "3.3.277",
-    "wavis-interactive-engine.js": "3.3.277",
+    "wavis-interactive-engine.js": "3.3.279",
     "firebase-adapter.js": "3.3.272",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
@@ -11,5 +11,5 @@
     "update.sh": "3.3.278"
   },
   "updatedAt": "2026-11-16",
-  "changelog": "Menambahkan wavis-interactive-engine.js ke daftar unduhan update.sh"
+  "changelog": "Perbaikan query piutang Firestore (in-memory filter tanpa perlu composite index) dan boundary matcher nama pelanggan"
 }

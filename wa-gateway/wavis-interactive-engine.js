@@ -137,20 +137,20 @@ class WavisInteractiveEngine {
     if (!clean) return 'UNKNOWN';
 
     // 1. Cek Pola Tanya Piutang
-    const piutangKeywords = ['piutang', 'utang', 'bon', 'tagihan', 'sisa tagihan', 'sisa piutang', 'belum bayar'];
-    if (piutangKeywords.some(kw => clean.includes(kw))) {
+    const piutangPattern = /\b(piutang|utang|bon|tagihan|sisa tagihan|sisa piutang|belum bayar)\b/i;
+    if (piutangPattern.test(clean)) {
       return 'QUERY_RECEIVABLES';
     }
 
     // 2. Cek Pola Tanya Stok
-    const stockKeywords = ['stok', 'stock', 'ready', 'sisa berapa', 'ada ga', 'ada gak', 'masih ada'];
-    if (stockKeywords.some(kw => clean.includes(kw))) {
+    const stockPattern = /\b(stok|stock|ready|sisa berapa|ada ga|ada gak|masih ada)\b/i;
+    if (stockPattern.test(clean)) {
       return 'QUERY_STOCK';
     }
 
     // 3. Cek Pola Sapaan / Menu Bantuan
-    const greetingKeywords = ['halo', 'hello', 'pagi', 'siang', 'sore', 'malam', 'assalamualaikum', 'bantuan', 'menu', 'wavis', 'hai'];
-    if (greetingKeywords.some(kw => clean.includes(kw))) {
+    const greetingPattern = /\b(halo|hello|pagi|siang|sore|malam|assalamualaikum|bantuan|menu|wavis|hai)\b/i;
+    if (greetingPattern.test(clean)) {
       return 'GREETING_MENU';
     }
 
@@ -164,20 +164,30 @@ class WavisInteractiveEngine {
     const clean = normalizeText(text);
     if (!clean || !Array.isArray(customers) || customers.length === 0) return null;
 
-    // 1. Cek Exact Alias / Inisial
+    // Buang kata kunci tanya piutang agar fokus ke nama toko
+    const queryWithoutKw = clean
+      .replace(/\b(piutang|utang|bon|tagihan|sisa|berapa|belum|bayar|toko|cek|tolong|dong|mas|pak|ya)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!queryWithoutKw) return null;
+
+    const words = queryWithoutKw.split(/\s+/).filter(w => w.length >= 2);
+
+    // 1. Cek Exact Alias (minimal 3 huruf, misal "AFM", "MMM")
     for (const c of customers) {
       const alias = normalizeText(c.aliasName || '');
-      if (alias.length >= 2 && clean.split(/\s+/).includes(alias)) {
+      if (alias.length >= 3 && words.includes(alias)) {
         return c;
       }
     }
 
-    // 2. Cek Inisial Nama
+    // 2. Cek Inisial Nama (minimal 3 huruf)
     for (const c of customers) {
       const name = normalizeText(c.customerName || '');
-      const words = name.split(/\s+/).filter(Boolean);
-      const initials = words.map(w => w[0]).join('');
-      if (initials.length >= 3 && clean.split(/\s+/).includes(initials)) {
+      const nameWords = name.split(/\s+/).filter(Boolean);
+      const initials = nameWords.map(w => w[0]).join('');
+      if (initials.length >= 3 && words.includes(initials)) {
         return c;
       }
     }
@@ -185,7 +195,7 @@ class WavisInteractiveEngine {
     // 3. Cek Substring Nama
     for (const c of customers) {
       const name = normalizeText(c.customerName || '');
-      if (name.length >= 3 && clean.includes(name)) {
+      if (name.length >= 3 && queryWithoutKw.includes(name)) {
         return c;
       }
     }
@@ -193,18 +203,27 @@ class WavisInteractiveEngine {
     // 4. Word overlap score
     let best = null;
     let maxScore = 0;
-    const qWords = clean.split(/\s+/);
     for (const c of customers) {
       const name = normalizeText(c.customerName || '');
       const alias = normalizeText(c.aliasName || '');
       const cWords = (name + ' ' + alias).split(/\s+/);
       let score = 0;
-      for (const qw of qWords) {
+      for (const qw of words) {
         if (qw.length >= 3 && cWords.includes(qw)) score += 5;
       }
       if (score > maxScore && score >= 5) {
         maxScore = score;
         best = c;
+      }
+    }
+
+    // Fallback untuk alias 2 huruf jika benar-benar ada di kata
+    if (!best) {
+      for (const c of customers) {
+        const alias = normalizeText(c.aliasName || '');
+        if (alias.length === 2 && words.includes(alias)) {
+          return c;
+        }
       }
     }
 
@@ -275,13 +294,16 @@ class WavisInteractiveEngine {
       if (this.firebaseAdapter.mode === 'admin' && db) {
         const snap = await db.collection('invoices')
           .where('customerName', '==', custName)
-          .where('statusTransfer', '!=', 'PAID')
           .get();
-        unpaidInvoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        unpaidInvoices = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(inv => (inv.statusTransfer || '').toUpperCase() !== 'PAID');
       } else if (this.firebaseAdapter.clientSdk && db) {
         const { collection, query, where, getDocs } = this.firebaseAdapter.clientSdk;
-        const snap = await getDocs(query(collection(db, 'invoices'), where('customerName', '==', custName), where('statusTransfer', '!=', 'PAID')));
-        unpaidInvoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const snap = await getDocs(query(collection(db, 'invoices'), where('customerName', '==', custName)));
+        unpaidInvoices = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(inv => (inv.statusTransfer || '').toUpperCase() !== 'PAID');
       }
 
       let totalRemaining = 0;
