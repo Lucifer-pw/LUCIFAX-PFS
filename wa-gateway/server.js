@@ -994,6 +994,30 @@ async function startBaileys() {
               if (bankResult.isBankSlip) {
                 console.log(`[BANK SLIP DETECTED] 💳 Terdeteksi Bukti Transfer ${bankResult.bank}! Nominal: Rp ${bankResult.amount.toLocaleString('id-ID')} | Berita: "${bankResult.berita}" | Faktur: #${bankResult.invoiceNo || '-'}`);
 
+                // Validasi nomor faktur yang terdeteksi
+                if (bankResult.invoiceNo) {
+                  const exists = await firebaseAdapter.checkInvoiceExists(bankResult.invoiceNo);
+                  if (!exists) {
+                    console.log(`[INVOICE VALIDATE] ⚠️ Faktur #${bankResult.invoiceNo} tidak ditemukan di database.`);
+                    let resolved = false;
+                    for (let len = 4; len >= 2; len--) {
+                      if (bankResult.invoiceNo.length > len) {
+                        const sub = bankResult.invoiceNo.substring(0, len);
+                        const subExists = await firebaseAdapter.checkInvoiceExists(sub);
+                        if (subExists) {
+                          console.log(`[INVOICE RESOLVE] 🎯 Faktur #${bankResult.invoiceNo} berhasil diarahkan ke faktur sah #${sub}!`);
+                          bankResult.invoiceNo = sub;
+                          resolved = true;
+                          break;
+                        }
+                      }
+                    }
+                    if (!resolved) {
+                      bankResult.invoiceNo = null; // Biarkan auto-match piutang mencari berdasarkan nama & nominal
+                    }
+                  }
+                }
+
                 // JIKA BELUM ADA NOMOR FAKTUR DI BERITA: COCOKKAN KE KARTU PIUTANG SECARA OTOMATIS
                 if (!bankResult.invoiceNo && bankResult.amount > 0) {
                   try {

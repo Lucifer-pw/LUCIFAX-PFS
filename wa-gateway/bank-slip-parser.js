@@ -2,7 +2,66 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.270'; // v3.3.270
+const BSP_VERSION = '3.3.282'; // v3.3.282
+
+/**
+ * Robust Currency Parser
+ * Handles:
+ * - Indonesian format: "11.750.000,00" -> 11750000
+ * - OCR dot-cent format: "11.750.000.00" -> 11750000 (prevents 100x multiplication / 1 Miliar bug)
+ * - US format: "11,750,000.00" -> 11750000
+ * - Thousand only: "11.750.000" or "11,750,000" -> 11750000
+ * - Small amounts: "500.00" -> 500, "11.75" -> 11.75
+ */
+function parseCurrencyString(rawStr) {
+  if (!rawStr) return 0;
+  let s = rawStr.trim();
+
+  if (s.includes('.') && s.includes(',')) {
+    const lastDot = s.lastIndexOf('.');
+    const lastComma = s.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      // Indonesian standard: 11.750.000,00
+      const intPart = s.substring(0, lastComma).replace(/\./g, '');
+      const decPart = s.substring(lastComma + 1);
+      s = intPart + '.' + decPart;
+    } else {
+      // US standard: 11,750,000.00
+      const intPart = s.substring(0, lastDot).replace(/,/g, '');
+      const decPart = s.substring(lastDot + 1);
+      s = intPart + '.' + decPart;
+    }
+  } else if (s.includes('.')) {
+    const parts = s.split('.');
+    if (parts.length > 1) {
+      const lastPart = parts[parts.length - 1];
+      if (lastPart.length <= 2) {
+        // Last part is 1-2 digits cents/sen: "11.750.000.00" or "500.00"
+        const intPart = parts.slice(0, -1).join('');
+        s = intPart + '.' + lastPart;
+      } else {
+        // All parts are thousands: "11.750.000"
+        s = parts.join('');
+      }
+    }
+  } else if (s.includes(',')) {
+    const parts = s.split(',');
+    if (parts.length > 1) {
+      const lastPart = parts[parts.length - 1];
+      if (lastPart.length <= 2) {
+        // Last part is 1-2 digits cents/sen: "11,750,000,00" or "500,00"
+        const intPart = parts.slice(0, -1).join('');
+        s = intPart + '.' + lastPart;
+      } else {
+        // All parts are thousands: "11,750,000"
+        s = parts.join('');
+      }
+    }
+  }
+
+  const val = parseFloat(s);
+  return isNaN(val) ? 0 : val;
+}
 
 function parseBankReceipt(rawText) {
   if (!rawText || typeof rawText !== 'string') {
@@ -132,29 +191,8 @@ function parseBankReceipt(rawText) {
   for (const pat of amountPatterns) {
     const match = clean.match(pat);
     if (match && match[1]) {
-      let numStr = match[1].trim();
-      // Handle Indonesian currency format "7.050.000,00" or standard "10,136,331.00"
-      if (numStr.includes('.') && numStr.includes(',')) {
-        if (numStr.lastIndexOf(',') > numStr.lastIndexOf('.')) {
-          // Indonesian: 7.050.000,00 -> 7050000.00
-          numStr = numStr.replace(/\./g, '').replace(',', '.');
-        } else {
-          // US: 10,136,331.00 -> 10136331.00
-          numStr = numStr.replace(/,/g, '');
-        }
-      } else if (numStr.includes('.')) {
-        const parts = numStr.split('.');
-        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
-          numStr = numStr.replace(/\./g, '');
-        }
-      } else if (numStr.includes(',')) {
-        const parts = numStr.split(',');
-        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
-          numStr = numStr.replace(/,/g, '');
-        }
-      }
-      const parsed = parseFloat(numStr);
-      if (!isNaN(parsed) && parsed > 0) {
+      const parsed = parseCurrencyString(match[1]);
+      if (parsed > 0) {
         amount = parsed;
         break;
       }

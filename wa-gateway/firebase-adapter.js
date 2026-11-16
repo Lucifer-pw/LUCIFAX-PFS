@@ -749,9 +749,48 @@ class FirebaseAdapter {
     return fallbackDate || new Date();
   }
 
-  async settleInvoicePayment(invoiceNo, paymentData = {}) {
+  async checkInvoiceExists(invoiceNo) {
     const invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
+    if (!invClean) return false;
+    try {
+      if (this.mode === 'admin') {
+        const trSnap = await this.db.collection('transactions').doc(invClean).get();
+        if (trSnap.exists && (Number(trSnap.data()?.grandTotal) > 0 || trSnap.data()?.customerName)) {
+          return true;
+        }
+        const recSnap = await this.db.collection('receivables').where('noInvoice', '==', invClean).get();
+        return !recSnap.empty;
+      } else if (this.mode === 'client') {
+        const { doc, getDoc, collection, query, where, getDocs } = this.clientSdk;
+        const trSnap = await getDoc(doc(this.clientDb, 'transactions', invClean));
+        if (trSnap.exists() && (Number(trSnap.data()?.grandTotal) > 0 || trSnap.data()?.customerName)) {
+          return true;
+        }
+        const recSnap = await getDocs(query(collection(this.clientDb, 'receivables'), where('noInvoice', '==', invClean)));
+        return !recSnap.empty;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  async settleInvoicePayment(invoiceNo, paymentData = {}) {
+    let invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
     if (!invClean) return { success: false };
+
+    // Validasi apakah faktur ini ada di database; jika tidak dan digit > 3, coba cari prefix valid (misal '69406' -> '694')
+    const exists = await this.checkInvoiceExists(invClean);
+    if (!exists && invClean.length > 3) {
+      for (let len = 4; len >= 2; len--) {
+        if (invClean.length > len) {
+          const sub = invClean.substring(0, len);
+          if (await this.checkInvoiceExists(sub)) {
+            console.log(`[AUTO-SETTLE RESOLVE] 🎯 Faktur #${invClean} dialihkan ke #${sub} karena faktur #${sub} sah ditemukan di database.`);
+            invClean = sub;
+            break;
+          }
+        }
+      }
+    }
 
     try {
       console.log(`[AUTO-SETTLE] Memproses pembayaran otomatis Faktur #${invClean}...`);
@@ -875,10 +914,22 @@ class FirebaseAdapter {
       };
 
       if (this.mode === 'admin') {
-        await this.db.collection('transactions').doc(invClean).set(updateData, { merge: true });
+        const docRef = this.db.collection('transactions').doc(invClean);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          await docRef.update(updateData);
+        } else {
+          console.warn(`[AUTO-SETTLE WARN] Faktur #${invClean} tidak ada di transactions. Melewati update dokumen.`);
+        }
       } else if (this.mode === 'client') {
-        const { doc, setDoc } = this.clientSdk;
-        await setDoc(doc(this.clientDb, 'transactions', invClean), updateData, { merge: true });
+        const { doc, getDoc, updateDoc } = this.clientSdk;
+        const docRef = doc(this.clientDb, 'transactions', invClean);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          await updateDoc(docRef, updateData);
+        } else {
+          console.warn(`[AUTO-SETTLE WARN] Faktur #${invClean} tidak ada di transactions. Melewati update dokumen.`);
+        }
       }
 
       const statusLog = willBeLunas ? 'LUNAS PENUH' : `CICILAN (Sisa: Rp ${remainingAfter.toLocaleString('id-ID')})`;
