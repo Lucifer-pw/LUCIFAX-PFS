@@ -3,7 +3,54 @@
  * Memungkinkan pembuatan PO / Faktur Penjualan secara mandiri dari HP (Termux)
  * saat laptop kasir mati / aplikasi Flutter belum dibuka.
  */
-const APO_VERSION = '3.3.273'; // v3.3.273 - Safe customer matching (anti short token noise) & filter menu resto
+const APO_VERSION = '3.3.275'; // v3.3.275 - Universal phonetic/fuzzy typo, smart gramatur, and slang karton (krton)
+
+// Helper Fonetik & Jarak Kemiripan Kata Universal
+function normalizePhonetic(w) {
+  return (w || '').toLowerCase()
+    .replace(/ll/g, 'l')
+    .replace(/oo/g, 'o')
+    .replace(/ck/g, 'k')
+    .replace(/c(?=[eiy])/g, 's')
+    .replace(/c/g, 'k')
+    .replace(/q/g, 'k')
+    .replace(/kh/g, 'k')
+    .replace(/sy/g, 's')
+    .replace(/z/g, 's')
+    .replace(/ph/g, 'f')
+    .replace(/v/g, 'f');
+}
+
+function levenshteinDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      matrix[i][j] = b.charAt(i - 1) === a.charAt(j - 1)
+        ? matrix[i - 1][j - 1]
+        : Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function isFuzzyWordMatch(qWord, targetWord) {
+  if (!qWord || !targetWord) return false;
+  if (qWord === targetWord) return true;
+  const nQ = normalizePhonetic(qWord);
+  const nT = normalizePhonetic(targetWord);
+  if (nQ === nT) return true;
+  const minLen = Math.min(nQ.length, nT.length);
+  if (minLen >= 4) {
+    const d = levenshteinDistance(nQ, nT);
+    if (d === 1 || (d === 2 && minLen >= 6)) return true;
+  }
+  return false;
+}
 
 class AutonomousPoProcessor {
   constructor(firebaseAdapter, notificationDispatcher = null) {
@@ -140,22 +187,25 @@ class AutonomousPoProcessor {
   }
 
   resolveProduct(rawItemText) {
-    const lower = rawItemText.toLowerCase();
+    let lower = rawItemText.toLowerCase();
+
+    // Pisahkan angka yang menempel dengan satuan gram / kg (misal 215gr -> 215 gr)
+    lower = lower.replace(/\b(\d+)\s*(gr|gram|g|kg)\b/gi, '$1 $2');
 
     // 1. Ekstrak kuantiti & satuan
-    const qtyMatch = lower.match(/(?:^|\s|\.\.\.)(\d+(?:[.,]\d+)?)\s*(k|ktn|karton|dus|box|pack|pcs|bal|ball|roll)\b/i);
+    const qtyMatch = lower.match(/(?:^|\s|\.\.\.)\b(\d+(?:[.,]\d+)?)\s*(k|ktn|krton|krtn|krt|karton|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)\b/i);
     let qtyInput = 0;
     let qtyUnit = 'karton';
     if (qtyMatch) {
       qtyInput = parseFloat(qtyMatch[1].replace(',', '.'));
       const u = qtyMatch[2].toLowerCase();
-      if (['k', 'ktn', 'karton', 'dus', 'box'].includes(u)) {
+      if (['k', 'ktn', 'krton', 'krtn', 'krt', 'karton', 'dus', 'box'].includes(u)) {
         qtyUnit = 'karton';
-      } else if (['pack', 'pcs'].includes(u)) {
+      } else if (['pack', 'pak', 'pcs', 'pc'].includes(u)) {
         qtyUnit = 'pcs';
       } else if (['bal', 'ball'].includes(u)) {
         qtyUnit = 'ball';
-      } else if (['roll'].includes(u)) {
+      } else if (['roll', 'rol'].includes(u)) {
         qtyUnit = 'roll';
       }
     } else {
@@ -171,7 +221,7 @@ class AutonomousPoProcessor {
 
     // Bersihkan teks barang dari kuantiti
     let cleanProd = lower
-      .replace(/(?:^|\s|\.\.\.)(\d+(?:[.,]\d+)?)\s*(k|ktn|karton|dus|box|pack|pcs|bal|ball|roll)\b/gi, ' ')
+      .replace(/(?:^|\s|\.\.\.)\b(\d+(?:[.,]\d+)?)\s*(k|ktn|krton|krtn|krt|karton|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)\b/gi, ' ')
       .replace(/^[0-9]+[.)]\s*/, '')
       .replace(/\.\.\..*$/, '')
       .replace(/[^a-zA-Z0-9\s]/g, ' ')
@@ -188,7 +238,7 @@ class AutonomousPoProcessor {
     for (const r of prodRules) {
       let from = (r.keyword || r.from || '').toLowerCase().trim();
       from = from.replace(/\bberes\b/g, 'brs').replace(/\bberas\b/g, 'brs');
-      if (from && cleanProd.includes(from)) {
+      if (from && (cleanProd === from || cleanProd.includes(from) || isFuzzyWordMatch(cleanProd, from))) {
         // Jika rule punya targetId, gunakan langsung
         if (r.targetId) {
           const p = this.cachedProducts.find(prod => prod.id === r.targetId);
@@ -196,11 +246,11 @@ class AutonomousPoProcessor {
             return this.buildTransactionItem(p, qtyInput, qtyUnit);
           }
         }
-        // Fallback ke nama produk (normalize spaces for matching)
-        const to = (r.mappedValue || r.to || '').toLowerCase().trim().replace(/\s+/g, '');
+        // Fallback ke nama produk (normalize non-alphanumeric for matching)
+        const toNorm = (r.mappedValue || r.to || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
         const p = this.cachedProducts.find(prod => {
-          const pn = (prod.productName || prod.name || '').toLowerCase().replace(/\s+/g, '');
-          return pn.includes(to) || to.includes(pn);
+          const pn = (prod.productName || prod.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return pn === toNorm || pn.includes(toNorm) || toNorm.includes(pn);
         });
         if (p) {
           return this.buildTransactionItem(p, qtyInput, qtyUnit);
@@ -209,16 +259,26 @@ class AutonomousPoProcessor {
     }
 
     // 3. Cocokkan dengan katalog produk langsung
-    const words = cleanProd.split(/\s+/).filter(w => w.length >= 3);
+    const words = cleanProd.split(/\s+/).filter(w => w.length >= 2 || /^\d+$/.test(w));
     if (words.length > 0) {
       let bestProduct = null;
       let maxScore = 0;
 
       for (const p of this.cachedProducts) {
         const pName = (p.productName || p.name || '').toLowerCase();
+        const pWords = pName.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
         let score = 0;
         for (const w of words) {
-          if (pName.includes(w)) score++;
+          if (pWords.includes(w)) {
+            score += 10;
+          } else if (pWords.some(pw => isFuzzyWordMatch(w, pw))) {
+            score += 8;
+          } else if (pName.includes(w)) {
+            score += 2;
+          }
+        }
+        if (pName.includes('115') && !cleanProd.includes('115') && !cleanProd.includes('8')) {
+          score -= 20;
         }
         if (score > maxScore) {
           maxScore = score;
@@ -226,7 +286,7 @@ class AutonomousPoProcessor {
         }
       }
 
-      if (bestProduct && maxScore >= Math.min(2, words.length)) {
+      if (bestProduct && maxScore >= 12) {
         return this.buildTransactionItem(bestProduct, qtyInput, qtyUnit);
       }
     }
@@ -298,7 +358,7 @@ class AutonomousPoProcessor {
   matchProductFromHistory(productText, customerHistory) {
     if (!customerHistory || customerHistory.length === 0) return null;
 
-    const cleanQ = productText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+    let cleanQ = productText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
     if (!cleanQ) return null;
 
     // Filter makanan / minuman matang restoran (ayam bakar, nasi goreng, es teh, dll)
@@ -308,10 +368,13 @@ class AutonomousPoProcessor {
 
     // PROTEIN MODIFIER GUARD: Kata 'ayam' atau 'sapi' saja TIDAK BISA mencocokkan produk
     // jika tidak ada kata kategori olahan frozen food (kornet, rollade, sosis, nugget, baso, brs, dll)
-    const hasCategoryWord = /\b(kornet|rollade|rolade|sosis|nugget|baso|bakso|beres|brs|tempura|siomay|otak|scallop|miniku|kaki naga|burger|patty|dimsum)\b/i.test(cleanQ);
+    const hasCategoryWord = /\b(kornet|rollade|rolade|sosis|nugget|baso|bakso|beres|brs|tempura|siomay|otak|scallop|miniku|kaki naga|burger|patty|dimsum|bratwurst|bratwust|cocktail|cooktail|coctail)\b/i.test(cleanQ);
     if (!hasCategoryWord) {
       return null;
     }
+
+    // Pisahkan angka yang menempel dengan satuan gram / kg (misal 215gr -> 215 gr, 500g -> 500 g)
+    cleanQ = cleanQ.replace(/\b(\d+)\s*(gr|gram|g|kg)\b/gi, '$1 $2').trim();
 
     // 1. Direct name match
     for (const h of customerHistory) {
@@ -330,11 +393,17 @@ class AutonomousPoProcessor {
     const queryHasAyam = qTokens.includes('ayam') || qTokens.includes('ay');
     const queryHasRoll = qTokens.includes('roll') || qTokens.includes('rol');
     const queryHasLoyang = qTokens.includes('loyang') || qTokens.includes('lyg');
-    const queryHas1000 = qTokens.includes('1000') || qTokens.includes('1kg') || cleanQ.includes('1 kg') || cleanQ.includes('1000g');
     const queryHasPolos = qTokens.includes('polos');
+
+    // Size disambiguation
     const queryHas13 = qTokens.includes('13') || qTokens.includes('13s');
     const queryHas24 = qTokens.includes('24') || qTokens.includes('24s');
     const queryHas7 = qTokens.includes('7') || qTokens.includes('7s');
+    const queryHas215 = qTokens.includes('215') || cleanQ.includes('215');
+    const queryHas250 = qTokens.includes('250') || cleanQ.includes('250');
+    const queryHas400 = qTokens.includes('400') || cleanQ.includes('400');
+    const queryHas500 = qTokens.includes('500') || cleanQ.includes('500');
+    const queryHas1000 = qTokens.includes('1000') || qTokens.includes('1kg') || cleanQ.includes('1 kg') || cleanQ.includes('1000g');
 
     let bestMatch = null;
     let maxScore = 0;
@@ -348,21 +417,24 @@ class AutonomousPoProcessor {
         if (hTokens.has(qw)) {
           score += 10;
         } else {
-          // Normalisasi typo
-          const normQ = qw.replace(/ll/g, 'l').replace('bratwust', 'bratwurst').replace('coctail', 'cocktail');
-          let normMatched = false;
+          // Normalisasi typo & fuzzy universal
+          let matched = false;
           for (const hw of hTokens) {
-            const normH = hw.replace(/ll/g, 'l').replace('bratwust', 'bratwurst').replace('coctail', 'cocktail');
-            if (normQ === normH) { score += 8; normMatched = true; break; }
+            if (isFuzzyWordMatch(qw, hw)) {
+              score += 8;
+              matched = true;
+              break;
+            }
           }
-          if (!normMatched) {
+          if (!matched) {
             // 24 vs 24S, 13 vs 13S, 7 vs 7S
             if ((qw === '24' && hTokens.has('24s')) || (qw === '13' && hTokens.has('13s')) || (qw === '7' && hTokens.has('7s')) ||
                 (qw === '24s' && hTokens.has('24')) || (qw === '13s' && hTokens.has('13')) || (qw === '7s' && hTokens.has('7'))) {
-              score += 10; normMatched = true;
+              score += 10;
+              matched = true;
             }
           }
-          if (!normMatched && hName.includes(qw)) {
+          if (!matched && hName.includes(qw)) {
             if (!((qw === 'roll' || qw === 'rol') && (hName.includes('rollade') || hName.includes('rolade')) && !hTokens.has(qw))) {
               score += 2;
             }
@@ -370,12 +442,24 @@ class AutonomousPoProcessor {
         }
       }
 
-      // Domain bonuses
+      // Domain bonuses:
+      // Beres matches BRS
       if (queryHasBeres && (hTokens.has('brs') || hName.includes('brs'))) score += 20;
+
+      // Aturan Beres Merah vs Coklat (Sapi):
       if (queryHasMerah) {
         if (hTokens.has('merah') || hName.includes('merah')) score += 25;
-        else if (hTokens.has('coklat') || hName.includes('coklat')) score -= 25;
+        else if (hTokens.has('coklat') || hName.includes('coklat')) score -= 30;
+      } else if (queryHasBeres) {
+        // Query Beres TANPA kata "merah" (e.g. Beres 24, Beres 13, Beres 7)
+        // Default industri Fiva: seri angka Beres tanpa warna adalah Beres Coklat (Sapi)
+        if (hTokens.has('coklat') || hName.includes('coklat')) {
+          score += 15;
+        } else if (hTokens.has('merah') || hName.includes('merah')) {
+          score -= 25; // Jangan ambil merah jika customer tidak menulis "merah"!
+        }
       }
+
       if (queryHasCoklat) {
         if (hTokens.has('coklat') || hName.includes('coklat')) score += 25;
         else if (hTokens.has('merah') || hName.includes('merah')) score -= 25;
@@ -390,29 +474,57 @@ class AutonomousPoProcessor {
       }
       if (queryHasRoll && (hTokens.has('roll') || hTokens.has('rol'))) score += 15;
       if (queryHasLoyang && (hTokens.has('loyang') || hTokens.has('lyg'))) score += 15;
-      if (queryHas1000 && (hName.includes('1000') || hName.includes('1kg') || hName.includes('1 kg'))) score += 15;
       if (queryHasPolos && hTokens.has('polos')) score += 15;
       if (!queryHasRoll && !queryHasLoyang && (hTokens.has('roll') || hTokens.has('rol') || hTokens.has('loyang'))) score -= 10;
-      if (!queryHas1000 && (hName.includes('1000') || hName.includes('1kg'))) score -= 10;
       if (!queryHasPolos && hTokens.has('polos')) score -= 10;
 
       // Size number disambiguation (13 vs 24 vs 7)
       if (queryHas13 && !queryHas24 && !queryHas7) {
         if (hTokens.has('13') || hTokens.has('13s')) score += 15;
-        if (hTokens.has('24') || hTokens.has('24s')) score -= 20;
+        if (hTokens.has('24') || hTokens.has('24s') || hTokens.has('7') || hTokens.has('7s')) score -= 25;
       }
       if (queryHas24 && !queryHas13 && !queryHas7) {
         if (hTokens.has('24') || hTokens.has('24s')) score += 15;
-        if (hTokens.has('13') || hTokens.has('13s')) score -= 20;
+        if (hTokens.has('13') || hTokens.has('13s') || hTokens.has('7') || hTokens.has('7s')) score -= 25;
       }
       if (queryHas7 && !queryHas13 && !queryHas24) {
         if (hTokens.has('7') || hTokens.has('7s')) score += 15;
-        if (hTokens.has('24') || hTokens.has('24s')) score -= 20;
+        if (hTokens.has('24') || hTokens.has('24s') || hTokens.has('13') || hTokens.has('13s')) score -= 25;
+      }
+
+      // Gramatur / Size disambiguation (215 vs 250 vs 400 vs 500 vs 1000)
+      const hHas215 = hTokens.has('215') || hName.includes('215');
+      const hHas250 = hTokens.has('250') || hName.includes('250');
+      const hHas400 = hTokens.has('400') || hName.includes('400');
+      const hHas1000 = hTokens.has('1000') || hName.includes('1000') || hName.includes('1kg') || hName.includes('1 kg');
+
+      if (queryHas215) {
+        if (hHas215) score += 35;
+        else if (hHas250 || hHas400 || hHas1000) score -= 40;
+      }
+      if (queryHas250) {
+        if (hHas250) score += 35;
+        else if (hHas215 || hHas400 || hHas1000) score -= 40;
+      }
+      if (queryHas400) {
+        if (hHas400) score += 35;
+        else if (hHas215 || hHas250 || hHas1000) score -= 40;
+      }
+      if (queryHas1000) {
+        if (hHas1000) score += 40;
+        else score -= 50;
+      } else {
+        if (hHas1000) score -= 15;
+      }
+
+      // Reward pembelian sebelumnya yang sering (frequency)
+      if (score > 0 && h.purchaseCount) {
+        score += Math.min(Number(h.purchaseCount) || 1, 5) * 2;
       }
 
       // Minimum threshold: at least 1 core product word matched
-      const coreWords = qTokens.filter(w => w.length >= 3);
-      const coreMatched = coreWords.filter(w => hTokens.has(w) || hName.includes(w)).length;
+      const coreWords = qTokens.filter(w => w.length >= 3 && !/^\d+$/.test(w));
+      const coreMatched = coreWords.filter(w => hTokens.has(w) || hName.includes(w) || Array.from(hTokens).some(hw => isFuzzyWordMatch(w, hw))).length;
       if (coreMatched === 0 && score < 20) continue;
 
       if (score > maxScore) {
@@ -618,19 +730,22 @@ class AutonomousPoProcessor {
 
   // UPGRADE: resolveProduct dengan customer history pricing
   async resolveProductWithHistory(rawItemText, customerHistory, customer) {
-    const lower = rawItemText.toLowerCase();
+    let lower = rawItemText.toLowerCase();
 
-    // 1. Ekstrak kuantiti & satuan (sama seperti sebelumnya)
-    const qtyMatch = lower.match(/(?:^|\s|\.\.\.)\b(\d+(?:[.,]\d+)?)\s*(k|ktn|karton|dus|box|pack|pcs|bal|ball|roll)\b/i);
+    // 0. Pisahkan angka yang menempel dengan satuan gram / kg (misal 215gr -> 215 gr)
+    lower = lower.replace(/\b(\d+)\s*(gr|gram|g|kg)\b/gi, '$1 $2');
+
+    // 1. Ekstrak kuantiti & satuan
+    const qtyMatch = lower.match(/(?:^|\s|\.\.\.)\b(\d+(?:[.,]\d+)?)\s*(k|ktn|krton|krtn|krt|karton|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)\b/i);
     let qtyInput = 0;
     let qtyUnit = 'karton';
     if (qtyMatch) {
       qtyInput = parseFloat(qtyMatch[1].replace(',', '.'));
       const u = qtyMatch[2].toLowerCase();
-      if (['k', 'ktn', 'karton', 'dus', 'box'].includes(u)) qtyUnit = 'karton';
-      else if (['pack', 'pcs'].includes(u)) qtyUnit = 'pcs';
+      if (['k', 'ktn', 'krton', 'krtn', 'krt', 'karton', 'dus', 'box'].includes(u)) qtyUnit = 'karton';
+      else if (['pack', 'pak', 'pcs', 'pc'].includes(u)) qtyUnit = 'pcs';
       else if (['bal', 'ball'].includes(u)) qtyUnit = 'ball';
-      else if (['roll'].includes(u)) qtyUnit = 'roll';
+      else if (['roll', 'rol'].includes(u)) qtyUnit = 'roll';
     } else {
       const endMatch = lower.match(/(?:\.\.\.|\s+)(\d+)\s*$/);
       if (endMatch) {
@@ -642,7 +757,7 @@ class AutonomousPoProcessor {
 
     // Bersihkan teks barang
     let cleanProd = lower
-      .replace(/(?:^|\s|\.\.\.)\b(\d+(?:[.,]\d+)?)\s*(k|ktn|karton|dus|box|pack|pcs|bal|ball|roll)\b/gi, ' ')
+      .replace(/(?:^|\s|\.\.\.)\b(\d+(?:[.,]\d+)?)\s*(k|ktn|krton|krtn|krt|karton|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)\b/gi, ' ')
       .replace(/^[0-9]+[.)]\s*/, '')
       .replace(/\.\.\..*$/, '')
       .replace(/[^a-zA-Z0-9\s]/g, ' ')
@@ -692,15 +807,15 @@ class AutonomousPoProcessor {
       for (const r of prodRules) {
         let from = (r.keyword || r.from || '').toLowerCase().trim();
         from = from.replace(/\bberes\b/g, 'brs').replace(/\bberas\b/g, 'brs');
-        if (from && cleanProd.includes(from)) {
+        if (from && (cleanProd === from || cleanProd.includes(from) || isFuzzyWordMatch(cleanProd, from))) {
           if (r.targetId) {
             const p = this.cachedProducts.find(prod => prod.id === r.targetId);
             if (p) { matchedProduct = p; break; }
           }
-          const to = (r.mappedValue || r.to || '').toLowerCase().trim().replace(/\s+/g, '');
+          const toNorm = (r.mappedValue || r.to || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           const p = this.cachedProducts.find(prod => {
-            const pn = (prod.productName || prod.name || '').toLowerCase().replace(/\s+/g, '');
-            return pn.includes(to) || to.includes(pn);
+            const pn = (prod.productName || prod.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return pn === toNorm || pn.includes(toNorm) || toNorm.includes(pn);
           });
           if (p) { matchedProduct = p; break; }
         }
@@ -709,17 +824,31 @@ class AutonomousPoProcessor {
 
     // PRIORITAS 3: Fuzzy match ke master produk
     if (!matchedProduct) {
-      const words = cleanProd.split(/\s+/).filter(w => w.length >= 3);
+      const prepProd = cleanProd.replace(/\b(\d+)\s*(gr|gram|g|kg)\b/gi, '$1 $2');
+      const words = prepProd.split(/\s+/).filter(w => w.length >= 2 || /^\d+$/.test(w));
       if (words.length > 0) {
         let bestProduct = null;
         let maxScore = 0;
         for (const p of this.cachedProducts) {
           const pName = (p.productName || p.name || '').toLowerCase();
+          const pWords = pName.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
           let score = 0;
-          for (const w of words) { if (pName.includes(w)) score++; }
+          for (const w of words) {
+            if (pWords.includes(w)) {
+              score += 10;
+            } else if (pWords.some(pw => isFuzzyWordMatch(w, pw))) {
+              score += 8;
+            } else if (pName.includes(w)) {
+              score += 2;
+            }
+          }
+          // Prioritaskan produk induk/reguler jika skor sama (misal BRS MERAH 24 500G lebih diutamakan daripada BRS MERAH 8 115 G jika tidak ada angka 8/115)
+          if (pName.includes('115') && !prepProd.includes('115') && !prepProd.includes('8')) {
+            score -= 20; // Jangan pilih 115g jika chat tidak minta 115g atau 8
+          }
           if (score > maxScore) { maxScore = score; bestProduct = p; }
         }
-        if (bestProduct && maxScore >= Math.min(2, words.length)) {
+        if (bestProduct && maxScore >= 12) {
           matchedProduct = bestProduct;
         }
       }

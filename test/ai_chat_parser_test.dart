@@ -1519,7 +1519,7 @@ Tambah beres 24s ...10 k
     expect(draft.isRevisionOrder, isTrue);
     expect(draft.note, '');
     expect(draft.items.length, 1);
-    expect(draft.items[0].productName, 'BRS MERAH 24 500G');
+    expect(draft.items[0].productName, 'BRS COKLAT 24S 500 G');
     expect(draft.items[0].qtyInput, 10.0);
     expect(draft.items[0].qtyUnit, 'karton');
     expect(draft.items[0].qtyPcs, 150.0);
@@ -1553,5 +1553,120 @@ oke makasih mas
     );
 
     expect(drafts.isEmpty, isTrue, reason: 'Pesan konfirmasi transfer dana tidak boleh menghasilkan draft pesanan!');
+  });
+
+  test('User 3-Case Fix: AFM Beres 24, MMM Rolade 215gr & Cooktail typo, GRIYA FF 10 krton beres merah', () async {
+    final parser = AiChatParserService();
+
+    final products = [
+      Product(id: 'BRSM-24', name: 'BRS MERAH 24 500 G', price: 36691, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'BRSM-24S', name: 'BRS MERAH 24S 500G', price: 34549, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'BRSM-115', name: 'BRS MERAH 8 115 G', price: 8500, stock: 100, isiKarton: 10, sizeGrams: 115),
+      Product(id: 'BRSC-24S', name: 'BRS COKLAT 24S 2 500G', price: 28234, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'BRSC-13S', name: 'BRS COKLAT 13S 2 500G', price: 27962, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'BRSC-7S', name: 'BRS COKLAT 7S 2 500G', price: 27962, stock: 100, isiKarton: 15, sizeGrams: 500),
+      Product(id: 'ROL-SAPI-215', name: 'ROLLADE SAPI 215 G', price: 16376, stock: 100, isiKarton: 30, sizeGrams: 215),
+      Product(id: 'ROL-SAPI-250', name: 'ROLLADE SAPI 250 G', price: 18500, stock: 100, isiKarton: 30, sizeGrams: 250),
+      Product(id: 'SOS-COCKTAIL', name: 'SOSIS COCKTAIL 250 G', price: 25680, stock: 100, isiKarton: 30, sizeGrams: 250),
+    ];
+
+    final customers = [
+      Customer(id: 'C_AFM', customerName: 'AFM (AHYAR)', aliasName: 'AFM', address: '', city: 'BATANG', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+      Customer(id: 'C_MMM', customerName: 'MAJU MARKET MANDIRI', aliasName: 'MMM', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+      Customer(id: 'C_GRIYA', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF', address: '', city: 'PEKALONGAN', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+
+    final rules = [
+      AiKnowledgeRule(id: 'r1', type: 'customer_alias', keyword: 'AFM', mappedValue: 'AFM (AHYAR)', targetId: 'C_AFM', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r2', type: 'customer_alias', keyword: 'MMM', mappedValue: 'MAJU MARKET MANDIRI', targetId: 'C_MMM', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r3', type: 'customer_alias', keyword: 'GRIYA FF', mappedValue: 'GRIYA FROZEN FOOD', targetId: 'C_GRIYA', createdAt: DateTime.now()),
+      AiKnowledgeRule(id: 'r4', type: 'customer_alias', keyword: 'GRIYA FF PKL', mappedValue: 'GRIYA FROZEN FOOD', targetId: 'C_GRIYA', createdAt: DateTime.now()),
+    ];
+
+    final mockHistory = {
+      'C_AFM': [
+        CustomerProductHistory(productId: 'BRSM-24S', productName: 'BRS MERAH 24S 500G', price: 34549, discountPercent: 0, discountAmount: 0, invoiceNo: 'INV-A1', purchaseCount: 5),
+        CustomerProductHistory(productId: 'BRSC-24S', productName: 'BRS COKLAT 24S 2 500G', price: 28234, discountPercent: 0, discountAmount: 0, invoiceNo: 'INV-A2', purchaseCount: 8),
+      ],
+      'C_MMM': [
+        CustomerProductHistory(productId: 'ROL-SAPI-250', productName: 'ROLLADE SAPI 250 G', price: 18500, discountPercent: 0, discountAmount: 0, invoiceNo: 'INV-M1', purchaseCount: 10),
+        CustomerProductHistory(productId: 'ROL-SAPI-215', productName: 'ROLLADE SAPI 215 G', price: 16376, discountPercent: 0, discountAmount: 0, invoiceNo: 'INV-M2', purchaseCount: 3),
+        CustomerProductHistory(productId: 'SOS-COCKTAIL', productName: 'SOSIS COCKTAIL 250 G', price: 25680, discountPercent: 0, discountAmount: 0, invoiceNo: 'INV-M3', purchaseCount: 2),
+      ],
+      'C_GRIYA': [
+        CustomerProductHistory(productId: 'BRSM-24', productName: 'BRS MERAH 24 500 G', price: 36691, discountPercent: 0, discountAmount: 0, invoiceNo: 'INV-G1', purchaseCount: 10),
+      ],
+    };
+
+    // Case 1: AFM (Beres 24 -> BRS COKLAT 24S, Beres Merah -> BRS MERAH 24S)
+    final chatAfm = '''
+Orderan fiva bulan November 2026
+AFM
+KRM HR KAMIS
+Beres 24 : 10 karton
+Beres 13 : 30 karton
+Beres 7 : 5 karton
+Beres merah : 20 karton
+''';
+    final draftsAfm = await parser.parseChatOrders(
+      rawChat: chatAfm,
+      products: products,
+      customers: customers,
+      rules: rules,
+      mockCustomerHistory: mockHistory,
+    );
+    expect(draftsAfm.length, 1);
+    expect(draftsAfm.first.items.length, 4);
+    // Beres 24 without "merah" MUST be BRS COKLAT 24S
+    expect(draftsAfm.first.items[0].productName, 'BRS COKLAT 24S 2 500G');
+    expect(draftsAfm.first.items[0].qtyInput, 10.0);
+    expect(draftsAfm.first.items[0].price, 28234.0);
+    // Beres Merah MUST be BRS MERAH 24S
+    expect(draftsAfm.first.items[3].productName, 'BRS MERAH 24S 500G');
+    expect(draftsAfm.first.items[3].qtyInput, 20.0);
+
+    // Case 2: MMM (Rolade 215gr -> ROLLADE SAPI 215 G, cooktail typo -> SOSIS COCKTAIL 250 G)
+    final chatMmm = '''
+Pak.. mau order
+Dari MMM
+KRM HR KAMIS
+
+• Fiva rolade sapi 215gr 30 pcs
+• Fiva sosis cooktail 30pcs
+''';
+    final draftsMmm = await parser.parseChatOrders(
+      rawChat: chatMmm,
+      products: products,
+      customers: customers,
+      rules: rules,
+      mockCustomerHistory: mockHistory,
+    );
+    expect(draftsMmm.length, 1);
+    expect(draftsMmm.first.items.length, 2);
+    expect(draftsMmm.first.items[0].productName, 'ROLLADE SAPI 215 G');
+    expect(draftsMmm.first.items[0].qtyInput, 30.0);
+    expect(draftsMmm.first.items[0].price, 16376.0);
+    expect(draftsMmm.first.items[1].productName, 'SOSIS COCKTAIL 250 G');
+    expect(draftsMmm.first.items[1].qtyInput, 30.0);
+
+    // Case 3: GRIYA FF (Slang "10 krton beres merah mawon pak" -> 10 Karton BRS MERAH 24 500 G, NOT 115G)
+    final chatGriya = '''
+nyuwun 10 krton beres merah mawon pak 🙏🙏🙏
+Po dari GRIYA FF PKL
+Krm hr Kamis
+''';
+    final draftsGriya = await parser.parseChatOrders(
+      rawChat: chatGriya,
+      products: products,
+      customers: customers,
+      rules: rules,
+      mockCustomerHistory: mockHistory,
+    );
+    expect(draftsGriya.length, 1);
+    expect(draftsGriya.first.items.length, 1);
+    expect(draftsGriya.first.items[0].productName, 'BRS MERAH 24 500 G');
+    expect(draftsGriya.first.items[0].qtyInput, 10.0);
+    expect(draftsGriya.first.items[0].qtyUnit, 'karton');
+    expect(draftsGriya.first.items[0].qtyPcs, 150.0); // 10 karton * 15 pcs
   });
 }

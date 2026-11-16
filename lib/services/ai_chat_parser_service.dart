@@ -297,7 +297,8 @@ class AiChatParserService {
     if (currentBlock.isNotEmpty) {
       blocks.add(currentBlock);
     }
-
+
+
         // Post-process: Split blocks that contain BOTH a header store and a footer store
     final refinedBlocks = _splitMixedHeaderFooterBlocks(
       blocks,
@@ -493,7 +494,7 @@ class AiChatParserService {
 
     final hasDigits = RegExp(r'\d').hasMatch(contentOnly);
     final hasQtyPattern = RegExp(
-      r'(\d+\s*(k|ktn|karton|roll|pack|dus|box|bal|ball|pc|pcs|sak|kg|ons|bks|bungkus|biji))|([:=]\s*\d+)|(\.{2,}\s*\d+)',
+      r'(\d+\s*(k|ktn|krton|krtn|krt|karton|roll|rol|pack|pak|dus|box|bal|ball|pc|pcs|sak|kg|ons|bks|bungkus|biji))|([:=]\s*\d+)|(\.{2,}\s*\d+)',
       caseSensitive: false,
     ).hasMatch(contentOnly);
 
@@ -511,6 +512,56 @@ class AiChatParserService {
         contentOnly.contains('tempura');
 
     return hasProductKeyword || hasQtyPattern;
+  }
+
+
+  static String _normalizePhonetic(String w) {
+    return w.toLowerCase()
+        .replaceAll('ll', 'l')
+        .replaceAll('oo', 'o')
+        .replaceAll('ck', 'k')
+        .replaceAll(RegExp(r'c(?=[eiy])'), 's')
+        .replaceAll('c', 'k')
+        .replaceAll('q', 'k')
+        .replaceAll('kh', 'k')
+        .replaceAll('sy', 's')
+        .replaceAll('z', 's')
+        .replaceAll('ph', 'f')
+        .replaceAll('v', 'f');
+  }
+
+  static int _levenshtein(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+    List<int> v0 = List<int>.generate(b.length + 1, (i) => i);
+    List<int> v1 = List<int>.filled(b.length + 1, 0);
+
+    for (int i = 0; i < a.length; i++) {
+      v1[0] = i + 1;
+      for (int j = 0; j < b.length; j++) {
+        int cost = a[i] == b[j] ? 0 : 1;
+        v1[j + 1] = [v1[j] + 1, v0[j + 1] + 1, v0[j] + cost].reduce((curr, next) => curr < next ? curr : next);
+      }
+      for (int j = 0; j <= b.length; j++) {
+        v0[j] = v1[j];
+      }
+    }
+    return v1[b.length];
+  }
+
+  static bool _isFuzzyWordMatch(String qWord, String targetWord) {
+    if (qWord.isEmpty || targetWord.isEmpty) return false;
+    if (qWord == targetWord) return true;
+    final nQ = _normalizePhonetic(qWord);
+    final nT = _normalizePhonetic(targetWord);
+    if (nQ == nT) return true;
+    final minLen = nQ.length < nT.length ? nQ.length : nT.length;
+    if (minLen >= 4) {
+      final d = _levenshtein(nQ, nT);
+      if (d == 1 || (d == 2 && minLen >= 6)) return true;
+    }
+    return false;
   }
 
   /// Normalizes phone number digits and checks if two phone numbers match
@@ -910,7 +961,7 @@ class AiChatParserService {
     productText = productText.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
 
     // Clean intermediate / trailing packaging notes like "= 2 ball", ": 2 bal", "= 2 dus", "100 ball", "35 ball", "300 pack"
-    productText = productText.replaceAll(RegExp(r'[:=\-\s]*\b\d+[\s\.\-]*(bal|ball|dus|box|pack|pak|ktn|karton|roll|rol|pcs|pc)\b', caseSensitive: false), '').trim();
+    productText = productText.replaceAll(RegExp(r'[:=\-\s]*\b\d+[\s\.\-]*(bal|ball|dus|box|pack|pak|ktn|krton|krtn|krt|karton|roll|rol|pcs|pc)\b', caseSensitive: false), '').trim();
     productText = productText.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
 
     // Remove brand "fiva " or "fv " if present at the start
@@ -980,12 +1031,16 @@ class AiChatParserService {
           }
         }
         if (isMatch) {
+          final toNorm = rule.mappedValue.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
           matchedProduct = products.firstWhere(
             (p) => (rule.targetId != null && p.id == rule.targetId) ||
-                p.name.toLowerCase() == rule.mappedValue.toLowerCase() ||
-                p.kodeInduk.toLowerCase() == rule.mappedValue.toLowerCase(),
+                p.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '') == toNorm ||
+                p.kodeInduk.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '') == toNorm,
             orElse: () => products.firstWhere(
-              (p) => p.name.toLowerCase().contains(rule.mappedValue.toLowerCase()),
+              (p) {
+                final pNorm = p.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+                return pNorm == toNorm || pNorm.contains(toNorm) || toNorm.contains(pNorm);
+              },
               orElse: () => Product(id: '', name: rule.mappedValue, price: 0.0, stock: 0.0, isiKarton: 10, sizeGrams: 500.0),
             ),
           );
@@ -1174,6 +1229,9 @@ class AiChatParserService {
         String baseUnit = 'pack';
         final unitPart = (match?.group(3) ?? val).toLowerCase();
         if (unitPart.contains('karton') ||
+            unitPart.contains('krton') ||
+            unitPart.contains('krtn') ||
+            unitPart == 'krt' ||
             unitPart.contains('ktn') ||
             unitPart.contains('dus') ||
             unitPart.contains('box') ||
@@ -1194,6 +1252,9 @@ class AiChatParserService {
     } else if (cleanWord.contains('roll') || cleanWord.contains('rol')) {
       return const _ResolvedUnitMultiplier(multiplier: 1.0, baseUnit: 'roll', matchedRule: true);
     } else if (cleanWord.contains('karton') ||
+        cleanWord.contains('krton') ||
+        cleanWord.contains('krtn') ||
+        cleanWord == 'krt' ||
         cleanWord.contains('ktn') ||
         cleanWord == 'k' ||
         cleanWord.contains('dus') ||
@@ -1215,7 +1276,8 @@ class AiChatParserService {
   _QtyUnitResolution _extractQuantityAndUnit(String line, List<AiKnowledgeRule> unitRules) {
     double qty = 1.0;
     String unit = 'pack';
-    String cleaned = line;
+    // Pisahkan angka yang menempel dengan satuan gram / kg (misal 215gr -> 215 gr, 500g -> 500 g)
+    String cleaned = line.replaceAllMapped(RegExp(r'\b(\d+)\s*(gr|gram|g|kg)\b', caseSensitive: false), (m) => '${m[1]} ${m[2]}');
 
     // Pattern 1: Separator format with optional explicit unit:
     // e.g. "-> 25 KARTON", "-> 2 BALL", ": 35 karton", ": 2", "= 2 ball", "- 2 ball"
@@ -1246,9 +1308,9 @@ class AiChatParserService {
     // Pattern 2: Explicit unit without separator:
     // e.g. "35 k", "40 ktn", "10 karton", "5 dus", "11 roll", "121 pack", "2 ball"
     final explicitUnitMatch = RegExp(
-      r'(\d+([.,]\d+)*)\s*(karton|ktn|k\b|k\.+|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji|ball|bal\b)',
+      r'(\d+([.,]\d+)*)\s*(karton|krton|krtn|krt|ktn|k\b|k\.+|dus|box|roll|rol|pack|pak|pcs|pc\b|bks|biji|ball|bal\b)',
       caseSensitive: false,
-    ).firstMatch(line);
+    ).firstMatch(cleaned);
 
     if (explicitUnitMatch != null) {
       final rawQty = _parseIndonesianNumber(explicitUnitMatch.group(1) ?? '1');
@@ -1257,7 +1319,7 @@ class AiChatParserService {
       qty = rawQty * res.multiplier;
       unit = res.baseUnit;
 
-      cleaned = (line.substring(0, explicitUnitMatch.start) + line.substring(explicitUnitMatch.end)).trim();
+      cleaned = (cleaned.substring(0, explicitUnitMatch.start) + cleaned.substring(explicitUnitMatch.end)).trim();
       cleaned = cleaned.replaceAll(RegExp(r'(\->|=>|[\.\:\=\,\-])+$'), '').trim();
       return _QtyUnitResolution(qty: qty, unit: unit, cleanedText: cleaned, hadExplicitQty: true);
     }
@@ -1302,7 +1364,11 @@ class AiChatParserService {
   ) {
     if (historyList.isEmpty) return null;
 
-    final cleanQ = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
+    final cleanQ = query
+        .toLowerCase()
+        .replaceAllMapped(RegExp(r'\b(\d+)\s*(gr|gram|g|kg)\b', caseSensitive: false), (m) => '${m[1]} ${m[2]}')
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .trim();
     if (cleanQ.isEmpty) return null;
 
     // 1. Direct name match
@@ -1334,7 +1400,10 @@ class AiChatParserService {
     final bool queryHas13 = qTokens.contains('13') || qTokens.contains('13s');
     final bool queryHas24 = qTokens.contains('24') || qTokens.contains('24s');
     final bool queryHas7 = qTokens.contains('7') || qTokens.contains('7s');
-    final bool queryHas215 = qTokens.contains('215') || qTokens.contains('215g') || qTokens.contains('215gr');
+    final bool queryHas215 = qTokens.contains('215') || qTokens.contains('215g') || qTokens.contains('215gr') || cleanQ.contains('215');
+    final bool queryHas250 = qTokens.contains('250') || cleanQ.contains('250');
+    final bool queryHas400 = qTokens.contains('400') || cleanQ.contains('400');
+    final bool queryHas500 = qTokens.contains('500') || cleanQ.contains('500');
 
     CustomerProductHistory? bestMatch;
     int maxScore = 0;
@@ -1348,19 +1417,9 @@ class AiChatParserService {
         if (hTokens.contains(qw)) {
           score += 10;
         } else {
-          final normQ = qw
-              .replaceAll('ll', 'l')
-              .replaceAll('bratwust', 'bratwurst')
-              .replaceAll('coctail', 'cocktail')
-              .replaceAll('koktail', 'cocktail');
           bool normMatched = false;
           for (var hw in hTokens) {
-            final normH = hw
-                .replaceAll('ll', 'l')
-                .replaceAll('bratwust', 'bratwurst')
-                .replaceAll('coctail', 'cocktail')
-                .replaceAll('koktail', 'cocktail');
-            if (normQ == normH) {
+            if (_isFuzzyWordMatch(qw, hw)) {
               score += 8;
               normMatched = true;
               break;
@@ -1397,12 +1456,19 @@ class AiChatParserService {
         if (hTokens.contains('merah') || hName.contains('merah')) {
           score += 25;
         } else if (hTokens.contains('coklat') || hName.contains('coklat')) {
-          score -= 25;
+          score -= 30;
         }
-      }
-      if (queryHasCoklat) {
+      } else if (queryHasCoklat) {
         if (hTokens.contains('coklat') || hName.contains('coklat')) {
           score += 25;
+        } else if (hTokens.contains('merah') || hName.contains('merah')) {
+          score -= 25;
+        }
+      } else if (queryHasBeres) {
+        // Query has "beres" but neither "merah" nor "coklat" specified (e.g. "Beres 24 : 10 karton").
+        // In Fiva frozen food, Beres sizing numbers default to Beres Coklat (Sapi)!
+        if (hTokens.contains('coklat') || hName.contains('coklat')) {
+          score += 15;
         } else if (hTokens.contains('merah') || hName.contains('merah')) {
           score -= 25;
         }
@@ -1440,8 +1506,30 @@ class AiChatParserService {
       if (queryHas7 && (hName.contains('7') || hTokens.contains('7s') || hTokens.contains('7'))) {
         score += 25;
       }
-      if (queryHas215 && (hName.contains('215') || hTokens.contains('215g') || hTokens.contains('215gr'))) {
-        score += 30;
+      if (queryHas215) {
+        if (hName.contains('215') || hTokens.contains('215')) {
+          score += 35;
+        } else if (hName.contains('250') || hName.contains('400') || hName.contains('500') || hName.contains('1000')) {
+          score -= 40;
+        }
+      } else if (queryHas250) {
+        if (hName.contains('250') || hTokens.contains('250')) {
+          score += 35;
+        } else if (hName.contains('215') || hName.contains('400') || hName.contains('500') || hName.contains('1000')) {
+          score -= 40;
+        }
+      } else if (queryHas400) {
+        if (hName.contains('400') || hTokens.contains('400')) {
+          score += 35;
+        } else if (hName.contains('215') || hName.contains('250') || hName.contains('500') || hName.contains('1000')) {
+          score -= 40;
+        }
+      } else if (queryHas500) {
+        if (hName.contains('500') || hTokens.contains('500')) {
+          score += 20;
+        } else if (hName.contains('215') || hName.contains('250') || hName.contains('400') || hName.contains('1000')) {
+          score -= 30;
+        }
       }
 
       // Penalty for size conflict (avoid matching 24 when 7 or 13 was requested, etc.)
@@ -1638,7 +1726,11 @@ class AiChatParserService {
 
   Product? _fuzzyMatchProduct(String query, List<Product> products) {
     if (products.isEmpty) return null;
-    final cleanQ = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').trim();
+    final cleanQ = query
+        .toLowerCase()
+        .replaceAllMapped(RegExp(r'\b(\d+)\s*(gr|gram|g|kg)\b', caseSensitive: false), (m) => '${m[1]} ${m[2]}')
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .trim();
 
     // 1. Direct name or code match
     for (var p in products) {
@@ -1669,7 +1761,10 @@ class AiChatParserService {
     final bool queryHas13 = qWords.contains('13') || qWords.contains('13s');
     final bool queryHas24 = qWords.contains('24') || qWords.contains('24s');
     final bool queryHas7 = qWords.contains('7') || qWords.contains('7s');
-    final bool queryHas215 = qWords.contains('215') || qWords.contains('215g') || qWords.contains('215gr');
+    final bool queryHas215 = qWords.contains('215') || qWords.contains('215g') || qWords.contains('215gr') || cleanQ.contains('215');
+    final bool queryHas250 = qWords.contains('250') || cleanQ.contains('250');
+    final bool queryHas400 = qWords.contains('400') || cleanQ.contains('400');
+    final bool queryHas500 = qWords.contains('500') || cleanQ.contains('500');
 
     Product? bestProduct;
     int maxScore = 0;
@@ -1685,19 +1780,9 @@ class AiChatParserService {
           score += 10;
         } else {
           // Normalize spelling (e.g. rolade == rollade, bratwust == bratwurst, coctail == cocktail)
-          final normQ = qw
-              .replaceAll('ll', 'l')
-              .replaceAll('bratwust', 'bratwurst')
-              .replaceAll('coctail', 'cocktail')
-              .replaceAll('koktail', 'cocktail');
           bool normMatched = false;
           for (var pw in pWords) {
-            final normP = pw
-                .replaceAll('ll', 'l')
-                .replaceAll('bratwust', 'bratwurst')
-                .replaceAll('coctail', 'cocktail')
-                .replaceAll('koktail', 'cocktail');
-            if (normQ == normP) {
+            if (_isFuzzyWordMatch(qw, pw)) {
               score += 8;
               normMatched = true;
               break;
@@ -1735,12 +1820,17 @@ class AiChatParserService {
         if (pWords.contains('merah') || pName.contains('merah')) {
           score += 25;
         } else if (pWords.contains('coklat') || pName.contains('coklat')) {
-          score -= 25;
+          score -= 30;
         }
-      }
-      if (queryHasCoklat) {
+      } else if (queryHasCoklat) {
         if (pWords.contains('coklat') || pName.contains('coklat')) {
           score += 25;
+        } else if (pWords.contains('merah') || pName.contains('merah')) {
+          score -= 25;
+        }
+      } else if (queryHasBeres) {
+        if (pWords.contains('coklat') || pName.contains('coklat')) {
+          score += 15;
         } else if (pWords.contains('merah') || pName.contains('merah')) {
           score -= 25;
         }
@@ -1778,8 +1868,30 @@ class AiChatParserService {
       if (queryHas7 && (pName.contains('7') || pWords.contains('7s') || pWords.contains('7'))) {
         score += 25;
       }
-      if (queryHas215 && (pName.contains('215') || pWords.contains('215g') || pWords.contains('215gr'))) {
-        score += 30;
+      if (queryHas215) {
+        if (pName.contains('215') || pWords.contains('215')) {
+          score += 35;
+        } else if (pName.contains('250') || pName.contains('400') || pName.contains('500') || pName.contains('1000')) {
+          score -= 40;
+        }
+      } else if (queryHas250) {
+        if (pName.contains('250') || pWords.contains('250')) {
+          score += 35;
+        } else if (pName.contains('215') || pName.contains('400') || pName.contains('500') || pName.contains('1000')) {
+          score -= 40;
+        }
+      } else if (queryHas400) {
+        if (pName.contains('400') || pWords.contains('400')) {
+          score += 35;
+        } else if (pName.contains('215') || pName.contains('250') || pName.contains('500') || pName.contains('1000')) {
+          score -= 40;
+        }
+      } else if (queryHas500) {
+        if (pName.contains('500') || pWords.contains('500')) {
+          score += 20;
+        } else if (pName.contains('215') || pName.contains('250') || pName.contains('400') || pName.contains('1000')) {
+          score -= 30;
+        }
       }
 
       // Penalty for size conflict (avoid matching 24 when 7 or 13 was requested, etc.)
@@ -1848,6 +1960,11 @@ class AiChatParserService {
       // Never penalize BRS COKLAT 24S because 24S is its only 24 variant!
       if (queryHas24 && !cleanQ.contains('24s') && pName.contains('24s') && !pName.contains('coklat')) {
         score -= 10;
+      }
+
+      // Prioritaskan produk induk/reguler jika chat tidak minta ukuran mini (115g / 8)
+      if (pName.contains('115') && !cleanQ.contains('115') && !cleanQ.contains('8')) {
+        score -= 20;
       }
 
       if (score > maxScore) {

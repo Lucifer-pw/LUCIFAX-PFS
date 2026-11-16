@@ -1,5 +1,5 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.273'; // v3.3.273 - Filter menu restoran & perketat deteksi PO gambar (wajib produk frozen food)
+const GATEWAY_VERSION = '3.3.275'; // v3.3.275 - Universal phonetic/fuzzy typo, smart gramatur, and slang karton (krton)
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
