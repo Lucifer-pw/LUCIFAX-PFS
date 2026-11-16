@@ -343,6 +343,25 @@ async function flushMessageBuffer(bufferKey) {
     isTransfer: isTransfer
   });
 
+  // L-W.A.V.I.S INTERACTIVE QUERY HANDLER
+  // STRICT: WAVIS HANYA aktif untuk chat pribadi (1-on-1 private chat).
+  // JANGAN PERNAH merespons query interaktif di dalam Grup WhatsApp (@g.us)!
+  const isGroupChat = (buf.senderJid && buf.senderJid.endsWith('@g.us')) || (chatPayload.senderJid && chatPayload.senderJid.endsWith('@g.us'));
+  const isInteractive = !isGroupChat && isInteractiveAllowed(buf.senderPhone, buf.senderJid);
+
+  let interactiveIntent = 'UNKNOWN';
+  if (isInteractive && !isTransfer) {
+    const products = autoPoProcessor?.cachedProducts || [];
+    interactiveIntent = wavisEngine.classifyIntent(combinedText, products);
+    console.log(`[L-W.A.V.I.S CLASSIFY] 🧠 Intent dari ${buf.senderName}: ${interactiveIntent}`);
+
+    // Jika pesan terklasifikasi sebagai interaksi L-W.A.V.I.S, cegah agar TIDAK dianggap sebagai ORDER_PO!
+    if (interactiveIntent !== 'UNKNOWN') {
+      chatPayload.messageType = 'INTERACTIVE_QUERY';
+      chatPayload.isOrderDetected = false;
+    }
+  }
+
   // Autonomous Auto-PO execution (khusus Termux saat laptop kasir mati / background)
   // DELAY 2 MENIT: Beri kesempatan Flutter (web/mobile) untuk proses duluan.
   // Jika Flutter sudah handle (status = processed), Termux SKIP.
@@ -394,21 +413,9 @@ async function flushMessageBuffer(bufferKey) {
     }, DELAY_MS);
   }
 
-  // L-W.A.V.I.S INTERACTIVE QUERY HANDLER (TAHAP 3: Tanya Piutang, Tanya Stok, Sapaan)
-  // STRICT: WAVIS HANYA aktif untuk chat pribadi (1-on-1 private chat).
-  // JANGAN PERNAH merespons query interaktif di dalam Grup WhatsApp (@g.us)!
-  const isGroupChat = (buf.senderJid && buf.senderJid.endsWith('@g.us')) || (chatPayload.senderJid && chatPayload.senderJid.endsWith('@g.us'));
-  if (isGroupChat) {
-    return;
-  }
-
-  const isInteractive = isInteractiveAllowed(buf.senderPhone, buf.senderJid);
-  if (isInteractive && !isTransfer && chatPayload.messageType !== 'ORDER_PO') {
-    const products = autoPoProcessor?.cachedProducts || [];
-    const intent = wavisEngine.classifyIntent(combinedText, products);
-    console.log(`[L-W.A.V.I.S CLASSIFY] 🧠 Intent dari ${buf.senderName}: ${intent}`);
-
-    if (intent === 'QUERY_RECEIVABLES') {
+  // EKSEKUSI JAWABAN INTERAKTIF L-W.A.V.I.S
+  if (isInteractive && !isTransfer && interactiveIntent !== 'UNKNOWN') {
+    if (interactiveIntent === 'QUERY_RECEIVABLES') {
       setTimeout(async () => {
         try {
           const res = await wavisEngine.handleReceivablesQuery(combinedText, buf.senderName);
@@ -417,7 +424,7 @@ async function flushMessageBuffer(bufferKey) {
           console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
         }
       }, 1000);
-    } else if (intent === 'QUERY_STOCK') {
+    } else if (interactiveIntent === 'QUERY_STOCK') {
       setTimeout(async () => {
         try {
           const res = await wavisEngine.handleStockQuery(combinedText, buf.senderName);
@@ -426,7 +433,7 @@ async function flushMessageBuffer(bufferKey) {
           console.warn('[L-W.A.V.I.S QUERY ERROR]', err.message);
         }
       }, 1000);
-    } else if (intent === 'QUERY_INVOICE') {
+    } else if (interactiveIntent === 'QUERY_INVOICE') {
       setTimeout(async () => {
         try {
           const res = await wavisEngine.handleInvoiceQuery(combinedText, buf.senderName);
@@ -435,7 +442,7 @@ async function flushMessageBuffer(bufferKey) {
           console.warn('[L-W.A.V.I.S INVOICE QUERY ERROR]', err.message);
         }
       }, 1000);
-    } else if (intent === 'REVISE_PO') {
+    } else if (interactiveIntent === 'REVISE_PO') {
       setTimeout(async () => {
         try {
           const res = await wavisEngine.handlePoRevision(chatPayload, buf.senderName);
@@ -444,7 +451,7 @@ async function flushMessageBuffer(bufferKey) {
           console.warn('[L-W.A.V.I.S REVISION ERROR]', err.message);
         }
       }, 1000);
-    } else if (intent === 'GREETING_MENU') {
+    } else if (interactiveIntent === 'GREETING_MENU') {
       if (!wavisEngine.isAdminStandby()) {
         setTimeout(async () => {
           try {
@@ -455,7 +462,7 @@ async function flushMessageBuffer(bufferKey) {
           }
         }, 1500);
       }
-    } else if (intent === 'SMART_FALLBACK') {
+    } else if (interactiveIntent === 'SMART_FALLBACK') {
       if (!wavisEngine.isAdminStandby()) {
         setTimeout(async () => {
           try {
@@ -1799,6 +1806,14 @@ async function startBaileys() {
         // FILTER: Abaikan foto daftar menu restoran / warung makan
         if (isImg && _looksLikeRestaurantMenu(t)) return false;
 
+        // INTERACTIVE GUARD: Teks pertanyaan, query faktur/stok/piutang, atau sapaan BUKAN order PO baru
+        if (!isImg) {
+          const isQuery = /\b(cek|lihat|tampilkan|kirimkan|info|data|apakah|bisa|revisi|ubah|ganti|piutang|utang|tagihan|stok|ready)\b/i.test(t);
+          if (isQuery && !/\b(karton|ktn|dus|box)\s*[:=]/i.test(t)) {
+            return false;
+          }
+        }
+
         const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice)\b/i.test(t);
         const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
         const hasProductWord = /\b(rolade|kornet|fiva|sosis|baso|bakso|beres|brs|nugget|tempura|siomay|otak|kaki naga|scallop|miniku)\b/i.test(t);
@@ -1812,9 +1827,10 @@ async function startBaileys() {
           return false;
         }
 
-        if (hasOrderWord) return true;
-        if (hasUnitWord && (hasQtyPattern || hasProductWord || hasVerb)) return true;
-        if (hasProductWord && (hasQtyPattern || hasVerb || hasOrderWord)) return true;
+        // Teks order PO WAJIB memuat nama produk atau unit kuantiti nyata
+        if (hasProductWord && (hasQtyPattern || hasVerb || hasOrderWord || hasUnitWord)) return true;
+        if (hasUnitWord && hasQtyPattern) return true;
+        if (hasOrderWord && (hasProductWord || hasQtyPattern)) return true;
         return false;
       };
 

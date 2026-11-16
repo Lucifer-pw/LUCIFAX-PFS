@@ -107,6 +107,9 @@ const intentTests = [
   { text: 'assalamualaikum wavis', expected: 'GREETING_MENU' },
   { text: 'apakah kamu bisa menampilkan data faktur atau invoice nomer 693', expected: 'QUERY_INVOICE' },
   { text: 'faktur 699', expected: 'QUERY_INVOICE' },
+  { text: 'kirimkan data PO nomor invoice 697', expected: 'QUERY_INVOICE' },
+  { text: 'cek PO 697', expected: 'QUERY_INVOICE' },
+  { text: 'tampilkan PO 697', expected: 'QUERY_INVOICE' },
   { text: 'revisi PO brs merah jadi 35 karton', expected: 'REVISE_PO' },
   { text: 'revisi faktur 699 brs merah jadi 35 dus', expected: 'REVISE_PO' },
   { text: 'tolong bantu cek toko', expected: 'SMART_FALLBACK' },
@@ -188,6 +191,8 @@ assert(greeting.includes('Halo Pak Joko!'), 'Harus menyapa Pak Joko');
 assert(greeting.includes('1. Buat Pesanan Baru'), 'Menu 1 PO harus ada');
 assert(greeting.includes('2. Cek') && greeting.includes('Piutang'), 'Menu 2 Piutang harus ada');
 assert(greeting.includes('3. Cek Stok'), 'Menu 3 Stok harus ada');
+assert(greeting.includes('4. Revisi PO'), 'Menu 4 Revisi PO harus ada');
+assert(greeting.includes('5. Cek Rincian Faktur'), 'Menu 5 Faktur harus ada');
 console.log(greeting);
 console.log('✅ Test 4 PASSED: Menu Bantuan L-W.A.V.I.S Sempurna!');
 
@@ -294,6 +299,16 @@ engine.setRawMessageStore((jid, id, msg) => {
   assert(fallbackText.includes('Revisi PO (Khusus Status PENDING)'), 'Panduan revisi harus ada');
   assert(fallbackText.includes('Cek Rincian Faktur / Invoice'), 'Panduan faktur harus ada');
   console.log('  ✓ 7C PASSED: Smart Fallback edukatif dan anti bisu');
+
+  // 7D: Uji Ekstraksi Query Faktur Kompleks ("kirimkan data PO nomor invoice 697")
+  engine.mockInvoices = {
+    '697': { ...mockInvoice, invoiceNo: '697' }
+  };
+  const invoiceRes = await engine.handleInvoiceQuery('kirimkan data PO nomor invoice 697', 'Rogue');
+  console.log(invoiceRes);
+  assert(invoiceRes.includes('#697'), 'Nomor invoice #697 harus ada di balasan faktur');
+  assert(invoiceRes.includes('DETAIL FAKTUR: L-W.A.V.I.S'), 'Header detail faktur harus ada');
+  console.log('  ✓ 7D PASSED: Query nomor invoice berhasil mengekstrak "697" dari kalimat kompleks');
 
   console.log('✅ Test 7 PASSED: SOP Revisi PO (Pending vs Dikirim) & Smart Fallback Sempurna!');
 

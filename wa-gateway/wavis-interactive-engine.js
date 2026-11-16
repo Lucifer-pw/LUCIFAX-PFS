@@ -262,7 +262,7 @@ class WavisInteractiveEngine {
     }
 
     // 3. Cek Pola Query Faktur / Invoice
-    const invoicePattern = /\b(faktur|invoice|nota)\b/i;
+    const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
     if (invoicePattern.test(clean)) {
       if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit)\b/i.test(clean)) {
         return 'REVISE_PO';
@@ -705,6 +705,10 @@ class WavisInteractiveEngine {
     resText += `📦 *3. Cek Stok Barang Gudang*\n`;
     resText += `   ↳ Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst mini*)\n`;
     resText += `   ↳ Atau ketik: \`stok keseluruhan\` untuk melihat rekap total gudang.\n\n`;
+    resText += `🔄 *4. Revisi PO (Khusus Status PENDING)*\n`;
+    resText += `   ↳ Quote/balas pesanan dengan: \`revisi PO [nama barang] jadi [jumlah] karton\`.\n\n`;
+    resText += `📄 *5. Cek Rincian Faktur / Invoice*\n`;
+    resText += `   ↳ Ketik: \`faktur [nomor]\` (contoh: *faktur 697* atau *kirimkan data PO nomor invoice 697*).\n\n`;
     resText += `────────────────────────────\n`;
     resText += `Ada hal operasional yang ingin dicek hari ini ${senderName}? Silakan ketik langsung ya! Untuk pesan pribadi, Admin akan tetap membalas segera setelah aktif kembali. 😊`;
 
@@ -712,18 +716,22 @@ class WavisInteractiveEngine {
   }
 
   /**
-   * Menampilkan Data Faktur / Invoice Spesifik (#693, #699, dll)
+   * Menampilkan Data Faktur / Invoice Spesifik (#693, #697, #699, dll)
    */
   async handleInvoiceQuery(text, senderName = 'Kak') {
     const clean = normalizeText(text);
-    const match = clean.match(/(?:invoice|faktur|nota|po|#|nomer|nomor)\s*[:#.]?\s*([a-zA-Z0-9\-_]{2,15})/i) || clean.match(/\b(\d{2,6})\b/);
+    // Regex presisi multi-tahap: Menangani 'kirimkan data PO nomor invoice 697', 'faktur 699', 'invoice #693', dll.
+    const regexPrefix = /(?:faktur|invoice|nota|po|nomor|nomer|#)\s*[:#.]?\s*([a-zA-Z]{1,3}\d{1,6})\b/i;
+    const regexDistance = /(?:faktur|invoice|nota|po).*?\b(\d{2,8})\b/i;
+    const regexAnyNumber = /\b(\d{2,8})\b/;
+    const match = clean.match(regexPrefix) || clean.match(regexDistance) || clean.match(regexAnyNumber);
     
     if (!match || !match[1]) {
       return `🤖 *[L-W.A.V.I.S]*\n` +
         `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `Halo ${senderName}! Untuk menampilkan rincian data faktur atau invoice, mohon sebutkan nomor fakturnya ya. 😊\n\n` +
-        `💡 *Contoh:* ketik \`faktur 699\` atau \`invoice #693\`.`;
+        `💡 *Contoh:* ketik \`faktur 697\` atau \`kirimkan data PO nomor invoice 697\`.`;
     }
 
     const rawInv = match[1].replace(/^[#]/, '').trim();
@@ -731,12 +739,15 @@ class WavisInteractiveEngine {
 
     try {
       const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
-      if (!db) {
+      let invData = null;
+
+      if (!db && this.mockInvoices) {
+        invData = this.mockInvoices[invNo] || null;
+      } else if (!db) {
         return `⚠️ Maaf ${senderName}, koneksi database sedang tidak tersedia. Mohon coba beberapa saat lagi.`;
       }
 
-      let invData = null;
-      if (this.firebaseAdapter.mode === 'admin') {
+      if (!invData && db && this.firebaseAdapter && this.firebaseAdapter.mode === 'admin') {
         const snap = await db.collection('transactions').doc(invNo).get();
         if (snap.exists) {
           invData = snap.data();
@@ -744,7 +755,7 @@ class WavisInteractiveEngine {
           const qSnap = await db.collection('transactions').where('invoiceNo', '==', invNo).limit(1).get();
           if (!qSnap.empty) invData = qSnap.docs[0].data();
         }
-      } else if (this.firebaseAdapter.clientSdk) {
+      } else if (!invData && db && this.firebaseAdapter && this.firebaseAdapter.clientSdk) {
         const { doc, getDoc, collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
         const snap = await getDoc(doc(db, 'transactions', invNo));
         if (snap.exists()) {
