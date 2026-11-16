@@ -1674,7 +1674,7 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                     scrollDirection: Axis.horizontal,
                                     child: DataTable(
                                       headingRowHeight: 36,
-                                      dataRowMaxHeight: 52,
+                                      dataRowMaxHeight: 62,
                                       columnSpacing: isMobile ? 14 : 24,
                                       columns: const [
                                         DataColumn(label: Text('NO', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 12))),
@@ -1736,11 +1736,22 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                                         ),
                                                       ],
                                                     ),
+                                                    if (item.payments.isNotEmpty) ...[
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        item.payments.length == 1
+                                                            ? 'Tgl Transfer: ${dateFormatter.format(item.payments.first.date)}'
+                                                            : 'Tgl Cicil: ${item.payments.map((p) => "${dateFormatter.format(p.date)} (${currencyFormatter.format(p.amount)})").join(", ")}',
+                                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.w600),
+                                                      ),
+                                                    ],
                                                   ] else if (item.isLunas) ...[
                                                     const SizedBox(height: 2),
-                                                    const Text(
-                                                      'Lunas Penuh',
-                                                      style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
+                                                    Text(
+                                                      item.payments.isNotEmpty
+                                                          ? 'Lunas Penuh (${dateFormatter.format(item.payments.last.date)})'
+                                                          : 'Lunas Penuh',
+                                                      style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
                                                     ),
                                                   ],
                                                 ],

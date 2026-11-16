@@ -716,14 +716,14 @@ class PrintService {
                   verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
                 ),
                 columnWidths: const {
-                  0: pw.FixedColumnWidth(26),  // NO
-                  1: pw.FixedColumnWidth(66),  // NO INVOICE
-                  2: pw.FixedColumnWidth(115), // CUSTOMER / TOKO
-                  3: pw.FixedColumnWidth(65),  // KOTA
+                  0: pw.FixedColumnWidth(24),  // NO
+                  1: pw.FixedColumnWidth(62),  // NO INVOICE
+                  2: pw.FixedColumnWidth(110), // CUSTOMER / TOKO
+                  3: pw.FixedColumnWidth(60),  // KOTA
                   4: pw.FixedColumnWidth(65),  // TGL KIRIM
-                  5: pw.FixedColumnWidth(75),  // TOTAL TAGIHAN
-                  6: pw.FixedColumnWidth(75),  // TERBAYAR
-                  7: pw.FixedColumnWidth(85),  // SISA PIUTANG
+                  5: pw.FixedColumnWidth(76),  // TOTAL TAGIHAN
+                  6: pw.FixedColumnWidth(88),  // TERBAYAR (lebar bertambah untuk tanggal transfer / cicil)
+                  7: pw.FixedColumnWidth(82),  // SISA PIUTANG
                 },
                 children: [
                   // Table Header Row
@@ -747,14 +747,58 @@ class PrintService {
                   ...List.generate(items.length, (index) {
                     final rec = items[index];
 
-                    // Terbayar cell
+                    // Terbayar cell (disertai tanggal transfer / cicilan)
                     pw.Widget paidCell;
                     if (rec.effectivePaidAmount > 0) {
-                      paidCell = _buildKartuPiutangCell(
-                        _rupiahFormatter.format(rec.effectivePaidAmount),
-                        align: pw.TextAlign.right,
-                        color: PdfColors.green900,
-                        isBold: true,
+                      final List<pw.Widget> paidContent = [
+                        pw.Text(
+                          _rupiahFormatter.format(rec.effectivePaidAmount),
+                          style: pw.TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.green900,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ];
+
+                      if (rec.payments.isNotEmpty) {
+                        if (rec.payments.length == 1) {
+                          final p = rec.payments.first;
+                          paidContent.add(
+                            pw.Text(
+                              'Tgl: ${DateFormat('dd-MM-yyyy').format(p.date)}',
+                              style: const pw.TextStyle(
+                                fontSize: 6.8,
+                                color: PdfColors.blueGrey800,
+                              ),
+                              textAlign: pw.TextAlign.right,
+                            ),
+                          );
+                        } else {
+                          for (var p in rec.payments) {
+                            paidContent.add(
+                              pw.Text(
+                                '${DateFormat('dd-MM-yy').format(p.date)}: ${_rupiahFormatter.format(p.amount)}',
+                                style: const pw.TextStyle(
+                                  fontSize: 6.2,
+                                  color: PdfColors.blueGrey800,
+                                ),
+                                textAlign: pw.TextAlign.right,
+                              ),
+                            );
+                          }
+                        }
+                      }
+
+                      paidCell = pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                        alignment: pw.Alignment.centerRight,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.end,
+                          mainAxisAlignment: pw.MainAxisAlignment.center,
+                          children: paidContent,
+                        ),
                       );
                     } else {
                       paidCell = _buildKartuPiutangCell('-', align: pw.TextAlign.center, color: PdfColors.grey700);

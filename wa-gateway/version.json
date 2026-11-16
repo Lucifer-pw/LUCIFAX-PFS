@@ -1,5 +1,5 @@
 {
-  "gateway": "3.3.275",
+  "gateway": "3.3.276",
   "files": {
     "server.js": "3.3.275",
     "autonomous-po-processor.js": "3.3.275",
@@ -9,5 +9,5 @@
     "bank-slip-parser.js": "3.3.270"
   },
   "updatedAt": "2026-11-16",
-  "changelog": "Smart product disambiguation (Beres 24 default Coklat, gramatur 215g vs 250g), slang karton (krton/krtn/krt), and universal fuzzy typo engine"
+  "changelog": "Menampilkan tanggal transfer / cicilan pembayaran faktur di Kartu Piutang (PDF & Layar Aplikasi)"
 }
