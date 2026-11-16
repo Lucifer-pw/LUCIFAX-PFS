@@ -171,19 +171,72 @@ class WavisInteractiveEngine {
 
   /**
    * Cari Pelanggan yang Cocok dari Teks Query
+   * Cerdas & memahami akronim/singkatan (SJJ, MMM, AFM), aturan AI Knowledge,
+   * nama toko alias, nama legal, dan membersihkan stop-words percakapan.
    */
   matchCustomerFromQuery(text, customers) {
     const clean = normalizeText(text);
     if (!clean || !Array.isArray(customers) || customers.length === 0) return null;
 
-    // 1. Cek Exact Alias (e.g. 'aw ff', 'griya ff', 'afm')
+    // 0. Cek Engine Self-Learning (ESL) rules dari ai_knowledge_rules (misal 'SJJ' -> 'SURYANTO WIBISONO WIBOWO' / 'AD008')
+    const rules = this.autoPoProcessor?.cachedRules || [];
+    for (const rule of rules) {
+      if (rule.type === 'customer_alias') {
+        const kw = normalizeText(rule.keyword || '');
+        if (kw.length >= 2) {
+          const kwPattern = new RegExp('(^|\\s)' + kw.replace(/\s+/g, '\\s+') + '(\\s|$)', 'i');
+          if (kwPattern.test(clean)) {
+            const found = customers.find(c =>
+              (rule.targetId && c.id === rule.targetId) ||
+              (rule.mappedValue && (c.customerName === rule.mappedValue || c.aliasName === rule.mappedValue)) ||
+              (rule.mappedValue && normalizeText(c.customerName).includes(normalizeText(rule.mappedValue))) ||
+              (rule.mappedValue && normalizeText(c.aliasName).includes(normalizeText(rule.mappedValue)))
+            );
+            if (found) return found;
+          }
+        }
+      }
+    }
+
+    // 1. Cek Initials / Singkatan / Akronim Nama Toko (misal "SUMBER JADI JAYA" -> "SJJ", "MAJU MARKET MANDIRI" -> "MMM")
+    for (const c of customers) {
+      const alias = normalizeText(c.aliasName || c.alias || '');
+      const name = normalizeText(c.customerName || c.name || '');
+
+      const getInitials = (s) => s.split(/\s+/).filter(w => w.length > 0 && !['ff', 'frozen', 'food', 'cv', 'pt', 'toko', 'ud'].includes(w)).map(w => w[0]).join('');
+      const aliasInitials = getInitials(alias);
+      const nameInitials = getInitials(name);
+
+      if (aliasInitials.length >= 2) {
+        const initPat = new RegExp('(^|\\s)' + aliasInitials + '(\\s|$)', 'i');
+        if (initPat.test(clean)) return c;
+      }
+      if (nameInitials.length >= 2) {
+        const initPat = new RegExp('(^|\\s)' + nameInitials + '(\\s|$)', 'i');
+        if (initPat.test(clean)) return c;
+      }
+
+      // Cek odooNamePtSo / odooDeliveryAddressCvSo jika ada
+      const odoo = normalizeText(c.odooNamePtSo || c.odooDeliveryAddressCvSo || '');
+      if (odoo.length >= 3) {
+        const odooParts = odoo.split(/\s+/);
+        for (const op of odooParts) {
+          if (op.length >= 3 && !['jateng', 'cv', 'pt', 'so'].includes(op)) {
+            const opPat = new RegExp('(^|\\s)' + op + '(\\s|$)', 'i');
+            if (opPat.test(clean)) return c;
+          }
+        }
+      }
+    }
+
+    // 2. Cek Exact Alias (e.g. 'aw ff', 'griya ff', 'afm', 'sumber jadi jaya')
     for (const c of customers) {
       const alias = normalizeText(c.aliasName || c.alias || '');
       if (alias.length >= 2) {
         const aliasPattern = new RegExp('(^|\\s)' + alias.replace(/\s+/g, '\\s+') + '(\\s|$)', 'i');
         if (aliasPattern.test(clean)) return c;
 
-        // Root alias tanpa 'ff' / 'frozen food' (e.g. 'aw' dari 'aw ff', 'griya' dari 'griya ff')
+        // Root alias tanpa 'ff' / 'frozen food'
         const rootAlias = alias.replace(/\b(ff|frozen|food)\b/g, '').trim();
         if (rootAlias.length >= 2) {
           const rootPattern = new RegExp('(^|\\s)' + rootAlias + '(\\s|$)', 'i');
@@ -192,7 +245,7 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 2. Cek Nama Pelanggan (e.g. 'aw frozen food' -> 'aw')
+    // 3. Cek Nama Pelanggan (e.g. 'aw frozen food', 'suryanto wibisono')
     for (const c of customers) {
       const name = normalizeText(c.customerName || c.name || '');
       if (name.length >= 3 && clean.includes(name)) return c;
@@ -203,8 +256,13 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 3. Word overlap fallback (abaikan kata umum piutang & stop words)
-    const stopWords = ['piutang', 'utang', 'bon', 'tagihan', 'cek', 'kartu', 'saya', 'ingin', 'mau', 'nya', 'mas', 'pak', 'dong', 'tolong', 'info'];
+    // 4. Word overlap fallback (abaikan kata umum & stop words percakapan)
+    const stopWords = [
+      'wavis', 'kirimkan', 'kirim', 'kartu', 'piutang', 'utang', 'bon', 'tagihan',
+      'dari', 'untuk', 'toko', 'pelanggan', 'cek', 'lihat', 'tampilkan', 'buka',
+      'minta', 'tolong', 'dong', 'saya', 'ingin', 'mau', 'mas', 'pak', 'kak',
+      'nya', 'ya', 'info', 'siang', 'pagi', 'sore', 'malam', 'halo', 'assalamualaikum'
+    ];
     const words = clean.split(/\s+/).filter(w => !stopWords.includes(w) && w.length >= 2);
     for (const c of customers) {
       const name = normalizeText(c.customerName || c.name || '');
@@ -302,6 +360,18 @@ class WavisInteractiveEngine {
         allCustomerTransactions = await queryCol('aliasName', matchedCustomer.aliasName);
       }
 
+      // Urutkan transaksi dari yang terbaru ke terlama
+      allCustomerTransactions.sort((a, b) => {
+        const getSec = (x) => {
+          if (!x) return 0;
+          if (x.date?._seconds) return x.date._seconds;
+          if (x.date?.toDate) return x.date.toDate().getTime() / 1000;
+          if (x.createdAt?._seconds) return x.createdAt._seconds;
+          return new Date(x.date || x.createdAt || 0).getTime() / 1000;
+        };
+        return getSec(b) - getSec(a);
+      });
+
       // Filter invoice yang belum lunas
       const unpaidInvoices = allCustomerTransactions.filter(inv => {
         const st = (inv.statusTransfer || '').toUpperCase();
@@ -324,7 +394,8 @@ class WavisInteractiveEngine {
           const rawDate = inv.transferBankDetails?.rawDate || inv.transferBankDetails?.transferDate || inv.transferDate || inv.date;
           lastPaymentInfo = {
             amount: paid,
-            date: rawDate
+            date: rawDate,
+            bank: inv.transferBankDetails?.bank || ''
           };
           break;
         }
@@ -346,7 +417,8 @@ class WavisInteractiveEngine {
           const d = new Date(lastPaymentInfo.date._seconds * 1000);
           tgl = ` (Tgl: ${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()})`;
         }
-        lastPayStr = `Rp ${lastPaymentInfo.amount.toLocaleString('id-ID')}${tgl}`;
+        const bName = lastPaymentInfo.bank ? ` via ${lastPaymentInfo.bank}` : '';
+        lastPayStr = `Rp ${lastPaymentInfo.amount.toLocaleString('id-ID')}${tgl}${bName}`;
       }
 
       let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -365,7 +437,8 @@ class WavisInteractiveEngine {
           resText += `• ...dan ${unpaidInvoices.length - 5} faktur lainnya.\n`;
         }
       } else {
-        resText += `✅ *Alhamdulillah, semua faktur tercatat sudah lunas!*\n`;
+        resText += `🎉 *STATUS: SEMUA FAKTUR SUDAH LUNAS!* ✅\n`;
+        resText += `Alhamdulillah, toko ini tidak memiliki sisa tunggakan tagihan saat ini.\n`;
       }
 
       resText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -380,16 +453,66 @@ class WavisInteractiveEngine {
 
   /**
    * Menjawab Pertanyaan Stok
+   * Cerdas: mendukung pertanyaan stok produk spesifik maupun stok keseluruhan gudang.
    */
   async handleStockQuery(text, senderName = 'Kak') {
     await this.autoPoProcessor.refreshCacheIfNeeded();
     const products = this.autoPoProcessor.cachedProducts || [];
+    const clean = normalizeText(text);
+
+    // 1. Cek Pertanyaan STOK KESELURUHAN / TOTAL GUDANG
+    const isOverall = /\b(keseluruhan|seluruh|semua|total|rekap|global|gudang fisik|fisik gudang|semuanya)\b/i.test(clean);
+    if (isOverall && products.length > 0) {
+      let totalPcs = 0;
+      let totalKtn = 0;
+      const readyList = [];
+      const emptyList = [];
+
+      for (const p of products) {
+        const stock = Number(p.stock) || 0;
+        const isi = Number(p.isiKarton) || 15;
+        const ktn = isi > 0 ? (stock / isi) : 0;
+        totalPcs += stock;
+        totalKtn += ktn;
+        if (stock > 0) {
+          readyList.push({ name: p.productName || p.name, stock, ktn, price: Number(p.price) || 0 });
+        } else {
+          emptyList.push({ name: p.productName || p.name });
+        }
+      }
+
+      readyList.sort((a, b) => b.stock - a.stock);
+
+      let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      resText += `Halo ${senderName}! Berikut rekap ketersediaan stok fisik gudang saat ini:\n\n`;
+      resText += `📊 *RINGKASAN TOTAL GUDANG:*\n`;
+      resText += `• Total Produk Terdaftar: ${products.length} SKU\n`;
+      resText += `• Total Fisik Gudang: *~${Math.round(totalKtn)} Karton* (${totalPcs.toLocaleString('id-ID')} pcs)\n`;
+      resText += `• Produk Ready (Siap Kirim): *${readyList.length} Item*\n`;
+      resText += `• Produk Kosong / Habis: *${emptyList.length} Item*\n\n`;
+
+      if (readyList.length > 0) {
+        resText += `📦 *Top ${Math.min(5, readyList.length)} Produk Paling Ready:*\n`;
+        const numEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+        readyList.slice(0, 5).forEach((p, idx) => {
+          const emoji = numEmojis[idx] || `${idx + 1}.`;
+          resText += `${emoji} *${p.name}*\n   ↳ ${Math.round(p.ktn * 10) / 10} Ktn (${p.stock.toLocaleString('id-ID')} pcs) @Rp ${p.price.toLocaleString('id-ID')}\n`;
+        });
+      }
+
+      resText += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      resText += `💡 _Ketik \`stok [nama barang]\` (contoh: \`stok bratwurst\`) untuk cek detail produk spesifik ya!_`;
+      return resText;
+    }
+
+    // 2. Cek Produk Spesifik
     const matchedProduct = this.matchProductFromQuery(text, products);
 
     if (!matchedProduct) {
       return `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `Halo ${senderName}! Untuk mengecek stok gudang, mohon sebutkan nama produknya ya.\n\n` +
-        `💡 *Contoh:* ketik \`stok bratwurst mini\` atau \`ready beres merah 24\`.`;
+        `💡 *Contoh:* ketik \`stok bratwurst mini\` atau \`ready beres merah 24\`.\n` +
+        `ℹ️ Atau ketik \`stok keseluruhan\` untuk melihat rekap total gudang.`;
     }
 
     const pName = matchedProduct.productName || matchedProduct.name || 'PRODUK';

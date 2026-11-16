@@ -121,14 +121,33 @@ const mockCustomers = [
   { id: 'c1', customerName: 'AHYAR', aliasName: 'AFM' },
   { id: 'c2', customerName: 'MAJU MARKET MANDIRI', aliasName: 'MMM' },
   { id: 'c3', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF' },
-  { id: 'H002', customerName: 'AW FROZEN FOOD', aliasName: 'AW FF' }
+  { id: 'H002', customerName: 'AW FROZEN FOOD', aliasName: 'AW FF' },
+  { id: 'AD008', customerName: 'SURYANTO WIBISONO WIBOWO', aliasName: 'SUMBER JADI JAYA', odooNamePtSo: 'SJJ JATENG' }
 ];
 
-const mockProducts = [
-  { id: 'p1', productName: 'BRS COKLAT 24S 500 G', price: 30688, isiKarton: 15, stock: 675 },
-  { id: 'p2', productName: 'BRATWURST SAPI MINI 500 G', price: 45838, isiKarton: 15, stock: 1200 },
-  { id: 'p3', productName: 'ROLLADE SAPI 215 G', price: 17500, isiKarton: 30, stock: 900 }
-];
+engine.autoPoProcessor = {
+  cachedRules: [
+    { type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SURYANTO WIBISONO WIBOWO', targetId: 'AD008' }
+  ],
+  cachedProducts: [
+    { id: 'p1', productName: 'BRS COKLAT 24S 500 G', price: 30688, isiKarton: 15, stock: 435 },
+    { id: 'p2', productName: 'BRATWURST SAPI MINI 500 G', price: 45838, isiKarton: 15, stock: 1200 },
+    { id: 'p3', productName: 'ROLLADE SAPI 215 G', price: 17500, isiKarton: 30, stock: 0 }
+  ],
+  refreshCacheIfNeeded: async () => {}
+};
+
+const custMatchSjj1 = engine.matchCustomerFromQuery('wavis kirimkan kartu piutang dari SJJ', mockCustomers);
+assert(custMatchSjj1 && custMatchSjj1.id === 'AD008', 'Harus cocok dengan SJJ (Sumber Jadi Jaya)');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchSjj1.aliasName} (${custMatchSjj1.customerName})" dari kalimat percakapan`);
+
+const custMatchSjj2 = engine.matchCustomerFromQuery('piutang sjj', mockCustomers);
+assert(custMatchSjj2 && custMatchSjj2.id === 'AD008', 'Harus cocok dengan SJJ (Sumber Jadi Jaya)');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchSjj2.aliasName}" dari "piutang sjj"`);
+
+const custMatchSjj3 = engine.matchCustomerFromQuery('piutang sumber jadi jaya', mockCustomers);
+assert(custMatchSjj3 && custMatchSjj3.id === 'AD008', 'Harus cocok dengan Sumber Jadi Jaya');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchSjj3.aliasName}" dari nama lengkap toko`);
 
 const custMatch = engine.matchCustomerFromQuery('tolong cek sisa utang afm mas', mockCustomers);
 assert(custMatch && custMatch.aliasName === 'AFM', 'Harus cocok dengan AFM');
@@ -142,10 +161,20 @@ const custMatchAw2 = engine.matchCustomerFromQuery('piutang AW FF', mockCustomer
 assert(custMatchAw2 && custMatchAw2.aliasName === 'AW FF', 'Harus cocok dengan AW FF');
 console.log(`  ✓ Cocok Pelanggan: "${custMatchAw2.aliasName} (${custMatchAw2.customerName})"`);
 
-const prodMatch = engine.matchProductFromQuery('stok bratwurst mini sisa berapa', mockProducts);
+const prodMatch = engine.matchProductFromQuery('stok bratwurst mini sisa berapa', engine.autoPoProcessor.cachedProducts);
 assert(prodMatch && prodMatch.productName.includes('BRATWURST SAPI MINI'), 'Harus cocok dengan Bratwurst Mini');
 console.log(`  ✓ Cocok Produk: "${prodMatch.productName}"`);
 console.log('✅ Test 3 PASSED: Matching Pelanggan & Produk Sempurna!');
+
+// 4. UJI OVERALL WAREHOUSE STOCK QUERY (CEK STOK KESELURUHAN)
+console.log('\n--- Test 4: Cek Stok Fisik Keseluruhan ---');
+(async () => {
+  const stockSummary = await engine.handleStockQuery('saya ingin cek stok barang fisik keseluruhan', 'Rogue');
+  console.log(stockSummary);
+  assert(stockSummary.includes('RINGKASAN TOTAL GUDANG'), 'Harus ada ringkasan total gudang');
+  assert(stockSummary.includes('Top'), 'Harus ada top produk ready');
+  console.log('✅ Test 4 PASSED: Respon Cek Stok Keseluruhan Cerdas & Informatif!');
+})();
 
 // 4. UJI GREETING MENU
 console.log('\n--- Test 4: Menu Bantuan L-W.A.V.I.S ---');
