@@ -365,11 +365,11 @@ async function flushMessageBuffer(bufferKey) {
                 if (db) {
                   let invData = null;
                   if (firebaseAdapter.mode === 'admin') {
-                    const snap = await db.collection('invoices').doc(invNo).get();
+                    const snap = await db.collection('transactions').doc(invNo).get();
                     if (snap.exists) invData = snap.data();
                   } else if (firebaseAdapter.clientSdk) {
                     const { doc, getDoc } = firebaseAdapter.clientSdk;
-                    const snap = await getDoc(doc(db, 'invoices', invNo));
+                    const snap = await getDoc(doc(db, 'transactions', invNo));
                     if (snap.exists()) invData = snap.data();
                   }
                   if (invData) {
@@ -569,6 +569,100 @@ firebaseAdapter.listenToSettings((settings) => {
   // Resolve WhatsApp LIDs with active socket if connected
   resolveWhitelistLids();
 });
+
+// REAL-TIME LISTENER: Konfirmasi PO Otomatis L-W.A.V.I.S saat Faktur Selesai Dibuat (oleh Flutter kasir / Termux)
+const processingReplyChatIds = new Set();
+
+async function handleProcessedChatConfirmation(chatData) {
+  if (!chatData || chatData.status !== 'processed') return;
+  if (chatData.isReplySent) return;
+
+  const invNo = String(chatData.createdInvoiceNo || chatData.createdTransactionId || '').replace(/\D/g, '');
+  if (!invNo) return;
+
+  const senderJid = chatData.senderJid;
+  const senderPhone = chatData.senderPhone;
+  if (!senderJid) return;
+
+  if (!isInteractiveAllowed(senderPhone, senderJid)) {
+    return;
+  }
+
+  if (processingReplyChatIds.has(chatData.id)) return;
+  processingReplyChatIds.add(chatData.id);
+
+  try {
+    const db = firebaseAdapter.db || firebaseAdapter.clientDb;
+    if (!db) return;
+
+    let invData = null;
+    if (firebaseAdapter.mode === 'admin') {
+      const snap = await db.collection('transactions').doc(invNo).get();
+      if (snap.exists) invData = snap.data();
+    } else if (firebaseAdapter.clientSdk) {
+      const { doc, getDoc } = firebaseAdapter.clientSdk;
+      const snap = await getDoc(doc(db, 'transactions', invNo));
+      if (snap.exists()) invData = snap.data();
+    }
+
+    if (invData) {
+      console.log(`[L-W.A.V.I.S AUTO-CONFIRM] 🚀 Mengirim konfirmasi Faktur #${invNo} ke ${chatData.senderName || 'Pelanggan'} (${senderJid})...`);
+      const replyText = wavisEngine.formatPoConfirmation(invData, chatData.senderName || 'Kak');
+      const sent = await wavisEngine.sendReply(senderJid, replyText, null, senderPhone);
+      if (sent) {
+        await firebaseAdapter.updateChatDocument(chatData.id, { isReplySent: true });
+        console.log(`[L-W.A.V.I.S AUTO-CONFIRM] ✅ Konfirmasi Faktur #${invNo} berhasil dikirim!`);
+      }
+    }
+  } catch (err) {
+    console.error('[L-W.A.V.I.S AUTO-CONFIRM ERROR]', err.message);
+  } finally {
+    setTimeout(() => processingReplyChatIds.delete(chatData.id), 60000);
+  }
+}
+
+// Pasang Firestore snapshot listener pada incoming_po_chats
+function initProcessedPoListener() {
+  try {
+    const db = firebaseAdapter.db || firebaseAdapter.clientDb;
+    if (!db) return;
+
+    if (firebaseAdapter.mode === 'admin') {
+      db.collection('incoming_po_chats')
+        .where('status', '==', 'processed')
+        .onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const data = change.doc.data();
+              if (data && !data.isReplySent && (data.createdInvoiceNo || data.createdTransactionId)) {
+                handleProcessedChatConfirmation({ id: change.doc.id, ...data });
+              }
+            }
+          });
+        }, err => console.warn('[PO CONFIRM LISTENER WARN]', err.message));
+    } else if (firebaseAdapter.clientSdk) {
+      const { collection, query, where, onSnapshot } = firebaseAdapter.clientSdk;
+      const q = query(
+        collection(db, 'incoming_po_chats'),
+        where('status', '==', 'processed')
+      );
+      onSnapshot(q, snapshot => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added' || change.type === 'modified') {
+            const data = change.doc.data();
+            if (data && !data.isReplySent && (data.createdInvoiceNo || data.createdTransactionId)) {
+              handleProcessedChatConfirmation({ id: change.doc.id, ...data });
+            }
+          }
+        });
+      }, err => console.warn('[PO CONFIRM LISTENER WARN]', err.message));
+    }
+    console.log('[L-W.A.V.I.S] 🎧 Real-time Listener Konfirmasi PO Aktif!');
+  } catch (e) {
+    console.warn('[L-W.A.V.I.S LISTENER INIT ERROR]', e.message);
+  }
+}
+setTimeout(initProcessedPoListener, 3000);
 
 function cleanupSocket() {
   if (heartbeatTimer) {

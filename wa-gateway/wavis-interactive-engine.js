@@ -142,13 +142,24 @@ class WavisInteractiveEngine {
       tglStr = `${dd}-${mm}-${yyyy}`;
     } catch (_) {}
 
+    // Helper isiKarton fallback
+    const cachedProds = this.autoPoProcessor?.cachedProducts || [];
+    const getIsiKtn = (it) => {
+      if (typeof it.isiKarton === 'number' && it.isiKarton > 0) return it.isiKarton;
+      if (cachedProds.length > 0) {
+        const found = cachedProds.find(p => (it.productId && p.id === it.productId) || (it.productName && (p.productName === it.productName || p.name === it.productName)));
+        if (found && found.isiKarton) return Number(found.isiKarton);
+      }
+      return 15;
+    };
+
     // Hitung total karton
     let totalCarton = 0;
     for (const it of items) {
       if (typeof it.cartonCount === 'number' && it.cartonCount > 0) {
         totalCarton += it.cartonCount;
       } else {
-        const pcsPerKtn = it.isiKarton || 15;
+        const pcsPerKtn = getIsiKtn(it);
         totalCarton += (it.qty || 0) / pcsPerKtn;
       }
     }
@@ -173,7 +184,8 @@ class WavisInteractiveEngine {
       const pName = it.productName || 'PRODUK';
       const weightStr = it.weightKg ? ` (${Number(it.weightKg).toFixed(2)} kg)` : '';
       
-      const ktnVal = it.cartonCount || (it.isiKarton ? Math.round(it.qty / it.isiKarton * 10) / 10 : null);
+      const pcsPerKtn = getIsiKtn(it);
+      const ktnVal = it.cartonCount || (pcsPerKtn ? Math.round(it.qty / pcsPerKtn * 10) / 10 : null);
       const ktnStr = ktnVal ? `${ktnVal} Ktn` : `${it.qty} pcs`;
       const priceStr = (it.price || 0).toLocaleString('id-ID');
       
@@ -197,7 +209,9 @@ class WavisInteractiveEngine {
       text += `📝 *Catatan:* ${note.trim()}\n`;
     }
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += this.generateSmartFooter('PO_CONFIRMATION', { senderName });
+    text += `ℹ️ *Catatan Sistem:*\n`;
+    text += `• Faktur sudah aman masuk Database Transaksi.\n`;
+    text += `• Jika ada pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali. 😊`;
 
     return text;
   }
@@ -537,21 +551,52 @@ class WavisInteractiveEngine {
     // 1. Cek Pertanyaan STOK KESELURUHAN / TOTAL GUDANG
     const isOverall = /\b(keseluruhan|seluruh|semua|total|rekap|global|gudang fisik|fisik gudang|semuanya)\b/i.test(clean);
     if (isOverall && products.length > 0) {
+      // Kelompokkan produk berdasarkan kodeInduk agar produk fisik yang sama tidak dihitung dobel
+      // (contoh: KAL-400 & KAL-400-2 memiliki fisik sama 480 pcs / 24 ktn, hanya beda tier harga)
+      const parentGroups = new Map();
+      for (const p of products) {
+        const ki = (p.kodeInduk || p.kode_induk || p.id || '').trim().toUpperCase();
+        if (!parentGroups.has(ki)) {
+          parentGroups.set(ki, []);
+        }
+        parentGroups.get(ki).push(p);
+      }
+
       let totalPcs = 0;
       let totalKtn = 0;
       const readyList = [];
       const emptyList = [];
 
-      for (const p of products) {
-        const stock = Number(p.stock) || 0;
-        const isi = Number(p.isiKarton) || 15;
+      for (const [ki, variantList] of parentGroups.entries()) {
+        const primaryProd = variantList.find(v => !v.id.endsWith('-2') && !v.id.endsWith('-3')) || variantList[0];
+        const stock = Number(primaryProd.stock) || 0;
+        const isi = Number(primaryProd.isiKarton) || 15;
         const ktn = isi > 0 ? (stock / isi) : 0;
+
         totalPcs += stock;
         totalKtn += ktn;
+
+        let displayName = primaryProd.productName || primaryProd.name || ki;
+        if (displayName.includes(' 2 400G')) displayName = displayName.replace(' 2 400G', ' 400 G');
+        if (displayName.includes(' 2 500G')) displayName = displayName.replace(' 2 500G', ' 500 G');
+
+        const prices = Array.from(new Set(variantList.map(v => Number(v.price) || 0).filter(pr => pr > 0))).sort((a, b) => a - b);
+        let priceStr = '';
+        if (prices.length === 1) {
+          priceStr = `Rp ${prices[0].toLocaleString('id-ID')}`;
+        } else if (prices.length > 1) {
+          priceStr = `Rp ${prices[0].toLocaleString('id-ID')} - Rp ${prices[prices.length - 1].toLocaleString('id-ID')}`;
+        }
+
         if (stock > 0) {
-          readyList.push({ name: p.productName || p.name, stock, ktn, price: Number(p.price) || 0 });
+          readyList.push({
+            name: displayName,
+            stock,
+            ktn,
+            priceStr
+          });
         } else {
-          emptyList.push({ name: p.productName || p.name });
+          emptyList.push({ name: displayName });
         }
       }
 
@@ -560,17 +605,18 @@ class WavisInteractiveEngine {
       let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
       resText += `Halo ${senderName}! Berikut rekap ketersediaan stok fisik gudang saat ini:\n\n`;
       resText += `📊 *RINGKASAN TOTAL GUDANG:*\n`;
-      resText += `• Total Produk Terdaftar: ${products.length} SKU\n`;
+      resText += `• Total Produk Terdaftar: ${products.length} SKU (${parentGroups.size} Produk Induk Fisik)\n`;
       resText += `• Total Fisik Gudang: *~${Math.round(totalKtn)} Karton* (${totalPcs.toLocaleString('id-ID')} pcs)\n`;
-      resText += `• Produk Ready (Siap Kirim): *${readyList.length} Item*\n`;
-      resText += `• Produk Kosong / Habis: *${emptyList.length} Item*\n\n`;
+      resText += `• Produk Fisik Ready: *${readyList.length} Item*\n`;
+      resText += `• Produk Fisik Kosong: *${emptyList.length} Item*\n\n`;
 
       if (readyList.length > 0) {
         resText += `📦 *Top ${Math.min(5, readyList.length)} Produk Paling Ready:*\n`;
         const numEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
         readyList.slice(0, 5).forEach((p, idx) => {
           const emoji = numEmojis[idx] || `${idx + 1}.`;
-          resText += `${emoji} *${p.name}*\n   ↳ ${Math.round(p.ktn * 10) / 10} Ktn (${p.stock.toLocaleString('id-ID')} pcs) @Rp ${p.price.toLocaleString('id-ID')}\n`;
+          const prc = p.priceStr ? ` @${p.priceStr}` : '';
+          resText += `${emoji} *${p.name}*\n   ↳ ${Math.round(p.ktn * 10) / 10} Ktn (${p.stock.toLocaleString('id-ID')} pcs)${prc}\n`;
         });
       }
 
@@ -647,18 +693,9 @@ class WavisInteractiveEngine {
       return false;
     }
 
-    // Resolusi Target JID:
-    // Jika target adalah WhatsApp LID (@lid) tapi nomor telepon (@s.whatsapp.net) diketahui,
-    // prioritaskan kirim ke nomor HP (@s.whatsapp.net) agar tidak terkena delay enkripsi WhatsApp
-    // "Menunggu pesan ini. Ini mungkin membutuhkan waktu beberapa saat."
-    let targetJid = remoteJid;
-    let cleanP = senderPhone ? String(senderPhone).replace(/\D/g, '') : '';
-    if (cleanP.startsWith('08')) cleanP = '628' + cleanP.slice(2);
-
-    if (cleanP && cleanP.length >= 8 && targetJid.endsWith('@lid')) {
-      targetJid = `${cleanP}@s.whatsapp.net`;
-      console.log(`[L-W.A.V.I.S JID RESOLVED] 🔄 Mengalihkan target dari LID ${remoteJid} ke nomor WhatsApp ${targetJid} untuk mencegah delay enkripsi.`);
-    }
+    // Target JID: Balas langsung ke remoteJid tempat pesan masuk
+    // (Bila pesan masuk dari @lid, balas langsung ke @lid agar tetap di thread yang sama pada WA pengirim & penerima)
+    const targetJid = remoteJid;
 
     try {
       // 1. Simulasi status mengetik ("composing presence")
@@ -670,7 +707,7 @@ class WavisInteractiveEngine {
 
       // 2. Kirim pesan balasan
       const options = {};
-      if (quotedMsg) {
+      if (quotedMsg && typeof quotedMsg === 'object' && quotedMsg.key) {
         options.quoted = quotedMsg;
       }
 
@@ -686,6 +723,13 @@ class WavisInteractiveEngine {
         }
         if (sentMsg.key.remoteJid && sentMsg.key.remoteJid !== targetJid) {
           this.rawMessageStore(sentMsg.key.remoteJid, msgId, sentMsg.message);
+        }
+        if (senderPhone) {
+          let cleanP = String(senderPhone).replace(/\D/g, '');
+          if (cleanP.startsWith('08')) cleanP = '628' + cleanP.slice(2);
+          if (cleanP) {
+            this.rawMessageStore(`${cleanP}@s.whatsapp.net`, msgId, sentMsg.message);
+          }
         }
       }
 

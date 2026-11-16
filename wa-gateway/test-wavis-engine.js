@@ -214,16 +214,16 @@ engine.setRawMessageStore((jid, id, msg) => {
   assert.strictEqual(groupRes, false, 'sendReply ke grup harus ditolak');
   console.log('  ✓ sendReply ke grup WhatsApp (@g.us) berhasil diblokir');
 
-  // 5B: Coba kirim ke LID (@lid) dengan nomor telepon -> WAJIB DIALIHKAN KE @s.whatsapp.net
+  // 5B: Coba kirim ke LID (@lid) -> Balas langsung ke LID agar sinkron di HP bot & lawan bicara
   const lidRes = await engine.sendReply('33668835856433@lid', 'Halo Rogue', null, '087789733632');
   assert.strictEqual(lidRes, true, 'sendReply harus berhasil');
-  assert.strictEqual(capturedTargetJid, '6287789733632@s.whatsapp.net', 'Target JID harus dialihkan ke 6287789733632@s.whatsapp.net');
-  console.log(`  ✓ sendReply ke LID berhasil dialihkan ke: ${capturedTargetJid}`);
+  assert.strictEqual(capturedTargetJid, '33668835856433@lid', 'Target JID harus tetap di thread LID yang sama');
+  console.log(`  ✓ sendReply ke LID berhasil dikirim ke: ${capturedTargetJid}`);
 
   // 5C: Cek apakah pesan keluar tersimpan di rawMessageCache untuk pencegahan E2EE delay
-  assert(mockRawCache.has('6287789733632@s.whatsapp.net_TEST_MSG_ID_999'), 'Pesan keluar harus tersimpan di cache targetJid');
-  assert(mockRawCache.has('33668835856433@lid_TEST_MSG_ID_999'), 'Pesan keluar harus tersimpan di cache remoteJid LID');
-  console.log('  ✓ Pesan keluar tersimpan di cache getMessage (Target & LID) untuk instant retry E2EE');
+  assert(mockRawCache.has('33668835856433@lid_TEST_MSG_ID_999'), 'Pesan keluar harus tersimpan di cache LID');
+  assert(mockRawCache.has('6287789733632@s.whatsapp.net_TEST_MSG_ID_999'), 'Pesan keluar harus tersimpan di cache phone number');
+  console.log('  ✓ Pesan keluar tersimpan di cache getMessage (LID & Phone) untuk instant retry E2EE');
 
   console.log('✅ Test 5 PASSED: Filter Grup, Resolusi LID, & Cache Pesan Keluar Bekerja Sempurna!');
 
