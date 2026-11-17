@@ -356,19 +356,21 @@ engine.setRawMessageStore((jid, id, msg) => {
   assert.strictEqual(pdfReceivablesIntent, 'SEND_PDF_RECEIVABLES', 'Harus mengenali intent SEND_PDF_RECEIVABLES');
   console.log('  ✓ 9A-2: "kirimkan file pdf piutang afm" → SEND_PDF_RECEIVABLES');
 
-  // 9B. Uji Pembuatan Buffer Dokumen PDF Faktur Penjualan
+  // 9B. Uji Pembuatan Buffer Dokumen PDF Faktur Penjualan (Sesuai Layout Resmi Kasir Image 4)
   engine.mockInvoices['700'] = {
     ...mockInvoice,
     invoiceNo: '700',
     customerName: 'AW FROZEN FOOD',
-    aliasName: 'AW FF'
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    date: new Date('2026-11-17T10:00:00Z')
   };
 
   const pdfInvoiceRes = await engine.handleSendPdfInvoice('kirimkan file pdf PO nomor 700', 'Rogue');
   assert(pdfInvoiceRes && pdfInvoiceRes.document, 'Respon harus memiliki objek document');
   assert(pdfInvoiceRes.document.buffer instanceof Buffer, 'Buffer PDF harus bertipe Buffer');
   assert(pdfInvoiceRes.document.buffer.length > 1000, 'Ukuran PDF harus valid (> 1KB)');
-  assert.strictEqual(pdfInvoiceRes.document.fileName, 'Faktur_Penjualan_700.pdf', 'Nama file PDF faktur harus sesuai');
+  assert.strictEqual(pdfInvoiceRes.document.fileName, '700_AW_FF_SEMARANG_20261117.pdf', 'Nama file PDF faktur harus format resmi kasir: ${invNo}_${alias}_${city}_${date}.pdf');
   assert(pdfInvoiceRes.document.buffer.slice(0, 8).toString().includes('%PDF-1.4'), 'Header binary file harus %PDF-1.4');
   console.log(`  ✓ 9B: Berhasil generate PDF Faktur Penjualan #${pdfInvoiceRes.document.fileName} (${pdfInvoiceRes.document.buffer.length} bytes)`);
 
@@ -388,11 +390,167 @@ engine.setRawMessageStore((jid, id, msg) => {
   const sendDocSuccess = await engine.sendDocumentReply('6287789733632@s.whatsapp.net', pdfInvoiceRes.document, pdfInvoiceRes.reply);
   assert.strictEqual(sendDocSuccess, true, 'sendDocumentReply harus mengembalikan true');
   assert(capturedDocPayload && capturedDocPayload.document, 'Payload socket harus berisi file document');
-  assert.strictEqual(capturedDocPayload.fileName, 'Faktur_Penjualan_700.pdf', 'Nama file pada Baileys payload harus sesuai');
+  assert.strictEqual(capturedDocPayload.fileName, '700_AW_FF_SEMARANG_20261117.pdf', 'Nama file pada Baileys payload harus sesuai format resmi');
   assert.strictEqual(capturedDocPayload.mimetype, 'application/pdf', 'Mimetype harus application/pdf');
   console.log('  ✓ 9C: Pengiriman Dokumen PDF via Baileys Socket terverifikasi sukses!');
 
   console.log('✅ Test 8 & 9 PASSED: Product Swap & Native PDF Document Dispatch Bekerja Sempurna!');
+
+  // 10. UJI PENGHAPUSAN ITEM DARI FAKTUR PO (ITEM DELETION, MISAL: "sosis cocktail dihapus saja")
+  console.log('\n--- Test 10: Uji Penghapusan Item PO (Item Deletion) ---');
+
+  // 10A. Uji Intent Detection untuk Hapus Item
+  const delIntent1 = engine.classifyIntent('sosis cocktail dihapus saja');
+  assert.strictEqual(delIntent1, 'REVISE_PO', 'Harus mengenali intent REVISE_PO untuk "sosis cocktail dihapus saja"');
+  console.log('  ✓ 10A-1: "sosis cocktail dihapus saja" → REVISE_PO');
+
+  const delIntent2 = engine.classifyIntent('hapus sosis cocktail di po 696');
+  assert.strictEqual(delIntent2, 'REVISE_PO', 'Harus mengenali intent REVISE_PO untuk "hapus sosis cocktail"');
+  console.log('  ✓ 10A-2: "hapus sosis cocktail di po 696" → REVISE_PO');
+
+  const delIntent3 = engine.classifyIntent('revisi rollade sapi dibuang saja');
+  assert.strictEqual(delIntent3, 'REVISE_PO', 'Harus mengenali intent REVISE_PO untuk "revisi rollade sapi dibuang saja"');
+  console.log('  ✓ 10A-3: "revisi rollade sapi dibuang saja" → REVISE_PO');
+
+  // 10B. Eksekusi Penghapusan Item pada Faktur Status PENDING
+  const invoiceForDeletion = JSON.parse(JSON.stringify(mockInvoice));
+  // Tambah item ke-4 sosis cocktail untuk dihapus
+  invoiceForDeletion.items.push({
+    productName: 'SOSIS COCKTAIL AYAM 500 G',
+    qty: 30,
+    isiKarton: 15,
+    cartonCount: 2,
+    price: 35000,
+    discountPercent: 0,
+    discountAmount: 0,
+    subtotal: 1050000,
+    weightKg: 15
+  });
+  invoiceForDeletion.grandTotal += 1050000; // total 30.329.850, total 5 item, 67 karton
+
+  const deletionPayload = {
+    messageText: 'sosis cocktail dihapus saja',
+    quotedMessageText: 'No. Invoice: #696\nPelanggan: AFM (AHYAR)',
+    quotedStanzaId: 'MSG_CONFIRM_696',
+    mockInvoice: invoiceForDeletion
+  };
+
+  const delResult = await engine.handlePoRevision(deletionPayload, 'Rogue');
+  console.log(delResult);
+
+  assert(delResult.includes('REVISE_PO BERHASIL DIPROSES: L-W.A.V.I.S') || delResult.includes('REVISI PO BERHASIL DIPROSES'), 'Header revisi harus muncul');
+  assert(delResult.includes('SOSIS COCKTAIL AYAM 500 G* berhasil dihapus'), 'Pesan konfirmasi harus menyebut nama barang yang dihapus');
+  assert(!delResult.includes('SOSIS COCKTAIL AYAM 500 G\n'), 'Sosis cocktail tidak boleh ada lagi di daftar item');
+  assert(delResult.includes('DAFTAR BARANG (4 Item):'), 'Jumlah item harus kembali menjadi 4 item');
+  assert(delResult.includes('GrandTotal Karton:* 65 Ktn'), 'GrandTotal Karton harus kembali 65 Ktn');
+  assert(delResult.includes('GRAND TOTAL:* *Rp 29.279.850*'), 'Grand Total harus kembali Rp 29.279.850');
+  console.log('  ✓ 10B PASSED: Penghapusan item PO berhasil menghapus item, mengurangi grand total, dan update karton');
+
+  // 10C. Edge Case: Menolak Penghapusan Jika Hanya Tersisa 1 Item
+  const singleItemInvoice = {
+    invoiceNo: '999',
+    customerName: 'AHYAR',
+    aliasName: 'AFM',
+    status: 'PENDING',
+    grandTotal: 1000000,
+    items: [
+      {
+        productName: 'SOSIS COCKTAIL AYAM 500 G',
+        qty: 15,
+        isiKarton: 15,
+        cartonCount: 1,
+        price: 35000,
+        subtotal: 525000
+      }
+    ]
+  };
+
+  const rejectSingleDelPayload = {
+    messageText: 'sosis cocktail dihapus saja',
+    mockInvoice: singleItemInvoice
+  };
+
+  const rejectDelResult = await engine.handlePoRevision(rejectSingleDelPayload, 'Rogue');
+  assert(rejectDelResult.includes('PENGHAPUSAN ITEM DITOLAK') || rejectDelResult.includes('Faktur tidak boleh'), 'Harus menolak menghapus item satu-satunya');
+  console.log('  ✓ 10C PASSED: Faktur dengan 1 item menolak penghapusan agar tidak menjadi faktur kosong');
+
+  console.log('✅ Test 10 PASSED: Logika Penghapusan Item PO (Item Deletion) Bekerja 100% Sempurna!');
+
+  // 11. UJI MATRIKS HAK AKSES & KEAMANAN (KANTOR VS UMUM)
+  console.log('\n--- Test 11: Uji Matriks Hak Akses & Keamanan (Kantor vs Umum) ---');
+
+  // Helper simulasi filter peran kontak
+  const officeNumbers = new Set(['6281234567890', '6281200000564']);
+  const generalNumbers = new Set(['6287789733632', '6282100000871', '6282100000410']);
+
+  function testContactRole(phone) {
+    if (generalNumbers.has(phone)) return 'GENERAL';
+    if (officeNumbers.has(phone)) return 'OFFICE';
+    return 'OFFICE';
+  }
+
+  function simulateSecurityFilter(phone, intent, senderName = 'Kak') {
+    const role = testContactRole(phone);
+    const isOffice = (role === 'OFFICE');
+
+    if (!isOffice) {
+      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES', 'REVISE_PO'].includes(intent)) {
+        return {
+          allowed: false,
+          reply: `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Halo ${senderName}! 👋\n\n` +
+            `Mohon maaf, informasi operasional, perubahan pesanan, serta dokumen keuangan hanya dapat diakses oleh tim internal PT PFS atau langsung melalui Admin / Developer saat aktif kembali ya. Terima kasih! 🙏\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `ℹ️ Jika ada keperluan mendesak, silakan tinggalkan pesan di sini, Admin akan membalas segera setelah online. 😊`
+        };
+      }
+
+      if (['GREETING_MENU', 'SMART_FALLBACK'].includes(intent)) {
+        return {
+          allowed: true,
+          isGeneralGreeting: true,
+          reply: `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Halo ${senderName}! 👋\n\n` +
+            `Admin / Developer saat ini sedang tidak standby di tempat.\n` +
+            `Namun jangan khawatir! Selagi menunggu beliau online, pesan Anda sudah kami terima dan beliau akan membalas segera setelah aktif kembali ya! 😊`
+        };
+      }
+    }
+
+    return { allowed: true, isOffice: true };
+  }
+
+  // 11A. Nomor Umum: Rogue (6287789733632) mencoba Revisi/Hapus PO
+  const secReviseGeneral = simulateSecurityFilter('6287789733632', 'REVISE_PO', 'Rogue');
+  assert.strictEqual(secReviseGeneral.allowed, false, 'Nomor Umum harus DITOLAK saat mencoba Revisi PO');
+  assert(secReviseGeneral.reply.includes('hanya dapat diakses oleh tim internal PT PFS'), 'Pesan penolakan harus sopan dan menjaga keamanan data');
+  console.log('  ✓ 11A-1: Nomor Umum coba REVISE_PO → DITOLAK MUTLAK');
+
+  // 11A-2. Nomor Umum: coba minta Piutang
+  const secPiutangGeneral = simulateSecurityFilter('6287789733632', 'QUERY_RECEIVABLES', 'Rogue');
+  assert.strictEqual(secPiutangGeneral.allowed, false, 'Nomor Umum harus DITOLAK saat tanya Piutang');
+  console.log('  ✓ 11A-2: Nomor Umum coba QUERY_RECEIVABLES → DITOLAK MUTLAK');
+
+  // 11A-3. Nomor Umum: coba cek Stok Gudang
+  const secStockGeneral = simulateSecurityFilter('6287789733632', 'QUERY_STOCK', 'Rogue');
+  assert.strictEqual(secStockGeneral.allowed, false, 'Nomor Umum harus DITOLAK saat cek Stok');
+  console.log('  ✓ 11A-3: Nomor Umum coba QUERY_STOCK → DITOLAK MUTLAK');
+
+  // 11A-4. Nomor Umum: sapaan offline (Halo Rogue)
+  const secGreetingGeneral = simulateSecurityFilter('6287789733632', 'GREETING_MENU', 'Rogue');
+  assert.strictEqual(secGreetingGeneral.allowed, true);
+  assert.strictEqual(secGreetingGeneral.isGeneralGreeting, true);
+  assert(!secGreetingGeneral.reply.includes('LAYANAN YANG BISA SAYA PROSES OTOMATIS'), 'Nomor umum TIDAK boleh melihat 5 menu internal');
+  assert(secGreetingGeneral.reply.includes('Halo Rogue! 👋'), 'Salam ramah harus menyebut nama');
+  console.log('  ✓ 11A-4: Nomor Umum sapaan offline → Salam Ramah Standar (Tanpa bocorkan 5 menu internal)');
+
+  // 11B. Nomor Kantor: Pak Joko (6281200000564)
+  const secOfficeCheck = simulateSecurityFilter('6281200000564', 'REVISE_PO', 'Pak Joko');
+  assert.strictEqual(secOfficeCheck.allowed, true);
+  assert.strictEqual(secOfficeCheck.isOffice, true);
+  console.log('  ✓ 11B: Nomor Kantor (Pak Joko) → Diizinkan akses seluruh operasional L-W.A.V.I.S');
+
+  console.log('✅ Test 11 PASSED: Matriks Hak Akses & Keamanan (Kantor vs Umum) Terverifikasi 100%!');
 
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

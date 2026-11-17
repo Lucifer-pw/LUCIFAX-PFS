@@ -447,13 +447,13 @@ async function flushMessageBuffer(bufferKey) {
 
     // 1. FILTER PRIVASI & KEAMANAN: JIKA KONTAK BERPERAN UMUM / ORANG LUAR (NON-KANTOR)
     if (!isOffice) {
-      // a) Jika mencoba tanya data perusahaan (Piutang, Stok Gudang, Faktur, Dokumen PDF) -> TOLAK SECARA SOPAN!
-      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES'].includes(interactiveIntent)) {
+      // a) Jika mencoba tanya data perusahaan (Piutang, Stok Gudang, Faktur, Dokumen PDF, Revisi & Hapus PO) -> TOLAK SECARA SOPAN!
+      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES', 'REVISE_PO'].includes(interactiveIntent)) {
         setTimeout(async () => {
           try {
             const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
               `Halo ${buf.senderName}! 👋\n\n` +
-              `Mohon maaf, informasi data operasional gudang dan keuangan hanya dapat diakses oleh tim internal PT PFS atau langsung melalui Admin / Developer saat aktif kembali ya. Terima kasih! 🙏\n` +
+              `Mohon maaf, informasi operasional, perubahan pesanan, serta dokumen keuangan hanya dapat diakses oleh tim internal PT PFS atau langsung melalui Admin / Developer saat aktif kembali ya. Terima kasih! 🙏\n` +
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
               `ℹ️ Jika ada keperluan mendesak, silakan tinggalkan pesan di sini, Admin akan membalas segera setelah online. 😊`;
             await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
@@ -1852,10 +1852,29 @@ async function startBaileys() {
         const savedBypassId = await firebaseAdapter.saveIncomingChat(bypassPayload);
         bypassPayload.chatDocId = savedBypassId;
 
-        // CEK APAKAH INI QUOTED REPLY UNTUK REVISI PO?
+        // CEK APAKAH INI QUOTED REPLY UNTUK REVISI / HAPUS ITEM PO?
         if (isQuotedReply && isInteractiveAllowed(senderPhone, remoteJid)) {
-          const isRevision = /\b(revisi|ubah|ganti|tambah|kurang|edit|batal|update)\b/i.test(cleanText);
+          const isRevision = /\b(revisi|ubah|ganti|tambah|kurang|edit|batal|update|hapus|dihapus|di\s*hapus|buang|dibuang|di\s*buang|hilangkan|dihilangkan|cancel|dicancel|coret|dicoret|ga\s*jadi|nggak\s*jadi)\b/i.test(cleanText);
           if (isRevision) {
+            const contactRole = getContactRole(senderPhone, remoteJid);
+            const isOffice = (contactRole === 'OFFICE');
+            if (!isOffice) {
+              console.log(`[L-W.A.V.I.S REVISI] ⛔ Quoted reply revisi PO dari ${senderName} DITOLAK (Role: ${contactRole})`);
+              setTimeout(async () => {
+                try {
+                  const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `Halo ${senderName}! 👋\n\n` +
+                    `Mohon maaf, perubahan pesanan (revisi atau pembatalan item) pada sistem hanya dapat diproses oleh tim internal PT PFS atau langsung melalui Admin / Developer saat aktif kembali ya. Terima kasih! 🙏\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `ℹ️ Jika ada keperluan mendesak, silakan tinggalkan pesan di sini, Admin akan membalas segera setelah online. 😊`;
+                  await wavisEngine.sendReply(remoteJid, res, null, senderPhone);
+                } catch (err) {
+                  console.warn('[L-W.A.V.I.S RESTRICTED ERROR]', err.message);
+                }
+              }, 1000);
+              return;
+            }
+
             console.log(`[L-W.A.V.I.S REVISI] 🔄 Menerima quoted reply revisi PO dari ${senderName}: "${cleanText}"`);
             setTimeout(async () => {
               try {

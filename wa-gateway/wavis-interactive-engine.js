@@ -268,8 +268,8 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 3. Cek Pola Revisi PO / Tukar Barang
-    const revisionPattern = /\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar)\b.*?\b(po|order|pesanan|karton|ktn|dus|box|jadi|pcs|pack|pak|bal|dengan|ke)\b|\b(revisi|ubah|ganti|tukar)\s+po\b|\b(?:di\s*ganti|di\s*tukar)\b/i;
+    // 3. Cek Pola Revisi PO / Tukar Barang / Hapus Barang
+    const revisionPattern = /\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar|hapus|buang|hilangkan|cancel|coret)\b.*?\b(po|order|pesanan|karton|ktn|dus|box|jadi|pcs|pack|pak|bal|dengan|ke|saja|aja)\b|\b(revisi|ubah|ganti|tukar|hapus|batalkan)\s+po\b|\b(?:di\s*ganti|di\s*tukar|di\s*hapus|hapus\s*saja|dihapus\s*saja|di\s*buang|buang\s*saja|dibuang\s*saja)\b/i;
     if (revisionPattern.test(clean)) {
       return 'REVISE_PO';
     }
@@ -277,7 +277,7 @@ class WavisInteractiveEngine {
     // 4. Cek Pola Query Faktur / Invoice atau Permintaan File Dokumen PDF Faktur
     const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
     if (invoicePattern.test(clean) || (isPdfRequest && /\b\d{2,6}\b/.test(clean))) {
-      if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar)\b/i.test(clean)) {
+      if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar|hapus|dihapus|di\s*hapus|buang|dibuang|cancel|coret)\b/i.test(clean)) {
         return 'REVISE_PO';
       }
       if (isPdfRequest) {
@@ -1019,6 +1019,11 @@ class WavisInteractiveEngine {
       }
     }
 
+    // Cek apakah ini instruksi penghapusan item dari faktur (Item Deletion)
+    // Contoh: "sosis cocktail dihapus saja", "hapus sosis cocktail", "revisi PO 700 rollade sapi buang"
+    const deletionKeywordsRegex = /\b(?:di\s*hapus|hapus|di\s*buang|buang|di\s*hilangkan|hilangkan|di\s*batalkan|batalkan|di\s*cancel|cancel|di\s*coret|coret|ga\s*jadi|nggak\s*jadi)\b/i;
+    const isDeletion = deletionKeywordsRegex.test(clean) && !isSwapCandidate;
+
     let matchedItemIndex = -1;
     let maxItemScore = 0;
     let targetOldItem = null;
@@ -1027,10 +1032,72 @@ class WavisInteractiveEngine {
     let newCartonQty = 0;
     let oldItemName = '';
     let newProductName = '';
+    let deletedItemName = '';
     let revisionNote = '';
 
-    if (isProductSwap) {
-      // A. SUB-ALUR 1: PENGGANTIAN PRODUK (SWAP / SUBSTITUTION)
+    if (isDeletion) {
+      // A. SUB-ALUR 1: PENGHAPUSAN BARANG (ITEM DELETION)
+      if (items.length <= 1) {
+        return `⚠️ *[PENGHAPUSAN ITEM DITOLAK]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}!\n\n` +
+          `Barang *${items[0].productName}* merupakan satu-satunya barang di Faktur #${targetInvNo}.\n` +
+          `Faktur tidak boleh berstatus kosong. Jika ingin membatalkan seluruh pesanan Faktur #${targetInvNo}, silakan konfirmasi langsung ke Admin / Kasir ya! 🙏`;
+      }
+
+      // Bersihkan teks query untuk mencari nama barang yang akan dihapus
+      const deleteProdQuery = clean
+        .replace(/\b(?:di\s*hapus|hapus|di\s*buang|buang|di\s*hilangkan|hilangkan|di\s*batalkan|batalkan|di\s*cancel|cancel|di\s*coret|coret|ga\s*jadi|nggak\s*jadi|saja|aja|tolong|dong|ya|mohon|revisi|ubah|po|faktur|invoice|nomor|\d+|#)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const delWords = deleteProdQuery.split(/\s+/).filter(w => w.length >= 2);
+
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const itName = normalizeText(it.productName || '');
+        let score = 0;
+        for (const pw of delWords) {
+          const pwNorm = pw.replace(/^beres$/, 'brs').replace(/^brs$/, 'beres');
+          if (itName.includes(pw) || itName.includes(pwNorm)) {
+            score += 5;
+          }
+        }
+        if (score > maxItemScore && score >= 5) {
+          maxItemScore = score;
+          matchedItemIndex = i;
+        }
+      }
+
+      if (matchedItemIndex === -1 && deleteProdQuery.length >= 2) {
+        for (let i = 0; i < items.length; i++) {
+          const itName = normalizeText(items[i].productName || '');
+          if (itName.includes(deleteProdQuery) || deleteProdQuery.includes(itName)) {
+            matchedItemIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (matchedItemIndex === -1) {
+        const currentItemList = items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n');
+        return `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Barang yang ingin dihapus (*${deleteProdQuery || clean}*) tidak ditemukan di Faktur *#${targetInvNo}*.\n\n` +
+          `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
+          `💡 *Contoh format:* \`revisi ${items[0]?.productName || 'nama barang'} dihapus saja\``;
+      }
+
+      const deletedItem = items[matchedItemIndex];
+      deletedItemName = deletedItem.productName || 'PRODUK';
+
+      // Hapus item dari faktur
+      items.splice(matchedItemIndex, 1);
+      revisionNote = `Revisi WA L-W.A.V.I.S: Hapus ${deletedItemName}`;
+    } else if (isProductSwap) {
+      // B. SUB-ALUR 2: PENGGANTIAN PRODUK (SWAP / SUBSTITUTION)
       const oldWords = swapOldText.split(/\s+/).filter(w => w.length >= 2);
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
@@ -1281,10 +1348,14 @@ class WavisInteractiveEngine {
         });
       }
 
+      const confSubtitle = isDeletion
+        ? `Barang *${deletedItemName}* berhasil dihapus dari Faktur #${targetInvNo}:`
+        : `Revisi pesanan Faktur #${targetInvNo} berhasil diperbarui di sistem:`;
+
       // Format balasan konfirmasi resmi revisi
       return this.formatPoConfirmation(invData, senderName, {
         title: 'REVISI PO BERHASIL DIPROSES: L-W.A.V.I.S',
-        subtitle: `Revisi pesanan Faktur #${targetInvNo} berhasil diperbarui di sistem:`,
+        subtitle: confSubtitle,
         isRevised: true
       });
     } catch (err) {
@@ -1397,7 +1468,7 @@ class WavisInteractiveEngine {
         document: {
           buffer: pdfBuffer,
           mimetype: 'application/pdf',
-          fileName: `Faktur_Penjualan_${invNo}.pdf`,
+          fileName: WavisPdfGenerator.generateInvoiceFilename(invData),
           caption: caption
         }
       };
