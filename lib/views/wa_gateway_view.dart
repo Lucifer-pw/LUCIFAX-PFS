@@ -445,11 +445,13 @@ class _WaGatewayViewState extends State<WaGatewayView> {
               if (isEditing) {
                 final currentEnabled = updatedContacts[editingIndex!]['enabled'] ?? 'true';
                 final currentInteractive = updatedContacts[editingIndex!]['interactive'] ?? 'true';
+                final currentRole = updatedContacts[editingIndex!]['role'] ?? 'OFFICE';
                 updatedContacts[editingIndex!] = {
                   'name': name.isNotEmpty ? name : 'Kontak #${editingIndex! + 1}',
                   'phone': phone,
                   'enabled': currentEnabled,
                   'interactive': currentInteractive,
+                  'role': currentRole,
                 };
               } else {
                 updatedContacts.add({
@@ -457,6 +459,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                   'phone': phone,
                   'enabled': 'true',
                   'interactive': 'true',
+                  'role': 'OFFICE',
                 });
               }
 
@@ -958,6 +961,71 @@ class _WaGatewayViewState extends State<WaGatewayView> {
                                               ),
                                             ),
                                           ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        // 3. Role: Kantor vs Umum Pill Toggle
+                                        Builder(
+                                          builder: (ctx) {
+                                            final rawRole = (item['role'] ?? 'OFFICE').toUpperCase();
+                                            final isOffice = rawRole != 'GENERAL' && rawRole != 'UMUM';
+                                            return Tooltip(
+                                              message: isOffice
+                                                  ? 'Peran: KANTOR (Internal PFS)\nAkses 5 layanan penuh: PO, Piutang, Stok Gudang, Revisi, Faktur'
+                                                  : 'Peran: UMUM (Pelanggan / Luar)\nHanya salam ramah saat offline. Stok & Piutang DILINDUNGI (tidak bisa diakses)',
+                                              child: InkWell(
+                                                borderRadius: BorderRadius.circular(14),
+                                                onTap: () async {
+                                                  try {
+                                                    final updatedContacts = List<Map<String, String>>.from(
+                                                      localSettings.whitelistContacts.map((c) => Map<String, String>.from(c)),
+                                                    );
+                                                    updatedContacts[idx]['role'] = isOffice ? 'GENERAL' : 'OFFICE';
+
+                                                    final updated = localSettings.copyWith(whitelistContacts: updatedContacts);
+                                                    await _firebaseService.saveWaAutoPoSettings(updated);
+
+                                                    setDialogState(() {
+                                                      localSettings = updated;
+                                                    });
+                                                  } catch (e) {
+                                                    debugPrint('Gagal toggle role whitelist: ');
+                                                  }
+                                                },
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
+                                                  decoration: BoxDecoration(
+                                                    color: isOffice
+                                                        ? const Color(0xFF7C3AED).withOpacity(0.35)
+                                                        : const Color(0xFFD97706).withOpacity(0.35),
+                                                    borderRadius: BorderRadius.circular(14),
+                                                    border: Border.all(
+                                                      color: isOffice ? const Color(0xFFA78BFA) : const Color(0xFFFBBF24),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        isOffice ? Icons.business_rounded : Icons.person_outline_rounded,
+                                                        color: isOffice ? const Color(0xFFA78BFA) : const Color(0xFFFBBF24),
+                                                        size: 11,
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        isOffice ? 'Kantor' : 'Umum',
+                                                        style: TextStyle(
+                                                          color: isOffice ? const Color(0xFFA78BFA) : const Color(0xFFFBBF24),
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         ),
                                         const SizedBox(width: 2),
                                         // Edit Button

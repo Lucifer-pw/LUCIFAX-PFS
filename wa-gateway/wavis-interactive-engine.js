@@ -193,16 +193,16 @@ class WavisInteractiveEngine {
       const pcsPerKtn = getIsiKtn(it);
       const ktnVal = it.cartonCount || (pcsPerKtn ? Math.round(it.qty / pcsPerKtn * 10) / 10 : null);
       const ktnStr = ktnVal ? `${ktnVal} Ktn` : `${it.qty} pcs`;
-      const priceStr = (it.price || 0).toLocaleString('id-ID');
+      const priceStr = Math.round(it.price || 0).toLocaleString('id-ID');
       
       let discStr = ' | Disc: -';
       if ((it.discountPercent && it.discountPercent > 0) || (it.discountAmount && it.discountAmount > 0)) {
         const pct = it.discountPercent ? `${it.discountPercent}%` : '';
-        const amt = it.discountAmount ? `(-${it.discountAmount.toLocaleString('id-ID')})` : '';
+        const amt = it.discountAmount ? `(-${Math.round(it.discountAmount).toLocaleString('id-ID')})` : '';
         discStr = ` | Disc ${pct} ${amt}`.trim();
       }
 
-      const subtotalStr = (it.subtotal || 0).toLocaleString('id-ID');
+      const subtotalStr = Math.round(it.subtotal || 0).toLocaleString('id-ID');
 
       text += `${num} *${pName}*${weightStr}${revisedTag}\n`;
       text += `   ${ktnStr} (${it.qty} pcs) @${priceStr}${discStr} = *Rp ${subtotalStr}*\n\n`;
@@ -210,7 +210,7 @@ class WavisInteractiveEngine {
 
     text += `────────────────────\n`;
     text += `📦 *GrandTotal Karton:* ${Math.round(totalCarton * 10) / 10} Ktn\n`;
-    text += `💰 *GRAND TOTAL:* *Rp ${grandTotal.toLocaleString('id-ID')}*\n`;
+    text += `💰 *GRAND TOTAL:* *Rp ${Math.round(grandTotal || 0).toLocaleString('id-ID')}*\n`;
     if (note && note.trim().length > 0) {
       text += `📝 *Catatan:* ${note.trim()}\n`;
     }
@@ -540,19 +540,19 @@ class WavisInteractiveEngine {
           tgl = ` (Tgl: ${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()})`;
         }
         const bName = lastPaymentInfo.bank ? ` via ${lastPaymentInfo.bank}` : '';
-        lastPayStr = `Rp ${lastPaymentInfo.amount.toLocaleString('id-ID')}${tgl}${bName}`;
+        lastPayStr = `Rp ${Math.round(lastPaymentInfo.amount || 0).toLocaleString('id-ID')}${tgl}${bName}`;
       }
 
       let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
       resText += `Halo ${senderName}! Berikut ringkasan kartu piutang untuk *${custName}${alias}*:\n\n`;
-      resText += `💳 *Total Sisa Piutang:* *Rp ${totalRemaining.toLocaleString('id-ID')}*\n`;
+      resText += `💳 *Total Sisa Piutang:* *Rp ${Math.round(totalRemaining || 0).toLocaleString('id-ID')}*\n`;
       resText += `📑 *Jumlah Faktur Belum Lunas:* ${unpaidInvoices.length} Invoice\n`;
       resText += `🗓️ *Cicilan / Pembayaran Terakhir:* ${lastPayStr}\n\n`;
 
       if (unpaidInvoices.length > 0) {
         resText += `*Daftar Faktur Belum Lunas:*\n`;
         unpaidInvoices.slice(0, 5).forEach((inv, i) => {
-          const rem = (Number(inv.grandTotal) || 0) - (Number(inv.paidAmount) || 0);
+          const rem = Math.round((Number(inv.grandTotal) || 0) - (Number(inv.paidAmount) || 0));
           resText += `• #${inv.invoiceNo || inv.id}: Sisa Rp ${rem.toLocaleString('id-ID')}\n`;
         });
         if (unpaidInvoices.length > 5) {
@@ -618,9 +618,9 @@ class WavisInteractiveEngine {
         const prices = Array.from(new Set(variantList.map(v => Number(v.price) || 0).filter(pr => pr > 0))).sort((a, b) => a - b);
         let priceStr = '';
         if (prices.length === 1) {
-          priceStr = `Rp ${prices[0].toLocaleString('id-ID')}`;
+          priceStr = `Rp ${Math.round(prices[0]).toLocaleString('id-ID')}`;
         } else if (prices.length > 1) {
-          priceStr = `Rp ${prices[0].toLocaleString('id-ID')} - Rp ${prices[prices.length - 1].toLocaleString('id-ID')}`;
+          priceStr = `Rp ${Math.round(prices[0]).toLocaleString('id-ID')} - Rp ${Math.round(prices[prices.length - 1]).toLocaleString('id-ID')}`;
         }
 
         if (stock > 0) {
@@ -680,7 +680,7 @@ class WavisInteractiveEngine {
     let resText = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     resText += `Halo ${senderName}! Informasi stok gudang untuk *${pName}*:\n\n`;
     resText += `📦 *Sisa Stok Gudang:* *${roundedKtn} Karton* (${stockPcs.toLocaleString('id-ID')} pcs)\n`;
-    resText += `💰 *Harga Standar:* Rp ${price.toLocaleString('id-ID')} / pcs\n`;
+    resText += `💰 *Harga Standar:* Rp ${Math.round(price).toLocaleString('id-ID')} / pcs\n`;
     resText += `🏷️ *Status:* ${stockPcs > 0 ? '✅ Ready / Siap Kirim' : '⚠️ Stok Kosong / Habis'}\n\n`;
     resText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     const stockFooterCtx = stockPcs > 0 ? 'STOCK_SPECIFIC_READY' : 'STOCK_SPECIFIC_EMPTY';

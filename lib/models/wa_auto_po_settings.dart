@@ -30,6 +30,8 @@ class WaAutoPoSettings {
         final isEnabled = enabled != 'false';
         final interactive = (it['interactive'] ?? 'true').toString();
         final isInteractive = interactive != 'false';
+        final rawRole = (it['role'] ?? 'OFFICE').toString().toUpperCase();
+        final role = (rawRole == 'GENERAL' || rawRole == 'UMUM') ? 'GENERAL' : 'OFFICE';
         if (phone.isNotEmpty) {
           final clean = phone.replaceAll(RegExp(r'\D'), '');
           contacts.add({
@@ -37,6 +39,7 @@ class WaAutoPoSettings {
             'name': name.isNotEmpty ? name : 'Kontak WA',
             'enabled': isEnabled ? 'true' : 'false',
             'interactive': isInteractive ? 'true' : 'false',
+            'role': role,
           });
           if (isEnabled && clean.isNotEmpty && !numbers.contains(clean)) {
             numbers.add(clean);
@@ -120,5 +123,24 @@ class WaAutoPoSettings {
       }
     }
     return false;
+  }
+
+  /// Mengecek peran kontak: 'OFFICE' (Kantor), 'GENERAL' (Umum), atau 'NONE'
+  String getContactRole(String phone) {
+    final clean = normalizePhoneDigits(phone);
+    if (clean.isEmpty) return 'NONE';
+    for (final c in whitelistContacts) {
+      final cp = normalizePhoneDigits(c['phone'] ?? '');
+      if (cp.isNotEmpty && (clean.endsWith(cp) || cp.endsWith(clean) || clean == cp)) {
+        final role = (c['role'] ?? 'OFFICE').toUpperCase();
+        return (role == 'GENERAL' || role == 'UMUM') ? 'GENERAL' : 'OFFICE';
+      }
+    }
+    return 'NONE';
+  }
+
+  /// Mengecek apakah suatu kontak berstatus Tim Kantor / Internal PFS
+  bool isOfficeForPhone(String phone) {
+    return getContactRole(phone) == 'OFFICE';
   }
 }

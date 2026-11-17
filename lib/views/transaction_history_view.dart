@@ -1718,18 +1718,98 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                 ],
               ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                onPressed: () => Navigator.pop(context),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isMobile) ...[
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF94A3B8)),
+                      tooltip: 'Menu Opsi Lainnya',
+                      color: const Color(0xFF1E293B),
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: const BorderSide(color: Color(0xFF334155)),
+                      ),
+                      onSelected: (val) {
+                        if (val == 'lock') {
+                          Navigator.pop(context);
+                          _toggleTransactionLock(tr);
+                        } else if (val == 'move') {
+                          Navigator.pop(context);
+                          _showMoveInvoiceItemsDialog(tr);
+                        } else if (val == 'odoo') {
+                          _prepareOdooTransfer(tr);
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        if (!isKacab) ...[
+                          PopupMenuItem(
+                            value: 'lock',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  tr.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                                  color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  tr.isLocked ? 'Buka Kunci (Unlock)' : 'Kunci Invoice (Lock)',
+                                  style: TextStyle(
+                                    color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'move',
+                            child: Row(
+                              children: [
+                                Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Pindah / Gabung Item',
+                                  style: TextStyle(color: Colors.cyanAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const PopupMenuItem(
+                          value: 'odoo',
+                          child: Row(
+                            children: [
+                              Icon(Icons.rocket_launch_rounded, color: Color(0xFFA855F7), size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Siapkan ke Odoo',
+                                style: TextStyle(color: Color(0xFFA855F7), fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               )
             ],
           ),
           content: SizedBox(
             width: isMobile ? double.maxFinite : 920,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // Information Header Box
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -1835,10 +1915,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 const SizedBox(height: 8),
 
                 // Table Container with Internal Scroll (ONLY THIS TABLE SCROLLS!)
-                Flexible(
-                  child: Container(
-                    width: double.infinity,
-                    constraints: BoxConstraints(maxHeight: isMobile ? 260 : 320),
+                Container(
+                  width: double.infinity,
+                  constraints: BoxConstraints(maxHeight: isMobile ? 320 : 320),
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: const Color(0xFF0F172A),
@@ -2035,7 +2114,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       ),
                     ),
                   ),
-                ),
 
                 // Moved Items History Section (shown only if items were moved)
                 if (tr.movedItems.isNotEmpty) ...[
@@ -2321,132 +2399,79 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               ],
             ),
           ),
-          actions: [
-            if (isMobile) ...[
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!isKacab) ...[
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _toggleTransactionLock(tr);
-                      },
-                      icon: Icon(
-                        tr.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
-                        color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
-                        size: 16,
-                      ),
-                      label: Text(
-                        tr.isLocked ? 'Buka Kunci (Unlock)' : 'Kunci Invoice (Lock)',
-                        style: TextStyle(
-                          color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: tr.isLocked ? Colors.greenAccent : Colors.amberAccent, width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Row(
-                    children: [
-                      if (!isKacab) ...[
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              _showEditTransactionDialog(tr);
-                            },
-                            icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 18),
-                            label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD97706),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showPrintDialog(tr, isDownload: true),
-                          icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
-                          label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.redAccent, width: 1.5),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (!isKacab) ...[
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              _showMoveInvoiceItemsDialog(tr);
-                            },
-                            icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
-                            label: const Text('Pindah / Gabung', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
+        ),
+        actions: [
+          if (isMobile) ...[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    if (!isKacab) ...[
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _showPrintDialog(tr, isDownload: false),
-                          icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
-                          label: const Text('Cetak / Print', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _showEditTransactionDialog(tr);
+                          },
+                          icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 16),
+                          label: const Text('Edit Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0284C7),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            backgroundColor: const Color(0xFFD97706),
+                            padding: const EdgeInsets.symmetric(vertical: 9),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () => _prepareOdooTransfer(tr),
-                    icon: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 16),
-                    label: const Text('Siapkan ke Odoo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7C3AED),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showPrintDialog(tr, isDownload: true),
+                        icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 16),
+                        label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF475569)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showPrintDialog(tr, isDownload: false),
+                        icon: const Icon(Icons.print_rounded, color: Colors.white, size: 16),
+                        label: const Text('Cetak / Print', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
                     ),
-                    child: const Text('Tutup', style: TextStyle(color: Color(0xFFCBD5E1), fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                ],
-              )
-            ] else ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF475569)),
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Tutup', style: TextStyle(color: Color(0xFFCBD5E1), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          ] else ...[
               if (!isKacab) ...[
                 OutlinedButton.icon(
                   onPressed: () {

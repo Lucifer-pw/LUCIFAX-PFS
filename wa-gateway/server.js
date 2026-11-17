@@ -192,6 +192,33 @@ let phoneToLidMap = new Map(); // '6287789733632' -> '33668835856433'
 let autoPoEnabled = false;
 let autoSettleTransferSlips = true; // Opsi B (100% Otomatis Penuh) default true
 let interactiveNumbers = new Set(); // Set of numbers allowed to receive L-W.A.V.I.S interactive replies
+let officeNumbers = new Set(); // Set of numbers with OFFICE role (Tim Internal PFS)
+let generalNumbers = new Set(); // Set of numbers with GENERAL role (Orang Luar / Umum)
+
+function getContactRole(senderPhone, rawJidDigits) {
+  if (!senderPhone && !rawJidDigits) return 'OFFICE';
+  const p = cleanPhone(senderPhone);
+  if (p) {
+    if (Array.from(generalNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
+      return 'GENERAL';
+    }
+    if (Array.from(officeNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
+      return 'OFFICE';
+    }
+  }
+  if (rawJidDigits && lidToPhoneMap.has(rawJidDigits)) {
+    const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
+    if (mappedPhone) {
+      if (Array.from(generalNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
+        return 'GENERAL';
+      }
+      if (Array.from(officeNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
+        return 'OFFICE';
+      }
+    }
+  }
+  return 'OFFICE';
+}
 
 function isInteractiveAllowed(senderPhone, rawJidDigits) {
   if (!senderPhone && !rawJidDigits) return false;
@@ -415,6 +442,47 @@ async function flushMessageBuffer(bufferKey) {
 
   // EKSEKUSI JAWABAN INTERAKTIF L-W.A.V.I.S
   if (isInteractive && !isTransfer && interactiveIntent !== 'UNKNOWN') {
+    const contactRole = getContactRole(buf.senderPhone, buf.senderJid);
+    const isOffice = (contactRole === 'OFFICE');
+
+    // 1. FILTER PRIVASI & KEAMANAN: JIKA KONTAK BERPERAN UMUM / ORANG LUAR (NON-KANTOR)
+    if (!isOffice) {
+      // a) Jika mencoba tanya data perusahaan (Piutang, Stok Gudang, Faktur) -> TOLAK SECARA SOPAN!
+      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE'].includes(interactiveIntent)) {
+        setTimeout(async () => {
+          try {
+            const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `Halo ${buf.senderName}! 👋\n\n` +
+              `Mohon maaf, informasi data operasional gudang dan keuangan hanya dapat diakses oleh tim internal PT PFS atau langsung melalui Admin / Developer saat aktif kembali ya. Terima kasih! 🙏\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `ℹ️ Jika ada keperluan mendesak, silakan tinggalkan pesan di sini, Admin akan membalas segera setelah online. 😊`;
+            await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+          } catch (err) {
+            console.warn('[L-W.A.V.I.S RESTRICTED ERROR]', err.message);
+          }
+        }, 1000);
+        return;
+      }
+
+      // b) Jika sapaan atau chat umum saat admin offline -> BALAS DENGAN SALAM RAMAH UMUM (TANPA BOCORKAN 5 MENU)
+      if (['GREETING_MENU', 'SMART_FALLBACK'].includes(interactiveIntent)) {
+        if (!wavisEngine.isAdminStandby()) {
+          setTimeout(async () => {
+            try {
+              const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Halo ${buf.senderName}! 👋\n\n` +
+                `Admin / Developer saat ini sedang tidak standby di tempat.\n` +
+                `Namun jangan khawatir! Selagi menunggu beliau online, pesan Anda sudah kami terima dan beliau akan membalas segera setelah aktif kembali ya! 😊`;
+              await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+            } catch (err) {
+              console.warn('[L-W.A.V.I.S GENERAL GREETING ERROR]', err.message);
+            }
+          }, 1500);
+        }
+        return;
+      }
+    }
+
     if (interactiveIntent === 'QUERY_RECEIVABLES') {
       setTimeout(async () => {
         try {
@@ -545,10 +613,14 @@ firebaseAdapter.listenToSettings((settings) => {
     const newDisabledNumbers = new Set();
     const newDisabledLids = new Set();
     const newInteractiveNumbers = new Set();
+    const newOfficeNumbers = new Set();
+    const newGeneralNumbers = new Set();
 
     settings.whitelistContacts.forEach(it => {
       const isEnabled = it.enabled !== false && it.enabled !== 'false';
       const isInteractive = it.interactive !== false && it.interactive !== 'false';
+      const rawRole = String(it.role || 'OFFICE').toUpperCase();
+      const isOffice = rawRole !== 'GENERAL' && rawRole !== 'UMUM';
       const c = cleanPhone(it.phone || it.number);
       const name = (it.name || '').trim();
       if (!c) return;
@@ -567,7 +639,12 @@ firebaseAdapter.listenToSettings((settings) => {
       if (isInteractive) {
         newInteractiveNumbers.add(c);
       }
-      whitelistContactsList.push({ name, phone: c, interactive: isInteractive });
+      if (isOffice) {
+        newOfficeNumbers.add(c);
+      } else {
+        newGeneralNumbers.add(c);
+      }
+      whitelistContactsList.push({ name, phone: c, interactive: isInteractive, role: isOffice ? 'OFFICE' : 'GENERAL' });
       if (phoneToLidMap.has(c)) {
         const mappedLid = phoneToLidMap.get(c);
         whitelistLids.add(mappedLid);
@@ -578,6 +655,8 @@ firebaseAdapter.listenToSettings((settings) => {
     disabledNumbers = newDisabledNumbers;
     disabledLids = newDisabledLids;
     interactiveNumbers = newInteractiveNumbers;
+    officeNumbers = newOfficeNumbers;
+    generalNumbers = newGeneralNumbers;
   } else if (Array.isArray(settings.whitelistNumbers)) {
     whitelistContactsList = [];
     const newNumbers = new Set(
@@ -1266,7 +1345,7 @@ async function startBaileys() {
       if (cleanPushName) {
         matchedContact = whitelistContactsList.find(c => {
           const cn = c.name.toLowerCase().trim();
-          return cn.length >= 3 && (cleanPushName.includes(cn) || cn.includes(cleanPushName));
+          return cn.length >= 3 && cleanPushName.length >= 3 && (cleanPushName === cn || cn.split(/\s+/).includes(cleanPushName) || cleanPushName.split(/\s+/).includes(cn));
         });
       }
 
