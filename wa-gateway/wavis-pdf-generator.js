@@ -19,8 +19,8 @@ function escapePdf(str) {
 }
 
 // Load official circular Fiva logo binary objects if available
-let logoObj11 = null;
-let logoObj12 = null;
+let fivaLogoStream = null;
+let fivaMaskStream = null;
 try {
   const logoPath = path.join(__dirname, 'fiva-logo.bin');
   if (fs.existsSync(logoPath)) {
@@ -28,8 +28,25 @@ try {
     if (raw.length > 8) {
       const len11 = raw.readUInt32BE(0);
       const len12 = raw.readUInt32BE(4);
-      logoObj11 = raw.slice(8, 8 + len11);
-      logoObj12 = raw.slice(8 + len11, 8 + len11 + len12);
+      const o11 = raw.slice(8, 8 + len11);
+      const o12 = raw.slice(8 + len11, 8 + len11 + len12);
+
+      function extractPureStream(buf) {
+        const str = buf.toString('latin1');
+        const sIdx = str.indexOf('stream');
+        const eIdx = str.lastIndexOf('endstream');
+        if (sIdx === -1 || eIdx === -1) return null;
+        let start = sIdx + 6;
+        if (buf[start] === 13) start++;
+        if (buf[start] === 10) start++;
+        let end = eIdx;
+        if (buf[end - 1] === 10) end--;
+        if (buf[end - 1] === 13) end--;
+        return buf.slice(start, end);
+      }
+
+      fivaLogoStream = extractPureStream(o11);
+      fivaMaskStream = extractPureStream(o12);
     }
   }
 } catch (_) {}
@@ -80,7 +97,7 @@ class WavisPdfGenerator {
    * @returns {Buffer} Buffer binary PDF 1.4
    */
   static generateInvoicePdf(inv) {
-    const hasLogo = (logoObj11 && logoObj12);
+    const hasLogo = !!(fivaLogoStream && fivaMaskStream);
     const objects = [];
     function addObj(c) {
       objects.push(c);
@@ -109,8 +126,9 @@ class WavisPdfGenerator {
       stream += `BT /${font} ${size} Tf ${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg ${x.toFixed(2)} ${y.toFixed(2)} Td (${escapePdf(text)}) Tj ET\n`;
     }
 
-    const invoiceNo = inv.invoiceNo || inv.id || '000';
-    const displayCust = inv.aliasName ? `${inv.aliasName} (${inv.customerName})` : (inv.customerName || 'Pelanggan');
+    const invoiceNo = String(inv.invoiceNo || inv.id || '000').replace(/^#/, '').trim();
+    // Kepada: Hanya nama alias toko (Persis Gambar 2 kasir: "AW FF")
+    const custAlias = String(inv.aliasName || inv.customerName || 'Pelanggan').trim();
     const cleanCity = inv.city || 'SEMARANG';
     const cleanProv = inv.province || 'JAWA TENGAH';
 
@@ -143,24 +161,39 @@ class WavisPdfGenerator {
     drawText('F1', 8.5, 88, 710, 'Fax: 021-84972237', 0, 0, 0);
 
     // Kanan: Metadata Faktur (No Invoice, Kepada, Tanggal Pengiriman, Alamat)
-    const labelX = 355;
-    const colonX = 460;
-    const valX = 468;
+    const labelX = 345;
+    const colonX = 450;
+    const valX = 458;
 
     drawText('F2', 10.5, labelX, 750, 'No Invoice');
     drawText('F2', 10.5, colonX, 750, ':');
-    drawText('F1', 10.5, valX, 750, `#${invoiceNo}`);
+    drawText('F1', 10.5, valX, 750, invoiceNo); // Tanpa tanda #
 
     drawText('F2', 10.5, labelX, 736, 'Kepada');
     drawText('F2', 10.5, colonX, 736, ':');
-    drawText('F1', 10.5, valX, 736, displayCust.substring(0, 24));
+    drawText('F1', 10.5, valX, 736, custAlias); // Hanya Alias Toko (AW FF)
 
     drawText('F2', 10.5, labelX, 722, 'Tanggal Pengiriman');
     drawText('F2', 10.5, colonX, 722, ':');
     drawText('F1', 10.5, valX, 722, delivDateStr);
 
-    drawText('F2', 10.5, labelX, 708, 'Alamat');
-    drawText('F2', 10.5, colonX, 708, ':');
+    // Alamat: Jika panjang > 16 karakter, wrap ke baris kedua persis Gambar 2 kasir ("SEMARANG, JAWA" dan "TENGAH")
+    const fullAddr = `${cleanCity}, ${cleanProv}`.trim();
+    if (fullAddr.length > 16) {
+      let splitIdx = fullAddr.lastIndexOf(' ', 17);
+      if (splitIdx === -1) splitIdx = 17;
+      const addrLine1 = fullAddr.substring(0, splitIdx).trim();
+      const addrLine2 = fullAddr.substring(splitIdx).trim();
+
+      drawText('F2', 10.5, labelX, 708, 'Alamat');
+      drawText('F2', 10.5, colonX, 708, ':');
+      drawText('F1', 10.5, valX, 708, addrLine1);
+      drawText('F1', 10.5, valX, 695, addrLine2);
+    } else {
+      drawText('F2', 10.5, labelX, 708, 'Alamat');
+      drawText('F2', 10.5, colonX, 708, ':');
+      drawText('F1', 10.5, valX, 708, fullAddr);
+    }
     drawText('F1', 10.5, valX, 708, `${cleanCity}, ${cleanProv}`.substring(0, 22));
 
     // 2. SECTION TITLE BAR: INVOICE (Kotak Border Hitam 2px, Teks Bold Tengah Kapital)
@@ -261,16 +294,17 @@ class WavisPdfGenerator {
     // 4. BOTTOM SECTION: Catatan Merah & Diterima Oleh (Kiri) | Box Grand Total & Tanda Tangan (Kanan)
     const bottomTop = tableBottom - 6;
 
-    // Kiri: Catatan (Teks Merah Miring Tebal Persis Gambar 4)
+    // Kiri: Catatan (HANYA catatan asli pelanggan, LOG REVISI BOT DIKOSONGKAN sesuai Gambar 2 & 3)
     if (inv.note && String(inv.note).trim().length > 0) {
       const fullNote = String(inv.note).trim();
-      // Potong jadi beberapa baris jika panjang
-      const maxChars = 75;
-      let noteY = bottomTop - 6;
-      for (let i = 0; i < fullNote.length && i < 225; i += maxChars) {
-        const line = fullNote.substring(i, i + maxChars);
-        drawText('F3', 8.5, 20, noteY, line, 0.85, 0.1, 0.1); // Red Italic
-        noteY -= 11;
+      if (!fullNote.toLowerCase().includes('revisi wa l-w.a.v.i.s')) {
+        const maxChars = 75;
+        let noteY = bottomTop - 6;
+        for (let i = 0; i < fullNote.length && i < 225; i += maxChars) {
+          const line = fullNote.substring(i, i + maxChars);
+          drawText('F3', 8.5, 20, noteY, line, 0.85, 0.1, 0.1);
+          noteY -= 11;
+        }
       }
     }
 
@@ -306,27 +340,43 @@ class WavisPdfGenerator {
 
     // 8: XObject Images (Fiva Logo & SMask) jika file fiva-logo.bin ada
     if (hasLogo) {
-      addObj(logoObj11.toString('binary')); // 8 0 R: Image /I11
-      addObj(logoObj12.toString('binary')); // 9 0 R: SMask
+      const obj8Body = Buffer.concat([
+        Buffer.from(`<</Type/XObject/Subtype/Image/Width 300/Height 300/BitsPerComponent 8/Name/I11/ColorSpace/DeviceRGB/SMask 9 0 R/Filter/FlateDecode/Length ${fivaLogoStream.length}>>\nstream\n`),
+        fivaLogoStream,
+        Buffer.from('\nendstream')
+      ]);
+      const obj9Body = Buffer.concat([
+        Buffer.from(`<</Type/XObject/Subtype/Image/Width 300/Height 300/BitsPerComponent 8/Name/I12/ColorSpace/DeviceGray/Filter/FlateDecode/Length ${fivaMaskStream.length}>>\nstream\n`),
+        fivaMaskStream,
+        Buffer.from('\nendstream')
+      ]);
+      addObj(obj8Body); // 8 0 R: Image /I11
+      addObj(obj9Body); // 9 0 R: SMask
     }
 
-    let pdf = '%PDF-1.4\n';
+    let header = Buffer.from('%PDF-1.4\n');
+    const parts = [header];
+    let currentOffset = header.length;
     const offsets = [];
+
     objects.forEach((obj, idx) => {
-      offsets.push(Buffer.byteLength(pdf));
-      pdf += `${idx + 1} 0 obj\n${obj}\nendobj\n`;
+      offsets.push(currentOffset);
+      const objHeader = Buffer.from(`${idx + 1} 0 obj\n`);
+      const objBody = Buffer.isBuffer(obj) ? obj : Buffer.from(obj, 'utf8');
+      const objTrailer = Buffer.from('\nendobj\n');
+      parts.push(objHeader, objBody, objTrailer);
+      currentOffset += objHeader.length + objBody.length + objTrailer.length;
     });
 
-    const startxref = Buffer.byteLength(pdf);
-    pdf += `xref\n0 ${objects.length + 1}\n`;
-    pdf += '0000000000 65535 f \n';
+    const startxref = currentOffset;
+    let xrefStr = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
     offsets.forEach(off => {
-      pdf += `${String(off).padStart(10, '0')} 00000 n \n`;
+      xrefStr += `${String(off).padStart(10, '0')} 00000 n \n`;
     });
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
-    pdf += `startxref\n${startxref}\n%%EOF`;
+    xrefStr += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`;
+    parts.push(Buffer.from(xrefStr, 'utf8'));
 
-    return Buffer.from(pdf, 'binary');
+    return Buffer.concat(parts);
   }
 
   /**

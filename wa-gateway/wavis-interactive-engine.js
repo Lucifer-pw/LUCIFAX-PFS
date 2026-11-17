@@ -1320,15 +1320,20 @@ class WavisInteractiveEngine {
       return c;
     });
 
-    const existingNote = invData.note ? invData.note.trim() : '';
-    const updatedNote = existingNote ? `${existingNote} | ${revisionNote}` : revisionNote;
+    // CATATAN FAKTUR TRANSAKSI (Gambar 3):
+    // Sesuai permintaan pengguna, kolom Catatan/Keterangan transaksi dikosongkan dari log revisi WAVIS
+    // agar faktur legal dan detail kasir tetap bersih.
+    // Log revisi hanya dicatat pada dokumen pesan masuk di menu "WA Gateway Auto-PO" (Gambar 4) dan notifikasi WA.
+    const cleanTransactionNote = (invData.note && !invData.note.toLowerCase().includes('revisi wa l-w.a.v.i.s'))
+      ? invData.note.trim()
+      : '';
 
     try {
       if (invDocRef) {
         const updatePayload = {
           items: cleanItemsForDb,
           grandTotal: invData.grandTotal,
-          note: updatedNote,
+          note: cleanTransactionNote,
           updatedAt: new Date()
         };
         if (this.firebaseAdapter?.mode === 'admin') {
@@ -1344,7 +1349,9 @@ class WavisInteractiveEngine {
           status: 'processed',
           createdInvoiceNo: `${targetInvNo} (UPDATED)`,
           createdTransactionId: targetInvNo,
-          isReplySent: true
+          isReplySent: true,
+          revisionLog: revisionNote,
+          note: revisionNote
         });
       }
 
@@ -1453,6 +1460,9 @@ class WavisInteractiveEngine {
       }
 
       if (!invData.invoiceNo) invData.invoiceNo = invNo;
+      if (invData.note && invData.note.toLowerCase().includes('revisi wa l-w.a.v.i.s')) {
+        invData.note = '';
+      }
 
       const pdfBuffer = WavisPdfGenerator.generateInvoicePdf(invData);
       const custDisplay = invData.aliasName ? `${invData.aliasName} (${invData.customerName})` : (invData.customerName || 'Pelanggan');
