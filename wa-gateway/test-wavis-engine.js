@@ -312,5 +312,87 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 7 PASSED: SOP Revisi PO (Pending vs Dikirim) & Smart Fallback Sempurna!');
 
+  // 8. UJI PERGANTIAN BARANG (PRODUCT SWAP / SUBSTITUTION) PADA REVISI PO
+  console.log('\n--- Test 8: Uji Pergantian Barang (Product Swap / Substitution) ---');
+  // Mock produk katalog master untuk penukaran
+  engine.autoPoProcessor.cachedProducts.push({
+    id: 'p-sosis-cocktail',
+    productName: 'SOSIS COCKTAIL 250 G',
+    name: 'SOSIS COCKTAIL 250 G',
+    price: 34549,
+    isiKarton: 15,
+    sizeGrams: 250,
+    stock: 500
+  });
+
+  const swapInvoiceMock = JSON.parse(JSON.stringify(mockInvoice)); // invoiceNo: 696, item 4: BRS MERAH 24S 500G
+  const swapPayload = {
+    messageText: 'revisi beres merah di ganti sosis cocktail 2 karton',
+    isQuotedReply: true,
+    quotedMessageText: 'Orderan fiva bulan November 2026...',
+    mockInvoice: swapInvoiceMock
+  };
+
+  const swapResult = await engine.handlePoRevision(swapPayload, 'Rogue');
+  console.log(swapResult);
+
+  assert(swapResult.includes('SOSIS COCKTAIL 250 G'), 'Item harus terganti menjadi SOSIS COCKTAIL');
+  assert(swapResult.includes('🔄 *(DIGANTI)*'), 'Tag DIGANTI harus muncul');
+  assert(swapResult.includes('2 Ktn (30 pcs)'), 'Jumlah karton baru harus 2 Ktn (30 pcs)');
+  assert(!swapResult.includes('BRS MERAH 24S 500G'), 'BRS MERAH tidak boleh ada lagi di daftar item');
+  // Hitung ulang karton: 10 + 30 + 5 + 2 = 47 Ktn
+  assert(swapResult.includes('GrandTotal Karton:* 47 Ktn'), 'GrandTotal Karton harus 47 Ktn');
+  console.log('  ✓ 8A PASSED: Pergantian barang (swap) berhasil mengganti item, harga, dan total karton');
+
+  // 9. UJI PEMBUATAN & PENGIRIMAN DOKUMEN PDF (FAKTUR & KARTU PIUTANG)
+  console.log('\n--- Test 9: Uji Pembuatan & Pengiriman Dokumen PDF ---');
+  
+  // 9A. Uji Intent Detection untuk Permintaan PDF
+  const pdfInvoiceIntent = engine.classifyIntent('kirimkan file pdf PO nomor 700');
+  assert.strictEqual(pdfInvoiceIntent, 'SEND_PDF_INVOICE', 'Harus mengenali intent SEND_PDF_INVOICE');
+  console.log('  ✓ 9A-1: "kirimkan file pdf PO nomor 700" → SEND_PDF_INVOICE');
+
+  const pdfReceivablesIntent = engine.classifyIntent('kirimkan file pdf piutang afm');
+  assert.strictEqual(pdfReceivablesIntent, 'SEND_PDF_RECEIVABLES', 'Harus mengenali intent SEND_PDF_RECEIVABLES');
+  console.log('  ✓ 9A-2: "kirimkan file pdf piutang afm" → SEND_PDF_RECEIVABLES');
+
+  // 9B. Uji Pembuatan Buffer Dokumen PDF Faktur Penjualan
+  engine.mockInvoices['700'] = {
+    ...mockInvoice,
+    invoiceNo: '700',
+    customerName: 'AW FROZEN FOOD',
+    aliasName: 'AW FF'
+  };
+
+  const pdfInvoiceRes = await engine.handleSendPdfInvoice('kirimkan file pdf PO nomor 700', 'Rogue');
+  assert(pdfInvoiceRes && pdfInvoiceRes.document, 'Respon harus memiliki objek document');
+  assert(pdfInvoiceRes.document.buffer instanceof Buffer, 'Buffer PDF harus bertipe Buffer');
+  assert(pdfInvoiceRes.document.buffer.length > 1000, 'Ukuran PDF harus valid (> 1KB)');
+  assert.strictEqual(pdfInvoiceRes.document.fileName, 'Faktur_Penjualan_700.pdf', 'Nama file PDF faktur harus sesuai');
+  assert(pdfInvoiceRes.document.buffer.slice(0, 8).toString().includes('%PDF-1.4'), 'Header binary file harus %PDF-1.4');
+  console.log(`  ✓ 9B: Berhasil generate PDF Faktur Penjualan #${pdfInvoiceRes.document.fileName} (${pdfInvoiceRes.document.buffer.length} bytes)`);
+
+  // 9C. Uji Pengiriman Dokumen via sendDocumentReply
+  let capturedDocPayload = null;
+  engine.setSocketGetter(() => ({
+    sendPresenceUpdate: async () => {},
+    sendMessage: async (jid, payload) => {
+      capturedDocPayload = payload;
+      return {
+        key: { id: 'TEST_DOC_MSG_888', remoteJid: jid, fromMe: true },
+        message: { documentMessage: { fileName: payload.fileName } }
+      };
+    }
+  }));
+
+  const sendDocSuccess = await engine.sendDocumentReply('6287789733632@s.whatsapp.net', pdfInvoiceRes.document, pdfInvoiceRes.reply);
+  assert.strictEqual(sendDocSuccess, true, 'sendDocumentReply harus mengembalikan true');
+  assert(capturedDocPayload && capturedDocPayload.document, 'Payload socket harus berisi file document');
+  assert.strictEqual(capturedDocPayload.fileName, 'Faktur_Penjualan_700.pdf', 'Nama file pada Baileys payload harus sesuai');
+  assert.strictEqual(capturedDocPayload.mimetype, 'application/pdf', 'Mimetype harus application/pdf');
+  console.log('  ✓ 9C: Pengiriman Dokumen PDF via Baileys Socket terverifikasi sukses!');
+
+  console.log('✅ Test 8 & 9 PASSED: Product Swap & Native PDF Document Dispatch Bekerja Sempurna!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

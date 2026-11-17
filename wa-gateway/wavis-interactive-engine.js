@@ -7,6 +7,8 @@
  * 100% Native / Lokal tanpa ketergantungan API pihak ketiga.
  */
 
+const WavisPdfGenerator = require('./wavis-pdf-generator');
+
 function normalizeText(str) {
   return (str || '')
     .toLowerCase()
@@ -188,7 +190,7 @@ class WavisInteractiveEngine {
       const num = idx < 10 ? numberEmojis[idx] : `${idx + 1}.`;
       const pName = it.productName || 'PRODUK';
       const weightStr = it.weightKg ? ` (${Number(it.weightKg).toFixed(2)} kg)` : '';
-      const revisedTag = it._isRevised ? ' 🔄 *(DIREVISI)*' : '';
+      const revisedTag = it._isSwapped ? ' 🔄 *(DIGANTI)*' : (it._isRevised ? ' 🔄 *(DIREVISI)*' : '');
       
       const pcsPerKtn = getIsiKtn(it);
       const ktnVal = it.cartonCount || (pcsPerKtn ? Math.round(it.qty / pcsPerKtn * 10) / 10 : null);
@@ -233,15 +235,20 @@ class WavisInteractiveEngine {
 
   /**
    * Klasifikasi Maksud Chat (Intent Recognition Lokal)
-   * Mendukung query piutang, stok, faktur/invoice, revisi PO, sapaan/menu, dan fallback cerdas.
+   * Mendukung query piutang, stok, faktur/invoice, revisi PO, kirim file PDF, sapaan/menu, dan fallback cerdas.
    */
   classifyIntent(text, products = []) {
     const clean = normalizeText(text);
     if (!clean) return 'UNKNOWN';
 
-    // 1. Cek Pola Tanya Piutang
+    const isPdfRequest = /\b(?:file\s*pdf|format\s*pdf|dokumen\s*pdf|cetak\s*pdf|unduh\s*pdf|download\s*pdf|pdf)\b/i.test(clean);
+
+    // 1. Cek Pola Tanya Piutang / Minta File Dokumen PDF Piutang
     const piutangPattern = /\b(piutang|utang|bon|tagihan|sisa tagihan|sisa piutang|belum bayar)\b/i;
     if (piutangPattern.test(clean)) {
+      if (isPdfRequest) {
+        return 'SEND_PDF_RECEIVABLES';
+      }
       return 'QUERY_RECEIVABLES';
     }
 
@@ -261,19 +268,22 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 3. Cek Pola Query Faktur / Invoice
-    const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
-    if (invoicePattern.test(clean)) {
-      if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit)\b/i.test(clean)) {
-        return 'REVISE_PO';
-      }
-      return 'QUERY_INVOICE';
-    }
-
-    // 4. Cek Pola Revisi PO
-    const revisionPattern = /\b(revisi|ubah|ganti|tambah|kurang|batal|edit)\b.*?\b(po|order|pesanan|karton|ktn|dus|box|jadi|pcs)\b|\b(revisi|ubah|ganti)\s+po\b/i;
+    // 3. Cek Pola Revisi PO / Tukar Barang
+    const revisionPattern = /\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar)\b.*?\b(po|order|pesanan|karton|ktn|dus|box|jadi|pcs|pack|pak|bal|dengan|ke)\b|\b(revisi|ubah|ganti|tukar)\s+po\b|\b(?:di\s*ganti|di\s*tukar)\b/i;
     if (revisionPattern.test(clean)) {
       return 'REVISE_PO';
+    }
+
+    // 4. Cek Pola Query Faktur / Invoice atau Permintaan File Dokumen PDF Faktur
+    const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
+    if (invoicePattern.test(clean) || (isPdfRequest && /\b\d{2,6}\b/.test(clean))) {
+      if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar)\b/i.test(clean)) {
+        return 'REVISE_PO';
+      }
+      if (isPdfRequest) {
+        return 'SEND_PDF_INVOICE';
+      }
+      return 'QUERY_INVOICE';
     }
 
     // 5. Cek Pola Sapaan / Menu Bantuan / Pertanyaan Kemampuan AI
@@ -700,15 +710,16 @@ class WavisInteractiveEngine {
     resText += `*LAYANAN YANG BISA SAYA PROSES OTOMATIS:*\n`;
     resText += `📝 *1. Buat Pesanan Baru (PO)*\n`;
     resText += `   ↳ Langsung kirim list order toko di sini, draft faktur akan langsung dibuatkan otomatis & masuk antrean kasir.\n\n`;
-    resText += `💳 *2. Cek Kartu Piutang Toko*\n`;
-    resText += `   ↳ Ketik: \`piutang [nama toko]\` (contoh: *piutang AFM* atau *piutang SJJ*).\n\n`;
+    resText += `💳 *2. Cek Kartu Piutang / Unduh PDF Piutang*\n`;
+    resText += `   ↳ Ketik: \`piutang [nama toko]\` atau \`kirimkan file pdf piutang [nama toko]\`.\n\n`;
     resText += `📦 *3. Cek Stok Barang Gudang*\n`;
     resText += `   ↳ Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst mini*)\n`;
     resText += `   ↳ Atau ketik: \`stok keseluruhan\` untuk melihat rekap total gudang.\n\n`;
     resText += `🔄 *4. Revisi PO (Khusus Status PENDING)*\n`;
-    resText += `   ↳ Quote/balas pesanan dengan: \`revisi PO [nama barang] jadi [jumlah] karton\`.\n\n`;
-    resText += `📄 *5. Cek Rincian Faktur / Invoice*\n`;
-    resText += `   ↳ Ketik: \`faktur [nomor]\` (contoh: *faktur 697* atau *kirimkan data PO nomor invoice 697*).\n\n`;
+    resText += `   ↳ Quote/balas pesanan dengan: \`revisi PO [nama barang] jadi [jumlah] karton\`\n`;
+    resText += `   ↳ Atau tukar barang: \`revisi [nama barang] di ganti [barang baru] [jumlah] karton\`.\n\n`;
+    resText += `📄 *5. Cek Rincian Faktur / Invoice (Unduh Dokumen PDF)*\n`;
+    resText += `   ↳ Ketik: \`faktur [nomor]\` atau \`kirimkan file pdf PO nomor [nomor]\`.\n\n`;
     resText += `────────────────────────────\n`;
     resText += `Ada hal operasional yang ingin dicek hari ini ${senderName}? Silakan ketik langsung ya! Untuk pesan pribadi, Admin akan tetap membalas segera setelah aktif kembali. 😊`;
 
@@ -971,88 +982,259 @@ class WavisInteractiveEngine {
       return `⚠️ Faktur #${targetInvNo} tidak memiliki daftar barang yang dapat direvisi.`;
     }
 
-    // Ekstrak kuantiti karton baru
-    let newCartonQty = null;
-    const m1 = text.match(/(?:jadi|menjadi|ganti|ubah|revisi)\s*(\d+)/i);
-    if (m1) {
-      newCartonQty = parseInt(m1[1], 10);
-    } else {
-      const m2 = text.match(/(\d+)\s*(?:karton|ktn|dus|box|bal|ball)\b/i);
-      if (m2) newCartonQty = parseInt(m2[1], 10);
-    }
+    // Cek apakah revisi ini merupakan penukaran / penggantian barang (Product Substitution)
+    // Contoh: "revisi beres merah di ganti sosis cocktail 2 karton"
+    // Contoh: "ganti brs merah jadi sosis cocktail 2 ktn"
+    // Contoh: "tukar rollade sapi dengan bratwurst 3 karton"
+    const swapKeywordsRegex = /\b(?:di\s*ganti\s*(?:ke|jadi|menjadi|dengan)?|ganti\s*(?:ke|jadi|menjadi|dengan)?|di\s*tukar\s*(?:ke|jadi|menjadi|dengan)?|tukar\s*(?:ke|jadi|menjadi|dengan)?)\b/i;
+    const isSwapCandidate = swapKeywordsRegex.test(clean);
+    let isProductSwap = false;
+    let swapOldText = '';
+    let swapNewText = '';
+    let swapNewProdQuery = '';
+    let swapQty = null;
 
-    if (!newCartonQty || newCartonQty <= 0) {
-      return `🤖 *[L-W.A.V.I.S]*\n` +
-        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Halo ${senderName}! Jumlah karton baru belum terdeteksi dengan jelas pada Faktur #${targetInvNo}.\n\n` +
-        `💡 *Contoh format:* \`revisi PO brs merah jadi 35 karton\``;
-    }
+    if (isSwapCandidate) {
+      const swapParts = clean.split(swapKeywordsRegex);
+      if (swapParts.length >= 2) {
+        swapOldText = swapParts[0]
+          .replace(/\b(revisi|ubah|tolong|minta|po|faktur|invoice|\d+|karton|ktn|dus|box)\b/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
 
-    // Cocokkan produk yang ingin diubah di dalam items
-    const queryProdText = clean
-      .replace(/\b(revisi|ubah|ganti|tambah|kurang|edit|batal|po|faktur|invoice|jadi|menjadi|karton|ktn|dus|box|pcs|pack|pak|\d+)\b/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+        swapNewText = swapParts.slice(1).join(' ').trim();
+        const qtyMatch = swapNewText.match(/(?:^|\s)(\d+)\s*(?:karton|ktn|dus|box|bal|ball|pcs|pack|pak)?(?:\s|$)/i);
+        if (qtyMatch) {
+          swapQty = parseInt(qtyMatch[1], 10);
+        }
+
+        swapNewProdQuery = swapNewText
+          .replace(/\b(jadi|menjadi|ke|dengan|karton|ktn|dus|box|bal|ball|pcs|pack|pak|\d+)\b/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (swapNewProdQuery.length >= 2 && /[a-z]/i.test(swapNewProdQuery) && swapOldText.length >= 2) {
+          isProductSwap = true;
+        }
+      }
+    }
 
     let matchedItemIndex = -1;
     let maxItemScore = 0;
-    const prodWords = queryProdText.split(/\s+/).filter(w => w.length >= 2);
+    let targetOldItem = null;
+    let targetNewProduct = null;
+    let newPricing = null;
+    let newCartonQty = 0;
+    let oldItemName = '';
+    let newProductName = '';
+    let revisionNote = '';
 
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      const itName = normalizeText(it.productName || '');
-      let score = 0;
-      for (const pw of prodWords) {
-        const pwNorm = pw.replace(/^beres$/, 'brs').replace(/^brs$/, 'beres');
-        if (itName.includes(pw) || itName.includes(pwNorm)) {
-          score += 5;
+    if (isProductSwap) {
+      // A. SUB-ALUR 1: PENGGANTIAN PRODUK (SWAP / SUBSTITUTION)
+      const oldWords = swapOldText.split(/\s+/).filter(w => w.length >= 2);
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const itName = normalizeText(it.productName || '');
+        let score = 0;
+        for (const pw of oldWords) {
+          const pwNorm = pw.replace(/^beres$/, 'brs').replace(/^brs$/, 'beres');
+          if (itName.includes(pw) || itName.includes(pwNorm)) {
+            score += 5;
+          }
+        }
+        if (score > maxItemScore && score >= 5) {
+          maxItemScore = score;
+          matchedItemIndex = i;
         }
       }
-      if (score > maxItemScore && score >= 5) {
-        maxItemScore = score;
-        matchedItemIndex = i;
+
+      if (matchedItemIndex === -1) {
+        const currentItemList = items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n');
+        return `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Barang yang ingin diganti (*${swapOldText}*) tidak ditemukan di Faktur *#${targetInvNo}*.\n\n` +
+          `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
+          `💡 *Contoh format:* \`revisi ${items[0]?.productName || 'barang'} di ganti ${swapNewProdQuery} ${swapQty || 2} karton\``;
       }
+
+      targetOldItem = items[matchedItemIndex];
+      oldItemName = targetOldItem.productName || 'PRODUK LAMA';
+
+      // Cari produk pengganti di history customer & katalog master
+      let customerHistory = [];
+      if (invData.customerId && this.firebaseAdapter?.getCustomerProductMemory) {
+        try {
+          customerHistory = await this.firebaseAdapter.getCustomerProductMemory(invData.customerId);
+        } catch (_) {}
+      }
+
+      if (customerHistory.length > 0 && this.autoPoProcessor?.matchProductFromHistory) {
+        const histMatch = this.autoPoProcessor.matchProductFromHistory(swapNewProdQuery, customerHistory);
+        if (histMatch) {
+          newPricing = histMatch;
+          targetNewProduct = products.find(p =>
+            (histMatch.productId && p.id === histMatch.productId) ||
+            (histMatch.productName && (p.productName === histMatch.productName || p.name === histMatch.productName))
+          );
+        }
+      }
+
+      if (!targetNewProduct) {
+        targetNewProduct = this.matchProductFromQuery(swapNewProdQuery, products);
+      }
+
+      if (!targetNewProduct && products.length > 0) {
+        const cleanNew = normalizeText(swapNewProdQuery);
+        targetNewProduct = products.find(p => {
+          const pName = normalizeText(p.productName || p.name || '');
+          return pName.includes(cleanNew) || cleanNew.split(/\s+/).every(w => pName.includes(w));
+        });
+      }
+
+      if (!targetNewProduct) {
+        return `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Produk pengganti (*${swapNewProdQuery}*) tidak ditemukan dalam katalog master produk.\n\n` +
+          `Mohon periksa kembali penulisan nama produk penggantinya ya. 😊`;
+      }
+
+      newCartonQty = (swapQty && swapQty > 0) ? swapQty : (targetOldItem.cartonCount || 1);
+      const pcsPerKtn = Number(targetNewProduct.isiKarton) || 15;
+      const newQtyPcs = newCartonQty * pcsPerKtn;
+
+      let unitPrice = Number(targetNewProduct.price) || 0;
+      let discPct = 0;
+      let discAmt = 0;
+
+      if (newPricing && newPricing.price > 0) {
+        unitPrice = newPricing.price;
+        discPct = newPricing.discountPercent || 0;
+        discAmt = newPricing.discountAmount || 0;
+      } else if (invData.customerId && this.firebaseAdapter?.getLastCustomerProductPricing) {
+        try {
+          const lastPrc = await this.firebaseAdapter.getLastCustomerProductPricing(
+            invData.customerId,
+            targetNewProduct.id,
+            targetNewProduct.productName || targetNewProduct.name
+          );
+          if (lastPrc && lastPrc.price > 0) {
+            unitPrice = lastPrc.price;
+            discPct = lastPrc.discountPercent || 0;
+            discAmt = lastPrc.discountAmount || 0;
+          }
+        } catch (_) {}
+      }
+
+      const grossTotal = newQtyPcs * unitPrice;
+      const calcDiscAmt = discPct > 0 ? (grossTotal * discPct / 100) : (discAmt > 0 ? discAmt : 0);
+      const newSubtotal = Math.round(grossTotal - calcDiscAmt);
+
+      newProductName = targetNewProduct.productName || targetNewProduct.name || 'PRODUK';
+      const sizeGrams = Number(targetNewProduct.sizeGrams) || 500;
+      const weightKg = Math.round(newQtyPcs * sizeGrams / 1000 * 100) / 100;
+
+      const swappedItem = {
+        productId: targetNewProduct.id || '',
+        productName: newProductName,
+        price: unitPrice,
+        qty: newQtyPcs,
+        isiKarton: pcsPerKtn,
+        cartonCount: newCartonQty,
+        discountPercent: discPct,
+        discountAmount: discAmt,
+        subtotal: newSubtotal,
+        sizeGrams: sizeGrams,
+        weightKg: weightKg,
+        isBonus: false,
+        _isRevised: true,
+        _isSwapped: true,
+        _oldProductName: oldItemName
+      };
+
+      items[matchedItemIndex] = swappedItem;
+      revisionNote = `Revisi WA L-W.A.V.I.S: Ganti ${oldItemName} -> ${newProductName} (${newCartonQty} ktn)`;
+    } else {
+      // B. SUB-ALUR 2: REVISI KUANTITI PRODUK YANG SAMA
+      const m1 = text.match(/(?:jadi|menjadi|ganti|ubah|revisi)\s*(\d+)/i);
+      if (m1) {
+        newCartonQty = parseInt(m1[1], 10);
+      } else {
+        const m2 = text.match(/(\d+)\s*(?:karton|ktn|dus|box|bal|ball)\b/i);
+        if (m2) newCartonQty = parseInt(m2[1], 10);
+      }
+
+      if (!newCartonQty || newCartonQty <= 0) {
+        return `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Jumlah karton baru belum terdeteksi dengan jelas pada Faktur #${targetInvNo}.\n\n` +
+          `💡 *Contoh format:* \`revisi PO brs merah jadi 35 karton\``;
+      }
+
+      const queryProdText = clean
+        .replace(/\b(revisi|ubah|ganti|tambah|kurang|edit|batal|po|faktur|invoice|jadi|menjadi|karton|ktn|dus|box|pcs|pack|pak|\d+)\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const prodWords = queryProdText.split(/\s+/).filter(w => w.length >= 2);
+
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const itName = normalizeText(it.productName || '');
+        let score = 0;
+        for (const pw of prodWords) {
+          const pwNorm = pw.replace(/^beres$/, 'brs').replace(/^brs$/, 'beres');
+          if (itName.includes(pw) || itName.includes(pwNorm)) {
+            score += 5;
+          }
+        }
+        if (score > maxItemScore && score >= 5) {
+          maxItemScore = score;
+          matchedItemIndex = i;
+        }
+      }
+
+      if (matchedItemIndex === -1) {
+        const currentItemList = items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n');
+        return `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Barang yang ingin direvisi pada Faktur *#${targetInvNo}* tidak cocok dengan daftar faktur saat ini.\n\n` +
+          `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
+          `💡 *Contoh:* \`revisi PO brs merah jadi ${newCartonQty} karton\``;
+      }
+
+      const targetItem = { ...items[matchedItemIndex] };
+      const getIsiKtn = (it) => {
+        if (typeof it.isiKarton === 'number' && it.isiKarton > 0) return it.isiKarton;
+        const found = products.find(p => (it.productId && p.id === it.productId) || (it.productName && (p.productName === it.productName || p.name === it.productName)));
+        if (found && found.isiKarton) return Number(found.isiKarton);
+        if (it.cartonCount > 0 && it.qty > 0) return Math.round(it.qty / it.cartonCount);
+        return 15;
+      };
+
+      const isiKtn = getIsiKtn(targetItem);
+      const newQtyPcs = newCartonQty * isiKtn;
+      const unitPrice = Number(targetItem.price) || 0;
+      const discPct = Number(targetItem.discountPercent) || 0;
+      const discAmt = Number(targetItem.discountAmount) || 0;
+      const grossTotal = newQtyPcs * unitPrice;
+      const calcDiscAmt = discPct > 0 ? (grossTotal * discPct / 100) : (discAmt > 0 ? discAmt : 0);
+      const newSubtotal = Math.round(grossTotal - calcDiscAmt);
+
+      targetItem.cartonCount = newCartonQty;
+      targetItem.qty = newQtyPcs;
+      targetItem.subtotal = newSubtotal;
+      if (targetItem.sizeGrams) {
+        targetItem.weightKg = (newQtyPcs * Number(targetItem.sizeGrams)) / 1000;
+      }
+      targetItem._isRevised = true;
+
+      items[matchedItemIndex] = targetItem;
+      revisionNote = `Revisi WA L-W.A.V.I.S: ${targetItem.productName} -> ${newCartonQty} ktn`;
     }
-
-    if (matchedItemIndex === -1) {
-      const currentItemList = items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n');
-      return `🤖 *[L-W.A.V.I.S]*\n` +
-        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Halo ${senderName}! Barang yang ingin direvisi pada Faktur *#${targetInvNo}* tidak cocok dengan daftar faktur saat ini.\n\n` +
-        `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
-        `💡 *Contoh:* \`revisi PO brs merah jadi ${newCartonQty} karton\``;
-    }
-
-    // Update item yang cocok
-    const targetItem = { ...items[matchedItemIndex] };
-    const getIsiKtn = (it) => {
-      if (typeof it.isiKarton === 'number' && it.isiKarton > 0) return it.isiKarton;
-      const found = products.find(p => (it.productId && p.id === it.productId) || (it.productName && (p.productName === it.productName || p.name === it.productName)));
-      if (found && found.isiKarton) return Number(found.isiKarton);
-      if (it.cartonCount > 0 && it.qty > 0) return Math.round(it.qty / it.cartonCount);
-      return 15;
-    };
-
-    const isiKtn = getIsiKtn(targetItem);
-    const newQtyPcs = newCartonQty * isiKtn;
-    const unitPrice = Number(targetItem.price) || 0;
-    const discPct = Number(targetItem.discountPercent) || 0;
-    const discAmt = Number(targetItem.discountAmount) || 0;
-    const grossTotal = newQtyPcs * unitPrice;
-    const calcDiscAmt = discPct > 0 ? (grossTotal * discPct / 100) : (discAmt > 0 ? discAmt : 0);
-    const newSubtotal = Math.round(grossTotal - calcDiscAmt);
-
-    targetItem.cartonCount = newCartonQty;
-    targetItem.qty = newQtyPcs;
-    targetItem.subtotal = newSubtotal;
-    if (targetItem.sizeGrams) {
-      targetItem.weightKg = (newQtyPcs * Number(targetItem.sizeGrams)) / 1000;
-    }
-    targetItem._isRevised = true;
-
-    items[matchedItemIndex] = targetItem;
 
     // Hitung ulang grand total invoice
     let newGrandTotal = 0;
@@ -1066,10 +1248,11 @@ class WavisInteractiveEngine {
     const cleanItemsForDb = items.map(it => {
       const c = { ...it };
       delete c._isRevised;
+      delete c._isSwapped;
+      delete c._oldProductName;
       return c;
     });
 
-    const revisionNote = `Revisi WA L-W.A.V.I.S: ${targetItem.productName} -> ${newCartonQty} ktn`;
     const existingNote = invData.note ? invData.note.trim() : '';
     const updatedNote = existingNote ? `${existingNote} | ${revisionNote}` : revisionNote;
 
@@ -1121,17 +1304,290 @@ class WavisInteractiveEngine {
     resText += `📝 *1. Buat Pesanan Baru (PO)*\n`;
     resText += `   ↳ Kirimkan rincian order toko di sini untuk langsung dibuatkan draft faktur.\n\n`;
     resText += `🔄 *2. Revisi PO (Khusus Status PENDING)*\n`;
-    resText += `   ↳ Quote/balas pesanan dengan: \`revisi PO [nama barang] jadi [jumlah] karton\`.\n\n`;
-    resText += `💳 *3. Cek Kartu Piutang Toko*\n`;
-    resText += `   ↳ Ketik: \`piutang [nama toko]\` (contoh: *piutang AFM* atau *piutang SJJ*).\n\n`;
+    resText += `   ↳ Quote/balas pesanan dengan: \`revisi PO [nama barang] jadi [jumlah] karton\` atau tukar barang: \`revisi [nama lama] di ganti [nama baru] [jumlah] karton\`.\n\n`;
+    resText += `💳 *3. Cek Kartu Piutang & Dokumen PDF Piutang*\n`;
+    resText += `   ↳ Ketik: \`piutang [nama toko]\` atau \`kirimkan file pdf piutang [nama toko]\`.\n\n`;
     resText += `📦 *4. Cek Stok Fisik Gudang*\n`;
     resText += `   ↳ Ketik: \`stok [nama barang]\` (contoh: *stok bratwurst*) atau \`stok keseluruhan\`.\n\n`;
-    resText += `📄 *5. Cek Rincian Faktur / Invoice*\n`;
-    resText += `   ↳ Ketik: \`faktur [nomor]\` (contoh: *faktur 699* atau *invoice #693*).\n\n`;
+    resText += `📄 *5. Cek Rincian Faktur / Invoice (Unduh Dokumen PDF)*\n`;
+    resText += `   ↳ Ketik: \`faktur [nomor]\` atau \`kirimkan file pdf PO nomor [nomor]\`.\n\n`;
     resText += `────────────────────────────\n`;
     resText += `Untuk hal-hal di luar 5 layanan otomatis di atas atau pesan personal untuk Admin, beliau akan membalas segera setelah aktif kembali ya! 😊`;
 
     return resText;
+  }
+
+  /**
+   * Membuat dan Mengirimkan File PDF Faktur Penjualan Resmi
+   */
+  async handleSendPdfInvoice(text, senderName = 'Kak', payload = null) {
+    const clean = normalizeText(text);
+    const regexPrefix = /(?:faktur|invoice|nota|po|nomor|nomer|#)\s*[:#.]?\s*([a-zA-Z]{1,3}\d{1,6})\b/i;
+    const regexDistance = /(?:faktur|invoice|nota|po).*?\b(\d{2,8})\b/i;
+    const regexAnyNumber = /\b(\d{2,8})\b/;
+    const match = clean.match(regexPrefix) || clean.match(regexDistance) || clean.match(regexAnyNumber);
+
+    let invNo = match && match[1] ? match[1].replace(/^[#]/, '').trim() : null;
+
+    if (!invNo && payload && payload.quotedMessageText) {
+      const qMatch = payload.quotedMessageText.match(/(?:invoice|faktur|nota|po|#)\s*[:#.]?\s*(\d{2,6})/i);
+      if (qMatch) invNo = qMatch[1];
+    }
+
+    if (!invNo) {
+      return {
+        reply: `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Untuk mengirimkan file dokumen PDF faktur, mohon sebutkan nomor fakturnya ya. 😊\n\n` +
+          `💡 *Contoh:* ketik \`kirimkan file pdf PO nomor 700\` atau \`pdf faktur 697\`.`
+      };
+    }
+
+    try {
+      const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
+      let invData = null;
+
+      if (!db && this.mockInvoices) {
+        invData = this.mockInvoices[invNo] || null;
+      }
+
+      if (!invData && db && this.firebaseAdapter?.mode === 'admin') {
+        const snap = await db.collection('transactions').doc(invNo).get();
+        if (snap.exists) {
+          invData = snap.data();
+        } else {
+          const qSnap = await db.collection('transactions').where('invoiceNo', '==', invNo).limit(1).get();
+          if (!qSnap.empty) invData = qSnap.docs[0].data();
+        }
+      } else if (!invData && db && this.firebaseAdapter?.clientSdk) {
+        const { doc, getDoc, collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
+        const snap = await getDoc(doc(db, 'transactions', invNo));
+        if (snap.exists()) {
+          invData = snap.data();
+        } else {
+          const qSnap = await getDocs(query(collection(db, 'transactions'), where('invoiceNo', '==', invNo), limit(1)));
+          if (!qSnap.empty) invData = qSnap.docs[0].data();
+        }
+      }
+
+      if (!invData) {
+        return {
+          reply: `🤖 *[L-W.A.V.I.S]*\n` +
+            `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Halo ${senderName}! Data Faktur / Invoice *#${invNo}* tidak ditemukan di dalam sistem database. ❌\n\n` +
+            `Mohon periksa kembali nomor fakturnya ya! Jika butuh bantuan lebih lanjut, Admin akan siap membantu setelah aktif kembali. 😊`
+        };
+      }
+
+      if (!invData.invoiceNo) invData.invoiceNo = invNo;
+
+      const pdfBuffer = WavisPdfGenerator.generateInvoicePdf(invData);
+      const custDisplay = invData.aliasName ? `${invData.aliasName} (${invData.customerName})` : (invData.customerName || 'Pelanggan');
+
+      const caption = `📄 *[DOKUMEN RESMI FAKTUR PENJUALAN]*\n` +
+        `No. Invoice: #${invNo}\n` +
+        `Pelanggan: ${custDisplay}\n` +
+        `Grand Total: Rp ${Math.round(invData.grandTotal || 0).toLocaleString('id-ID')}\n` +
+        `Dibuat otomatis oleh L-W.A.V.I.S ✨`;
+
+      return {
+        reply: caption,
+        document: {
+          buffer: pdfBuffer,
+          mimetype: 'application/pdf',
+          fileName: `Faktur_Penjualan_${invNo}.pdf`,
+          caption: caption
+        }
+      };
+    } catch (err) {
+      console.error('[L-W.A.V.I.S SEND PDF INVOICE ERROR]', err.message);
+      return {
+        reply: `⚠️ Maaf ${senderName}, terjadi kendala saat membuat file dokumen PDF faktur #${invNo}: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Membuat dan Mengirimkan File PDF Kartu Piutang Resmi
+   */
+  async handleSendPdfReceivables(text, senderName = 'Kak') {
+    await this.autoPoProcessor.refreshCacheIfNeeded();
+    const customers = this.autoPoProcessor.cachedCustomers || [];
+    const matchedCustomer = this.matchCustomerFromQuery(text, customers);
+
+    if (!matchedCustomer) {
+      return {
+        reply: `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Untuk mengirimkan file dokumen PDF kartu piutang, mohon sebutkan nama toko / pelanggannya ya. 😊\n\n` +
+          `💡 *Contoh:* ketik \`kirimkan file pdf piutang AFM\` atau \`pdf piutang SJJ\`.`
+      };
+    }
+
+    const custName = matchedCustomer.customerName || 'PELANGGAN';
+    const alias = matchedCustomer.aliasName ? ` (${matchedCustomer.aliasName})` : '';
+
+    try {
+      const db = this.firebaseAdapter.db || this.firebaseAdapter.clientDb;
+      let allCustomerTransactions = [];
+
+      const queryCol = async (field, val) => {
+        if (!val) return [];
+        if (this.firebaseAdapter.mode === 'admin' && db) {
+          const snap = await db.collection('transactions').where(field, '==', val).get();
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } else if (this.firebaseAdapter.clientSdk && db) {
+          const { collection, query, where, getDocs } = this.firebaseAdapter.clientSdk;
+          const snap = await getDocs(query(collection(db, 'transactions'), where(field, '==', val)));
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        return [];
+      };
+
+      if (matchedCustomer.id) {
+        allCustomerTransactions = await queryCol('customerId', matchedCustomer.id);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.customerName) {
+        allCustomerTransactions = await queryCol('customerName', matchedCustomer.customerName);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.aliasName) {
+        allCustomerTransactions = await queryCol('aliasName', matchedCustomer.aliasName);
+      }
+
+      allCustomerTransactions.sort((a, b) => {
+        const getSec = (x) => {
+          if (!x) return 0;
+          if (x.date?._seconds) return x.date._seconds;
+          if (x.date?.toDate) return x.date.toDate().getTime() / 1000;
+          if (x.createdAt?._seconds) return x.createdAt._seconds;
+          return new Date(x.date || x.createdAt || 0).getTime() / 1000;
+        };
+        return getSec(b) - getSec(a);
+      });
+
+      const unpaidInvoices = allCustomerTransactions.filter(inv => {
+        const st = (inv.statusTransfer || '').toUpperCase();
+        return st !== 'PAID' && (Number(inv.grandTotal) || 0) > 0;
+      });
+
+      let totalDebt = 0;
+      unpaidInvoices.forEach(inv => {
+        const grand = Number(inv.grandTotal) || 0;
+        const paid = Number(inv.transferBankDetails?.totalPaid || inv.transferBankDetails?.amount || inv.paidAmount || 0);
+        totalDebt += Math.max(0, grand - paid);
+      });
+
+      let lastPayment = null;
+      for (const inv of allCustomerTransactions) {
+        const paid = Number(inv.transferBankDetails?.totalPaid || inv.transferBankDetails?.amount || inv.paidAmount || 0);
+        if (paid > 0) {
+          lastPayment = {
+            amount: paid,
+            date: inv.transferBankDetails?.rawDate || inv.transferBankDetails?.transferDate || inv.transferDate || inv.date,
+            bank: inv.transferBankDetails?.bank || ''
+          };
+          break;
+        }
+      }
+
+      const pdfData = {
+        customer: matchedCustomer,
+        unpaidInvoices,
+        allTransactions: allCustomerTransactions,
+        totalDebt,
+        lastPayment
+      };
+
+      const pdfBuffer = WavisPdfGenerator.generateReceivablesPdf(pdfData);
+      const safeAlias = (matchedCustomer.aliasName || matchedCustomer.customerName || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
+
+      const caption = `📊 *[DOKUMEN RESMI KARTU PIUTANG]*\n` +
+        `Pelanggan: ${custName}${alias}\n` +
+        `Total Sisa Piutang: Rp ${Math.round(totalDebt).toLocaleString('id-ID')}\n` +
+        `Faktur Belum Lunas: ${unpaidInvoices.length} Invoice\n` +
+        `Dibuat otomatis oleh L-W.A.V.I.S ✨`;
+
+      return {
+        reply: caption,
+        document: {
+          buffer: pdfBuffer,
+          mimetype: 'application/pdf',
+          fileName: `Kartu_Piutang_${safeAlias}.pdf`,
+          caption: caption
+        }
+      };
+    } catch (err) {
+      console.error('[L-W.A.V.I.S SEND PDF RECEIVABLES ERROR]', err.message);
+      return {
+        reply: `⚠️ Maaf ${senderName}, gagal membuat file PDF kartu piutang: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Kirim File Dokumen (PDF) WhatsApp via Baileys Socket
+   */
+  async sendDocumentReply(remoteJid, documentObj, caption = '', quotedMsg = null, senderPhone = null) {
+    if (!remoteJid || !documentObj || !documentObj.buffer) return false;
+    const sock = this.sockGetter ? this.sockGetter() : null;
+    if (!sock) {
+      console.warn('[L-W.A.V.I.S] ⚠️ Socket WhatsApp tidak terhubung. Kirim PDF dibatalkan.');
+      return false;
+    }
+
+    // STRICT: JANGAN PERNAH mengirim balasan interaktif bot ke grup WhatsApp (@g.us)!
+    if (remoteJid.endsWith('@g.us')) {
+      console.log(`[L-W.A.V.I.S SKIP] 🛑 Membatalkan pengiriman dokumen PDF ke grup WhatsApp (${remoteJid}).`);
+      return false;
+    }
+
+    const targetJid = remoteJid;
+
+    try {
+      try {
+        await sock.sendPresenceUpdate('composing', targetJid);
+        await new Promise(r => setTimeout(r, 1200));
+        await sock.sendPresenceUpdate('paused', targetJid);
+      } catch (_) {}
+
+      const options = {};
+      if (quotedMsg && typeof quotedMsg === 'object' && quotedMsg.key) {
+        options.quoted = quotedMsg;
+      }
+
+      const docPayload = {
+        document: documentObj.buffer,
+        mimetype: documentObj.mimetype || 'application/pdf',
+        fileName: documentObj.fileName || 'dokumen.pdf',
+        caption: caption || documentObj.caption || ''
+      };
+
+      const sentMsg = await sock.sendMessage(targetJid, docPayload, options);
+      console.log(`[L-W.A.V.I.S SUCCESS] 📄 File PDF "${docPayload.fileName}" berhasil dikirim ke ${targetJid}!`);
+
+      if (sentMsg && sentMsg.key && sentMsg.message && typeof this.rawMessageStore === 'function') {
+        const msgId = sentMsg.key.id;
+        this.rawMessageStore(targetJid, msgId, sentMsg.message);
+        if (remoteJid && remoteJid !== targetJid) {
+          this.rawMessageStore(remoteJid, msgId, sentMsg.message);
+        }
+        if (senderPhone) {
+          let cleanP = String(senderPhone).replace(/\D/g, '');
+          if (cleanP.startsWith('08')) cleanP = '628' + cleanP.slice(2);
+          if (cleanP) {
+            this.rawMessageStore(`${cleanP}@s.whatsapp.net`, msgId, sentMsg.message);
+          }
+        }
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[L-W.A.V.I.S SEND PDF ERROR]', err.message);
+      return false;
+    }
   }
 
   /**

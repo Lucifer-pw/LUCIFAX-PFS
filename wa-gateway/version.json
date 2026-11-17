@@ -1,15 +1,16 @@
 {
-  "gateway": "3.3.288",
+  "gateway": "3.3.289",
   "files": {
-    "server.js": "3.3.288",
+    "server.js": "3.3.289",
     "autonomous-po-processor.js": "3.3.281",
-    "wavis-interactive-engine.js": "3.3.288",
+    "wavis-interactive-engine.js": "3.3.289",
+    "wavis-pdf-generator.js": "3.3.289",
     "firebase-adapter.js": "3.3.282",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.282",
-    "update.sh": "3.3.278"
+    "update.sh": "3.3.289"
   },
   "updatedAt": "2026-11-17",
-  "changelog": "WAVIS AI Upgrade v3.3.288: Pembulatan nominal Rupiah utuh (Math.round) tanpa desimal sen, perapian UI responsif dialog Detail Invoice HP (header popup menu & full scroll), filter keamanan peran 3-tier (Kantor vs Umum), dan sinkronisasi rilis pubspec APK."
+  "changelog": "WAVIS AI Upgrade v3.3.289: Fitur Product Substitution / pergantian barang pada revisi PO (di ganti/tukar), generator dan pengiriman dokumen PDF resmi asli (Faktur Penjualan & Kartu Piutang) zero-dependency via WhatsApp Baileys, dan menu bantuan interaktif terpadu."
 }

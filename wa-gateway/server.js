@@ -447,8 +447,8 @@ async function flushMessageBuffer(bufferKey) {
 
     // 1. FILTER PRIVASI & KEAMANAN: JIKA KONTAK BERPERAN UMUM / ORANG LUAR (NON-KANTOR)
     if (!isOffice) {
-      // a) Jika mencoba tanya data perusahaan (Piutang, Stok Gudang, Faktur) -> TOLAK SECARA SOPAN!
-      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE'].includes(interactiveIntent)) {
+      // a) Jika mencoba tanya data perusahaan (Piutang, Stok Gudang, Faktur, Dokumen PDF) -> TOLAK SECARA SOPAN!
+      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES'].includes(interactiveIntent)) {
         setTimeout(async () => {
           try {
             const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -508,6 +508,32 @@ async function flushMessageBuffer(bufferKey) {
           await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
         } catch (err) {
           console.warn('[L-W.A.V.I.S INVOICE QUERY ERROR]', err.message);
+        }
+      }, 1000);
+    } else if (interactiveIntent === 'SEND_PDF_INVOICE') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handleSendPdfInvoice(combinedText, buf.senderName, chatPayload);
+          if (res && res.document) {
+            await wavisEngine.sendDocumentReply(buf.senderJid, res.document, res.reply, null, buf.senderPhone);
+          } else if (res && res.reply) {
+            await wavisEngine.sendReply(buf.senderJid, res.reply, null, buf.senderPhone);
+          }
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S SEND PDF INVOICE ERROR]', err.message);
+        }
+      }, 1000);
+    } else if (interactiveIntent === 'SEND_PDF_RECEIVABLES') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handleSendPdfReceivables(combinedText, buf.senderName);
+          if (res && res.document) {
+            await wavisEngine.sendDocumentReply(buf.senderJid, res.document, res.reply, null, buf.senderPhone);
+          } else if (res && res.reply) {
+            await wavisEngine.sendReply(buf.senderJid, res.reply, null, buf.senderPhone);
+          }
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S SEND PDF RECEIVABLES ERROR]', err.message);
         }
       }, 1000);
     } else if (interactiveIntent === 'REVISE_PO') {
