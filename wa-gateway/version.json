@@ -1,16 +1,16 @@
 {
-  "gateway": "3.3.291",
+  "gateway": "3.3.292",
   "files": {
     "server.js": "3.3.290",
     "autonomous-po-processor.js": "3.3.281",
     "wavis-interactive-engine.js": "3.3.291",
-    "wavis-pdf-generator.js": "3.3.291",
+    "wavis-pdf-generator.js": "3.3.292",
     "firebase-adapter.js": "3.3.282",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.282",
-    "update.sh": "3.3.291"
+    "update.sh": "3.3.292"
   },
   "updatedAt": "2026-11-17",
-  "changelog": "WAVIS AI Upgrade v3.3.291: Perbaikan rendering Logo Fiva asli pada PDF (resolving pure image & SMask binary stream), perbaikan margin teks Kepada (hanya nama alias toko) & wrapping Alamat 2-baris, serta pengosongan kolom Catatan transaksi kasir agar faktur tetap bersih (log revisi hanya di notif WA dan menu WA Gateway Auto-PO)."
+  "changelog": "WAVIS AI Upgrade v3.3.292: Perbaikan bug teks Alamat faktur PDF (menghapus duplikasi render yang menyebabkan kata TENGAH muncul 2 kali dan melebihi garis pembatas kotak kanan)."
 }

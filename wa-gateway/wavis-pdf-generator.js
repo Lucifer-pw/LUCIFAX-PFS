@@ -194,7 +194,6 @@ class WavisPdfGenerator {
       drawText('F2', 10.5, colonX, 708, ':');
       drawText('F1', 10.5, valX, 708, fullAddr);
     }
-    drawText('F1', 10.5, valX, 708, `${cleanCity}, ${cleanProv}`.substring(0, 22));
 
     // 2. SECTION TITLE BAR: INVOICE (Kotak Border Hitam 2px, Teks Bold Tengah Kapital)
     // x = 20, y = 664, w = 572, h = 24
