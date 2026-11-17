@@ -127,10 +127,52 @@ class WavisPdfGenerator {
     }
 
     const invoiceNo = String(inv.invoiceNo || inv.id || '000').replace(/^#/, '').trim();
-    // Kepada: Hanya nama alias toko (Persis Gambar 2 kasir: "AW FF")
+    // Helper estimasi lebar teks Helvetica (1000 units per em)
+    const charWidths = {
+      ' ': 278, '.': 278, ',': 278, '-': 333, ':': 278, '(': 333, ')': 333, '/': 278,
+      'A': 667, 'B': 667, 'C': 722, 'D': 722, 'E': 667, 'F': 611, 'G': 778, 'H': 722,
+      'I': 278, 'J': 500, 'K': 667, 'L': 556, 'M': 833, 'N': 722, 'O': 778, 'P': 667,
+      'Q': 778, 'R': 722, 'S': 667, 'T': 611, 'U': 722, 'V': 667, 'W': 944, 'X': 667,
+      'Y': 667, 'Z': 611, '0': 556, '1': 556, '2': 556, '3': 556, '4': 556, '5': 556,
+      '6': 556, '7': 556, '8': 556, '9': 556
+    };
+    function getTextWidth(str, size = 10.5) {
+      let total = 0;
+      for (const c of String(str || '').toUpperCase()) {
+        total += (charWidths[c] || 550);
+      }
+      return (total * size) / 1000;
+    }
+
+    // Helper wrap teks ke baris-baris jika melebihi batas lebar (maxWidthPt)
+    function wrapText(text, maxWidthPt = 106, size = 10.5) {
+      const words = String(text || '').trim().split(/\s+/);
+      if (words.length === 0 || words[0] === '') return ['-'];
+      const lines = [];
+      let currentLine = '';
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        if (getTextWidth(testLine, size) <= maxWidthPt) {
+          currentLine = testLine;
+        } else {
+          if (currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            lines.push(word);
+            currentLine = '';
+          }
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+      return lines;
+    }
+
+    // Kepada: Hanya nama alias toko (atau customer name)
     const custAlias = String(inv.aliasName || inv.customerName || 'Pelanggan').trim();
     const cleanCity = inv.city || 'SEMARANG';
     const cleanProv = inv.province || 'JAWA TENGAH';
+    const fullAddr = `${cleanCity}, ${cleanProv}`.trim();
 
     let delivDateStr = '-';
     if (inv.deliveryDate) {
@@ -140,66 +182,88 @@ class WavisPdfGenerator {
       } catch (_) {}
     }
 
-    // 1. TOP HEADER BOX (Kotak Border Hitam Solid 2px: Lebar 572 pt, Tinggi 82 pt)
-    // x = 20, y = 688, w = 572, h = 82
-    drawRect(20, 688, 572, 82, 2);
+    // Wrap Kepada dan Alamat secara otomatis jika nama/alamat terlalu panjang
+    const kepadaLines = wrapText(custAlias, 106, 10.5);
+    const alamatLines = wrapText(fullAddr, 106, 10.5);
+
+    // Hitung total baris metadata di kolom kanan (minimal 4 baris)
+    const totalRightLines = 1 + kepadaLines.length + 1 + alamatLines.length;
+    const lineStep = 13.5;
+
+    // Tinggi kotak header dinamis menyesuaikan isi (minimal 82 pt)
+    const headerBoxH = Math.max(82, 28 + (totalRightLines * lineStep));
+    const boxTop = 775;
+    const boxBottom = boxTop - headerBoxH;
+
+    // 1. TOP HEADER BOX (Kotak Border Hitam Solid 2px: Lebar 572 pt, Tinggi dinamis)
+    // x = 20, y = boxBottom, w = 572, h = headerBoxH
+    drawRect(20, boxBottom, 572, headerBoxH, 2);
 
     // Kiri: Logo Bulat Fiva + Identitas Perusahaan
+    const logoY = boxTop - 64;
     if (hasLogo) {
-      // Gambar image object /I11 berukuran 54 x 54 pt pada koordinat x = 26, y = 702
-      stream += `q 54 0 0 54 26 702 cm /I11 Do Q\n`;
+      // Gambar image object /I11 berukuran 54 x 54 pt pada koordinat x = 26
+      stream += `q 54 0 0 54 26 ${logoY} cm /I11 Do Q\n`;
     } else {
       // Vector circle fallback
-      drawRect(26, 702, 54, 54, 1.5, 0.8, 0.1, 0.1);
-      drawText('F2', 12, 36, 724, 'Fiva', 0.8, 0.1, 0.1);
+      drawRect(26, logoY, 54, 54, 1.5, 0.8, 0.1, 0.1);
+      drawText('F2', 12, 36, logoY + 22, 'Fiva', 0.8, 0.1, 0.1);
     }
 
-    // Teks Nama & Alamat Perusahaan (Persis Format Gambar 4)
-    drawText('F2', 12, 88, 748, 'FIVA SOLO FOOD & MEAT SUPPLY', 0, 0, 0);
-    drawText('F1', 8.5, 88, 734, 'JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412,', 0, 0, 0);
-    drawText('F1', 8.5, 88, 722, 'Tel: 021-8484308', 0, 0, 0);
-    drawText('F1', 8.5, 88, 710, 'Fax: 021-84972237', 0, 0, 0);
+    // Teks Nama & Alamat Perusahaan di Kiri (Font 8.2pt agar ada margin aman dengan kolom kanan)
+    drawText('F2', 12, 86, boxTop - 20, 'FIVA SOLO FOOD & MEAT SUPPLY', 0, 0, 0);
+    drawText('F1', 8.2, 86, boxTop - 34, 'JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi 17412,', 0, 0, 0);
+    drawText('F1', 8.2, 86, boxTop - 46, 'Tel: 021-8484308', 0, 0, 0);
+    drawText('F1', 8.2, 86, boxTop - 58, 'Fax: 021-84972237', 0, 0, 0);
 
     // Kanan: Metadata Faktur (No Invoice, Kepada, Tanggal Pengiriman, Alamat)
-    const labelX = 345;
-    const colonX = 450;
-    const valX = 458;
+    // labelX = 362 (ada jarak aman 24 pt dari Bekasi 17412 yang berakhir di x=338)
+    const labelX = 362;
+    const colonX = 468;
+    const valX = 475;
 
-    drawText('F2', 10.5, labelX, 750, 'No Invoice');
-    drawText('F2', 10.5, colonX, 750, ':');
-    drawText('F1', 10.5, valX, 750, invoiceNo); // Tanpa tanda #
+    let rightY = boxTop - 20;
 
-    drawText('F2', 10.5, labelX, 736, 'Kepada');
-    drawText('F2', 10.5, colonX, 736, ':');
-    drawText('F1', 10.5, valX, 736, custAlias); // Hanya Alias Toko (AW FF)
+    // 1. No Invoice
+    drawText('F2', 10.5, labelX, rightY, 'No Invoice');
+    drawText('F2', 10.5, colonX, rightY, ':');
+    drawText('F1', 10.5, valX, rightY, invoiceNo);
+    rightY -= lineStep;
 
-    drawText('F2', 10.5, labelX, 722, 'Tanggal Pengiriman');
-    drawText('F2', 10.5, colonX, 722, ':');
-    drawText('F1', 10.5, valX, 722, delivDateStr);
+    // 2. Kepada (Wrap otomatis jika panjang)
+    drawText('F2', 10.5, labelX, rightY, 'Kepada');
+    drawText('F2', 10.5, colonX, rightY, ':');
+    for (let i = 0; i < kepadaLines.length; i++) {
+      drawText('F1', 10.5, valX, rightY, kepadaLines[i]);
+      if (i < kepadaLines.length - 1) {
+        rightY -= lineStep;
+      }
+    }
+    rightY -= lineStep;
 
-    // Alamat: Jika panjang > 16 karakter, wrap ke baris kedua persis Gambar 2 kasir ("SEMARANG, JAWA" dan "TENGAH")
-    const fullAddr = `${cleanCity}, ${cleanProv}`.trim();
-    if (fullAddr.length > 16) {
-      let splitIdx = fullAddr.lastIndexOf(' ', 17);
-      if (splitIdx === -1) splitIdx = 17;
-      const addrLine1 = fullAddr.substring(0, splitIdx).trim();
-      const addrLine2 = fullAddr.substring(splitIdx).trim();
+    // 3. Tanggal Pengiriman
+    drawText('F2', 10.5, labelX, rightY, 'Tanggal Pengiriman');
+    drawText('F2', 10.5, colonX, rightY, ':');
+    drawText('F1', 10.5, valX, rightY, delivDateStr);
+    rightY -= lineStep;
 
-      drawText('F2', 10.5, labelX, 708, 'Alamat');
-      drawText('F2', 10.5, colonX, 708, ':');
-      drawText('F1', 10.5, valX, 708, addrLine1);
-      drawText('F1', 10.5, valX, 695, addrLine2);
-    } else {
-      drawText('F2', 10.5, labelX, 708, 'Alamat');
-      drawText('F2', 10.5, colonX, 708, ':');
-      drawText('F1', 10.5, valX, 708, fullAddr);
+    // 4. Alamat (Wrap otomatis jika panjang)
+    drawText('F2', 10.5, labelX, rightY, 'Alamat');
+    drawText('F2', 10.5, colonX, rightY, ':');
+    for (let i = 0; i < alamatLines.length; i++) {
+      drawText('F1', 10.5, valX, rightY, alamatLines[i]);
+      if (i < alamatLines.length - 1) {
+        rightY -= lineStep;
+      }
     }
 
     // 2. SECTION TITLE BAR: INVOICE (Kotak Border Hitam 2px, Teks Bold Tengah Kapital)
-    // x = 20, y = 664, w = 572, h = 24
-    drawRect(20, 664, 572, 24, 2);
+    const invoiceBarTop = boxBottom;
+    const invoiceBarH = 24;
+    const invoiceBarBottom = invoiceBarTop - invoiceBarH;
+    drawRect(20, invoiceBarBottom, 572, invoiceBarH, 2);
     const titleText = String(invoiceNo).toUpperCase().startsWith('LA') ? 'INVOICE LAMPIRAN' : 'INVOICE';
-    drawText('F2', 14, 268, 672, titleText, 0, 0, 0);
+    drawText('F2', 14, 268, invoiceBarBottom + 8, titleText, 0, 0, 0);
 
     // 3. TABLE GRID (FULL SOLID BLACK BORDER DENGAN 5 KOLOM PRESISI & 14 BARIS KOTAK)
     // x = 20, lebar total = 572 pt.
@@ -208,12 +272,12 @@ class WavisPdfGenerator {
     // Kolom 2 (HARGA): 85 pt       -> x: 330 s/d 415
     // Kolom 3 (DISKON): 75 pt      -> x: 415 s/d 490
     // Kolom 4 (SUB TOTAL): 102 pt  -> x: 490 s/d 592
-    const tableTop = 664;
+    const tableTop = invoiceBarBottom;
     const headerH = 18;
     const rowH = 17.5;
     const totalGridRows = 14;
     const tableH = headerH + (totalGridRows * rowH); // 18 + 245 = 263 pt
-    const tableBottom = tableTop - tableH; // 664 - 263 = 401 pt
+    const tableBottom = tableTop - tableH;
 
     // Border Luar Tabel 2px
     drawRect(20, tableBottom, 572, tableH, 2);
