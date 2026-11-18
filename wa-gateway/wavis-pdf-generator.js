@@ -484,9 +484,9 @@ class WavisPdfGenerator {
 
     // 1. Header Banner
     drawRect(40, 765, 515, 50, 0.008, 0.518, 0.780);
-    drawText('F2', 15, 55, 795, 'PT PANGAN PRIMA SUKSES (FIVA FROZEN FOOD)', 1, 1, 1);
-    drawText('F1', 9, 55, 781, 'DISTRIBUTION CENTER - Gedung Pacific Century Place Lt. 45, Jakarta Selatan', 0.9, 0.95, 1);
-    drawText('F3', 8, 55, 770, 'Sistem Penjualan & Distribusi Terpadu L-W.A.V.I.S', 0.85, 0.92, 0.98);
+    drawText('F2', 13.5, 55, 796, 'PT PUTRA FIVA SEJAHTERA (CABANG JAWA TENGAH)', 1, 1, 1);
+    drawText('F1', 8.2, 55, 782, 'JL. Pembangunan II No. 27 Jatibening I, Pondok Gede, Bekasi, Indonesia 17412, Tel: 021-8484308', 0.9, 0.95, 1);
+    drawText('F3', 7.5, 55, 771, 'Sistem Penjualan & Distribusi Terpadu L-W.A.V.I.S (L-Whatsapp Assistant Vision Interactive System)', 0.85, 0.92, 0.98);
 
     // 2. Judul Dokumen
     drawText('F2', 13, 40, 742, 'KARTU PIUTANG PELANGGAN', 0.06, 0.09, 0.16);
@@ -570,8 +570,8 @@ class WavisPdfGenerator {
     }
 
     // 6. Footer Dokumen
-    drawText('F3', 7.5, 40, 40, 'Dicetak otomatis oleh L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System) - PT Pangan Prima Sukses', 0.5, 0.55, 0.6);
-    drawText('F1', 7.5, 470, 40, `Tgl Cetak: ${tglStr}`, 0.5, 0.55, 0.6);
+    drawText('F3', 7.2, 40, 40, 'Dicetak otomatis oleh L-W.A.V.I.S (L-Whatsapp Assistant Vision Interactive System) - PT PUTRA FIVA SEJAHTERA (Jawa Tengah)', 0.5, 0.55, 0.6);
+    drawText('F1', 7.2, 485, 40, `Tgl Cetak: ${tglStr}`, 0.5, 0.55, 0.6);
 
     addObj(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
     addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
