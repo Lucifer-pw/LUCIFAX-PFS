@@ -552,5 +552,49 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 11 PASSED: Matriks Hak Akses & Keamanan (Kantor vs Umum) Terverifikasi 100%!');
 
+  // 12. UJI REVISI MULTI-ITEM (BATCH DELETION & BATCH QTY REVISION)
+  console.log('\n--- Test 12: Uji Revisi Multi-Item (Batch Deletion & Multi Qty) ---');
+  const inv700Test = {
+    invoiceNo: '700',
+    customerName: 'AW FF (AW FROZEN FOOD)',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    province: 'JAWA TENGAH',
+    status: 'PENDING',
+    items: [
+      { productName: 'BRS COKLAT 24S 2 500G', qty: 150, cartonCount: 10, price: 28234, subtotal: 4235100, isiKarton: 15 },
+      { productName: 'BRS COKLAT 13S 2 500G', qty: 450, cartonCount: 30, price: 27962, subtotal: 12582900, isiKarton: 15 },
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 75, cartonCount: 5, price: 27962, subtotal: 2097150, isiKarton: 15 }
+    ],
+    grandTotal: 18915150
+  };
+
+  // 12A. Hapus beberapa item sekaligus: "hapus item barang brs 13 dan brs 7"
+  const multiDelPayload = {
+    messageText: 'hapus item barang brs 13 dan brs 7',
+    mockInvoice: JSON.parse(JSON.stringify(inv700Test))
+  };
+  const multiDelRes = await engine.handlePoRevision(multiDelPayload, 'Rogue');
+  assert(multiDelRes.includes('BRS COKLAT 13S 2 500G dan BRS COKLAT 7S 2 500G* berhasil dihapus'), 'Harus menyebut kedua item yang dihapus');
+  assert(multiDelRes.includes('DAFTAR BARANG (1 Item):'), 'Harus tersisa 1 item');
+  assert(multiDelRes.includes('BRS COKLAT 24S 2 500G'), 'Item 24S harus tetap ada');
+  assert(multiDelRes.includes('GrandTotal Karton:* 10 Ktn'), 'Grand total karton harus 10 Ktn');
+  assert(multiDelRes.includes('GRAND TOTAL:* *Rp 4.235.100*'), 'Grand total uang harus Rp 4.235.100');
+  console.log('  ✓ 12A PASSED: Penghapusan multi-item ("hapus item barang brs 13 dan brs 7") berhasil menghapus kedua item dan menjaga item lainnya');
+
+  // 12B. Revisi Qty beberapa item sekaligus: "revisi brs 24 jadi 15 karton dan brs 13 jadi 20 karton"
+  const multiQtyPayload = {
+    messageText: 'revisi brs 24 jadi 15 karton dan brs 13 jadi 20 karton',
+    mockInvoice: JSON.parse(JSON.stringify(inv700Test))
+  };
+  const multiQtyRes = await engine.handlePoRevision(multiQtyPayload, 'Rogue');
+  assert(multiQtyRes.includes('15 Ktn (225 pcs)'), 'BRS 24S harus menjadi 15 Ktn');
+  assert(multiQtyRes.includes('20 Ktn (300 pcs)'), 'BRS 13S harus menjadi 20 Ktn');
+  assert(multiQtyRes.includes('GrandTotal Karton:* 40 Ktn'), 'Grand total karton harus 40 Ktn');
+  assert(multiQtyRes.includes('GRAND TOTAL:* *Rp 16.838.400*'), 'Grand total uang harus Rp 16.838.400');
+  console.log('  ✓ 12B PASSED: Revisi multi-qty ("revisi brs 24 jadi 15 karton dan brs 13 jadi 20 karton") berhasil memperbarui kedua item sekaligus');
+
+  console.log('✅ Test 12 PASSED: Dukungan Revisi Multi-Item (Batch Deletion & Multi Qty) Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();
