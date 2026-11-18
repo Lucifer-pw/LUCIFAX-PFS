@@ -3880,7 +3880,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       transactions: selectedList,
       products: productProvider.products,
     );
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final screenW = MediaQuery.of(context).size.width;
+    final screenH = MediaQuery.of(context).size.height;
+    final isMobile = screenW < 700;
 
     showDialog(
       context: context,
@@ -3891,50 +3893,161 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              contentPadding: EdgeInsets.all(isMobile ? 14 : 22),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.local_shipping_rounded, color: Color(0xFF10B981), size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Skim Muatan Kendaraan',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 24,
+                vertical: isMobile ? 12 : 20,
               ),
-              content: SizedBox(
-                width: isMobile ? double.maxFinite : 900,
-                height: isMobile ? (MediaQuery.of(context).size.height * 0.78) : 620,
-                child: Column(
+              contentPadding: EdgeInsets.fromLTRB(
+                isMobile ? 10 : 18,
+                isMobile ? 10 : 16,
+                isMobile ? 10 : 18,
+                isMobile ? 10 : 14,
+              ),
+              title: Padding(
+                padding: EdgeInsets.only(bottom: isMobile ? 2 : 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // ── 4 Metric Cards ──
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
+                    Row(
                       children: [
-                        _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981)),
-                        _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8)),
-                        _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24)),
-                        _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA)),
+                        Container(
+                          padding: EdgeInsets.all(isMobile ? 6 : 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.local_shipping_rounded,
+                            color: const Color(0xFF10B981),
+                            size: isMobile ? 18 : 22,
+                          ),
+                        ),
+                        SizedBox(width: isMobile ? 8 : 12),
+                        Text(
+                          'Skim Muatan Kendaraan',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isMobile ? 15 : 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 14),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: const Color(0xFF64748B),
+                        size: isMobile ? 20 : 24,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              content: SizedBox(
+                width: isMobile ? double.maxFinite : (screenW * 0.92).clamp(960.0, 1200.0),
+                height: isMobile ? (screenH * 0.93) : (screenH * 0.92).clamp(720.0, 920.0),
+                child: Column(
+                  children: [
+                    // ── 4 Metric Cards (Clean, Compact & Responsive) ──
+                    if (isMobile) ...[
+                      // Mobile: 2 Rows of 2 Cards
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '📦',
+                              'Total Karton',
+                              summary.grandTotalKartonStr,
+                              const Color(0xFF10B981),
+                              isMobile: true,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '🔢',
+                              'Total Qty',
+                              '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs',
+                              const Color(0xFF38BDF8),
+                              isMobile: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '⚖️',
+                              'Total Berat',
+                              '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg',
+                              const Color(0xFFFBBF24),
+                              isMobile: true,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '🏷️',
+                              'SKU Induk',
+                              '${summary.items.length} Macam',
+                              const Color(0xFFA78BFA),
+                              isMobile: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      // Website / Desktop: 1 Horizontal Row of 4 Cards
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '📦',
+                              'Total Karton',
+                              summary.grandTotalKartonStr,
+                              const Color(0xFF10B981),
+                              isMobile: false,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '🔢',
+                              'Total Qty',
+                              '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs',
+                              const Color(0xFF38BDF8),
+                              isMobile: false,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '⚖️',
+                              'Total Berat',
+                              '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg',
+                              const Color(0xFFFBBF24),
+                              isMobile: false,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              '🏷️',
+                              'SKU Induk',
+                              '${summary.items.length} Macam',
+                              const Color(0xFFA78BFA),
+                              isMobile: false,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    SizedBox(height: isMobile ? 6 : 8),
 
                     // ── Tab Bar ──
                     Container(
@@ -3948,7 +4061,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: GestureDetector(
                               onTap: () => setDialogState(() => tabIndex = 0),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: EdgeInsets.symmetric(vertical: isMobile ? 6 : 7),
                                 decoration: BoxDecoration(
                                   color: tabIndex == 0 ? const Color(0xFF10B981).withOpacity(0.2) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -3960,7 +4073,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     style: TextStyle(
                                       color: tabIndex == 0 ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                      fontSize: isMobile ? 11 : 12,
                                     ),
                                   ),
                                 ),
@@ -3971,7 +4084,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: GestureDetector(
                               onTap: () => setDialogState(() => tabIndex = 1),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: EdgeInsets.symmetric(vertical: isMobile ? 6 : 7),
                                 decoration: BoxDecoration(
                                   color: tabIndex == 1 ? const Color(0xFF38BDF8).withOpacity(0.2) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -3983,7 +4096,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     style: TextStyle(
                                       color: tabIndex == 1 ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                      fontSize: isMobile ? 11 : 12,
                                     ),
                                   ),
                                 ),
@@ -3993,7 +4106,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: isMobile ? 6 : 8),
 
                     // ── Tab Content ──
                     Expanded(
@@ -4002,53 +4115,109 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           : _buildLoadingDropPointTab(summary, isMobile),
                     ),
 
-                    const SizedBox(height: 10),
+                    SizedBox(height: isMobile ? 6 : 8),
 
                     // ── Action Buttons ──
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            final text = VehicleLoadingService.generateWhatsAppText(summary);
-                            Clipboard.setData(ClipboardData(text: text));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('📋 Rekap Muatan berhasil disalin ke clipboard! Paste di WhatsApp grup sopir/checker.'),
-                                backgroundColor: Color(0xFF10B981),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.black),
-                          label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            try {
-                              await VehicleLoadingService.printLoadingSheetPdf(summary);
-                            } catch (e) {
-                              if (context.mounted) {
+                    if (isMobile) ...[
+                      // Mobile: 1 Row with 2 Expanded Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                final text = VehicleLoadingService.generateWhatsAppText(summary);
+                                Clipboard.setData(ClipboardData(text: text));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Gagal cetak PDF: $e'), backgroundColor: Colors.red),
+                                  const SnackBar(
+                                    content: Text('📋 Rekap Muatan disalin ke clipboard!'),
+                                    backgroundColor: Color(0xFF10B981),
+                                  ),
                                 );
-                              }
-                            }
-                          },
-                          icon: const Icon(Icons.print_rounded, size: 16, color: Colors.black),
-                          label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF38BDF8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              },
+                              icon: const Icon(Icons.copy_rounded, size: 14, color: Colors.black),
+                              label: const Text(
+                                'Salin Format WA',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  await VehicleLoadingService.printLoadingSheetPdf(summary);
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Gagal cetak PDF: $e'), backgroundColor: Colors.red),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.print_rounded, size: 14, color: Colors.black),
+                              label: const Text(
+                                'Cetak PDF Surat Muat',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF38BDF8),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      // Desktop: Center-aligned Compact Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              final text = VehicleLoadingService.generateWhatsAppText(summary);
+                              Clipboard.setData(ClipboardData(text: text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('📋 Rekap Muatan berhasil disalin ke clipboard! Paste di WhatsApp grup sopir/checker.'),
+                                  backgroundColor: Color(0xFF10B981),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.copy_rounded, size: 15, color: Colors.black),
+                            label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                await VehicleLoadingService.printLoadingSheetPdf(summary);
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Gagal cetak PDF: $e'), backgroundColor: Colors.red),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.print_rounded, size: 15, color: Colors.black),
+                            label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38BDF8),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -4059,25 +4228,52 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
-  Widget _buildLoadingMetricCard(String emoji, String label, String value, Color accentColor) {
+  Widget _buildLoadingMetricCard(
+    String emoji,
+    String label,
+    String value,
+    Color accentColor, {
+    bool isMobile = false,
+  }) {
     return Container(
-      width: 190,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 8 : 10,
+        vertical: isMobile ? 5 : 7,
+      ),
       decoration: BoxDecoration(
         color: accentColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: accentColor.withOpacity(0.4)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
-              Text(value, style: TextStyle(color: accentColor, fontSize: 15, fontWeight: FontWeight.bold)),
-            ],
+          Text(emoji, style: TextStyle(fontSize: isMobile ? 16 : 18)),
+          SizedBox(width: isMobile ? 6 : 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: isMobile ? 8.5 : 9.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: isMobile ? 12.5 : 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -4089,24 +4285,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Scrollbar(
         thumbVisibility: true,
         child: SingleChildScrollView(
           scrollDirection: Axis.vertical,
-          padding: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.only(bottom: 6),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columnSpacing: 14,
-              horizontalMargin: 10,
-              headingRowHeight: 44,
-              dataRowMinHeight: 56,
-              dataRowMaxHeight: 80,
+              columnSpacing: isMobile ? 10 : 14,
+              horizontalMargin: isMobile ? 8 : 10,
+              headingRowHeight: 32,
+              dataRowMinHeight: 34,
+              dataRowMaxHeight: 46,
               headingRowColor: MaterialStateProperty.all(const Color(0xFF10B981).withOpacity(0.15)),
-              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
+              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
               columns: const [
                 DataColumn(label: Text('NO')),
                 DataColumn(label: Text('KODE INDUK')),
@@ -4127,10 +4323,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
                   ),
                   cells: [
-                    DataCell(Text('${idx + 1}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11))),
+                    DataCell(Text('${idx + 1}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5))),
                     DataCell(
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: const Color(0xFF10B981).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(4),
@@ -4138,38 +4334,38 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         ),
                         child: Text(
                           item.kodeInduk,
-                          style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
+                          style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
                         ),
                       ),
                     ),
                     DataCell(
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 200),
+                        constraints: BoxConstraints(maxWidth: isMobile ? 180 : 250),
                         child: Text(
                           item.canonicalProductName,
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
-                    DataCell(Text('${item.isiKarton}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11))),
+                    DataCell(Text('${item.isiKarton}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5))),
                     DataCell(
                       Text(
                         item.totalKartonFormatted,
-                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
+                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11.5),
                       ),
                     ),
-                    DataCell(Text(NumberFormat('#,##0', 'id_ID').format(item.totalQty), style: const TextStyle(color: Colors.white, fontSize: 11))),
-                    DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11))),
+                    DataCell(Text(NumberFormat('#,##0', 'id_ID').format(item.totalQty), style: const TextStyle(color: Colors.white, fontSize: 10.5))),
+                    DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 10.5))),
                     DataCell(
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 260),
+                        constraints: BoxConstraints(maxWidth: isMobile ? 260 : 480),
                         child: Wrap(
                           spacing: 4,
-                          runSpacing: 3,
+                          runSpacing: 2,
                           children: item.allocations.map((alloc) {
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF38BDF8).withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(4),
@@ -4211,11 +4407,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         }
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.all(isMobile ? 8 : 10),
           decoration: BoxDecoration(
             color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF334155)),
           ),
           child: Column(
@@ -4228,12 +4424,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   Flexible(
                     child: Row(
                       children: [
-                        const Icon(Icons.store_rounded, color: Color(0xFF38BDF8), size: 18),
-                        const SizedBox(width: 8),
+                        Icon(Icons.store_rounded, color: const Color(0xFF38BDF8), size: isMobile ? 16 : 18),
+                        const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             '#${inv.invoiceNo} - ${inv.customerName}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 12.5 : 13.5),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -4241,24 +4437,24 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF10B981).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       inv.totalKartonFormatted,
-                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: const Color(0xFF10B981), fontSize: isMobile ? 11 : 12, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 '📍 ${inv.city.toUpperCase()} • ${inv.itemCount} Item • ${inv.totalWeightKg.toStringAsFixed(1)} kg',
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
               ),
-              const Divider(color: Color(0xFF1E293B), height: 16),
+              const Divider(color: Color(0xFF1E293B), height: 12),
 
               // Items allocated to this invoice
               ...allocatedItems.asMap().entries.map((entry) {
@@ -4267,12 +4463,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 final alloc = entry.value.value;
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 22,
-                        child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                        width: 20,
+                        child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 9.5)),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -4287,19 +4483,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       Expanded(
                         child: Text(
                           alloc.originalItemName,
-                          style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                          style: TextStyle(color: Colors.white, fontSize: isMobile ? 11 : 11.5),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         alloc.kartonFormatted,
-                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11.5),
+                        style: TextStyle(color: const Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: isMobile ? 11 : 11.5),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       Text(
                         '(${alloc.qty.toInt()} pcs)',
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9.5),
                       ),
                     ],
                   ),
@@ -4311,8 +4507,6 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       },
     );
   }
-
-  // Create Merged Lampiran (LA) invoice dialog from selected source transactions
   void _showCreateLampiranDialog(List<model_tr.Transaction> selectedList) {
     if (selectedList.isEmpty) return;
 
