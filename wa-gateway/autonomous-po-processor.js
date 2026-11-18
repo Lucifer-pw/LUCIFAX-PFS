@@ -492,16 +492,16 @@ class AutonomousPoProcessor {
 
       // Size number disambiguation (13 vs 24 vs 7)
       if (queryHas13 && !queryHas24 && !queryHas7) {
-        if (hTokens.has('13') || hTokens.has('13s')) score += 15;
-        if (hTokens.has('24') || hTokens.has('24s') || hTokens.has('7') || hTokens.has('7s')) score -= 25;
+        if (hTokens.has('13') || hTokens.has('13s')) score += 25;
+        if (hTokens.has('24') || hTokens.has('24s') || hTokens.has('7') || hTokens.has('7s')) score -= 60;
       }
       if (queryHas24 && !queryHas13 && !queryHas7) {
-        if (hTokens.has('24') || hTokens.has('24s')) score += 15;
-        if (hTokens.has('13') || hTokens.has('13s') || hTokens.has('7') || hTokens.has('7s')) score -= 25;
+        if (hTokens.has('24') || hTokens.has('24s')) score += 25;
+        if (hTokens.has('13') || hTokens.has('13s') || hTokens.has('7') || hTokens.has('7s')) score -= 60;
       }
       if (queryHas7 && !queryHas13 && !queryHas24) {
-        if (hTokens.has('7') || hTokens.has('7s')) score += 15;
-        if (hTokens.has('24') || hTokens.has('24s') || hTokens.has('13') || hTokens.has('13s')) score -= 25;
+        if (hTokens.has('7') || hTokens.has('7s')) score += 25;
+        if (hTokens.has('24') || hTokens.has('24s') || hTokens.has('13') || hTokens.has('13s')) score -= 60;
       }
 
       // Gramatur / Size disambiguation (215 vs 250 vs 400 vs 500 vs 1000)

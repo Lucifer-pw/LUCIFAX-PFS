@@ -1,9 +1,9 @@
 {
-  "gateway": "3.3.296",
+  "gateway": "3.3.297",
   "files": {
     "server.js": "3.3.290",
-    "autonomous-po-processor.js": "3.3.281",
-    "wavis-interactive-engine.js": "3.3.296",
+    "autonomous-po-processor.js": "3.3.297",
+    "wavis-interactive-engine.js": "3.3.297",
     "wavis-pdf-generator.js": "3.3.293",
     "firebase-adapter.js": "3.3.282",
     "notification-dispatcher.js": "3.3.272",
@@ -12,5 +12,5 @@
     "update.sh": "3.3.295"
   },
   "updatedAt": "2026-11-18",
-  "changelog": "WAVIS AI Upgrade v3.3.296: Smart multi-line & block header parsing (revisi tambahan / hapus), unit conversion awareness (roll/pcs/pack vs karton), domain contrast scoring, and zero-NaN guard."
+  "changelog": "WAVIS AI Upgrade v3.3.297: Direct cartonCount derivation from Firestore qty, invoice-first item matching on revision add, and strict size number disambiguation (7s vs 13s vs 24s)."
 }

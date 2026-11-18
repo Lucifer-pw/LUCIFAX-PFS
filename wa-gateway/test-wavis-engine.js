@@ -623,8 +623,11 @@ engine.setRawMessageStore((jid, id, msg) => {
       ];
     },
     getLastCustomerProductPricing: async (customerId, prodId, prodName) => {
-      if (prodName && prodName.includes('24S')) {
+      if (prodName && prodName.includes('COKLAT 24S')) {
         return { price: 28234, discountPercent: 0, invoiceNo: '700' };
+      }
+      if (prodName && prodName.includes('MERAH')) {
+        return { price: 34549, discountPercent: 0, invoiceNo: '698' };
       }
       return null;
     }
@@ -760,6 +763,42 @@ engine.setRawMessageStore((jid, id, msg) => {
   console.log('  ✓ 14A PASSED: "revisi tambahan\\nbrs merah 15 karton\\nrolade ayam roll 250 roll" berhasil 100% tanpa NaN!');
 
   console.log('✅ Test 14 PASSED: Pola Percakapan WhatsApp Nyata & Unit Awareness Sempurna!');
+
+  // 15. UJI AKUMULASI KARTON PADA ITEM DARI FIRESTORE (KARTON COUNT SINKRON DENGAN QTY)
+  console.log('\n--- Test 15: Akumulasi Tambah Karton pada Item Tanpa Field cartonCount di Database ---');
+  const invFromDbWithoutCartonCount = {
+    invoiceNo: '700',
+    customerId: 'c-awff',
+    customerName: 'AW FF (AW FROZEN FOOD)',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    province: 'JAWA TENGAH',
+    status: 'PENDING',
+    items: [
+      { productName: 'BRS COKLAT 13S 2 500G', qty: 450, price: 27962, subtotal: 12582900, sizeGrams: 500 },
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 75, price: 27962, subtotal: 2097150, sizeGrams: 500 },
+      { productName: 'BRS COKLAT 24S 2 500G', qty: 150, price: 28234, subtotal: 4235100, sizeGrams: 500 }
+    ],
+    grandTotal: 18915150
+  };
+
+  const image5Payload = {
+    messageText: 'revisi tambah brs 7  5 karton\nganti brs 24 jadi brs merah 7 karton\nhapus brs 13',
+    mockInvoice: invFromDbWithoutCartonCount
+  };
+
+  const image5Res = await engine.handlePoRevision(image5Payload, 'Rogue');
+  console.log(image5Res);
+
+  assert(!image5Res.includes('BRS COKLAT 13S'), 'BRS COKLAT 13S harus terhapus');
+  assert(!image5Res.includes('5 Ktn (150 pcs)'), 'BRS COKLAT 7S TIDAK BOLEH salah menampilkan 5 Ktn (150 pcs)');
+  assert(image5Res.includes('10 Ktn (150 pcs)'), 'BRS COKLAT 7S harus menampilkan 10 Ktn (150 pcs)');
+  assert(image5Res.includes('7 Ktn (105 pcs)'), 'BRS MERAH 24S harus menampilkan 7 Ktn (105 pcs)');
+  assert(image5Res.includes('GrandTotal Karton:* 17 Ktn'), 'Grand total karton harus 17 Ktn (10 + 7)');
+  assert(image5Res.includes('GRAND TOTAL:* *Rp 7.821.945*'), 'Grand total rupiah harus tepat Rp 7.821.945');
+  console.log('  ✓ 15A PASSED: Akumulasi karton dari database sinkron 10 Ktn (150 pcs) & total 17 Ktn!');
+
+  console.log('✅ Test 15 PASSED: Sinkronisasi Karton dengan Qty Firestore Terverifikasi 100%!');
 
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

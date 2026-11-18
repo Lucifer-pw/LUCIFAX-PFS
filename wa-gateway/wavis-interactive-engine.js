@@ -160,15 +160,15 @@ class WavisInteractiveEngine {
       return 15;
     };
 
-    // Hitung total karton
+    // Hitung total karton (selaras dengan it.qty dan isiKarton)
     let totalCarton = 0;
     for (const it of items) {
-      if (typeof it.cartonCount === 'number' && it.cartonCount > 0) {
-        totalCarton += it.cartonCount;
-      } else {
-        const pcsPerKtn = getIsiKtn(it);
-        totalCarton += (it.qty || 0) / pcsPerKtn;
-      }
+      const pcsPerKtn = getIsiKtn(it);
+      const safeQty = (typeof it.qty === 'number' && !isNaN(it.qty)) ? it.qty : 0;
+      const ktn = (pcsPerKtn > 0 && safeQty > 0)
+        ? (safeQty / pcsPerKtn)
+        : ((typeof it.cartonCount === 'number' && !isNaN(it.cartonCount) && it.cartonCount > 0) ? it.cartonCount : 0);
+      totalCarton += ktn;
     }
 
     const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
@@ -193,8 +193,11 @@ class WavisInteractiveEngine {
       const revisedTag = it._isAdded ? ' ➕ *(DITAMBAHKAN)*' : (it._isSwapped ? ' 🔄 *(DIGANTI)*' : (it._isRevised ? ' 🔄 *(DIREVISI)*' : ''));
       
       const pcsPerKtn = getIsiKtn(it);
-      const ktnVal = it.cartonCount || (pcsPerKtn ? Math.round(it.qty / pcsPerKtn * 10) / 10 : null);
-      const ktnStr = ktnVal ? `${ktnVal} Ktn` : `${it.qty} pcs`;
+      const safeQty = (typeof it.qty === 'number' && !isNaN(it.qty)) ? it.qty : 0;
+      const ktnVal = (pcsPerKtn > 0 && safeQty > 0)
+        ? Math.round(safeQty / pcsPerKtn * 10) / 10
+        : ((typeof it.cartonCount === 'number' && !isNaN(it.cartonCount) && it.cartonCount > 0) ? it.cartonCount : null);
+      const ktnStr = ktnVal ? `${ktnVal} Ktn` : `${safeQty} pcs`;
       const priceStr = Math.round(it.price || 0).toLocaleString('id-ID');
       
       let discStr = ' | Disc: -';
@@ -207,7 +210,7 @@ class WavisInteractiveEngine {
       const subtotalStr = Math.round(it.subtotal || 0).toLocaleString('id-ID');
 
       text += `${num} *${pName}*${weightStr}${revisedTag}\n`;
-      text += `   ${ktnStr} (${it.qty} pcs) @${priceStr}${discStr} = *Rp ${subtotalStr}*\n\n`;
+      text += `   ${ktnStr} (${safeQty} pcs) @${priceStr}${discStr} = *Rp ${subtotalStr}*\n\n`;
     });
 
     text += `────────────────────\n`;
@@ -421,7 +424,7 @@ class WavisInteractiveEngine {
       .replace(/\s+/g, ' ')
       .trim()
       .split(/\s+/)
-      .filter(w => w.length >= 2);
+      .filter(w => w.length >= 2 || /^\d+$/.test(w));
 
     if (cleanWords.length === 0) return null;
 
@@ -429,6 +432,10 @@ class WavisInteractiveEngine {
     const qHasCoklat = cleanWords.includes('coklat') || cleanWords.includes('cklt');
     const qHasAyam = cleanWords.includes('ayam') || cleanWords.includes('ay');
     const qHasSapi = cleanWords.includes('sapi') || cleanWords.includes('sp');
+
+    const qHas7 = cleanWords.includes('7') || cleanWords.includes('7s');
+    const qHas13 = cleanWords.includes('13') || cleanWords.includes('13s');
+    const qHas24 = cleanWords.includes('24') || cleanWords.includes('24s');
 
     let best = null;
     let maxScore = 0;
@@ -460,6 +467,20 @@ class WavisInteractiveEngine {
       if (qHasSapi) {
         if (pWords.includes('sapi') || pName.includes('sapi')) score += 10;
         else if (pWords.includes('ayam') || pName.includes('ayam')) score -= 15;
+      }
+
+      // Size number contrast penalty & bonus (7 vs 13 vs 24)
+      if (qHas7) {
+        if (pWords.includes('7') || pWords.includes('7s') || pName.includes('7s') || /\b7s\b/i.test(pName)) score += 20;
+        if (pWords.includes('13') || pWords.includes('13s') || pWords.includes('24') || pWords.includes('24s') || pName.includes('13s') || pName.includes('24s')) score -= 30;
+      }
+      if (qHas13) {
+        if (pWords.includes('13') || pWords.includes('13s') || pName.includes('13s') || /\b13s\b/i.test(pName)) score += 20;
+        if (pWords.includes('7') || pWords.includes('7s') || pWords.includes('24') || pWords.includes('24s') || pName.includes('7s') || pName.includes('24s')) score -= 30;
+      }
+      if (qHas24) {
+        if (pWords.includes('24') || pWords.includes('24s') || pName.includes('24s') || /\b24s\b/i.test(pName)) score += 20;
+        if (pWords.includes('7') || pWords.includes('7s') || pWords.includes('13') || pWords.includes('13s') || pName.includes('7s') || pName.includes('13s')) score -= 30;
       }
 
       if (score > maxScore && score >= 5) {
@@ -1091,7 +1112,11 @@ class WavisInteractiveEngine {
             `Mohon periksa kembali penulisan nama produk penggantinya ya. 😊`;
         }
 
-        const newCartonQty = (act.qty && act.qty > 0) ? act.qty : (targetOldItem.cartonCount || 1);
+        const oldPcsPerKtn = Number(targetOldItem.isiKarton) || 15;
+        const oldCarton = (typeof targetOldItem.cartonCount === 'number' && targetOldItem.cartonCount > 0)
+          ? targetOldItem.cartonCount
+          : (targetOldItem.qty && oldPcsPerKtn > 0 ? Math.round(targetOldItem.qty / oldPcsPerKtn) : 1);
+        const newCartonQty = (act.qty && act.qty > 0) ? act.qty : oldCarton;
         const pcsPerKtn = Number(targetNewProduct.isiKarton) || 15;
         const newQtyPcs = newCartonQty * pcsPerKtn;
 
@@ -1214,8 +1239,14 @@ class WavisInteractiveEngine {
         let matchedProduct = null;
         let historyPricing = null;
 
+        // PRIORITAS 0: Cek apakah item sudah ada di faktur saat ini (Prioritas Utama Konteks Percakapan Revisi)
+        const existingInvoiceIdx = this.matchItemFromList(act.productQuery, items);
+        if (existingInvoiceIdx !== -1) {
+          matchedProduct = items[existingInvoiceIdx];
+        }
+
         // PRIORITAS 1: Cek Customer History (AI belajar dari kebiasaan customer AW FF)
-        if (customerHistory.length > 0 && this.autoPoProcessor?.matchProductFromHistory) {
+        if (!matchedProduct && customerHistory.length > 0 && this.autoPoProcessor?.matchProductFromHistory) {
           const histMatch = this.autoPoProcessor.matchProductFromHistory(act.productQuery, customerHistory);
           if (histMatch) {
             historyPricing = histMatch;
@@ -1342,7 +1373,10 @@ class WavisInteractiveEngine {
         if (existingIdx !== -1) {
           // Barang sudah ada di faktur: akumulasikan kuantitas
           const it = items[existingIdx];
-          it.cartonCount = (it.cartonCount || 0) + addCartonQty;
+          const existingCarton = (typeof it.cartonCount === 'number' && it.cartonCount > 0)
+            ? it.cartonCount
+            : (pcsPerKtn > 0 ? (it.qty / pcsPerKtn) : 0);
+          it.cartonCount = existingCarton + addCartonQty;
           it.qty = (it.qty || 0) + addQtyPcs;
           it.subtotal = (it.subtotal || 0) + addSubtotal;
           if (it.sizeGrams) {
@@ -1350,7 +1384,8 @@ class WavisInteractiveEngine {
           }
           it._isRevised = true;
           items[existingIdx] = it;
-          revisionLogs.push(`Tambah ${prodName} +${unitDisplay} (Total: ${it.cartonCount} ktn)`);
+          const totalUnitDisplay = (it.cartonCount % 1 === 0) ? `${it.cartonCount} ktn` : `${it.qty} pcs`;
+          revisionLogs.push(`Tambah ${prodName} +${unitDisplay} (Total: ${totalUnitDisplay})`);
         } else {
           // Barang baru: sisipkan ke faktur
           const newItem = {
