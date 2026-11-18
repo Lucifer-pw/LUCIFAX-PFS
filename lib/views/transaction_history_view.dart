@@ -26,6 +26,7 @@ import '../models/wa_contact.dart';
 import 'transaction_entry_view.dart';
 import 'return_transaction_dialog.dart';
 import 'yearly_shipment_chart_dialog.dart';
+import '../services/vehicle_loading_service.dart';
 
 class TransactionHistoryView extends StatefulWidget {
   const TransactionHistoryView({super.key});
@@ -3868,6 +3869,449 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
+  // ============================================================
+  // SKIM MUATAN KENDARAAN (Vehicle Loading Summary Dialog)
+  // ============================================================
+  void _showVehicleLoadingDialog(List<model_tr.Transaction> selectedList) {
+    if (selectedList.isEmpty) return;
+
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final summary = VehicleLoadingService.calculateLoadingSummary(
+      transactions: selectedList,
+      products: productProvider.products,
+    );
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        int tabIndex = 0; // 0 = Rekap Kode Induk, 1 = Per Invoice/Drop Point
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: EdgeInsets.all(isMobile ? 14 : 22),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.local_shipping_rounded, color: Color(0xFF10B981), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Skim Muatan Kendaraan',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: isMobile ? double.maxFinite : 900,
+                height: isMobile ? (MediaQuery.of(context).size.height * 0.78) : 620,
+                child: Column(
+                  children: [
+                    // ── 4 Metric Cards ──
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981)),
+                        _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8)),
+                        _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24)),
+                        _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Tab Bar ──
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setDialogState(() => tabIndex = 0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: tabIndex == 0 ? const Color(0xFF10B981).withOpacity(0.2) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: tabIndex == 0 ? Border.all(color: const Color(0xFF10B981), width: 1) : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '📦 Rekap Kode Induk',
+                                    style: TextStyle(
+                                      color: tabIndex == 0 ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setDialogState(() => tabIndex = 1),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: tabIndex == 1 ? const Color(0xFF38BDF8).withOpacity(0.2) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: tabIndex == 1 ? Border.all(color: const Color(0xFF38BDF8), width: 1) : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '🏪 Per Faktur / Drop Point',
+                                    style: TextStyle(
+                                      color: tabIndex == 1 ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ── Tab Content ──
+                    Expanded(
+                      child: tabIndex == 0
+                          ? _buildLoadingKodeIndukTab(summary, isMobile)
+                          : _buildLoadingDropPointTab(summary, isMobile),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // ── Action Buttons ──
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            final text = VehicleLoadingService.generateWhatsAppText(summary);
+                            Clipboard.setData(ClipboardData(text: text));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('📋 Rekap Muatan berhasil disalin ke clipboard! Paste di WhatsApp grup sopir/checker.'),
+                                backgroundColor: Color(0xFF10B981),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.black),
+                          label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            try {
+                              await VehicleLoadingService.printLoadingSheetPdf(summary);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Gagal cetak PDF: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.print_rounded, size: 16, color: Colors.black),
+                          label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingMetricCard(String emoji, String label, String value, Color accentColor) {
+    return Container(
+      width: 190,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentColor.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
+              Text(value, style: TextStyle(color: accentColor, fontSize: 15, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingKodeIndukTab(VehicleLoadingSummary summary, bool isMobile) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Scrollbar(
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          padding: const EdgeInsets.only(bottom: 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 14,
+              horizontalMargin: 10,
+              headingRowHeight: 44,
+              dataRowMinHeight: 56,
+              dataRowMaxHeight: 80,
+              headingRowColor: MaterialStateProperty.all(const Color(0xFF10B981).withOpacity(0.15)),
+              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
+              columns: const [
+                DataColumn(label: Text('NO')),
+                DataColumn(label: Text('KODE INDUK')),
+                DataColumn(label: Text('NAMA BARANG FISIK')),
+                DataColumn(label: Text('ISI/KTN'), numeric: true),
+                DataColumn(label: Text('TOTAL KTN'), numeric: true),
+                DataColumn(label: Text('TOTAL PCS'), numeric: true),
+                DataColumn(label: Text('BERAT'), numeric: true),
+                DataColumn(label: Text('ALOKASI TOKO / FAKTUR')),
+              ],
+              rows: summary.items.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final item = entry.value;
+                final isEven = idx % 2 == 0;
+
+                return DataRow(
+                  color: MaterialStateProperty.all(
+                    isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
+                  ),
+                  cells: [
+                    DataCell(Text('${idx + 1}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          item.kodeInduk,
+                          style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text(
+                          item.canonicalProductName,
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    DataCell(Text('${item.isiKarton}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11))),
+                    DataCell(
+                      Text(
+                        item.totalKartonFormatted,
+                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                    DataCell(Text(NumberFormat('#,##0', 'id_ID').format(item.totalQty), style: const TextStyle(color: Colors.white, fontSize: 11))),
+                    DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11))),
+                    DataCell(
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 3,
+                          children: item.allocations.map((alloc) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF38BDF8).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                              ),
+                              child: Text(
+                                '#${alloc.invoiceNo} ${alloc.customerName}: ${alloc.kartonFormatted}',
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.w600),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingDropPointTab(VehicleLoadingSummary summary, bool isMobile) {
+    return ListView.builder(
+      itemCount: summary.invoiceSummaries.length,
+      itemBuilder: (context, index) {
+        final inv = summary.invoiceSummaries[index];
+
+        // Find items allocated to this invoice
+        final allocatedItems = <MapEntry<VehicleLoadingItem, VehicleLoadingAllocation>>[];
+        for (var item in summary.items) {
+          for (var alloc in item.allocations) {
+            if (alloc.invoiceNo == inv.invoiceNo) {
+              allocatedItems.add(MapEntry(item, alloc));
+            }
+          }
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF334155)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Invoice header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.store_rounded, color: Color(0xFF38BDF8), size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            '#${inv.invoiceNo} - ${inv.customerName}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      inv.totalKartonFormatted,
+                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '📍 ${inv.city.toUpperCase()} • ${inv.itemCount} Item • ${inv.totalWeightKg.toStringAsFixed(1)} kg',
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+              ),
+              const Divider(color: Color(0xFF1E293B), height: 16),
+
+              // Items allocated to this invoice
+              ...allocatedItems.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final item = entry.value.key;
+                final alloc = entry.value.value;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(3),
+                          border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                        ),
+                        child: Text(item.kodeInduk, style: const TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                      Expanded(
+                        child: Text(
+                          alloc.originalItemName,
+                          style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        alloc.kartonFormatted,
+                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '(${alloc.qty.toInt()} pcs)',
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Create Merged Lampiran (LA) invoice dialog from selected source transactions
   void _showCreateLampiranDialog(List<model_tr.Transaction> selectedList) {
     if (selectedList.isEmpty) return;
@@ -5370,14 +5814,31 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                     if (isDeveloper && _selectedInvoiceNos.isNotEmpty) ...[
                                       Builder(
                                         builder: (context) {
-                                          final firstSelectedTr = trProvider.transactions.firstWhere(
-                                            (t) => _selectedInvoiceNos.contains(t.invoiceNo.toString()),
-                                            orElse: () => trProvider.transactions.first,
+                                          final selectedTrList = trProvider.transactions
+                                              .where((t) => _selectedInvoiceNos.contains(t.invoiceNo.toString()))
+                                              .toList();
+
+                                          // Determine distinct customers for LA eligibility
+                                          final Set<String> distinctCustomerKeys = {};
+                                          for (var t in selectedTrList) {
+                                            final cInfo = _resolveCustomerDisplay(t, masterCustomers);
+                                            final key = (cInfo['firstLine'] != null && cInfo['firstLine'] != '-')
+                                                ? cInfo['firstLine']!.trim().toUpperCase()
+                                                : (t.aliasName.isNotEmpty ? t.aliasName.trim().toUpperCase() : t.customerName.trim().toUpperCase());
+                                            distinctCustomerKeys.add(key);
+                                          }
+                                          final bool isSameCustomer = distinctCustomerKeys.length == 1;
+
+                                          // Compute quick summary for toolbar
+                                          final productProvider = Provider.of<ProductProvider>(context, listen: false);
+                                          final loadingSummary = VehicleLoadingService.calculateLoadingSummary(
+                                            transactions: selectedTrList,
+                                            products: productProvider.products,
                                           );
-                                          final cInfo = _resolveCustomerDisplay(firstSelectedTr, masterCustomers);
-                                          final storeName = (cInfo['firstLine'] != null && cInfo['firstLine'] != '-')
-                                              ? cInfo['firstLine']!
-                                              : (firstSelectedTr.aliasName.isNotEmpty ? firstSelectedTr.aliasName : firstSelectedTr.customerName);
+
+                                          final String toolbarLabel = isSameCustomer
+                                              ? '📌 ${_selectedInvoiceNos.length} Invoice Terpilih (${distinctCustomerKeys.first}) | ${loadingSummary.grandTotalKartonStr}'
+                                              : '🚚 ${_selectedInvoiceNos.length} Invoice Terpilih (${distinctCustomerKeys.length} Toko) | Estimasi Muatan: ${loadingSummary.grandTotalKartonStr} (${loadingSummary.grandTotalWeightKg.toStringAsFixed(1)} kg)';
 
                                           return Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -5387,13 +5848,15 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                               borderRadius: BorderRadius.circular(10),
                                               border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
                                             ),
-                                            child: Row(
+                                            child: Wrap(
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              spacing: 8,
+                                              runSpacing: 8,
                                               children: [
                                                 const Icon(Icons.fact_check_rounded, color: Colors.cyanAccent, size: 20),
-                                                const SizedBox(width: 10),
-                                                Expanded(
+                                                Flexible(
                                                   child: Text(
-                                                    '📌 ${_selectedInvoiceNos.length} Invoice Terpilih ($storeName) | [${_selectedInvoiceNos.map((no) => '#$no').join(', ')}]',
+                                                    toolbarLabel,
                                                     style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
@@ -5410,18 +5873,36 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                   ),
                                                   child: const Text('Batal', style: TextStyle(color: Colors.white70, fontSize: 12)),
                                                 ),
-                                                const SizedBox(width: 8),
+                                                // Skim Muatan Kendaraan button — always available
                                                 ElevatedButton.icon(
                                                   onPressed: () {
-                                                    final selectedTrList = trProvider.transactions
-                                                        .where((t) => _selectedInvoiceNos.contains(t.invoiceNo.toString()))
-                                                        .toList();
-                                                    _showCreateLampiranDialog(selectedTrList);
+                                                    _showVehicleLoadingDialog(selectedTrList);
                                                   },
-                                                  icon: const Icon(Icons.description_rounded, size: 16, color: Colors.black),
-                                                  label: const Text('Buat Invoice Lampiran (LA)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                                                  icon: const Icon(Icons.local_shipping_rounded, size: 16, color: Colors.black),
+                                                  label: const Text('Skim Muatan Kendaraan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                                                   style: ElevatedButton.styleFrom(
-                                                    backgroundColor: Colors.cyanAccent,
+                                                    backgroundColor: const Color(0xFF10B981),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                  ),
+                                                ),
+                                                // Buat LA button — only enabled if same customer
+                                                ElevatedButton.icon(
+                                                  onPressed: isSameCustomer
+                                                      ? () {
+                                                          _showCreateLampiranDialog(selectedTrList);
+                                                        }
+                                                      : null,
+                                                  icon: Icon(Icons.description_rounded, size: 16, color: isSameCustomer ? Colors.black : Colors.white38),
+                                                  label: Text(
+                                                    'Buat Invoice Lampiran (LA)',
+                                                    style: TextStyle(
+                                                      color: isSameCustomer ? Colors.black : Colors.white38,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: isSameCustomer ? Colors.cyanAccent : const Color(0xFF334155),
                                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                                   ),
                                                 ),
@@ -5464,23 +5945,6 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
 
                                               final isSelected = _selectedInvoiceNos.contains(tr.invoiceNo.toString());
 
-                                              String? lockedCustomerKey;
-                                              if (_selectedInvoiceNos.isNotEmpty) {
-                                                final firstSelectedTr = trProvider.transactions.firstWhere(
-                                                  (t) => _selectedInvoiceNos.contains(t.invoiceNo.toString()),
-                                                  orElse: () => trProvider.transactions.first,
-                                                );
-                                                final cInfo = _resolveCustomerDisplay(firstSelectedTr, masterCustomers);
-                                                lockedCustomerKey = (cInfo['firstLine'] != null && cInfo['firstLine'] != '-')
-                                                    ? cInfo['firstLine']!.trim().toUpperCase()
-                                                    : (firstSelectedTr.aliasName.isNotEmpty ? firstSelectedTr.aliasName.trim().toUpperCase() : firstSelectedTr.customerName.trim().toUpperCase());
-                                              }
-
-                                              final trCInfo = _resolveCustomerDisplay(tr, masterCustomers);
-                                              final currentCustomerKey = (trCInfo['firstLine'] != null && trCInfo['firstLine'] != '-')
-                                                  ? trCInfo['firstLine']!.trim().toUpperCase()
-                                                  : (tr.aliasName.isNotEmpty ? tr.aliasName.trim().toUpperCase() : tr.customerName.trim().toUpperCase());
-
                                               final trClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
                                               final bool isThisLa = tr.isLampiran ||
                                                   trClean.toUpperCase().startsWith('LA') ||
@@ -5489,17 +5953,15 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                   ? tr.lampiranInvoiceNo.replaceAll('#', '').trim()
                                                   : (childToLaMap[trClean] ?? '');
 
-                                              final bool canSelect = !isThisLa &&
-                                                  linkedLaNo.isEmpty &&
-                                                  (_selectedInvoiceNos.isEmpty || (lockedCustomerKey != null && currentCustomerKey == lockedCustomerKey));
+                                              // Allow cross-customer selection for Vehicle Loading (Skim Muatan)
+                                              // Only block LA invoices and those already linked to an LA
+                                              final bool canSelect = !isThisLa && linkedLaNo.isEmpty;
 
                                               final String selectTooltip = isThisLa
-                                                  ? 'Invoice Lampiran tidak dapat digabung ke Lampiran lain'
+                                                  ? 'Invoice Lampiran tidak dapat dipilih'
                                                   : (linkedLaNo.isNotEmpty
                                                       ? 'Invoice sudah digabung ke #$linkedLaNo'
-                                                      : (canSelect
-                                                          ? 'Centang untuk gabung ke Invoice Lampiran'
-                                                          : 'Hanya bisa memilih invoice untuk pelanggan yang sama ($lockedCustomerKey)'));
+                                                      : 'Centang untuk Skim Muatan / Invoice Lampiran');
 
                                               return DataRow(
                                                 selected: isSelected,
