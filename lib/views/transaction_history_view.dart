@@ -3919,41 +3919,22 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ],
               ),
               content: SizedBox(
-                width: isMobile ? double.maxFinite : 980,
-                height: isMobile ? (MediaQuery.of(context).size.height * 0.90) : (MediaQuery.of(context).size.height * 0.88).clamp(650.0, 850.0),
+                width: isMobile ? double.maxFinite : 900,
+                height: isMobile ? (MediaQuery.of(context).size.height * 0.78) : 620,
                 child: Column(
                   children: [
-                    // ── 4 Metric Cards (compact & responsive) ──
-                    if (isMobile) ...[
-                      Row(
-                        children: [
-                          Expanded(child: _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981))),
-                          const SizedBox(width: 6),
-                          Expanded(child: _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8))),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(child: _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24))),
-                          const SizedBox(width: 6),
-                          Expanded(child: _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA))),
-                        ],
-                      ),
-                    ] else ...[
-                      Row(
-                        children: [
-                          Expanded(child: _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981))),
-                          const SizedBox(width: 6),
-                          Expanded(child: _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8))),
-                          const SizedBox(width: 6),
-                          Expanded(child: _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24))),
-                          const SizedBox(width: 6),
-                          Expanded(child: _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA))),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 8),
+                    // ── 4 Metric Cards ──
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981)),
+                        _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8)),
+                        _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24)),
+                        _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
 
                     // ── Tab Bar ──
                     Container(
@@ -3967,7 +3948,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: GestureDetector(
                               onTap: () => setDialogState(() => tabIndex = 0),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 7),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
                                   color: tabIndex == 0 ? const Color(0xFF10B981).withOpacity(0.2) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -3979,7 +3960,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     style: TextStyle(
                                       color: tabIndex == 0 ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ),
@@ -3990,7 +3971,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: GestureDetector(
                               onTap: () => setDialogState(() => tabIndex = 1),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 7),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
                                   color: tabIndex == 1 ? const Color(0xFF38BDF8).withOpacity(0.2) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -4002,7 +3983,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     style: TextStyle(
                                       color: tabIndex == 1 ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ),
@@ -4012,7 +3993,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
 
                     // ── Tab Content ──
                     Expanded(
@@ -4021,11 +4002,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           : _buildLoadingDropPointTab(summary, isMobile),
                     ),
 
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
 
-                    // ── Action Buttons (compact) ──
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    // ── Action Buttons ──
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
                       children: [
                         ElevatedButton.icon(
                           onPressed: () {
@@ -4038,14 +4021,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.copy_rounded, size: 14, color: Colors.black),
-                          label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+                          icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.black),
+                          label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           ),
                         ),
-                        const SizedBox(width: 10),
                         ElevatedButton.icon(
                           onPressed: () async {
                             try {
@@ -4058,11 +4040,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               }
                             }
                           },
-                          icon: const Icon(Icons.print_rounded, size: 14, color: Colors.black),
-                          label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+                          icon: const Icon(Icons.print_rounded, size: 16, color: Colors.black),
+                          label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF38BDF8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           ),
                         ),
                       ],
@@ -4079,26 +4061,23 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   Widget _buildLoadingMetricCard(String emoji, String label, String value, Color accentColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      width: 190,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: accentColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: accentColor.withOpacity(0.4)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.w600)),
-                Text(value, style: TextStyle(color: accentColor, fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-              ],
-            ),
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
+              Text(value, style: TextStyle(color: accentColor, fontSize: 15, fontWeight: FontWeight.bold)),
+            ],
           ),
         ],
       ),
@@ -4121,13 +4100,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columnSpacing: 10,
-              horizontalMargin: 8,
-              headingRowHeight: 34,
-              dataRowMinHeight: 38,
-              dataRowMaxHeight: 56,
+              columnSpacing: 14,
+              horizontalMargin: 10,
+              headingRowHeight: 44,
+              dataRowMinHeight: 56,
+              dataRowMaxHeight: 80,
               headingRowColor: MaterialStateProperty.all(const Color(0xFF10B981).withOpacity(0.15)),
-              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
+              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
               columns: const [
                 DataColumn(label: Text('NO')),
                 DataColumn(label: Text('KODE INDUK')),
@@ -4184,7 +4163,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11))),
                     DataCell(
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 380),
+                        constraints: const BoxConstraints(maxWidth: 260),
                         child: Wrap(
                           spacing: 4,
                           runSpacing: 3,
