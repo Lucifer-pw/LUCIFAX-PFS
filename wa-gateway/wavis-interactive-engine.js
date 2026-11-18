@@ -1593,8 +1593,16 @@ class WavisInteractiveEngine {
    */
   parseSingleItemAndQty(raw) {
     let s = String(raw || '').trim();
+    // Bersihkan kata-kata percakapan / partikel di akhir (saja, aja, ya, dong, min, pak, dll)
+    const trailingStopWordsRegex = /[\s,]+(?:saja|aja|aj|sj|ya|yaa|yah|dong|dunk|dng|deh|nih|lah|lh|mas|masnya|pak|pakbos|kak|kakak|min|mimin|admin|bos|boss|bosque|om|gan|tolong|mohon)$/i;
+    while (trailingStopWordsRegex.test(s)) {
+      s = s.replace(trailingStopWordsRegex, '').trim();
+    }
+    // Bersihkan prefix perintah revisi/tambah jika terbawa
+    s = s.replace(/^(?:tolong\s+|mohon\s+|revisi\s+|ubah\s+|tambah\s+|tambahkan\s+)+/i, '').trim();
+
     // 1. Qty di depan dengan satuan: '10 karton brs 24'
-    const m1 = s.match(/^(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)\s+(.+)$/i);
+    const m1 = s.match(/^(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol|batang)\s+(.+)$/i);
     if (m1) {
       return {
         product: m1[3].trim(),
@@ -1603,7 +1611,7 @@ class WavisInteractiveEngine {
       };
     }
     // 2. Qty di belakang dengan satuan: 'brs 24 10 karton'
-    const m2 = s.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)$/i);
+    const m2 = s.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol|batang)$/i);
     if (m2) {
       return {
         product: m2[1].trim(),
@@ -1654,11 +1662,18 @@ class WavisInteractiveEngine {
     // Normalisasi baris
     const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
 
+    const trailingStopWordsRegex = /[\s,]+(?:saja|aja|aj|sj|ya|yaa|yah|dong|dunk|dng|deh|nih|lah|lh|mas|masnya|pak|pakbos|kak|kakak|min|mimin|admin|bos|boss|bosque|om|gan|tolong|mohon)$/i;
+
     const actions = [];
-    let currentBlockMode = null; // 'ADD', 'DELETE', null
+    let currentBlockMode = null; // 'ADD', 'DELETE', 'SWAP', null
 
     for (let line of rawLines) {
       let cleanLine = line.replace(/^[0-9]+[.)\-*+]\s*/, '').replace(/^[-*+]\s*/, '').trim();
+      if (!cleanLine) continue;
+
+      while (trailingStopWordsRegex.test(cleanLine)) {
+        cleanLine = cleanLine.replace(trailingStopWordsRegex, '').trim();
+      }
       if (!cleanLine) continue;
 
       // Header blok baris (misal 'revisi tambahan', 'tambahan:', 'tambah:', 'hapus:', 'revisi qty:')
@@ -1743,6 +1758,9 @@ class WavisInteractiveEngine {
 
       for (let part of subParts) {
         part = part.trim();
+        while (trailingStopWordsRegex.test(part)) {
+          part = part.replace(trailingStopWordsRegex, '').trim();
+        }
         if (!part) continue;
 
         // A. SWAP (Ganti / Tukar)
@@ -1759,7 +1777,8 @@ class WavisInteractiveEngine {
           const checkNewT = mSwap3[2].trim();
           const nonQty = checkNewT
             .replace(/\d+(?:[.,]\d+)?/g, '')
-            .replace(/\b(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/gi, '')
+            .replace(/\b(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol|pc|batang)\b/gi, '')
+            .replace(/\b(saja|aja|aj|sj|ya|yaa|yah|dong|dunk|dng|deh|nih|lah|lh|mas|masnya|pak|pakbos|kak|kakak|min|mimin|admin|bos|boss|bosque|om|gan|tolong|mohon)\b/gi, '')
             .trim();
           if (nonQty.length > 0 || currentBlockMode === 'SWAP') {
             swapMatch = { oldT: mSwap3[1], newT: mSwap3[2] };
@@ -1769,9 +1788,12 @@ class WavisInteractiveEngine {
         if (swapMatch) {
           let oldT = swapMatch.oldT.replace(/^(?:ganti|tukar|revisi|ubah|tolong|mohon|item|barang|produk)\s+/gi, '').trim();
           let newT = swapMatch.newT.trim();
+          while (trailingStopWordsRegex.test(newT)) {
+            newT = newT.replace(trailingStopWordsRegex, '').trim();
+          }
           let qty = null;
           let unit = 'karton';
-          const qm = newT.match(/(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/i);
+          const qm = newT.match(/(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol|pc|batang)\b/i);
           if (qm) {
             qty = parseFloat(qm[1].replace(',', '.'));
             unit = qm[2].toLowerCase();
@@ -1780,7 +1802,7 @@ class WavisInteractiveEngine {
             if (qm2) qty = parseFloat(qm2[2]);
           }
           let newProd = newT
-            .replace(/(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/gi, '')
+            .replace(/(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol|pc|batang)\b/gi, '')
             .replace(/\s+\d+$/, '')
             .trim();
           actions.push({ action: 'SWAP', oldQuery: oldT, newQuery: newProd, qty, unit });
@@ -1819,10 +1841,10 @@ class WavisInteractiveEngine {
         }
 
         // D. QTY dengan kata 'jadi / menjadi'
-        const mQty1 = part.match(/(?:revisi\s+|ubah\s+)?(.+?)\s+(?:jadi|menjadi)\s+(\d+(?:[.,]\d+)?)\s*(?:karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)?$/i);
+        const mQty1 = part.match(/(?:revisi\s+|ubah\s+)?(.+?)\s+(?:jadi|menjadi)\s+(\d+(?:[.,]\d+)?)\s*(?:karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol|pc|batang)?(?:\s+(?:saja|aja|ya|dong|deh|nih|lah|mas|pak|kak|min|admin|bos))?$/i);
         if (mQty1) {
           const prod = mQty1[1].replace(/\b(revisi|ubah|tolong|mohon|item|barang|produk|po|faktur|invoice)\b/gi, '').trim();
-          const unitM = part.match(/(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)$/i);
+          const unitM = part.match(/(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol|pc|batang)(?:\s+(?:saja|aja|ya|dong|deh|nih|lah|mas|pak|kak|min|admin|bos))?$/i);
           actions.push({
             action: 'QTY',
             targetQuery: prod,
@@ -1835,13 +1857,8 @@ class WavisInteractiveEngine {
         // E. Pola nama barang diikuti jumlah (misal 'brs merah 15 karton' atau 'rolade ayam roll 250 roll')
         const itemCandidate = this.parseSingleItemAndQty(part);
         if (itemCandidate && itemCandidate.product && itemCandidate.qty > 0) {
-          const existsInInvoice = currentInvoiceItems.some(it => {
-            const n = (it.productName || it.name || '').toLowerCase();
-            const q = itemCandidate.product.toLowerCase();
-            return n.includes(q) || q.includes(n);
-          });
-
-          if (existsInInvoice) {
+          const matchedIdx = this.matchItemFromList(itemCandidate.product, currentInvoiceItems);
+          if (matchedIdx !== -1) {
             actions.push({ action: 'QTY', targetQuery: itemCandidate.product, qty: itemCandidate.qty, unit: itemCandidate.unit });
           } else {
             actions.push({ action: 'ADD', productQuery: itemCandidate.product, qty: itemCandidate.qty, unit: itemCandidate.unit });

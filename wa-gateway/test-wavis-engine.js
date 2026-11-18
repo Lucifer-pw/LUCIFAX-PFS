@@ -855,5 +855,40 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 16 PASSED: Header Blok Ganti Standalone & Subtitusi Barang Terverifikasi 100%!');
 
+  // 17. UJI REVISI QTY DENGAN STOP WORDS / PARTIKEL PERCAKAPAN (SAJA, AJA, YA, DONG, DLL)
+  console.log('\n--- Test 17: Uji Revisi Qty dengan Partikel Percakapan ("saja", "aja", "ya") ---');
+  const inv700BeforeQtyRevision = {
+    invoiceNo: '700',
+    customerId: 'c-awff',
+    customerName: 'AW FF (AW FROZEN FOOD)',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    province: 'JAWA TENGAH',
+    status: 'PENDING',
+    items: [
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 150, cartonCount: 10, price: 27962, subtotal: 4194300, isiKarton: 15, sizeGrams: 500 },
+      { productName: 'BRS MERAH 24S 500G', qty: 180, cartonCount: 12, price: 34549, subtotal: 6218820, isiKarton: 15, sizeGrams: 500 },
+      { productName: 'BRS COKLAT 13S 2 500G', qty: 240, cartonCount: 16, price: 27962, subtotal: 6710880, isiKarton: 15, sizeGrams: 500 }
+    ],
+    grandTotal: 17124000
+  };
+
+  const conversationalQtyPayload = {
+    messageText: 'revisi brs 13 jadi 10 karton saja',
+    mockInvoice: JSON.parse(JSON.stringify(inv700BeforeQtyRevision))
+  };
+
+  const conversationalQtyRes = await engine.handlePoRevision(conversationalQtyPayload, 'Rogue');
+  console.log(conversationalQtyRes);
+
+  assert(!conversationalQtyRes.includes('+1 ktn'), 'TIDAK BOLEH salah diartikan sebagai tambah item +1 ktn');
+  assert(!conversationalQtyRes.includes('16 Ktn'), 'BRS 13S TIDAK BOLEH tetap 16 Ktn');
+  assert(conversationalQtyRes.includes('10 Ktn (150 pcs)'), 'BRS COKLAT 13S harus berhasil diubah menjadi 10 Ktn (150 pcs)');
+  assert(conversationalQtyRes.includes('GrandTotal Karton:* 32 Ktn'), 'Grand total karton harus 32 Ktn (10 + 12 + 10)');
+  assert(conversationalQtyRes.includes('Revisi pesanan Faktur #700 berhasil diperbarui'), 'Pesan konfirmasi harus revisi berhasil diperbarui');
+  console.log('  ✓ 17A PASSED: "revisi brs 13 jadi 10 karton saja" berhasil diproses sebagai QTY revision 10 Ktn!');
+
+  console.log('✅ Test 17 PASSED: Partikel Percakapan ("saja", "aja", "ya", dll) Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();
