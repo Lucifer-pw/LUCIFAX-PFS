@@ -12,6 +12,9 @@ class Customer {
   final double depositBalance;
   final String odooNamePtSo; // Nama Customer di Odoo PT SO (e.g. MISTER SOSIS (SUSILO HARYAWAN))
   final String odooDeliveryAddressCvSo; // Nama Delivery Address di Odoo CV SO (e.g. MISTER SOSIS)
+  final String mapsUrl; // Link Google Maps lokasi toko / titik pengiriman
+  final double? latitude;
+  final double? longitude;
 
   Customer({
     required this.id,
@@ -27,6 +30,9 @@ class Customer {
     this.depositBalance = 0.0,
     this.odooNamePtSo = '',
     this.odooDeliveryAddressCvSo = '',
+    this.mapsUrl = '',
+    this.latitude,
+    this.longitude,
   });
 
   String get displayName {
@@ -44,6 +50,8 @@ class Customer {
       ? odooDeliveryAddressCvSo.trim()
       : (aliasName.trim().isNotEmpty ? aliasName.trim() : customerName.trim());
 
+  bool get hasValidMapsLocation => mapsUrl.trim().isNotEmpty || (latitude != null && longitude != null);
+
   factory Customer.fromMap(Map<String, dynamic> map, String docId) {
     return Customer(
       id: docId,
@@ -59,6 +67,9 @@ class Customer {
       depositBalance: (map['depositBalance'] is num) ? (map['depositBalance'] as num).toDouble() : 0.0,
       odooNamePtSo: map['odooNamePtSo']?.toString() ?? '',
       odooDeliveryAddressCvSo: map['odooDeliveryAddressCvSo']?.toString() ?? '',
+      mapsUrl: map['mapsUrl']?.toString() ?? '',
+      latitude: (map['latitude'] is num) ? (map['latitude'] as num).toDouble() : null,
+      longitude: (map['longitude'] is num) ? (map['longitude'] as num).toDouble() : null,
     );
   }
 
@@ -76,6 +87,9 @@ class Customer {
       'depositBalance': depositBalance,
       'odooNamePtSo': odooNamePtSo,
       'odooDeliveryAddressCvSo': odooDeliveryAddressCvSo,
+      'mapsUrl': mapsUrl,
+      'latitude': latitude,
+      'longitude': longitude,
     };
   }
 
@@ -93,6 +107,9 @@ class Customer {
     double? depositBalance,
     String? odooNamePtSo,
     String? odooDeliveryAddressCvSo,
+    String? mapsUrl,
+    double? latitude,
+    double? longitude,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -108,6 +125,9 @@ class Customer {
       depositBalance: depositBalance ?? this.depositBalance,
       odooNamePtSo: odooNamePtSo ?? this.odooNamePtSo,
       odooDeliveryAddressCvSo: odooDeliveryAddressCvSo ?? this.odooDeliveryAddressCvSo,
+      mapsUrl: mapsUrl ?? this.mapsUrl,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }

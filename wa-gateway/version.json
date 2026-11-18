@@ -1,5 +1,5 @@
 {
-  "gateway": "3.3.305",
+  "gateway": "3.3.306",
   "files": {
     "server.js": "3.3.290",
     "autonomous-po-processor.js": "3.3.297",

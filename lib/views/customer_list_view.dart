@@ -12,6 +12,7 @@ import '../services/import_service.dart';
 import '../services/download_helper.dart';
 import '../services/file_drop_helper.dart';
 import '../services/ktp_cache_service.dart';
+import '../widgets/customer_minimap_widget.dart';
 
 class CustomerListView extends StatefulWidget {
   const CustomerListView({super.key});
@@ -42,6 +43,9 @@ class _CustomerListViewState extends State<CustomerListView> {
     final ktpController = TextEditingController(text: customer?.ktpNumber ?? '');
     final odooPtSoController = TextEditingController(text: customer?.odooNamePtSo ?? '');
     final odooCvSoDeliveryController = TextEditingController(text: customer?.odooDeliveryAddressCvSo ?? '');
+    final mapsUrlController = TextEditingController(text: customer?.mapsUrl ?? '');
+    double? selectedLat = customer?.latitude;
+    double? selectedLng = customer?.longitude;
 
     Uint8List? selectedKtpBytes;
     String? selectedKtpFileName;
@@ -191,7 +195,7 @@ class _CustomerListViewState extends State<CustomerListView> {
               ),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 440,
+                  width: MediaQuery.of(context).size.width < 600 ? double.maxFinite : 500,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -262,6 +266,23 @@ class _CustomerListViewState extends State<CustomerListView> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Titik Lokasi Peta & Minimap (Shopee Style)
+                      CustomerMinimapWidget(
+                        controller: mapsUrlController,
+                        initialStoreName: aliasController.text.isNotEmpty ? aliasController.text : nameController.text,
+                        getStoreNameCallback: () => aliasController.text.isNotEmpty ? aliasController.text : nameController.text,
+                        initialLat: selectedLat,
+                        initialLng: selectedLng,
+                        getAddressCallback: () => addressController.text,
+                        getCityCallback: () => cityController.text,
+                        getProvinceCallback: () => provinceController.text,
+                        onCoordinatesChanged: (lat, lng) {
+                          selectedLat = lat;
+                          selectedLng = lng;
+                        },
                       ),
                       const SizedBox(height: 12),
 
@@ -569,6 +590,9 @@ class _CustomerListViewState extends State<CustomerListView> {
                               depositBalance: customer?.depositBalance ?? 0.0,
                               odooNamePtSo: odooPtSoController.text.trim(),
                               odooDeliveryAddressCvSo: odooCvSoDeliveryController.text.trim(),
+                              mapsUrl: mapsUrlController.text.trim(),
+                              latitude: selectedLat,
+                              longitude: selectedLng,
                             );
 
                             await custProvider.saveCustomer(newCustomer);
@@ -1101,6 +1125,7 @@ class _CustomerListViewState extends State<CustomerListView> {
                                     DataColumn(label: Text('PROVINSI')),
                                     DataColumn(label: Text('NEGARA')),
                                     DataColumn(label: Text('TELEPON')),
+                                    DataColumn(label: Text('TITIK MAPS')),
                                     DataColumn(label: Text('FOTO KTP')),
                                     DataColumn(label: Text('AKSI')),
                                   ],
@@ -1115,6 +1140,56 @@ class _CustomerListViewState extends State<CustomerListView> {
                                         DataCell(Text(c.province.isNotEmpty ? c.province : 'JAWA TENGAH', style: const TextStyle(color: Colors.white, fontSize: 11))),
                                         DataCell(Text(c.country.isNotEmpty ? c.country : 'INDONESIA', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
                                         DataCell(Text(c.phone.isNotEmpty ? c.phone : '-', style: const TextStyle(color: Colors.white, fontSize: 11))),
+                                        DataCell(
+                                          c.hasValidMapsLocation
+                                              ? InkWell(
+                                                  onTap: () => MapsLocationParser.launchMaps(c.mapsUrl.isNotEmpty ? c.mapsUrl : '${c.latitude},${c.longitude}'),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF10B981).withOpacity(0.18),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.5)),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.location_on_rounded, size: 14, color: Color(0xFF10B981)),
+                                                        SizedBox(width: 4),
+                                                        Text('Buka Maps', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                )
+                                              : InkWell(
+                                                  onTap: () {
+                                                    final searchUrl = MapsLocationParser.buildSearchUrl(
+                                                      address: c.address,
+                                                      city: c.city,
+                                                      province: c.province,
+                                                    );
+                                                    MapsLocationParser.launchMaps(searchUrl);
+                                                  },
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF0F172A),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(color: const Color(0xFF334155)),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.search_rounded, size: 13, color: Color(0xFF64748B)),
+                                                        SizedBox(width: 4),
+                                                        Text('Cari Peta', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                        ),
                                         DataCell(
                                           c.ktpImageUrl.isNotEmpty
                                               ? InkWell(
@@ -1149,7 +1224,14 @@ class _CustomerListViewState extends State<CustomerListView> {
                                               side: const BorderSide(color: Color(0xFF334155)),
                                             ),
                                             onSelected: (value) {
-                                              if (value == 'view_ktp') {
+                                              if (value == 'open_maps') {
+                                                if (c.hasValidMapsLocation) {
+                                                  MapsLocationParser.launchMaps(c.mapsUrl.isNotEmpty ? c.mapsUrl : '${c.latitude},${c.longitude}');
+                                                } else {
+                                                  final searchUrl = MapsLocationParser.buildSearchUrl(address: c.address, city: c.city, province: c.province);
+                                                  MapsLocationParser.launchMaps(searchUrl);
+                                                }
+                                              } else if (value == 'view_ktp') {
                                                 _showKtpPreviewDialog(c);
                                               } else if (value == 'edit') {
                                                 _showCustomerDialog(c);
@@ -1179,6 +1261,16 @@ class _CustomerListViewState extends State<CustomerListView> {
                                               }
                                             },
                                             itemBuilder: (context) => [
+                                              PopupMenuItem(
+                                                value: 'open_maps',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.location_on_outlined, color: Color(0xFF10B981), size: 18),
+                                                    SizedBox(width: 10),
+                                                    Text('Buka Titik Peta Maps', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                  ],
+                                                ),
+                                              ),
                                               if (c.ktpImageUrl.isNotEmpty)
                                                 const PopupMenuItem(
                                                   value: 'view_ktp',
