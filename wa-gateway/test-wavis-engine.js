@@ -596,5 +596,109 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 12 PASSED: Dukungan Revisi Multi-Item (Batch Deletion & Multi Qty) Terverifikasi 100%!');
 
+  // 13. UJI TAMBAH ITEM BARU & AKUMULASI (ADD_ITEM)
+  console.log('\n--- Test 13: Uji Tambah Item Baru & Akumulasi Item (ADD_ITEM) ---');
+  
+  // Pastikan master products dan rules memiliki mapping BRS 24
+  engine.autoPoProcessor.cachedRules.push({
+    type: 'product_alias',
+    keyword: 'brs 24',
+    mappedValue: 'BRS COKLAT 24S 2 500G'
+  });
+  engine.autoPoProcessor.cachedProducts.push({
+    id: 'p-brs-24',
+    productName: 'BRS COKLAT 24S 2 500G',
+    name: 'BRS COKLAT 24S 2 500G',
+    price: 28234,
+    isiKarton: 15,
+    sizeGrams: 500,
+    stock: 200
+  });
+
+  // Mock history transaksi AW FF untuk BRS 24
+  engine.firebaseAdapter = {
+    getCustomerProductMemory: async (customerId) => {
+      return [
+        { productId: 'p-brs-24', productName: 'BRS COKLAT 24S 2 500G', price: 28234, discountPercent: 0, invoiceNo: '700' }
+      ];
+    },
+    getLastCustomerProductPricing: async (customerId, prodId, prodName) => {
+      if (prodName && prodName.includes('24S')) {
+        return { price: 28234, discountPercent: 0, invoiceNo: '700' };
+      }
+      return null;
+    }
+  };
+
+  const inv700TwoItems = {
+    invoiceNo: '700',
+    customerId: 'c-awff',
+    customerName: 'AW FF (AW FROZEN FOOD)',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    province: 'JAWA TENGAH',
+    status: 'PENDING',
+    items: [
+      { productName: 'BRS COKLAT 13S 2 500G', qty: 450, cartonCount: 30, price: 27962, subtotal: 12582900, isiKarton: 15 },
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 75, cartonCount: 5, price: 27962, subtotal: 2097150, isiKarton: 15 }
+    ],
+    grandTotal: 14680050
+  };
+
+  // 13A. Tambah item baru: "tambahkan brs 24 10 karton"
+  const addPayload1 = {
+    messageText: 'tambahkan brs 24 10 karton',
+    mockInvoice: JSON.parse(JSON.stringify(inv700TwoItems))
+  };
+  const addRes1 = await engine.handlePoRevision(addPayload1, 'Rogue');
+  console.log(addRes1);
+  assert(addRes1.includes('BRS COKLAT 24S 2 500G (10 ktn)* berhasil ditambahkan'), 'Header harus menyatakan BRS 24S berhasil ditambahkan');
+  assert(addRes1.includes('DAFTAR BARANG (3 Item):'), 'Faktur harus bertambah menjadi 3 item');
+  assert(addRes1.includes('➕ *(DITAMBAHKAN)*'), 'Tag DITAMBAHKAN harus muncul pada item baru');
+  assert(addRes1.includes('10 Ktn (150 pcs) @28.234 | Disc: - = *Rp 4.235.100*'), 'Kalkulasi harga dan pcs BRS 24 harus tepat');
+  assert(addRes1.includes('30 Ktn (450 pcs)'), 'BRS 13S harus TETAP 30 Ktn (tidak boleh berubah jadi 10 ktn)');
+  assert(addRes1.includes('5 Ktn (75 pcs)'), 'BRS 7S harus TETAP 5 Ktn');
+  assert(addRes1.includes('GrandTotal Karton:* 45 Ktn'), 'Grand total karton harus 45 Ktn (30+5+10)');
+  assert(addRes1.includes('GRAND TOTAL:* *Rp 18.915.150*'), 'Grand total uang harus Rp 18.915.150');
+  console.log('  ✓ 13A PASSED: "tambahkan brs 24 10 karton" berhasil menambahkan item baru tanpa merusak item lain!');
+
+  // 13B. Akumulasi item yang sudah ada: "tambah brs 24 5 karton"
+  const invWith24 = JSON.parse(JSON.stringify(inv700Test)); // Sudah ada BRS 24S 10 ktn, 13S 30 ktn, 7S 5 ktn
+  const addPayload2 = {
+    messageText: 'tambah brs 24 5 karton',
+    mockInvoice: invWith24
+  };
+  const addRes2 = await engine.handlePoRevision(addPayload2, 'Rogue');
+  assert(addRes2.includes('15 Ktn (225 pcs)'), 'BRS 24S harus bertambah dari 10 ktn jadi 15 ktn');
+  assert(addRes2.includes('GrandTotal Karton:* 50 Ktn'), 'Grand total karton harus bertambah 5 ktn jadi 50 ktn');
+  console.log('  ✓ 13B PASSED: Akumulasi "tambah brs 24 5 karton" pada item yang sudah ada berhasil menambah kuantitas');
+
+  // 13C. Multi-add item baru sekaligus: "tambah brs 24 10 karton dan sosis cocktail 5 karton"
+  const addPayload3 = {
+    messageText: 'tambah brs 24 10 karton dan sosis cocktail 5 karton',
+    mockInvoice: JSON.parse(JSON.stringify(inv700TwoItems))
+  };
+  const addRes3 = await engine.handlePoRevision(addPayload3, 'Rogue');
+  assert(addRes3.includes('DAFTAR BARANG (4 Item):'), 'Faktur harus bertambah menjadi 4 item');
+  assert(addRes3.includes('BRS COKLAT 24S 2 500G'), 'Harus memuat BRS 24S');
+  assert(addRes3.includes('SOSIS COCKTAIL 250 G'), 'Harus memuat SOSIS COCKTAIL');
+  assert(addRes3.includes('GrandTotal Karton:* 50 Ktn'), 'Grand total karton harus 50 Ktn (30+5+10+5)');
+  console.log('  ✓ 13C PASSED: Multi-add "tambah brs 24 10 karton dan sosis cocktail 5 karton" sukses menambahkan kedua barang');
+
+  // 13D. Mixed command: "hapus brs 13 dan tambah brs 24 10 karton"
+  const mixedPayload = {
+    messageText: 'hapus brs 13 dan tambah brs 24 10 karton',
+    mockInvoice: JSON.parse(JSON.stringify(inv700TwoItems))
+  };
+  const mixedRes = await engine.handlePoRevision(mixedPayload, 'Rogue');
+  assert(!mixedRes.includes('BRS COKLAT 13S'), 'BRS 13S harus terhapus');
+  assert(mixedRes.includes('BRS COKLAT 7S 2 500G'), 'BRS 7S harus tetap ada');
+  assert(mixedRes.includes('BRS COKLAT 24S 2 500G'), 'BRS 24S harus ditambahkan');
+  assert(mixedRes.includes('DAFTAR BARANG (2 Item):'), 'Faktur harus berisi 2 item (7S dan 24S)');
+  assert(mixedRes.includes('GrandTotal Karton:* 15 Ktn'), 'Grand total karton harus 15 Ktn (5 + 10)');
+  console.log('  ✓ 13D PASSED: Mixed command ("hapus brs 13 dan tambah brs 24 10 karton") berhasil diproses simultan');
+
+  console.log('✅ Test 13 PASSED: Fitur Penambahan Item (ADD_ITEM) & Akumulasi Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

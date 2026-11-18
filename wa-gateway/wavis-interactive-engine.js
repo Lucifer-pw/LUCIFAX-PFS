@@ -190,7 +190,7 @@ class WavisInteractiveEngine {
       const num = idx < 10 ? numberEmojis[idx] : `${idx + 1}.`;
       const pName = it.productName || 'PRODUK';
       const weightStr = it.weightKg ? ` (${Number(it.weightKg).toFixed(2)} kg)` : '';
-      const revisedTag = it._isSwapped ? ' 🔄 *(DIGANTI)*' : (it._isRevised ? ' 🔄 *(DIREVISI)*' : '');
+      const revisedTag = it._isAdded ? ' ➕ *(DITAMBAHKAN)*' : (it._isSwapped ? ' 🔄 *(DIGANTI)*' : (it._isRevised ? ' 🔄 *(DIREVISI)*' : ''));
       
       const pcsPerKtn = getIsiKtn(it);
       const ktnVal = it.cartonCount || (pcsPerKtn ? Math.round(it.qty / pcsPerKtn * 10) / 10 : null);
@@ -268,8 +268,8 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 3. Cek Pola Revisi PO / Tukar Barang / Hapus Barang
-    const revisionPattern = /\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar|hapus|buang|hilangkan|cancel|coret)\b.*?\b(po|order|pesanan|karton|ktn|dus|box|jadi|pcs|pack|pak|bal|dengan|ke|saja|aja)\b|\b(revisi|ubah|ganti|tukar|hapus|batalkan)\s+po\b|\b(?:di\s*ganti|di\s*tukar|di\s*hapus|hapus\s*saja|dihapus\s*saja|di\s*buang|buang\s*saja|dibuang\s*saja)\b/i;
+    // 3. Cek Pola Revisi PO / Tukar Barang / Hapus Barang / Tambah Barang
+    const revisionPattern = /\b(revisi|ubah|ganti|tambah|tambahkan|kurang|batal|edit|tukar|hapus|buang|hilangkan|cancel|coret)\b.*?\b(po|order|pesanan|karton|ktn|krton|krtn|krt|dus|box|jadi|pcs|pack|pak|bal|ball|dengan|ke|saja|aja)\b|\b(revisi|ubah|ganti|tukar|hapus|batalkan|tambah|tambahkan)\s+(?:po|item|barang|orderan)\b|^(?:tolong\s+|mohon\s+)?(?:tambah|tambahkan)\b|\b(?:di\s*ganti|di\s*tukar|di\s*hapus|hapus\s*saja|dihapus\s*saja|di\s*buang|buang\s*saja|dibuang\s*saja|di\s*tambah(?:kan)?)\b/i;
     if (revisionPattern.test(clean)) {
       return 'REVISE_PO';
     }
@@ -277,7 +277,7 @@ class WavisInteractiveEngine {
     // 4. Cek Pola Query Faktur / Invoice atau Permintaan File Dokumen PDF Faktur
     const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
     if (invoicePattern.test(clean) || (isPdfRequest && /\b\d{2,6}\b/.test(clean))) {
-      if (/\b(revisi|ubah|ganti|tambah|kurang|batal|edit|tukar|hapus|dihapus|di\s*hapus|buang|dibuang|cancel|coret)\b/i.test(clean)) {
+      if (/\b(revisi|ubah|ganti|tambah|tambahkan|kurang|batal|edit|tukar|hapus|dihapus|di\s*hapus|buang|dibuang|cancel|coret)\b/i.test(clean)) {
         return 'REVISE_PO';
       }
       if (isPdfRequest) {
@@ -978,22 +978,26 @@ class WavisInteractiveEngine {
 
     // 3. JIKA STATUS PENDING -> LAKUKAN PARSING & REVISI
     let items = Array.isArray(invData.items) ? [...invData.items] : [];
-    if (items.length === 0) {
-      return `⚠️ Faktur #${targetInvNo} tidak memiliki daftar barang yang dapat direvisi.`;
-    }
-
     const actions = this.parseAllRevisionActions(text);
     if (!actions || actions.length === 0) {
-      const currentItemList = items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n');
+      const currentItemList = items.length > 0
+        ? items.map((it, idx) => `${idx + 1}. ${it.productName}`).join('\n')
+        : '(Faktur belum memiliki daftar barang)';
       return `🤖 *[L-W.A.V.I.S]*\n` +
         `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `Halo ${senderName}! Perintah revisi belum terdeteksi dengan jelas pada Faktur *#${targetInvNo}*.\n\n` +
         `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
         `💡 *Contoh format yang bisa Anda gunakan:*\n` +
+        `• Tambah Item: \`tambah brs 24 10 karton\` atau \`tambahkan sosis cocktail 5 karton\`\n` +
         `• Hapus: \`hapus brs 13 dan brs 7\` atau \`sosis cocktail dihapus\`\n` +
         `• Ubah Qty: \`revisi brs 24 jadi 15 karton\` atau \`brs 24 jadi 15 ktn dan brs 13 jadi 20 ktn\`\n` +
         `• Ganti Barang: \`ganti brs 13 jadi sosis cocktail 10 ktn\``;
+    }
+
+    const hasAddAction = actions.some(a => a.action === 'ADD');
+    if (items.length === 0 && !hasAddAction) {
+      return `⚠️ Faktur #${targetInvNo} tidak memiliki daftar barang yang dapat direvisi.`;
     }
 
     const deleteIndices = [];
@@ -1155,6 +1159,158 @@ class WavisInteractiveEngine {
 
         items[idx] = targetItem;
         revisionLogs.push(`${targetItem.productName} -> ${newCartonQty} ktn`);
+      } else if (act.action === 'ADD') {
+        let customerHistory = [];
+        if (invData.customerId && this.firebaseAdapter?.getCustomerProductMemory) {
+          try {
+            customerHistory = await this.firebaseAdapter.getCustomerProductMemory(invData.customerId);
+          } catch (_) {}
+        }
+
+        let matchedProduct = null;
+        let historyPricing = null;
+
+        // PRIORITAS 1: Cek Customer History (AI belajar dari kebiasaan customer AW FF)
+        if (customerHistory.length > 0 && this.autoPoProcessor?.matchProductFromHistory) {
+          const histMatch = this.autoPoProcessor.matchProductFromHistory(act.productQuery, customerHistory);
+          if (histMatch) {
+            historyPricing = histMatch;
+            matchedProduct = products.find(p =>
+              (histMatch.productId && p.id === histMatch.productId) ||
+              (histMatch.productName && (p.productName === histMatch.productName || p.name === histMatch.productName))
+            );
+            if (!matchedProduct) {
+              matchedProduct = products.find(p =>
+                (p.productName || p.name || '').toLowerCase().includes((histMatch.productName || '').toLowerCase())
+              );
+            }
+            if (!matchedProduct) {
+              matchedProduct = {
+                id: histMatch.productId || '',
+                productName: histMatch.productName,
+                name: histMatch.productName,
+                price: histMatch.price,
+                isiKarton: 15,
+                sizeGrams: 500
+              };
+            }
+          }
+        }
+
+        // PRIORITAS 2: Cek AI Knowledge Rules (product_alias)
+        if (!matchedProduct) {
+          const rules = this.autoPoProcessor?.cachedRules || [];
+          const prodRules = rules.filter(r => r.type === 'product_alias');
+          const cleanQ = normalizeText(act.productQuery);
+          for (const r of prodRules) {
+            let from = normalizeText(r.keyword || r.from || '');
+            if (from && (cleanQ === from || cleanQ.includes(from) || from.includes(cleanQ))) {
+              if (r.targetId) {
+                const p = products.find(prod => prod.id === r.targetId);
+                if (p) { matchedProduct = p; break; }
+              }
+              const toNorm = normalizeText(r.mappedValue || r.to || '');
+              const p = products.find(prod => {
+                const pn = normalizeText(prod.productName || prod.name || '');
+                return pn === toNorm || pn.includes(toNorm) || toNorm.includes(pn);
+              });
+              if (p) { matchedProduct = p; break; }
+            }
+          }
+        }
+
+        // PRIORITAS 3: Match via matchProductFromQuery atau fuzzy search ke master products
+        if (!matchedProduct) {
+          matchedProduct = this.matchProductFromQuery(act.productQuery, products);
+        }
+        if (!matchedProduct && products.length > 0) {
+          const cleanQ = normalizeText(act.productQuery);
+          matchedProduct = products.find(p => {
+            const pName = normalizeText(p.productName || p.name || '');
+            return pName.includes(cleanQ) || cleanQ.split(/\s+/).every(w => pName.includes(w));
+          });
+        }
+
+        if (!matchedProduct) {
+          notFoundQueries.push(act.productQuery);
+          continue;
+        }
+
+        // Tentukan Harga & Diskon Pelanggan
+        let unitPrice = Number(matchedProduct.price) || 0;
+        let discPct = 0;
+        let discAmt = 0;
+
+        if (historyPricing && historyPricing.price > 0) {
+          unitPrice = historyPricing.price;
+          discPct = historyPricing.discountPercent || 0;
+          discAmt = historyPricing.discountAmount || 0;
+        } else if (invData.customerId && this.firebaseAdapter?.getLastCustomerProductPricing) {
+          try {
+            const lastPrc = await this.firebaseAdapter.getLastCustomerProductPricing(
+              invData.customerId,
+              matchedProduct.id,
+              matchedProduct.productName || matchedProduct.name
+            );
+            if (lastPrc && lastPrc.price > 0) {
+              unitPrice = lastPrc.price;
+              discPct = lastPrc.discountPercent || 0;
+              discAmt = lastPrc.discountAmount || 0;
+            }
+          } catch (_) {}
+        }
+
+        // Konversi Kemasan & Qty
+        const addCartonQty = (act.qty && act.qty > 0) ? act.qty : 1;
+        const pcsPerKtn = Number(matchedProduct.isiKarton) || 15;
+        const addQtyPcs = addCartonQty * pcsPerKtn;
+        const sizeGrams = Number(matchedProduct.sizeGrams) || 500;
+        const addWeightKg = Math.round(addQtyPcs * sizeGrams / 1000 * 100) / 100;
+
+        const grossTotal = addQtyPcs * unitPrice;
+        const calcDiscAmt = discPct > 0 ? (grossTotal * discPct / 100) : (discAmt > 0 ? discAmt : 0);
+        const addSubtotal = Math.round(grossTotal - calcDiscAmt);
+        const prodName = matchedProduct.productName || matchedProduct.name || 'PRODUK';
+
+        // Periksa apakah barang sudah ada di faktur
+        const existingIdx = items.findIndex(it =>
+          (matchedProduct.id && it.productId && it.productId === matchedProduct.id) ||
+          ((it.productName || '').toLowerCase().trim() === prodName.toLowerCase().trim())
+        );
+
+        if (existingIdx !== -1) {
+          // Barang sudah ada di faktur: akumulasikan kuantitas
+          const it = items[existingIdx];
+          it.cartonCount = (it.cartonCount || 0) + addCartonQty;
+          it.qty = (it.qty || 0) + addQtyPcs;
+          it.subtotal = (it.subtotal || 0) + addSubtotal;
+          if (it.sizeGrams) {
+            it.weightKg = Math.round(it.qty * Number(it.sizeGrams) / 1000 * 100) / 100;
+          }
+          it._isRevised = true;
+          items[existingIdx] = it;
+          revisionLogs.push(`Tambah ${prodName} +${addCartonQty} ktn (Total: ${it.cartonCount} ktn)`);
+        } else {
+          // Barang baru: sisipkan ke faktur
+          const newItem = {
+            productId: matchedProduct.id || '',
+            productName: prodName,
+            price: unitPrice,
+            qty: addQtyPcs,
+            isiKarton: pcsPerKtn,
+            cartonCount: addCartonQty,
+            discountPercent: discPct,
+            discountAmount: discAmt,
+            subtotal: addSubtotal,
+            sizeGrams: sizeGrams,
+            weightKg: addWeightKg,
+            isBonus: false,
+            _isRevised: true,
+            _isAdded: true
+          };
+          items.push(newItem);
+          revisionLogs.push(`Tambah ${prodName} (${addCartonQty} ktn)`);
+        }
       }
     }
 
@@ -1181,9 +1337,9 @@ class WavisInteractiveEngine {
       return `🤖 *[L-W.A.V.I.S]*\n` +
         `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Halo ${senderName}! Barang yang ingin direvisi (*${notFoundQueries.join(', ')}*) tidak ditemukan di Faktur *#${targetInvNo}*.\n\n` +
+        `Halo ${senderName}! Barang yang ingin direvisi/ditambahkan (*${notFoundQueries.join(', ')}*) tidak ditemukan di Faktur *#${targetInvNo}* maupun katalog produk.\n\n` +
         `*Barang yang ada di Faktur #${targetInvNo}:*\n${currentItemList}\n\n` +
-        `💡 *Contoh format:* \`revisi ${items[0]?.productName || 'nama barang'} jadi 10 karton\` atau \`hapus ${items[0]?.productName || 'nama barang'}\``;
+        `💡 *Contoh format:* \`tambah brs 24 10 karton\` atau \`revisi ${items[0]?.productName || 'nama barang'} jadi 10 karton\``;
     }
 
     // Hitung ulang grand total invoice
@@ -1201,6 +1357,7 @@ class WavisInteractiveEngine {
       const c = { ...it };
       delete c._isRevised;
       delete c._isSwapped;
+      delete c._isAdded;
       delete c._oldProductName;
       return c;
     });
@@ -1239,6 +1396,8 @@ class WavisInteractiveEngine {
       let confSubtitle = '';
       if (deleteIndices.length > 0 && revisionLogs.length === 1) {
         confSubtitle = `Barang *${deletedItemNames.join(' dan ')}* berhasil dihapus dari Faktur #${targetInvNo}:`;
+      } else if (revisionLogs.length === 1 && revisionLogs[0].startsWith('Tambah ')) {
+        confSubtitle = `Barang *${revisionLogs[0].replace(/^Tambah\s+/, '')}* berhasil ditambahkan ke Faktur #${targetInvNo}:`;
       } else {
         confSubtitle = `Revisi pesanan Faktur #${targetInvNo} berhasil diperbarui di sistem:`;
       }
@@ -1262,30 +1421,42 @@ class WavisInteractiveEngine {
     const cleanQ = normalizeText(targetQuery).replace(/\b(item|barang|produk|yang|pesanan|order|po|faktur|invoice)\b/gi, ' ').replace(/\s+/g, ' ').trim();
     if (!cleanQ) return -1;
     const words = cleanQ.split(/\s+/).filter(w => w.length >= 1);
+    const numTokens = words.filter(w => /^\d+$/.test(w));
     let bestIdx = -1;
     let bestScore = 0;
 
     for (let i = 0; i < items.length; i++) {
       const itName = normalizeText(items[i].productName || items[i].name || '');
       let score = 0;
+      let numMatched = 0;
+
       for (const w of words) {
         const wNorm = w.replace(/^beres$/, 'brs').replace(/^brs$/, 'beres');
         if (/^\d+$/.test(w)) {
           const numRegex = new RegExp('\\b' + w + '[a-z]*\\b|\\b' + w + '\\b', 'i');
           if (numRegex.test(itName)) {
             score += 20;
+            numMatched++;
+          } else {
+            score -= 15;
           }
         } else if (itName.includes(w) || itName.includes(wNorm)) {
           score += 5;
         }
       }
+
+      // Jika query menyebutkan nomor spesifik (misal 24, 13, 7), tapi nomor tersebut tidak ada pada item ini, abaikan
+      if (numTokens.length > 0 && numMatched === 0) {
+        continue;
+      }
+
       if (score > bestScore && score >= 5) {
         bestScore = score;
         bestIdx = i;
       }
     }
 
-    if (bestIdx === -1 && cleanQ.length >= 2) {
+    if (bestIdx === -1 && cleanQ.length >= 2 && numTokens.length === 0) {
       for (let i = 0; i < items.length; i++) {
         const itName = normalizeText(items[i].productName || items[i].name || '');
         if (itName.includes(cleanQ) || cleanQ.includes(itName)) {
@@ -1295,6 +1466,59 @@ class WavisInteractiveEngine {
     }
 
     return bestIdx;
+  }
+
+  /**
+   * Helper parsing 1 item dan kuantitas untuk penambahan item (mendukung format angka di depan/belakang)
+   */
+  parseSingleItemAndQty(raw) {
+    let s = String(raw || '').trim();
+    // 1. Qty di depan dengan satuan: '10 karton brs 24'
+    const m1 = s.match(/^(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)\s+(.+)$/i);
+    if (m1) {
+      return {
+        product: m1[3].trim(),
+        qty: parseFloat(m1[1].replace(',', '.')),
+        unit: m1[2].toLowerCase()
+      };
+    }
+    // 2. Qty di belakang dengan satuan: 'brs 24 10 karton'
+    const m2 = s.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)$/i);
+    if (m2) {
+      return {
+        product: m2[1].trim(),
+        qty: parseFloat(m2[2].replace(',', '.')),
+        unit: m2[3].toLowerCase()
+      };
+    }
+    // 3. Qty di belakang TANPA satuan, tapi ada 2 angka terpisah: misal 'brs 24 10'
+    const m3 = s.match(/^(.+?\b\d+s?)\s+(\d+)$/i);
+    if (m3) {
+      return {
+        product: m3[1].trim(),
+        qty: parseFloat(m3[2]),
+        unit: 'karton'
+      };
+    }
+    // 4. Qty di belakang tanpa satuan pada nama tanpa angka: misal 'sosis cocktail 10'
+    const m4 = s.match(/^([a-zA-Z\s]+?)\s+(\d+)$/);
+    if (m4) {
+      const num = parseInt(m4[2], 10);
+      const isSize = [7, 8, 13, 24, 215, 250, 400, 500, 1000].includes(num) || /^(brs|beres|beras)/i.test(m4[1].trim());
+      if (!isSize) {
+        return {
+          product: m4[1].trim(),
+          qty: num,
+          unit: 'karton'
+        };
+      }
+    }
+    // 5. Default: seluruh teks adalah nama produk, qty = 1
+    return {
+      product: s,
+      qty: 1,
+      unit: 'karton'
+    };
   }
 
   /**
@@ -1309,7 +1533,7 @@ class WavisInteractiveEngine {
 
     // 1. Cek apakah ini satu instruksi penghapusan murni (bisa 1 atau banyak barang sekaligus)
     const isPureDelete = /\b(?:di\s*hapus|hapus|di\s*buang|buang|di\s*hilangkan|hilangkan|di\s*batalkan|batalkan|di\s*cancel|cancel|di\s*coret|coret|ga\s*jadi|nggak\s*jadi)\b/i.test(text)
-      && !/\b(?:jadi|menjadi|ganti|tukar)\b/i.test(text);
+      && !/\b(?:jadi|menjadi|ganti|tukar|tambah|tambahkan)\b/i.test(text);
 
     if (isPureDelete) {
       // Pola prefix: 'hapus item barang brs 13 dan brs 7'
@@ -1343,7 +1567,28 @@ class WavisInteractiveEngine {
       }
     }
 
-    // 2. Jika bukan single delete, pisahkan klausa majemuk (baris baru, titik koma, atau 'dan / serta' / koma)
+    // 2. Cek apakah ini instruksi penambahan barang murni (bisa 1 atau banyak barang sekaligus)
+    const isPureAdd = /^(?:tolong\s+|mohon\s+)?(?:tambahkan|tambah)\b/i.test(text)
+      && !/\b(?:di\s*hapus|hapus|di\s*buang|buang|di\s*hilangkan|hilangkan|di\s*batalkan|batalkan|di\s*cancel|cancel|di\s*coret|coret|ga\s*jadi|nggak\s*jadi|ganti|tukar|jadi|menjadi)\b/i.test(text);
+
+    if (isPureAdd) {
+      const raw = text
+        .replace(/^(?:tolong\s+|mohon\s+)?(?:tambahkan|tambah)\s+(?:item\s+|barang\s+|produk\s+|orderan\s+|pesanan\s+)?/i, '')
+        .replace(/\b(?:saja|aja|dong|ya|tolong|mohon)\b/gi, '')
+        .trim();
+      const parts = raw.split(/\s*(?:,|;|\bdan\b|\bserta\b)\s*/i).map(t => t.trim()).filter(t => t.length > 0);
+      return parts.map(p => {
+        const itemParsed = this.parseSingleItemAndQty(p);
+        return {
+          action: 'ADD',
+          productQuery: itemParsed.product,
+          qty: itemParsed.qty,
+          unit: itemParsed.unit
+        };
+      });
+    }
+
+    // 3. Jika bukan single delete/add, pisahkan klausa majemuk (baris baru, titik koma, atau 'dan / serta' / koma)
     const rawLines = text.split(/\r?\n|;/).map(l => l.trim()).filter(l => l.length > 0);
     const clauses = [];
     for (const line of rawLines) {
@@ -1382,7 +1627,34 @@ class WavisInteractiveEngine {
         continue;
       }
 
-      // B. Action: DELETE (Hapus)
+      // B. Action: ADD (Tambah / Tambahkan)
+      const mAddPrefix = cleanClause.match(/^(?:tolong\s+|mohon\s+)?(?:tambahkan|tambah)\s+(?:item\s+|barang\s+|produk\s+|orderan\s+|pesanan\s+)?(.+)$/i);
+      if (mAddPrefix) {
+        const itemParsed = this.parseSingleItemAndQty(mAddPrefix[1]);
+        actions.push({
+          action: 'ADD',
+          productQuery: itemParsed.product,
+          qty: itemParsed.qty,
+          unit: itemParsed.unit
+        });
+        continue;
+      }
+
+      const mAddSuffix = cleanClause.match(/^(.+?)\s+(?:di\s*tambah(?:kan)?|tambah(?:kan)?)\s+(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|pack|pak|pcs|pc|bal|ball|roll|rol)?$/i);
+      if (mAddSuffix) {
+        const prodQ = mAddSuffix[1].replace(/\b(revisi|ubah|tolong|mohon|item|barang|produk)\b/gi, '').trim();
+        const qtyVal = parseFloat(mAddSuffix[2].replace(',', '.'));
+        const unitVal = (mAddSuffix[3] || 'karton').toLowerCase();
+        actions.push({
+          action: 'ADD',
+          productQuery: prodQ,
+          qty: qtyVal,
+          unit: unitVal
+        });
+        continue;
+      }
+
+      // C. Action: DELETE (Hapus)
       const isDel = /\b(?:di\s*hapus|hapus|di\s*buang|buang|di\s*hilangkan|hilangkan|di\s*batalkan|batalkan|di\s*cancel|cancel|di\s*coret|coret|ga\s*jadi|nggak\s*jadi)\b/i.test(cleanClause);
       if (isDel) {
         const targetQ = cleanClause
@@ -1393,7 +1665,7 @@ class WavisInteractiveEngine {
         continue;
       }
 
-      // C. Action: QTY REVISION (Ubah Qty Karton)
+      // D. Action: QTY REVISION (Ubah Qty Karton)
       const mQty1 = cleanClause.match(/(?:revisi\s+|ubah\s+)?(.+?)\s+(?:jadi|menjadi)\s+(\d+)\s*(?:karton|ktn|dus|box|bal|ball|pcs|pack|pak)?$/i);
       if (mQty1) {
         const prod = mQty1[1].replace(/\b(revisi|ubah|tolong|mohon|item|barang|produk|po|faktur|invoice)\b/gi, '').trim();
