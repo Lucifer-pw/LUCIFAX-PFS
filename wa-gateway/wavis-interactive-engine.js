@@ -1116,9 +1116,23 @@ class WavisInteractiveEngine {
         const oldCarton = (typeof targetOldItem.cartonCount === 'number' && targetOldItem.cartonCount > 0)
           ? targetOldItem.cartonCount
           : (targetOldItem.qty && oldPcsPerKtn > 0 ? Math.round(targetOldItem.qty / oldPcsPerKtn) : 1);
-        const newCartonQty = (act.qty && act.qty > 0) ? act.qty : oldCarton;
         const pcsPerKtn = Number(targetNewProduct.isiKarton) || 15;
-        const newQtyPcs = newCartonQty * pcsPerKtn;
+        const rawQty = (act.qty && act.qty > 0 && !isNaN(act.qty)) ? act.qty : oldCarton;
+        const unit = (act.unit || 'karton').toLowerCase();
+
+        let newCartonQty = 0;
+        let newQtyPcs = 0;
+
+        if (['roll', 'rol', 'pcs', 'pack', 'pak', 'pc', 'batang'].includes(unit)) {
+          newQtyPcs = Math.round(rawQty);
+          newCartonQty = pcsPerKtn > 0 ? (newQtyPcs / pcsPerKtn) : 1;
+        } else if (['bal', 'ball'].includes(unit)) {
+          newQtyPcs = Math.round(rawQty * 25);
+          newCartonQty = pcsPerKtn > 0 ? (newQtyPcs / pcsPerKtn) : rawQty;
+        } else {
+          newCartonQty = rawQty;
+          newQtyPcs = Math.round(newCartonQty * pcsPerKtn);
+        }
 
         let unitPrice = Number(targetNewProduct.price) || 0;
         let discPct = 0;
@@ -1656,6 +1670,10 @@ class WavisInteractiveEngine {
         currentBlockMode = 'DELETE';
         continue;
       }
+      if (/^(?:revisi\s+)?(?:ganti|tukar|penggantian|penukaran)\s*[:]?$/i.test(cleanLine)) {
+        currentBlockMode = 'SWAP';
+        continue;
+      }
       if (/^(?:revisi\s+)?(?:ubah\s+qty|ganti\s+qty|revisi)\s*[:]?$/i.test(cleanLine)) {
         currentBlockMode = null;
         continue;
@@ -1672,6 +1690,12 @@ class WavisInteractiveEngine {
       if (inlineDelHeaderMatch) {
         currentBlockMode = 'DELETE';
         cleanLine = inlineDelHeaderMatch[1].trim();
+      }
+
+      const inlineSwapHeaderMatch = cleanLine.match(/^(?:revisi\s+)?(?:ganti|tukar|penggantian|penukaran)\s*[:]\s*(.+)$/i);
+      if (inlineSwapHeaderMatch) {
+        currentBlockMode = 'SWAP';
+        cleanLine = inlineSwapHeaderMatch[1].trim();
       }
 
       // Deteksi baris perintah hapus multi-item murni (misal: 'hapus item barang brs 13 dan brs 7')
@@ -1722,27 +1746,44 @@ class WavisInteractiveEngine {
         if (!part) continue;
 
         // A. SWAP (Ganti / Tukar)
+        let swapMatch = null;
         const mSwap1 = part.match(/^(?:revisi\s+|tolong\s+)?(?:ganti|tukar)\s+(.+?)\s+(?:dengan|jadi|ke|menjadi)\s+(.+)$/i);
+        const mSwap2 = part.match(/(.+?)\s+(?:di\s*ganti|ganti|di\s*tukar|tukar)\s+(?:dengan|jadi|ke|menjadi)?\s*(.+)$/i);
+        const mSwap3 = part.match(/^(?:revisi\s+|tolong\s+)?(?:ganti\s+|tukar\s+)?(.+?)\s+(?:menjadi|jadi|ke|dengan)\s+(.+)$/i);
+
         if (mSwap1) {
-          let oldT = mSwap1[1].replace(/\b(item|barang|produk)\b/gi, '').trim();
-          let newT = mSwap1[2].trim();
-          let qty = null;
-          const qm = newT.match(/(\d+(?:[.,]\d+)?)\s*(?:karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/i);
-          if (qm) qty = parseFloat(qm[1].replace(',', '.'));
-          let newProd = newT.replace(/(\d+(?:[.,]\d+)?)\s*(?:karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/gi, '').trim();
-          actions.push({ action: 'SWAP', oldQuery: oldT, newQuery: newProd, qty });
-          continue;
+          swapMatch = { oldT: mSwap1[1], newT: mSwap1[2] };
+        } else if (mSwap2) {
+          swapMatch = { oldT: mSwap2[1], newT: mSwap2[2] };
+        } else if (mSwap3) {
+          const checkNewT = mSwap3[2].trim();
+          const nonQty = checkNewT
+            .replace(/\d+(?:[.,]\d+)?/g, '')
+            .replace(/\b(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/gi, '')
+            .trim();
+          if (nonQty.length > 0 || currentBlockMode === 'SWAP') {
+            swapMatch = { oldT: mSwap3[1], newT: mSwap3[2] };
+          }
         }
 
-        const mSwap2 = part.match(/(.+?)\s+(?:di\s*ganti|ganti|di\s*tukar|tukar)\s+(?:dengan|jadi|ke|menjadi)?\s*(.+)$/i);
-        if (mSwap2) {
-          let oldT = mSwap2[1].replace(/\b(revisi|ubah|tolong|mohon|item|barang|produk)\b/gi, '').trim();
-          let newT = mSwap2[2].trim();
+        if (swapMatch) {
+          let oldT = swapMatch.oldT.replace(/^(?:ganti|tukar|revisi|ubah|tolong|mohon|item|barang|produk)\s+/gi, '').trim();
+          let newT = swapMatch.newT.trim();
           let qty = null;
-          const qm = newT.match(/(\d+(?:[.,]\d+)?)\s*(?:karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/i);
-          if (qm) qty = parseFloat(qm[1].replace(',', '.'));
-          let newProd = newT.replace(/(\d+(?:[.,]\d+)?)\s*(?:karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/gi, '').trim();
-          actions.push({ action: 'SWAP', oldQuery: oldT, newQuery: newProd, qty });
+          let unit = 'karton';
+          const qm = newT.match(/(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/i);
+          if (qm) {
+            qty = parseFloat(qm[1].replace(',', '.'));
+            unit = qm[2].toLowerCase();
+          } else {
+            const qm2 = newT.match(/(.*?)\s+(\d+)$/);
+            if (qm2) qty = parseFloat(qm2[2]);
+          }
+          let newProd = newT
+            .replace(/(\d+(?:[.,]\d+)?)\s*(karton|ktn|krton|krtn|krt|dus|box|bal|ball|pcs|pack|pak|roll|rol)\b/gi, '')
+            .replace(/\s+\d+$/, '')
+            .trim();
+          actions.push({ action: 'SWAP', oldQuery: oldT, newQuery: newProd, qty, unit });
           continue;
         }
 

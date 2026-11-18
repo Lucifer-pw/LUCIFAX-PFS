@@ -725,6 +725,24 @@ engine.setRawMessageStore((jid, id, msg) => {
     sizeGrams: 400,
     stock: 500
   });
+  engine.autoPoProcessor.cachedProducts.push({
+    id: 'p-brs-13',
+    productName: 'BRS COKLAT 13S 2 500G',
+    name: 'BRS COKLAT 13S 2 500G',
+    price: 27962,
+    isiKarton: 15,
+    sizeGrams: 500,
+    stock: 400
+  });
+  engine.autoPoProcessor.cachedProducts.push({
+    id: 'p-brs-7',
+    productName: 'BRS COKLAT 7S 2 500G',
+    name: 'BRS COKLAT 7S 2 500G',
+    price: 27962,
+    isiKarton: 15,
+    sizeGrams: 500,
+    stock: 400
+  });
 
   const inv700ThreeItems = {
     invoiceNo: '700',
@@ -799,6 +817,43 @@ engine.setRawMessageStore((jid, id, msg) => {
   console.log('  ✓ 15A PASSED: Akumulasi karton dari database sinkron 10 Ktn (150 pcs) & total 17 Ktn!');
 
   console.log('✅ Test 15 PASSED: Sinkronisasi Karton dengan Qty Firestore Terverifikasi 100%!');
+
+  // 16. UJI MULTI-LINE COMBINED BLOCK (REVISI TAMBAH + GANTI STANDALONE HEADER)
+  console.log('\n--- Test 16: Multi-line Combined Block (Header Ganti Standalone & Subtitusi Barang Nyata) ---');
+  const inv700TwoItemsBeforeSwap = {
+    invoiceNo: '700',
+    customerId: 'c-awff',
+    customerName: 'AW FF (AW FROZEN FOOD)',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    province: 'JAWA TENGAH',
+    status: 'PENDING',
+    items: [
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 150, price: 27962, subtotal: 4194300, sizeGrams: 500 },
+      { productName: 'BRS MERAH 24S 500G', qty: 105, price: 34549, subtotal: 3627645, sizeGrams: 500 }
+    ],
+    grandTotal: 7821945
+  };
+
+  const multiBlockPayload = {
+    messageText: 'revisi tambah\n1. brs 13 15 karton\nganti\nbrs merah menjadi brs 24 5 karton',
+    mockInvoice: inv700TwoItemsBeforeSwap
+  };
+
+  const multiBlockRes = await engine.handlePoRevision(multiBlockPayload, 'Rogue');
+  console.log(multiBlockRes);
+
+  assert(!multiBlockRes.includes('BRS MERAH 24S 500G'), 'BRS MERAH harus berhasil diganti dan TIDAK boleh tersisa di faktur');
+  assert(multiBlockRes.includes('BRS COKLAT 24S'), 'BRS COKLAT 24S harus masuk menggantikan BRS MERAH');
+  assert(multiBlockRes.includes('5 Ktn (75 pcs)'), 'BRS COKLAT 24S harus 5 Ktn (75 pcs)');
+  assert(multiBlockRes.includes('BRS COKLAT 13S 2 500G'), 'BRS COKLAT 13S harus berhasil ditambahkan');
+  assert(multiBlockRes.includes('15 Ktn (225 pcs)'), 'BRS COKLAT 13S harus 15 Ktn (225 pcs)');
+  assert(multiBlockRes.includes('10 Ktn (150 pcs)'), 'BRS COKLAT 7S harus tetap 10 Ktn (150 pcs)');
+  assert(multiBlockRes.includes('GrandTotal Karton:* 30 Ktn'), 'Grand total karton harus 30 Ktn (10 + 5 + 15)');
+  assert(multiBlockRes.includes('GRAND TOTAL:* *Rp 12.603.300*'), 'Grand total rupiah harus tepat Rp 12.603.300');
+  console.log('  ✓ 16A PASSED: Multi-line combined block (revisi tambah + header ganti standalone) berhasil 100%!');
+
+  console.log('✅ Test 16 PASSED: Header Blok Ganti Standalone & Subtitusi Barang Terverifikasi 100%!');
 
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();
