@@ -130,12 +130,16 @@ const mockCustomers = [
   { id: 'c2', customerName: 'MAJU MARKET MANDIRI', aliasName: 'MMM' },
   { id: 'c3', customerName: 'GRIYA FROZEN FOOD', aliasName: 'GRIYA FF' },
   { id: 'H002', customerName: 'AW FROZEN FOOD', aliasName: 'AW FF' },
-  { id: 'AD008', customerName: 'SURYANTO WIBISONO WIBOWO', aliasName: 'SUMBER JADI JAYA', odooNamePtSo: 'SJJ JATENG' }
+  { id: 'AD008', customerName: 'SURYANTO WIBISONO WIBOWO', aliasName: 'SUMBER JADI JAYA', odooNamePtSo: 'SJJ JATENG' },
+  { id: 'cNardi', customerName: 'NARDI', aliasName: 'NARDI FF' },
+  { id: 'cPipit', customerName: 'PIPIT ARI KUSUMA', aliasName: 'GRAHA FF' },
+  { id: 'cAlisya', customerName: 'ABDUL AZIZ', aliasName: 'ALISYA FF COMAL' }
 ];
 
 engine.autoPoProcessor = {
   cachedRules: [
-    { type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SURYANTO WIBISONO WIBOWO', targetId: 'AD008' }
+    { type: 'customer_alias', keyword: 'SJJ', mappedValue: 'SURYANTO WIBISONO WIBOWO', targetId: 'AD008' },
+    { type: 'customer_alias', keyword: 'Pak Nardi', mappedValue: 'NARDI FF (NARDI)' }
   ],
   cachedProducts: [
     { id: 'p1', productName: 'BRS COKLAT 24S 500 G', price: 30688, isiKarton: 15, stock: 435 },
@@ -168,6 +172,19 @@ console.log(`  ✓ Cocok Pelanggan: "${custMatchAw.aliasName} (${custMatchAw.cus
 const custMatchAw2 = engine.matchCustomerFromQuery('piutang AW FF', mockCustomers);
 assert(custMatchAw2 && custMatchAw2.aliasName === 'AW FF', 'Harus cocok dengan AW FF');
 console.log(`  ✓ Cocok Pelanggan: "${custMatchAw2.aliasName} (${custMatchAw2.customerName})"`);
+
+// Pengujian pencegahan tabrakan inisial PAK (Pipit Ari Kusuma) vs kata sapaan "Pak"
+const custMatchNardi = engine.matchCustomerFromQuery('Tolong kartu piutang file pdf pak nardi', mockCustomers);
+assert(custMatchNardi && custMatchNardi.id === 'cNardi', 'Harus cocok dengan Nardi, TIDAK BOLEH salah mencocokkan Pipit Ari Kusuma (PAK)');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchNardi.aliasName} (${custMatchNardi.customerName})" (Anti-Collision Inisial PAK)`);
+
+const custMatchAlisya = engine.matchCustomerFromQuery('kirimkan file pdf kartu piutang alisya', mockCustomers);
+assert(custMatchAlisya && custMatchAlisya.id === 'cAlisya', 'Harus cocok dengan Abdul Aziz (Alisya FF Comal)');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchAlisya.aliasName} (${custMatchAlisya.customerName})"`);
+
+const custMatchGraha = engine.matchCustomerFromQuery('tolong piutang graha ff', mockCustomers);
+assert(custMatchGraha && custMatchGraha.id === 'cPipit', 'Harus cocok dengan Pipit Ari Kusuma (Graha FF)');
+console.log(`  ✓ Cocok Pelanggan: "${custMatchGraha.aliasName} (${custMatchGraha.customerName})"`);
 
 const prodMatch = engine.matchProductFromQuery('stok bratwurst mini sisa berapa', engine.autoPoProcessor.cachedProducts);
 assert(prodMatch && prodMatch.productName.includes('BRATWURST SAPI MINI'), 'Harus cocok dengan Bratwurst Mini');

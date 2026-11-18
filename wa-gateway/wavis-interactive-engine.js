@@ -313,7 +313,7 @@ class WavisInteractiveEngine {
     const clean = normalizeText(text);
     if (!clean || !Array.isArray(customers) || customers.length === 0) return null;
 
-    // 0. Cek Engine Self-Learning (ESL) rules dari ai_knowledge_rules (misal 'SJJ' -> 'SURYANTO WIBISONO WIBOWO' / 'AD008')
+    // 0. Cek Engine Self-Learning (ESL) rules dari ai_knowledge_rules (misal 'SJJ' -> 'SURYANTO WIBISONO WIBOWO' / 'AD008', 'Pak Nardi' -> 'NARDI FF (NARDI)')
     const rules = this.autoPoProcessor?.cachedRules || [];
     for (const rule of rules) {
       if (rule.type === 'customer_alias') {
@@ -321,17 +321,38 @@ class WavisInteractiveEngine {
         if (kw.length >= 2) {
           const kwPattern = new RegExp('(^|\\s)' + kw.replace(/\s+/g, '\\s+') + '(\\s|$)', 'i');
           if (kwPattern.test(clean)) {
-            const found = customers.find(c =>
-              (rule.targetId && c.id === rule.targetId) ||
-              (rule.mappedValue && (c.customerName === rule.mappedValue || c.aliasName === rule.mappedValue)) ||
-              (rule.mappedValue && normalizeText(c.customerName).includes(normalizeText(rule.mappedValue))) ||
-              (rule.mappedValue && normalizeText(c.aliasName).includes(normalizeText(rule.mappedValue)))
-            );
+            const normMapped = normalizeText(rule.mappedValue || '');
+            const mappedParts = (rule.mappedValue || '')
+              .replace(/[()]/g, ' ')
+              .split(/\s+/)
+              .map(p => normalizeText(p))
+              .filter(p => p.length >= 2 && !['ff', 'frozen', 'food', 'toko', 'cv', 'pt', 'ud'].includes(p));
+
+            const found = customers.find(c => {
+              if (rule.targetId && c.id === rule.targetId) return true;
+              const cName = normalizeText(c.customerName || c.name || '');
+              const cAlias = normalizeText(c.aliasName || c.alias || '');
+
+              // Exact match
+              if (cName === normMapped || cAlias === normMapped) return true;
+              // Bidirectional inclusion
+              if (cName.length >= 2 && (normMapped.includes(cName) || cName.includes(normMapped))) return true;
+              if (cAlias.length >= 2 && (normMapped.includes(cAlias) || cAlias.includes(normMapped))) return true;
+
+              // Mapped parts match (misal 'NARDI FF (NARDI)' -> mp 'nardi' cocok dengan cName / cAlias 'nardi')
+              for (const mp of mappedParts) {
+                if (cName.includes(mp) || cAlias.includes(mp)) return true;
+              }
+              return false;
+            });
             if (found) return found;
           }
         }
       }
     }
+
+    // Blacklist inisial yang bertabrakan dengan kata umum / sapaan / partikel bahasa Indonesia
+    const initialsBlacklist = ['pak', 'mas', 'kak', 'bu', 'ibu', 'om', 'dan', 'ke', 'di', 'ada', 'ff', 'pt', 'cv', 'ud'];
 
     // 1. Cek Initials / Singkatan / Akronim Nama Toko (misal "SUMBER JADI JAYA" -> "SJJ", "MAJU MARKET MANDIRI" -> "MMM")
     for (const c of customers) {
@@ -342,11 +363,11 @@ class WavisInteractiveEngine {
       const aliasInitials = getInitials(alias);
       const nameInitials = getInitials(name);
 
-      if (aliasInitials.length >= 2) {
+      if (aliasInitials.length >= 2 && !initialsBlacklist.includes(aliasInitials)) {
         const initPat = new RegExp('(^|\\s)' + aliasInitials + '(\\s|$)', 'i');
         if (initPat.test(clean)) return c;
       }
-      if (nameInitials.length >= 2) {
+      if (nameInitials.length >= 2 && !initialsBlacklist.includes(nameInitials)) {
         const initPat = new RegExp('(^|\\s)' + nameInitials + '(\\s|$)', 'i');
         if (initPat.test(clean)) return c;
       }
