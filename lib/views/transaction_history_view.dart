@@ -5848,12 +5848,10 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                               borderRadius: BorderRadius.circular(10),
                                               border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
                                             ),
-                                            child: Wrap(
-                                              crossAxisAlignment: WrapCrossAlignment.center,
-                                              spacing: 8,
-                                              runSpacing: 8,
+                                            child: Row(
                                               children: [
                                                 const Icon(Icons.fact_check_rounded, color: Colors.cyanAccent, size: 20),
+                                                const SizedBox(width: 8),
                                                 Flexible(
                                                   child: Text(
                                                     toolbarLabel,
@@ -5861,6 +5859,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
+                                                const SizedBox(width: 8),
                                                 OutlinedButton(
                                                   onPressed: () {
                                                     setState(() {
@@ -5873,18 +5872,20 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                   ),
                                                   child: const Text('Batal', style: TextStyle(color: Colors.white70, fontSize: 12)),
                                                 ),
+                                                const SizedBox(width: 8),
                                                 // Skim Muatan Kendaraan button — always available
                                                 ElevatedButton.icon(
                                                   onPressed: () {
                                                     _showVehicleLoadingDialog(selectedTrList);
                                                   },
                                                   icon: const Icon(Icons.local_shipping_rounded, size: 16, color: Colors.black),
-                                                  label: const Text('Skim Muatan Kendaraan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                                                  label: const Text('Skim Muatan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                                                   style: ElevatedButton.styleFrom(
                                                     backgroundColor: const Color(0xFF10B981),
                                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                                   ),
                                                 ),
+                                                const SizedBox(width: 8),
                                                 // Buat LA button — only enabled if same customer
                                                 ElevatedButton.icon(
                                                   onPressed: isSameCustomer
@@ -5894,7 +5895,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                       : null,
                                                   icon: Icon(Icons.description_rounded, size: 16, color: isSameCustomer ? Colors.black : Colors.white38),
                                                   label: Text(
-                                                    'Buat Invoice Lampiran (LA)',
+                                                    'Buat LA',
                                                     style: TextStyle(
                                                       color: isSameCustomer ? Colors.black : Colors.white38,
                                                       fontWeight: FontWeight.bold,
