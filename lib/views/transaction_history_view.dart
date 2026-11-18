@@ -3919,22 +3919,41 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                 ],
               ),
               content: SizedBox(
-                width: isMobile ? double.maxFinite : 900,
-                height: isMobile ? (MediaQuery.of(context).size.height * 0.78) : 620,
+                width: isMobile ? double.maxFinite : 980,
+                height: isMobile ? (MediaQuery.of(context).size.height * 0.90) : (MediaQuery.of(context).size.height * 0.88).clamp(650.0, 850.0),
                 child: Column(
                   children: [
-                    // ── 4 Metric Cards ──
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981)),
-                        _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8)),
-                        _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24)),
-                        _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
+                    // ── 4 Metric Cards (compact & responsive) ──
+                    if (isMobile) ...[
+                      Row(
+                        children: [
+                          Expanded(child: _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981))),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8))),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(child: _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24))),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA))),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(child: _buildLoadingMetricCard('📦', 'Total Karton', summary.grandTotalKartonStr, const Color(0xFF10B981))),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildLoadingMetricCard('🔢', 'Total Qty', '${NumberFormat('#,##0', 'id_ID').format(summary.grandTotalQty)} Pcs', const Color(0xFF38BDF8))),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildLoadingMetricCard('⚖️', 'Total Berat', '${summary.grandTotalWeightKg.toStringAsFixed(1)} Kg', const Color(0xFFFBBF24))),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildLoadingMetricCard('🏷️', 'SKU Induk', '${summary.items.length} Macam', const Color(0xFFA78BFA))),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
 
                     // ── Tab Bar ──
                     Container(
@@ -3948,7 +3967,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: GestureDetector(
                               onTap: () => setDialogState(() => tabIndex = 0),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(vertical: 7),
                                 decoration: BoxDecoration(
                                   color: tabIndex == 0 ? const Color(0xFF10B981).withOpacity(0.2) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -3960,7 +3979,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     style: TextStyle(
                                       color: tabIndex == 0 ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ),
@@ -3971,7 +3990,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: GestureDetector(
                               onTap: () => setDialogState(() => tabIndex = 1),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(vertical: 7),
                                 decoration: BoxDecoration(
                                   color: tabIndex == 1 ? const Color(0xFF38BDF8).withOpacity(0.2) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -3983,7 +4002,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                     style: TextStyle(
                                       color: tabIndex == 1 ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ),
@@ -3993,7 +4012,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
 
                     // ── Tab Content ──
                     Expanded(
@@ -4002,13 +4021,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           : _buildLoadingDropPointTab(summary, isMobile),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
 
-                    // ── Action Buttons ──
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
+                    // ── Action Buttons (compact) ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton.icon(
                           onPressed: () {
@@ -4021,13 +4038,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.black),
-                          label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                          icon: const Icon(Icons.copy_rounded, size: 14, color: Colors.black),
+                          label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                         ),
+                        const SizedBox(width: 10),
                         ElevatedButton.icon(
                           onPressed: () async {
                             try {
@@ -4040,11 +4058,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               }
                             }
                           },
-                          icon: const Icon(Icons.print_rounded, size: 16, color: Colors.black),
-                          label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                          icon: const Icon(Icons.print_rounded, size: 14, color: Colors.black),
+                          label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF38BDF8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                         ),
                       ],
@@ -4061,23 +4079,26 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   Widget _buildLoadingMetricCard(String emoji, String label, String value, Color accentColor) {
     return Container(
-      width: 190,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: accentColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: accentColor.withOpacity(0.4)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
-              Text(value, style: TextStyle(color: accentColor, fontSize: 15, fontWeight: FontWeight.bold)),
-            ],
+          Text(emoji, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.w600)),
+                Text(value, style: TextStyle(color: accentColor, fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         ],
       ),
@@ -4100,13 +4121,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columnSpacing: 14,
-              horizontalMargin: 10,
-              headingRowHeight: 44,
-              dataRowMinHeight: 56,
-              dataRowMaxHeight: 80,
+              columnSpacing: 10,
+              horizontalMargin: 8,
+              headingRowHeight: 34,
+              dataRowMinHeight: 38,
+              dataRowMaxHeight: 56,
               headingRowColor: MaterialStateProperty.all(const Color(0xFF10B981).withOpacity(0.15)),
-              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
+              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
               columns: const [
                 DataColumn(label: Text('NO')),
                 DataColumn(label: Text('KODE INDUK')),
@@ -4163,7 +4184,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11))),
                     DataCell(
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 260),
+                        constraints: const BoxConstraints(maxWidth: 380),
                         child: Wrap(
                           spacing: 4,
                           runSpacing: 3,
@@ -5837,77 +5858,163 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                           );
 
                                           final String toolbarLabel = isSameCustomer
-                                              ? '📌 ${_selectedInvoiceNos.length} Invoice Terpilih (${distinctCustomerKeys.first}) | ${loadingSummary.grandTotalKartonStr}'
+                                              ? '📌 ${_selectedInvoiceNos.length} Invoice Terpilih (${distinctCustomerKeys.isNotEmpty ? distinctCustomerKeys.first : "-"}) | ${loadingSummary.grandTotalKartonStr}'
                                               : '🚚 ${_selectedInvoiceNos.length} Invoice Terpilih (${distinctCustomerKeys.length} Toko) | Estimasi Muatan: ${loadingSummary.grandTotalKartonStr} (${loadingSummary.grandTotalWeightKg.toStringAsFixed(1)} kg)';
 
                                           return Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                            margin: const EdgeInsets.only(bottom: 12),
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                            margin: const EdgeInsets.only(bottom: 10),
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF0284C7).withOpacity(0.18),
                                               borderRadius: BorderRadius.circular(10),
                                               border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
                                             ),
-                                            child: Row(
-                                              children: [
-                                                const Icon(Icons.fact_check_rounded, color: Colors.cyanAccent, size: 20),
-                                                const SizedBox(width: 8),
-                                                Flexible(
-                                                  child: Text(
-                                                    toolbarLabel,
-                                                    style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                OutlinedButton(
-                                                  onPressed: () {
-                                                    setState(() {
-                                                      _selectedInvoiceNos.clear();
-                                                    });
-                                                  },
-                                                  style: OutlinedButton.styleFrom(
-                                                    side: const BorderSide(color: Colors.white38),
-                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                  ),
-                                                  child: const Text('Batal', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                // Skim Muatan Kendaraan button — always available
-                                                ElevatedButton.icon(
-                                                  onPressed: () {
-                                                    _showVehicleLoadingDialog(selectedTrList);
-                                                  },
-                                                  icon: const Icon(Icons.local_shipping_rounded, size: 16, color: Colors.black),
-                                                  label: const Text('Skim Muatan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: const Color(0xFF10B981),
-                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                // Buat LA button — only enabled if same customer
-                                                ElevatedButton.icon(
-                                                  onPressed: isSameCustomer
-                                                      ? () {
-                                                          _showCreateLampiranDialog(selectedTrList);
-                                                        }
-                                                      : null,
-                                                  icon: Icon(Icons.description_rounded, size: 16, color: isSameCustomer ? Colors.black : Colors.white38),
-                                                  label: Text(
-                                                    'Buat LA',
-                                                    style: TextStyle(
-                                                      color: isSameCustomer ? Colors.black : Colors.white38,
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 12,
+                                            child: LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                final bool isNarrow = constraints.maxWidth < 650;
+                                                if (isNarrow) {
+                                                  return Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          const Icon(Icons.fact_check_rounded, color: Colors.cyanAccent, size: 18),
+                                                          const SizedBox(width: 8),
+                                                          Expanded(
+                                                            child: Text(
+                                                              toolbarLabel,
+                                                              style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 6),
+                                                          InkWell(
+                                                            onTap: () {
+                                                              setState(() {
+                                                                _selectedInvoiceNos.clear();
+                                                              });
+                                                            },
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                              decoration: BoxDecoration(
+                                                                borderRadius: BorderRadius.circular(6),
+                                                                border: Border.all(color: Colors.white38),
+                                                              ),
+                                                              child: const Text('Batal', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Row(
+                                                        children: [
+                                                          Expanded(
+                                                            child: ElevatedButton.icon(
+                                                              onPressed: () {
+                                                                _showVehicleLoadingDialog(selectedTrList);
+                                                              },
+                                                              icon: const Icon(Icons.local_shipping_rounded, size: 15, color: Colors.black),
+                                                              label: const Text('Skim Muatan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+                                                              style: ElevatedButton.styleFrom(
+                                                                backgroundColor: const Color(0xFF10B981),
+                                                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 8),
+                                                          Expanded(
+                                                            child: ElevatedButton.icon(
+                                                              onPressed: isSameCustomer
+                                                                  ? () {
+                                                                      _showCreateLampiranDialog(selectedTrList);
+                                                                    }
+                                                                  : null,
+                                                              icon: Icon(Icons.description_rounded, size: 15, color: isSameCustomer ? Colors.black : Colors.white38),
+                                                              label: Text(
+                                                                'Buat LA',
+                                                                style: TextStyle(
+                                                                  color: isSameCustomer ? Colors.black : Colors.white38,
+                                                                  fontWeight: FontWeight.bold,
+                                                                  fontSize: 11,
+                                                                ),
+                                                              ),
+                                                              style: ElevatedButton.styleFrom(
+                                                                backgroundColor: isSameCustomer ? Colors.cyanAccent : const Color(0xFF334155),
+                                                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  );
+                                                }
+
+                                                // Desktop view
+                                                return Row(
+                                                  children: [
+                                                    const Icon(Icons.fact_check_rounded, color: Colors.cyanAccent, size: 20),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        toolbarLabel,
+                                                        style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
                                                     ),
-                                                  ),
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: isSameCustomer ? Colors.cyanAccent : const Color(0xFF334155),
-                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                  ),
-                                                ),
-                                              ],
+                                                    const SizedBox(width: 8),
+                                                    OutlinedButton(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _selectedInvoiceNos.clear();
+                                                        });
+                                                      },
+                                                      style: OutlinedButton.styleFrom(
+                                                        side: const BorderSide(color: Colors.white38),
+                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                      ),
+                                                      child: const Text('Batal', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    // Skim Muatan Kendaraan button — always available
+                                                    ElevatedButton.icon(
+                                                      onPressed: () {
+                                                        _showVehicleLoadingDialog(selectedTrList);
+                                                      },
+                                                      icon: const Icon(Icons.local_shipping_rounded, size: 16, color: Colors.black),
+                                                      label: const Text('Skim Muatan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: const Color(0xFF10B981),
+                                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    // Buat LA button — only enabled if same customer
+                                                    ElevatedButton.icon(
+                                                      onPressed: isSameCustomer
+                                                          ? () {
+                                                              _showCreateLampiranDialog(selectedTrList);
+                                                            }
+                                                          : null,
+                                                      icon: Icon(Icons.description_rounded, size: 16, color: isSameCustomer ? Colors.black : Colors.white38),
+                                                      label: Text(
+                                                        'Buat LA',
+                                                        style: TextStyle(
+                                                          color: isSameCustomer ? Colors.black : Colors.white38,
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: isSameCustomer ? Colors.cyanAccent : const Color(0xFF334155),
+                                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
                                             ),
                                           );
                                         },
