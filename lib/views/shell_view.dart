@@ -51,7 +51,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.295';
+  String _appVersion = '3.3.296';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;

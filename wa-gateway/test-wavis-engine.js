@@ -700,5 +700,66 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 13 PASSED: Fitur Penambahan Item (ADD_ITEM) & Akumulasi Terverifikasi 100%!');
 
+  // 14. UJI POLA PERCAKAPAN WHATSAPP NYATA (REVISI TAMBAHAN MULTI-LINE & ROLL/PCS UNIT CONVERSION)
+  console.log('\n--- Test 14: Pola Percakapan WhatsApp Nyata (Revisi Tambahan Multi-Line, Unit Awareness, Anti-NaN) ---');
+
+  // Pastikan master products memuat Rolade Ayam Roll 400G dan BRS Merah 24S 500G
+  engine.autoPoProcessor.cachedProducts.push({
+    id: 'p-brs-merah-24',
+    productName: 'BRS MERAH 24S 500G',
+    name: 'BRS MERAH 24S 500G',
+    price: 34549,
+    isiKarton: 15,
+    sizeGrams: 500,
+    stock: 300
+  });
+  engine.autoPoProcessor.cachedProducts.push({
+    id: 'p-rolade-ayam-roll',
+    productName: 'ROLLADE AYAM ROLL 400 G',
+    name: 'ROLLADE AYAM ROLL 400 G',
+    price: 24797,
+    isiKarton: 25,
+    sizeGrams: 400,
+    stock: 500
+  });
+
+  const inv700ThreeItems = {
+    invoiceNo: '700',
+    customerId: 'c-awff',
+    customerName: 'AW FF (AW FROZEN FOOD)',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    province: 'JAWA TENGAH',
+    status: 'PENDING',
+    items: [
+      { productName: 'BRS COKLAT 13S 2 500G', qty: 450, cartonCount: 30, price: 27962, subtotal: 12582900, isiKarton: 15 },
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 75, cartonCount: 5, price: 27962, subtotal: 2097150, isiKarton: 15 },
+      { productName: 'BRS COKLAT 24S 2 500G', qty: 150, cartonCount: 10, price: 28234, subtotal: 4235100, isiKarton: 15 }
+    ],
+    grandTotal: 18915150
+  };
+
+  const exactUserChatPayload = {
+    messageText: 'revisi tambahan\nbrs merah 15 karton\nrolade ayam roll 250 roll',
+    mockInvoice: JSON.parse(JSON.stringify(inv700ThreeItems))
+  };
+
+  const exactUserRes = await engine.handlePoRevision(exactUserChatPayload, 'Rogue');
+  console.log(exactUserRes);
+
+  assert(!exactUserRes.includes('NaN'), 'Respon TIDAK BOLEH memuat nilai NaN sama sekali!');
+  assert(exactUserRes.includes('30 Ktn (450 pcs)'), 'BRS COKLAT 13S harus tetap 30 Ktn (450 pcs), tidak boleh rusak jadi NaN');
+  assert(exactUserRes.includes('5 Ktn (75 pcs)'), 'BRS COKLAT 7S harus tetap 5 Ktn');
+  assert(exactUserRes.includes('10 Ktn (150 pcs)'), 'BRS COKLAT 24S harus tetap 10 Ktn');
+  assert(exactUserRes.includes('BRS MERAH 24S 500G'), 'BRS MERAH 24S harus berhasil ditambahkan');
+  assert(exactUserRes.includes('15 Ktn (225 pcs)'), 'BRS MERAH harus 15 Ktn (225 pcs)');
+  assert(exactUserRes.includes('ROLLADE AYAM ROLL 400 G'), 'ROLLADE AYAM ROLL harus berhasil ditambahkan');
+  assert(exactUserRes.includes('10 Ktn (250 pcs)'), 'ROLADE AYAM ROLL 250 roll (isi 25) harus dikonversi menjadi 10 Ktn (250 pcs)');
+  assert(exactUserRes.includes('DAFTAR BARANG (5 Item):'), 'Faktur harus bertambah menjadi 5 item');
+  assert(exactUserRes.includes('GrandTotal Karton:* 70 Ktn'), 'Grand total karton harus 70 Ktn (30+5+10+15+10)');
+  console.log('  ✓ 14A PASSED: "revisi tambahan\\nbrs merah 15 karton\\nrolade ayam roll 250 roll" berhasil 100% tanpa NaN!');
+
+  console.log('✅ Test 14 PASSED: Pola Percakapan WhatsApp Nyata & Unit Awareness Sempurna!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();
