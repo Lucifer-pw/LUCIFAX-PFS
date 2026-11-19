@@ -255,11 +255,14 @@ class WavisInteractiveEngine {
       return 'QUERY_RECEIVABLES';
     }
 
-    // 2. Cek Pola Tanya Stok:
+    // 2. Cek Pola Tanya Stok & Permintaan Dokumen PDF Stok:
     const stockExplicitPattern = /\b(stok|stock|sisa berapa|sisa stok|info stok|cek stok)\b|\b(ada|masih ada)\s+(ga|gak|nggak|kah|blm|belum|ndak|ora)\b/i;
     const readyWithContextPattern = /\bready\s+(stok|stock|ga|gak|nggak|kah|ta|po|dong|blm|belum)\b|\b(stok|stock|masih|apakah|apa)\s+ready\b/i;
 
-    if (stockExplicitPattern.test(clean) || readyWithContextPattern.test(clean)) {
+    if (stockExplicitPattern.test(clean) || readyWithContextPattern.test(clean) || (isPdfRequest && /\b(master barang|daftar barang|katalog|stok|stock|barang)\b/i.test(clean))) {
+      if (isPdfRequest) {
+        return 'SEND_PDF_STOCK';
+      }
       return 'QUERY_STOCK';
     }
 
@@ -2125,6 +2128,58 @@ class WavisInteractiveEngine {
       console.error('[L-W.A.V.I.S SEND PDF RECEIVABLES ERROR]', err.message);
       return {
         reply: `⚠️ Maaf ${senderName}, gagal membuat file PDF kartu piutang: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Membuat dan Mengirimkan File PDF Data Master Stok Barang Resmi (Persis Gambar 1)
+   */
+  async handleSendPdfStock(text, senderName = 'Kak') {
+    await this.autoPoProcessor.refreshCacheIfNeeded();
+    const products = this.autoPoProcessor.cachedProducts || [];
+
+    if (!products || products.length === 0) {
+      return {
+        reply: `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Saat ini data master produk belum termuat dari sistem. Mohon coba beberapa saat lagi ya. 🙏`
+      };
+    }
+
+    try {
+      const pdfBuffer = WavisPdfGenerator.generateStockPdf(products);
+
+      let dateFileStr = '20261119';
+      try {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        dateFileStr = `${yyyy}${mm}${dd}`;
+      } catch (_) {}
+
+      const fileName = `Master_Barang_${dateFileStr}.pdf`;
+      const caption = `📦 *[DATA MASTER BARANG CABANG JAWA TENGAH]*\n` +
+        `PT PUTRA FIVA SEJAHTERA\n` +
+        `Total Master Barang: ${products.length} Produk\n` +
+        `Dokumen resmi format A4 siap cetak & tinjau stok.\n` +
+        `Dibuat otomatis oleh L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System) ✨`;
+
+      return {
+        reply: caption,
+        document: {
+          buffer: pdfBuffer,
+          mimetype: 'application/pdf',
+          fileName: fileName,
+          caption: caption
+        }
+      };
+    } catch (err) {
+      console.error('[L-W.A.V.I.S SEND PDF STOCK ERROR]', err.message);
+      return {
+        reply: `⚠️ Maaf ${senderName}, terjadi kendala saat membuat file dokumen PDF stok master barang: ${err.message}`
       };
     }
   }

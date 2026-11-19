@@ -766,6 +766,11 @@ class _ProductListViewState extends State<ProductListView> {
                       'Tanggal Cetak: $dateStr',
                       style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
                     ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System)',
+                      style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey600),
+                    ),
                   ],
                 ),
                 pw.Column(
@@ -4431,6 +4436,8 @@ class _ProductListViewState extends State<ProductListView> {
                     pw.Text('PT. PANGAN FROZEN SEJAHTERA', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF0F172A))),
                     pw.SizedBox(height: 1),
                     pw.Text('Dicetak: $dateStr | Total Barang: ${items.length} item', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                    pw.SizedBox(height: 1),
+                    pw.Text('L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System)', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey600)),
                   ],
                 ),
               ],

@@ -373,6 +373,10 @@ engine.setRawMessageStore((jid, id, msg) => {
   assert.strictEqual(pdfReceivablesIntent, 'SEND_PDF_RECEIVABLES', 'Harus mengenali intent SEND_PDF_RECEIVABLES');
   console.log('  ✓ 9A-2: "kirimkan file pdf piutang afm" → SEND_PDF_RECEIVABLES');
 
+  const pdfStockIntent = engine.classifyIntent('pdf stok keseluruhan');
+  assert.strictEqual(pdfStockIntent, 'SEND_PDF_STOCK', 'Harus mengenali intent SEND_PDF_STOCK');
+  console.log('  ✓ 9A-3: "pdf stok keseluruhan" → SEND_PDF_STOCK');
+
   // 9B. Uji Pembuatan Buffer Dokumen PDF Faktur Penjualan (Sesuai Layout Resmi Kasir Image 4)
   engine.mockInvoices['700'] = {
     ...mockInvoice,
@@ -410,6 +414,15 @@ engine.setRawMessageStore((jid, id, msg) => {
   assert.strictEqual(capturedDocPayload.fileName, '700_AW_FF_SEMARANG_20261117.pdf', 'Nama file pada Baileys payload harus sesuai format resmi');
   assert.strictEqual(capturedDocPayload.mimetype, 'application/pdf', 'Mimetype harus application/pdf');
   console.log('  ✓ 9C: Pengiriman Dokumen PDF via Baileys Socket terverifikasi sukses!');
+
+  // 9D. Uji Pembuatan Dokumen PDF Data Master Stok Barang Resmi (Format Gambar 1)
+  const pdfStockRes = await engine.handleSendPdfStock('pdf stok keseluruhan', 'Rogue');
+  assert(pdfStockRes && pdfStockRes.document, 'Respon harus memiliki objek document');
+  assert(pdfStockRes.document.buffer instanceof Buffer, 'Buffer PDF harus bertipe Buffer');
+  assert(pdfStockRes.document.buffer.length > 500, 'Ukuran PDF harus valid (> 500 bytes)');
+  assert(pdfStockRes.document.fileName.startsWith('Master_Barang_'), 'Nama file PDF master barang harus Master_Barang_*.pdf');
+  assert(pdfStockRes.document.buffer.slice(0, 8).toString().includes('%PDF-1.4'), 'Header binary file harus %PDF-1.4');
+  console.log(`  ✓ 9D: Berhasil generate PDF Data Master Stok Barang (${pdfStockRes.document.fileName}, ${pdfStockRes.document.buffer.length} bytes)`);
 
   console.log('✅ Test 8 & 9 PASSED: Product Swap & Native PDF Document Dispatch Bekerja Sempurna!');
 
@@ -511,7 +524,7 @@ engine.setRawMessageStore((jid, id, msg) => {
     const isOffice = (role === 'OFFICE');
 
     if (!isOffice) {
-      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES', 'REVISE_PO'].includes(intent)) {
+      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES', 'SEND_PDF_STOCK', 'REVISE_PO'].includes(intent)) {
         return {
           allowed: false,
           reply: `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +

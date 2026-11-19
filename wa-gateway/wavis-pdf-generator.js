@@ -596,6 +596,207 @@ class WavisPdfGenerator {
 
     return Buffer.from(pdf, 'binary');
   }
+
+  /**
+   * Bangun File PDF Master Data Stok Barang (100% Persis Format Gambar 1)
+   * Dilengkapi Keterangan L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System)
+   * @param {Array} products Daftar produk dari Firestore
+   * @returns {Buffer} Buffer binary PDF 1.4
+   */
+  static generateStockPdf(products = []) {
+    // 1. Deduplikasi produk berdasarkan kodeInduk (sama seperti tampilan di web app Gambar 1)
+    const seenKodeInduk = new Set();
+    const pdfProducts = [];
+    for (const p of products) {
+      const k = (p.kodeInduk || p.id || '').trim().toUpperCase();
+      if (!k) continue;
+      if (!seenKodeInduk.has(k)) {
+        seenKodeInduk.add(k);
+        pdfProducts.push(p);
+      }
+    }
+
+    // Urutkan berdasarkan kodeInduk alfabetis
+    pdfProducts.sort((a, b) => {
+      const ka = (a.kodeInduk || a.id || '').toUpperCase();
+      const kb = (b.kodeInduk || b.id || '').toUpperCase();
+      return ka.localeCompare(kb);
+    });
+
+    // 34 item per halaman muat rapi di kertas A4 (841.89 pt)
+    const itemsPerPage = 34;
+    const totalPages = Math.max(1, Math.ceil(pdfProducts.length / itemsPerPage));
+
+    let dateStr = 'Hari ini';
+    try {
+      const d = new Date();
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      dateStr = `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+    } catch (_) {}
+
+    const objects = [];
+    function addObj(c) {
+      objects.push(c);
+      return objects.length;
+    }
+
+    // 1: Catalog
+    addObj('<< /Type /Catalog /Pages 2 0 R >>');
+
+    // 2: Pages (placeholder, akan diisi array kids)
+    const pagesObjIdx = addObj('');
+
+    // Font objects: 3 (F1), 4 (F2), 5 (F3)
+    const f1Idx = addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    const f2Idx = addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+    const f3Idx = addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>');
+
+    const pageKids = [];
+
+    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+      const pageItems = pdfProducts.slice(pIdx * itemsPerPage, (pIdx + 1) * itemsPerPage);
+
+      let stream = '';
+      function drawRect(x, y, w, h, lw = 1, r = 0, g = 0, b = 0) {
+        stream += `${lw} w ${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re S\n`;
+      }
+      function fillRect(x, y, w, h, r, g, b) {
+        stream += `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f\n`;
+      }
+      function drawLine(x1, y1, x2, y2, lw = 0.5, r = 0, g = 0, b = 0) {
+        stream += `${lw} w ${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG ${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S\n`;
+      }
+      function drawText(font, size, x, y, text, r = 0, g = 0, b = 0) {
+        stream += `BT /${font} ${size} Tf ${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg ${x.toFixed(2)} ${y.toFixed(2)} Td (${escapePdf(text)}) Tj ET\n`;
+      }
+
+      // Header Dokumen (Sesuai Format Gambar 1)
+      drawText('F2', 13.5, 24, 808, 'DATA MASTER BARANG CABANG JAWA TENGAH', 0.05, 0.22, 0.55);
+      drawText('F2', 10.5, 24, 794, 'PT PUTRA FIVA SEJAHTERA', 0.12, 0.14, 0.18);
+      drawText('F1', 8.5, 24, 781, `Tanggal Cetak: ${dateStr}`, 0.35, 0.38, 0.42);
+      drawText('F2', 8, 24, 770, 'L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System)', 0.28, 0.38, 0.48);
+
+      // Header Kanan
+      drawText('F2', 12, 475, 808, 'LUCIFAX PFS', 0.05, 0.22, 0.55);
+      const totalText = totalPages > 1
+        ? `Total Items: ${pdfProducts.length} (Hal. ${pIdx + 1}/${totalPages})`
+        : `Total Items: ${pdfProducts.length}`;
+      drawText('F1', 8.5, 475, 794, totalText, 0.35, 0.38, 0.42);
+
+      // Garis pemisah header
+      drawLine(24, 760, 571, 760, 0.8, 0.7, 0.72, 0.75);
+
+      // Header Tabel (Background gelap seperti Gambar 1)
+      const tableTopY = 752;
+      const headerH = 20;
+      const headerBottomY = tableTopY - headerH; // 732
+
+      fillRect(24, headerBottomY, 547, headerH, 0.18, 0.24, 0.28);
+      drawRect(24, headerBottomY, 547, headerH, 0.8, 0.15, 0.18, 0.22);
+
+      // Kolom pembatas vertikal header
+      drawLine(88, headerBottomY, 88, tableTopY, 0.5, 0.35, 0.4, 0.45);
+      drawLine(275, headerBottomY, 275, tableTopY, 0.5, 0.35, 0.4, 0.45);
+      drawLine(348, headerBottomY, 348, tableTopY, 0.5, 0.35, 0.4, 0.45);
+      drawLine(392, headerBottomY, 392, tableTopY, 0.5, 0.35, 0.4, 0.45);
+      drawLine(448, headerBottomY, 448, tableTopY, 0.5, 0.35, 0.4, 0.45);
+      drawLine(512, headerBottomY, 512, tableTopY, 0.5, 0.35, 0.4, 0.45);
+
+      // Teks Header Tabel (Putih Bold)
+      drawText('F2', 8.5, 34, headerBottomY + 6, 'Kode Induk', 1, 1, 1);
+      drawText('F2', 8.5, 94, headerBottomY + 6, 'Nama Barang', 1, 1, 1);
+      drawText('F2', 8.5, 286, headerBottomY + 6, 'Harga Unit', 1, 1, 1);
+      drawText('F2', 8.5, 358, headerBottomY + 6, 'Stok', 1, 1, 1);
+      drawText('F2', 8.5, 400, headerBottomY + 6, 'Isi Karton', 1, 1, 1);
+      drawText('F2', 8.5, 454, headerBottomY + 6, 'Total Karton', 1, 1, 1);
+      drawText('F2', 8.5, 527, headerBottomY + 6, 'Berat', 1, 1, 1);
+
+      // Render Baris-Baris Data Produk
+      const rowH = 18;
+      let currentTop = headerBottomY;
+
+      for (let r = 0; r < pageItems.length; r++) {
+        const item = pageItems[r];
+        const nextBottom = currentTop - rowH;
+        const textY = nextBottom + 5.5;
+
+        // Border baris
+        drawRect(24, nextBottom, 547, rowH, 0.5, 0.15, 0.18, 0.22);
+
+        // Garis vertikal pemisah kolom
+        drawLine(88, nextBottom, 88, currentTop, 0.5, 0.15, 0.18, 0.22);
+        drawLine(275, nextBottom, 275, currentTop, 0.5, 0.15, 0.18, 0.22);
+        drawLine(348, nextBottom, 348, currentTop, 0.5, 0.15, 0.18, 0.22);
+        drawLine(392, nextBottom, 392, currentTop, 0.5, 0.15, 0.18, 0.22);
+        drawLine(448, nextBottom, 448, currentTop, 0.5, 0.15, 0.18, 0.22);
+        drawLine(512, nextBottom, 512, currentTop, 0.5, 0.15, 0.18, 0.22);
+
+        const kode = (item.kodeInduk || item.id || '-').trim();
+        const nama = (item.name || item.productName || 'PRODUK').trim().substring(0, 34);
+        const harga = `Rp ${Math.round(item.price || 0).toLocaleString('id-ID')}`;
+        const stok = Math.round(item.stock || 0).toString();
+        const isi = `${item.isiKarton || 0} Pack`;
+        const totalKtn = item.isiKarton > 0 ? (item.stock / item.isiKarton).toFixed(1) : '0.0';
+        const berat = `${Math.round(item.sizeGrams || 500)} G`;
+
+        // Render isi sel
+        drawText('F1', 8, 30, textY, kode, 0, 0, 0);
+        drawText('F1', 8, 94, textY, nama, 0, 0, 0);
+        // Harga (right aligned in 275..345)
+        const priceOffset = 342 - (harga.length * 4.6);
+        drawText('F1', 8, priceOffset, textY, harga, 0, 0, 0);
+        // Stok (centered in 348..392)
+        const stokOffset = 370 - (stok.length * 2.5);
+        drawText('F1', 8, stokOffset, textY, stok, 0, 0, 0);
+        // Isi (centered in 392..448)
+        const isiOffset = 420 - (isi.length * 2.4);
+        drawText('F1', 8, isiOffset, textY, isi, 0, 0, 0);
+        // Total Karton (centered in 448..512)
+        const ktnOffset = 480 - (totalKtn.length * 2.5);
+        drawText('F1', 8, ktnOffset, textY, totalKtn, 0, 0, 0);
+        // Berat (centered in 512..571)
+        const beratOffset = 541 - (berat.length * 2.5);
+        drawText('F1', 8, beratOffset, textY, berat, 0, 0, 0);
+
+        currentTop = nextBottom;
+      }
+
+      // Footer Dokumen
+      drawText('F3', 7.2, 24, 20, 'Dicetak otomatis oleh L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System) - PT PUTRA FIVA SEJAHTERA', 0.5, 0.55, 0.6);
+
+      // Create content object then page object
+      const contentIdx = addObj(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+      const pageIdx = addObj(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents ${contentIdx} 0 R /Resources << /Font << /F1 ${f1Idx} 0 R /F2 ${f2Idx} 0 R /F3 ${f3Idx} 0 R >> >> >>`);
+
+      pageKids.push(`${pageIdx} 0 R`);
+    }
+
+    // Update Pages Object (Obj 2)
+    objects[pagesObjIdx - 1] = `<< /Type /Pages /Kids [${pageKids.join(' ')}] /Count ${totalPages} >>`;
+
+    // Serialize PDF
+    let pdf = '%PDF-1.4\n';
+    const offsets = [];
+    objects.forEach((obj, idx) => {
+      offsets.push(Buffer.byteLength(pdf));
+      pdf += `${idx + 1} 0 obj\n${obj}\nendobj\n`;
+    });
+
+    const startxref = Buffer.byteLength(pdf);
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    offsets.forEach(off => {
+      pdf += `${String(off).padStart(10, '0')} 00000 n \n`;
+    });
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
+    pdf += `startxref\n${startxref}\n%%EOF`;
+
+    return Buffer.from(pdf, 'binary');
+  }
 }
 
 module.exports = WavisPdfGenerator;

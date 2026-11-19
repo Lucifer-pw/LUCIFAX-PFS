@@ -454,6 +454,11 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
                 'LAPORAN MENU ERP & STOK MASUK CABANG - PERIODE $_selectedMonthYear',
                 style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
               ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'L-W.A.V.I.S (Lucifax-Whatsapp Assistant Vision Interactive System)',
+                style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey600),
+              ),
               pw.SizedBox(height: 12),
               pw.TableHelper.fromTextArray(
                 headers: [
