@@ -29,7 +29,7 @@ echo "Mengunduh file terbaru dari GitHub..."
 echo ""
 
 # Download semua file gateway (kecuali update.sh disimpan terpisah agar tidak merusak eksekusi bash)
-FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pdf-generator.js fiva-logo.bin firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js test-wavis-engine.js version.json"
+FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pdf-generator.js fiva-logo.bin firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js test-wavis-engine.js version.json update.bat"
 CACHE_BUST="?t=$(date +%s)"
 
 for f in $FILES; do
