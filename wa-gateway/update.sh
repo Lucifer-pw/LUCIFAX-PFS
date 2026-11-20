@@ -27,12 +27,13 @@ echo ""
 echo "⬇️  Mengunduh file terbaru dari GitHub..."
 echo ""
 
-# Download semua file gateway
-FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pdf-generator.js fiva-logo.bin firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js version.json update.sh"
+# Download semua file gateway (tambah ?t=timestamp untuk cache-busting GitHub CDN)
+FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pdf-generator.js fiva-logo.bin firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js test-wavis-engine.js version.json update.sh"
+CACHE_BUST="?t=$(date +%s)"
 
 for f in $FILES; do
   echo -n "  📥 $f ... "
-  if curl -sL -o "$f" "$REPO_BASE/$f"; then
+  if curl -sL -o "$f" "$REPO_BASE/$f$CACHE_BUST"; then
     echo "✅"
   else
     echo "❌ GAGAL"

@@ -9,8 +9,9 @@
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.282",
-    "update.sh": "3.3.295"
+    "test-wavis-engine.js": "3.3.308",
+    "update.sh": "3.3.309"
   },
   "updatedAt": "2026-11-20",
-  "changelog": "v3.3.309: WAVIS selalu merespon GREETING_MENU & SMART_FALLBACK tanpa cek isAdminStandby. Fix role sync (office-first priority, LID strip), fix BAD MAC (3.5s handover, ws.close, silent filter), dual Firestore listener."
+  "changelog": "v3.3.309: WAVIS selalu merespon sapaan (hapus isAdminStandby guard). Fix role sync office-first + LID strip. Fix BAD MAC 3.5s handover. Cache-bust update.sh."
 }
