@@ -481,21 +481,20 @@ async function flushMessageBuffer(bufferKey) {
         return;
       }
 
-      // b) Jika sapaan atau chat umum saat admin offline -> BALAS DENGAN SALAM RAMAH UMUM (TANPA BOCORKAN 5 MENU)
+      // b) Jika sapaan atau chat umum -> BALAS DENGAN SALAM RAMAH UMUM (TANPA BOCORKAN 5 MENU)
+      // WAVIS SELALU merespon sapaan, tidak peduli admin online atau tidak
       if (['GREETING_MENU', 'SMART_FALLBACK'].includes(interactiveIntent)) {
-        if (!wavisEngine.isAdminStandby()) {
-          setTimeout(async () => {
-            try {
-              const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-                `Halo ${buf.senderName}! 👋\n\n` +
-                `Admin / Developer saat ini sedang tidak standby di tempat.\n` +
-                `Namun jangan khawatir! Selagi menunggu beliau online, pesan Anda sudah kami terima dan beliau akan membalas segera setelah aktif kembali ya! 😊`;
-              await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
-            } catch (err) {
-              console.warn('[L-W.A.V.I.S GENERAL GREETING ERROR]', err.message);
-            }
-          }, 1500);
-        }
+        setTimeout(async () => {
+          try {
+            const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `Halo ${buf.senderName}! 👋\n\n` +
+              `Admin / Developer saat ini sedang tidak standby di tempat.\n` +
+              `Namun jangan khawatir! Selagi menunggu beliau online, pesan Anda sudah kami terima dan beliau akan membalas segera setelah aktif kembali ya! 😊`;
+            await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+          } catch (err) {
+            console.warn('[L-W.A.V.I.S GENERAL GREETING ERROR]', err.message);
+          }
+        }, 1500);
         return;
       }
     }
@@ -576,27 +575,25 @@ async function flushMessageBuffer(bufferKey) {
         }
       }, 1000);
     } else if (interactiveIntent === 'GREETING_MENU') {
-      if (!wavisEngine.isAdminStandby()) {
-        setTimeout(async () => {
-          try {
-            const res = wavisEngine.handleGreetingMenu(buf.senderName);
-            await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
-          } catch (err) {
-            console.warn('[L-W.A.V.I.S GREETING ERROR]', err.message);
-          }
-        }, 1500);
-      }
+      // WAVIS SELALU merespon sapaan KANTOR, tidak peduli admin online atau tidak
+      setTimeout(async () => {
+        try {
+          const res = wavisEngine.handleGreetingMenu(buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S GREETING ERROR]', err.message);
+        }
+      }, 1500);
     } else if (interactiveIntent === 'SMART_FALLBACK') {
-      if (!wavisEngine.isAdminStandby()) {
-        setTimeout(async () => {
-          try {
-            const res = wavisEngine.handleSmartFallback(combinedText, buf.senderName);
-            await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
-          } catch (err) {
-            console.warn('[L-W.A.V.I.S FALLBACK ERROR]', err.message);
-          }
-        }, 1500);
-      }
+      // WAVIS SELALU merespon fallback KANTOR, tidak peduli admin online atau tidak
+      setTimeout(async () => {
+        try {
+          const res = wavisEngine.handleSmartFallback(combinedText, buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S FALLBACK ERROR]', err.message);
+        }
+      }, 1500);
     }
   }
 }
