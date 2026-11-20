@@ -531,6 +531,59 @@ class FirebaseAdapter {
     }
   }
 
+  // Sinkronisasi realtime ID pesan di antara seluruh node klaster (Laptop, Redmi, Asus)
+  listenToRecentMessageIds(onNewIds) {
+    if (typeof onNewIds !== 'function') return;
+    try {
+      if (this.mode === 'admin' && this.db) {
+        this.db.collection('incoming_po_chats')
+          .orderBy('receivedAt', 'desc')
+          .limit(30)
+          .onSnapshot(snap => {
+            if (!snap || snap.empty) return;
+            const ids = [];
+            snap.docChanges().forEach(change => {
+              if (change.type === 'added' || change.type === 'modified') {
+                const d = change.doc.data();
+                if (d.messageId) ids.push(d.messageId);
+                if (Array.isArray(d.messageIds)) {
+                  d.messageIds.forEach(id => ids.push(id));
+                }
+              }
+            });
+            if (ids.length > 0) onNewIds(ids);
+          }, err => {
+            console.warn('[FIREBASE RECENT MSG IDS WARN]', err.message);
+          });
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { collection, query, orderBy, limit, onSnapshot } = this.clientSdk;
+        const q = query(
+          collection(this.clientDb, 'incoming_po_chats'),
+          orderBy('receivedAt', 'desc'),
+          limit(30)
+        );
+        onSnapshot(q, snap => {
+          if (!snap || snap.empty) return;
+          const ids = [];
+          snap.docChanges().forEach(change => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const d = change.doc.data();
+              if (d.messageId) ids.push(d.messageId);
+              if (Array.isArray(d.messageIds)) {
+                d.messageIds.forEach(id => ids.push(id));
+              }
+            }
+          });
+          if (ids.length > 0) onNewIds(ids);
+        }, err => {
+          console.warn('[FIREBASE CLIENT RECENT MSG IDS WARN]', err.message);
+        });
+      }
+    } catch (e) {
+      console.warn('[FIREBASE LISTEN MSG IDS INIT ERROR]', e.message);
+    }
+  }
+
   async findMatchingReceivable(customerHint, amount, rawOcrText = '') {
     if (!amount || amount <= 0) return null;
     const cleanHint = (customerHint || '').toUpperCase().trim();

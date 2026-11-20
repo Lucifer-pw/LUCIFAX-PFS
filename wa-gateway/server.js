@@ -1,5 +1,21 @@
 require('dotenv').config();
-const GATEWAY_VERSION = '3.3.275'; // v3.3.275 - Universal phonetic/fuzzy typo, smart gramatur, and slang karton (krton)
+
+// Filter console.error dari libsignal agar frame sinkronisasi Bad MAC multi-device tidak mencemari terminal
+const _originalConsoleError = console.error;
+console.error = function (...args) {
+  const combined = args.map(a => (a?.stack || a?.message || String(a || ''))).join(' ');
+  if (
+    combined.includes('Bad MAC') ||
+    combined.includes('Failed to decrypt message with any known session') ||
+    combined.includes('SessionError: No matching sessions found') ||
+    combined.includes('No matching sessions found for message')
+  ) {
+    return; // Abaikan secara senyap frame enkripsi ganda dari perangkat tertaut lain
+  }
+  _originalConsoleError.apply(console, args);
+};
+
+const GATEWAY_VERSION = '3.3.310'; // v3.3.310 - Cluster de-duplication, silence Bad MAC libsignal, instant handover cache sync
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -169,6 +185,7 @@ let connectedUser = null;
 let recentChats = [];
 let isConnecting = false;
 let reconnectTimer = null;
+let lastGatewayConnectedAt = 0; // Waktu koneksi Baileys saat ini untuk mendeteksi pesan sebelum koneksi
 
 // Continuous Cluster Node Heartbeat (runs every 50s to optimize Firestore writes & stay within free tier)
 setInterval(async () => {
@@ -263,6 +280,13 @@ if (firebaseAdapter && typeof firebaseAdapter.loadRecentMessageIds === 'function
       console.log(`[CACHE INIT] Memuat ${ids.size} ID pesan terakhir untuk mencegah duplikasi.`);
     }
   }).catch(() => {});
+}
+
+// Sinkronisasi realtime ID pesan dari klaster (perangkat lain yang sedang/pernah aktif)
+if (firebaseAdapter && typeof firebaseAdapter.listenToRecentMessageIds === 'function') {
+  firebaseAdapter.listenToRecentMessageIds(ids => {
+    ids.forEach(id => processedMessageIds.add(id));
+  });
 }
 
 // Dynamic Message Buffering / Debounce per Sender (Tahap 1: Gabung Chat Otomatis)
@@ -458,6 +482,15 @@ async function flushMessageBuffer(bufferKey) {
 
   // EKSEKUSI JAWABAN INTERAKTIF L-W.A.V.I.S
   if (isInteractive && !isTransfer && interactiveIntent !== 'UNKNOWN') {
+    // Anti-replay: Jangan membalas sapaan / fallback otomatis untuk pesan lama (> 45 detik lalu)
+    if (['GREETING_MENU', 'SMART_FALLBACK'].includes(interactiveIntent)) {
+      const msgAgeMs = Date.now() - (buf.receivedAt ? buf.receivedAt.getTime() : Date.now());
+      if (msgAgeMs > 45000) {
+        console.log(`[L-W.A.V.I.S DE-DUP] ⏭️ Sapaan/menu dari ${buf.senderName} diterima ${Math.round(msgAgeMs / 1000)}s lalu, lewati agar tidak dobel respon.`);
+        return;
+      }
+    }
+
     const contactRole = getContactRole(buf.senderPhone, buf.senderJid);
     const isOffice = (contactRole === 'OFFICE');
     console.log(`[ROLE CHECK] 👤 ${buf.senderName} (+${buf.senderPhone || buf.senderJid}) terdeteksi sebagai: [${contactRole}] [Intent: ${interactiveIntent}]`);
@@ -1027,6 +1060,7 @@ async function startBaileys() {
         }
       } else if (connection === 'open') {
         gatewayStatus = 'CONNECTED';
+        lastGatewayConnectedAt = Date.now();
         currentQrDataUrl = null;
         isConnecting = false;
         if (reconnectTimer) {
@@ -1115,6 +1149,21 @@ async function startBaileys() {
       const MAX_HISTORY_AGE_MS = 12 * 60 * 60 * 1000;
       if (isHistorySync && (Date.now() - msgTimeMs > MAX_HISTORY_AGE_MS)) {
         return; // Terlalu lama, lewati
+      }
+
+      // CEK KLUSTER ANTI-DUPLIKASI SAAT ALIH PERANGKAT:
+      // Jika pesan dikirim sebelum gateway ini terhubung (> 5 detik sebelum connected)
+      // atau berasal dari history sync, cek apakah sudah pernah disimpan/diproses perangkat lain!
+      if (msgId && (isHistorySync || (lastGatewayConnectedAt > 0 && msgTimeMs < (lastGatewayConnectedAt - 5000)))) {
+        try {
+          if (firebaseAdapter && typeof firebaseAdapter.findChatByMessageId === 'function') {
+            const alreadyProcessed = await firebaseAdapter.findChatByMessageId(msgId);
+            if (alreadyProcessed) {
+              processedMessageIds.add(msgId);
+              return; // Sudah pernah diproses perangkat lain di klaster, lewati tanpa duplikasi!
+            }
+          }
+        } catch (_) {}
       }
 
       // =========================================================================
@@ -2088,12 +2137,13 @@ async function startBaileys() {
     // 2. Tangkap pesan masuk real-time
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (!Array.isArray(messages)) return;
+      const isAppend = (type === 'append');
       for (const m of messages) {
         if (m.key && m.message) {
           storeRawMessage(m.key.remoteJid, m.key.id, m.message);
         }
         try {
-          await processSingleMessage(m, false);
+          await processSingleMessage(m, isAppend);
         } catch (e) {
           console.error('[UPSERT ERROR]', e.message);
         }
@@ -2137,6 +2187,17 @@ async function activateGatewayThisDevice(reason = 'MANUAL') {
 
   cleanupSocket();
   isConnecting = false;
+
+  // Refresh cache pesan terbaru dari Firestore saat takeover untuk cegah dobel proses
+  if (firebaseAdapter && typeof firebaseAdapter.loadRecentMessageIds === 'function') {
+    firebaseAdapter.loadRecentMessageIds().then(ids => {
+      ids.forEach(id => processedMessageIds.add(id));
+      if (ids.size > 0) {
+        console.log(`[TAKE-OVER] 🔄 Sinkronisasi ${ids.size} ID pesan klaster dari Firestore.`);
+      }
+    }).catch(() => {});
+  }
+
   console.log('[TAKE-OVER] ⏳ Jeda aman handover (3.5 detik) agar WhatsApp membersihkan soket perangkat lama dan mencegah BAD MAC...');
   setTimeout(startBaileys, 3500);
 }
@@ -2282,6 +2343,17 @@ app.get('/api/qr', (req, res) => {
 app.post('/api/restart', (req, res) => {
   cleanupSocket();
   isConnecting = false;
+
+  // Refresh cache pesan terbaru dari Firestore saat takeover untuk cegah dobel proses
+  if (firebaseAdapter && typeof firebaseAdapter.loadRecentMessageIds === 'function') {
+    firebaseAdapter.loadRecentMessageIds().then(ids => {
+      ids.forEach(id => processedMessageIds.add(id));
+      if (ids.size > 0) {
+        console.log(`[TAKE-OVER] 🔄 Sinkronisasi ${ids.size} ID pesan klaster dari Firestore.`);
+      }
+    }).catch(() => {});
+  }
+
   console.log('[TAKE-OVER] ⏳ Jeda aman handover (3.5 detik) agar WhatsApp membersihkan soket perangkat lama dan mencegah BAD MAC...');
   setTimeout(startBaileys, 3500);
   res.json({ success: true, message: 'Gateway direstart.' });
