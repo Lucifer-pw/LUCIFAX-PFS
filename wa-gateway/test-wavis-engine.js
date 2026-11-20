@@ -1046,5 +1046,110 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 18 PASSED: Smart PDF & Faktur Matcher via Toko & Nominal Terverifikasi 100%!');
 
+  // ==========================================
+  // Test 19: Uji Rekap Faktur Bulanan per Toko (List Faktur Toko Bulan X)
+  // ==========================================
+  console.log('\n--- Test 19: Uji Rekap Faktur Bulanan per Toko ("list faktur mmm bulan november") ---');
+
+  // 19A. Klasifikasi Intent Rekap Bulanan
+  const intentList1 = engine.classifyIntent('list faktur mmm bulan november');
+  assert.strictEqual(intentList1, 'LIST_MONTHLY_INVOICES', 'Harus mendeteksi intent LIST_MONTHLY_INVOICES');
+
+  const intentList2 = engine.classifyIntent('rekap faktur aw ff bulan ini');
+  assert.strictEqual(intentList2, 'LIST_MONTHLY_INVOICES', 'Harus mendeteksi rekap faktur bulan ini');
+
+  const intentList3 = engine.classifyIntent('daftar invoice shafa ff');
+  assert.strictEqual(intentList3, 'LIST_MONTHLY_INVOICES', 'Harus mendeteksi daftar invoice toko');
+
+  const intentList4 = engine.classifyIntent('faktur mmm bulan november');
+  assert.strictEqual(intentList4, 'LIST_MONTHLY_INVOICES', 'Harus mendeteksi faktur toko dengan bulan');
+
+  const intentSingle = engine.classifyIntent('faktur 697');
+  assert.strictEqual(intentSingle, 'QUERY_INVOICE', 'Faktur nomor eksplisit tetap harus QUERY_INVOICE');
+  console.log('  ✓ 19A PASSED: Klasifikasi Intent LIST_MONTHLY_INVOICES 100% Akurat!');
+
+  // Siapkan Mock Transaksi MAJU MARKET MANDIRI (MMM)
+  engine.autoPoProcessor.cachedCustomers.push({
+    id: 'CUST_MMM',
+    customerName: 'YURINDA ARUM PRATIWI',
+    aliasName: 'MAJU MARKET MANDIRI',
+    city: 'PEKALONGAN'
+  });
+
+  engine.mockInvoices['697'] = {
+    ...mockInvoice,
+    invoiceNo: '697',
+    customerName: 'YURINDA ARUM PRATIWI',
+    aliasName: 'MAJU MARKET MANDIRI',
+    city: 'PEKALONGAN',
+    grandTotal: 11417966,
+    totalWeightKg: 178.55,
+    status: 'DIKIRIM',
+    statusTransfer: 'UNPAID',
+    tgl: '17-11-2026',
+    date: new Date('2026-11-17'),
+    items: [
+      { productName: 'BRS MERAH 24S 500G', qty: 75, isiKarton: 15, price: 36691, subtotal: 2683029 },
+      { productName: 'BRATWURST SAPI MINI 500 G', qty: 30, isiKarton: 15, price: 45838, subtotal: 1134491 },
+      { productName: 'BRS COKLAT 13S 500 G', qty: 150, isiKarton: 15, price: 30688, subtotal: 4373040 }
+    ]
+  };
+
+  engine.mockInvoices['675'] = {
+    ...mockInvoice,
+    invoiceNo: '675',
+    customerName: 'YURINDA ARUM PRATIWI',
+    aliasName: 'MAJU MARKET MANDIRI',
+    city: 'PEKALONGAN',
+    grandTotal: 8500000,
+    totalWeightKg: 135.0,
+    status: 'DIKIRIM',
+    statusTransfer: 'PAID',
+    tgl: '05-11-2026',
+    date: new Date('2026-11-05'),
+    items: [
+      { productName: 'BRS COKLAT 7S 2 500G', qty: 150, isiKarton: 15, price: 27962, subtotal: 4194300 }
+    ]
+  };
+
+  engine.mockInvoices['650'] = {
+    ...mockInvoice,
+    invoiceNo: '650',
+    customerName: 'YURINDA ARUM PRATIWI',
+    aliasName: 'MAJU MARKET MANDIRI',
+    city: 'PEKALONGAN',
+    grandTotal: 5000000,
+    totalWeightKg: 80.0,
+    status: 'DIKIRIM',
+    statusTransfer: 'PAID',
+    tgl: '15-10-2026',
+    date: new Date('2026-10-15')
+  };
+
+  // 19B. Uji handleMonthlyInvoicesQuery ("list faktur mmm bulan november")
+  const mmmNovRes = await engine.handleMonthlyInvoicesQuery('list faktur mmm bulan november', 'Pak Joko');
+  assert(mmmNovRes.includes('MAJU MARKET MANDIRI'), 'Harus memuat nama pelanggan MAJU MARKET MANDIRI');
+  assert(mmmNovRes.includes('November 2026'), 'Harus menyebutkan periode November 2026');
+  assert(mmmNovRes.includes('#697'), 'Harus memuat Faktur #697');
+  assert(mmmNovRes.includes('#675'), 'Harus memuat Faktur #675');
+  assert(!mmmNovRes.includes('#650'), 'TIDAK BOLEH memuat Faktur #650 karena #650 adalah bulan Oktober!');
+  assert(mmmNovRes.includes('19.917.966'), 'Harus memuat Total Belanja (Omset) Rp 19.917.966');
+  assert(mmmNovRes.includes('11.417.966'), 'Harus memuat Sisa Belum Lunas Rp 11.417.966');
+  console.log('  ✓ 19B PASSED: "list faktur mmm bulan november" menghasilkan rekap faktur & akumulasi sempurna!');
+
+  // 19C. Uji Delegasi Otomatis via handleInvoiceQuery
+  const delegRes = await engine.handleInvoiceQuery('list faktur mmm bulan november', 'Pak Joko');
+  assert(delegRes.includes('REKAP FAKTUR: L-W.A.V.I.S'), 'handleInvoiceQuery harus mendelegasikan ke rekap bulanan');
+  assert(delegRes.includes('#697') && delegRes.includes('#675'), 'Harus menampilkan daftar faktur #697 & #675');
+  console.log('  ✓ 19C PASSED: handleInvoiceQuery otomatis mendelegasikan ke rekap bulanan!');
+
+  // 19D. Uji Bulan Tanpa Transaksi
+  const notFoundMonthRes = await engine.handleMonthlyInvoicesQuery('list faktur mmm bulan agustus', 'Pak Joko');
+  assert(notFoundMonthRes.includes('Tidak ditemukan riwayat faktur untuk *MAJU MARKET MANDIRI (YURINDA ARUM PRATIWI)* pada periode *Agustus 2026*') || notFoundMonthRes.includes('Tidak ditemukan riwayat faktur'), 'Harus menginfokan santun');
+  assert(notFoundMonthRes.includes('Faktur terakhir yang tercatat'), 'Harus memberikan petunjuk faktur terakhir');
+  console.log('  ✓ 19D PASSED: Respon santun saat tidak ada transaksi pada bulan yang diminta!');
+
+  console.log('✅ Test 19 PASSED: Rekap Faktur Bulanan per Toko L-W.A.V.I.S Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

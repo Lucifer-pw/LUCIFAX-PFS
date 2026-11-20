@@ -1,18 +1,18 @@
 {
-  "gateway": "3.3.312",
+  "gateway": "3.3.313",
   "files": {
-    "server.js": "3.3.312",
+    "server.js": "3.3.313",
     "autonomous-po-processor.js": "3.3.297",
-    "wavis-interactive-engine.js": "3.3.311",
+    "wavis-interactive-engine.js": "3.3.313",
     "wavis-pdf-generator.js": "3.3.301",
     "firebase-adapter.js": "3.3.310",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.282",
-    "test-wavis-engine.js": "3.3.311",
+    "test-wavis-engine.js": "3.3.313",
     "update.sh": "3.3.312",
     "update.bat": "3.3.310"
   },
   "updatedAt": "2026-11-20",
-  "changelog": "v3.3.312: Auto-heal Signal session desync (Over 2000 messages into the future) tanpa hapus login creds. Sembunyikan spam stack trace libsignal. Buat update.sh bulletproof dari self-replacement bash offset."
+  "changelog": "v3.3.313: Support Rekap Faktur Bulanan per Toko (list faktur [toko] bulan [nama bulan]), akumulasi omset & muatan, dan date filtering cerdas."
 }

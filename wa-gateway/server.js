@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.312'; // v3.3.312 - Auto-heal Signal session desync (Over 2000 messages) & silence stack trace
+const GATEWAY_VERSION = '3.3.313'; // v3.3.313 - Rekap Faktur Bulanan Toko (list faktur mmm bulan november) & akumulasi omset
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -539,7 +539,7 @@ async function flushMessageBuffer(bufferKey) {
     // 1. FILTER PRIVASI & KEAMANAN: JIKA KONTAK BERPERAN UMUM / ORANG LUAR (NON-KANTOR)
     if (!isOffice) {
       // a) Jika mencoba tanya data perusahaan (Piutang, Stok Gudang, Faktur, Dokumen PDF, Revisi & Hapus PO) -> TOLAK SECARA SOPAN!
-      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES', 'SEND_PDF_STOCK', 'REVISE_PO'].includes(interactiveIntent)) {
+      if (['QUERY_RECEIVABLES', 'QUERY_STOCK', 'QUERY_INVOICE', 'LIST_MONTHLY_INVOICES', 'SEND_PDF_INVOICE', 'SEND_PDF_RECEIVABLES', 'SEND_PDF_STOCK', 'REVISE_PO'].includes(interactiveIntent)) {
         setTimeout(async () => {
           try {
             const res = `🤖 *[L-W.A.V.I.S]*\n_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -598,6 +598,15 @@ async function flushMessageBuffer(bufferKey) {
           await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
         } catch (err) {
           console.warn('[L-W.A.V.I.S INVOICE QUERY ERROR]', err.message);
+        }
+      }, 1000);
+    } else if (interactiveIntent === 'LIST_MONTHLY_INVOICES') {
+      setTimeout(async () => {
+        try {
+          const res = await wavisEngine.handleMonthlyInvoicesQuery(combinedText, buf.senderName);
+          await wavisEngine.sendReply(buf.senderJid, res, null, buf.senderPhone);
+        } catch (err) {
+          console.warn('[L-W.A.V.I.S MONTHLY INVOICE ERROR]', err.message);
         }
       }, 1000);
     } else if (interactiveIntent === 'SEND_PDF_INVOICE') {

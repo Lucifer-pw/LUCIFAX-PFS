@@ -88,6 +88,98 @@ function extractNominalRange(str) {
   return null;
 }
 
+/**
+ * Ekstraktor Periode Bulan & Tahun (Month-Year Extractor)
+ * Mendeteksi nama bulan (Indo/Inggris, singkatan), angka bulan (bulan 11), dan istilah relatif (bulan ini, bulan lalu).
+ */
+function extractMonthYear(str) {
+  if (!str) return null;
+  const clean = normalizeText(str);
+
+  const monthNamesIndo = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+
+  const now = new Date();
+  let defaultYear = now.getFullYear();
+  if (defaultYear < 2026) defaultYear = 2026;
+
+  // 1. Cek tahun eksplisit (contoh: 2025, 2026, 2027)
+  const mYear = clean.match(/\b(20\d{2})\b/);
+  const targetYear = mYear ? parseInt(mYear[1], 10) : defaultYear;
+
+  // 2. Cek istilah relatif (bulan ini, bulan lalu, bulan kemarin)
+  if (/\b(?:bulan|bln)\s*ini\b/i.test(clean)) {
+    const curMonth = (now.getMonth() + 1); // 1-12
+    return {
+      month: curMonth,
+      year: targetYear,
+      monthName: monthNamesIndo[curMonth - 1],
+      rawText: 'bulan ini'
+    };
+  }
+
+  if (/\b(?:bulan|bln)\s*(?:lalu|kemarin)\b/i.test(clean)) {
+    let lastMonth = now.getMonth(); // 0 is previous month of Jan, etc.
+    let yearForLast = targetYear;
+    if (lastMonth === 0) {
+      lastMonth = 12;
+      yearForLast -= 1;
+    }
+    return {
+      month: lastMonth,
+      year: yearForLast,
+      monthName: monthNamesIndo[lastMonth - 1],
+      rawText: 'bulan lalu'
+    };
+  }
+
+  // 3. Cek format nama bulan (prioritaskan nama panjang sebelum singkatan)
+  const monthMap = [
+    { regex: /\b(?:bulan|bln)?\s*(?:januari|january|jan)\b/i, month: 1 },
+    { regex: /\b(?:bulan|bln)?\s*(?:februari|february|feb)\b/i, month: 2 },
+    { regex: /\b(?:bulan|bln)?\s*(?:maret|march|mar)\b/i, month: 3 },
+    { regex: /\b(?:bulan|bln)?\s*(?:april|apr)\b/i, month: 4 },
+    { regex: /\b(?:bulan|bln)?\s*(?:mei|may)\b/i, month: 5 },
+    { regex: /\b(?:bulan|bln)?\s*(?:juni|june|jun)\b/i, month: 6 },
+    { regex: /\b(?:bulan|bln)?\s*(?:juli|july|jul)\b/i, month: 7 },
+    { regex: /\b(?:bulan|bln)?\s*(?:agustus|august|agt|ags|aug)\b/i, month: 8 },
+    { regex: /\b(?:bulan|bln)?\s*(?:september|sept|sep)\b/i, month: 9 },
+    { regex: /\b(?:bulan|bln)?\s*(?:oktober|october|okt|oct)\b/i, month: 10 },
+    { regex: /\b(?:bulan|bln)?\s*(?:november|nov)\b/i, month: 11 },
+    { regex: /\b(?:bulan|bln)?\s*(?:desember|december|des|dec)\b/i, month: 12 },
+  ];
+
+  for (const m of monthMap) {
+    const match = clean.match(m.regex);
+    if (match) {
+      return {
+        month: m.month,
+        year: targetYear,
+        monthName: monthNamesIndo[m.month - 1],
+        rawText: match[0].trim()
+      };
+    }
+  }
+
+  // 4. Cek format angka bulan: "bulan 11", "bln 11", "bulan ke 11"
+  const mNumericMonth = clean.match(/\b(?:bulan|bln)(?:\s*ke)?\s*(\d{1,2})\b/i);
+  if (mNumericMonth) {
+    const num = parseInt(mNumericMonth[1], 10);
+    if (num >= 1 && num <= 12) {
+      return {
+        month: num,
+        year: targetYear,
+        monthName: monthNamesIndo[num - 1],
+        rawText: mNumericMonth[0].trim()
+      };
+    }
+  }
+
+  return null;
+}
+
 class WavisInteractiveEngine {
   constructor(firebaseAdapter, autoPoProcessor) {
     this.firebaseAdapter = firebaseAdapter;
@@ -351,16 +443,32 @@ class WavisInteractiveEngine {
       return 'REVISE_PO';
     }
 
-    // 4. Cek Pola Query Faktur / Invoice atau Permintaan File Dokumen PDF Faktur
+    // 4. Cek Pola Rekap / Daftar Faktur Bulanan & Query Faktur Satuan
+    const hasMonth = Boolean(extractMonthYear(clean));
+    const isListOrRekap = /\b(list|daftar|rekap|semua|histori|riwayat)\b/i.test(clean);
     const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
-    if (invoicePattern.test(clean) || isPdfRequest) {
+
+    if (invoicePattern.test(clean) || isPdfRequest || (isListOrRekap && hasMonth)) {
       if (/\b(revisi|ubah|ganti|tambah|tambahkan|kurang|batal|edit|tukar|hapus|dihapus|di\s*hapus|buang|dibuang|cancel|coret)\b/i.test(clean)) {
         return 'REVISE_PO';
       }
+
+      // Deteksi permintaan rekap / daftar faktur bulanan:
+      // contoh: "list faktur mmm bulan november", "rekap faktur aw ff bulan ini", "daftar invoice shafa ff", "faktur mmm bulan november"
+      if (!isPdfRequest && (
+        (isListOrRekap && invoicePattern.test(clean)) ||
+        (hasMonth && invoicePattern.test(clean)) ||
+        (isListOrRekap && hasMonth)
+      )) {
+        return 'LIST_MONTHLY_INVOICES';
+      }
+
       if (isPdfRequest) {
         return 'SEND_PDF_INVOICE';
       }
-      return 'QUERY_INVOICE';
+      if (invoicePattern.test(clean)) {
+        return 'QUERY_INVOICE';
+      }
     }
 
     // 5. Cek Pola Sapaan / Menu Bantuan / Pertanyaan Kemampuan AI
@@ -1054,6 +1162,16 @@ class WavisInteractiveEngine {
    */
   async handleInvoiceQuery(text, senderName = 'Kak') {
     try {
+      const clean = normalizeText(text);
+      const isListOrRekap = /\b(list|daftar|rekap|semua|histori|riwayat)\b/i.test(clean);
+      const hasMonth = Boolean(extractMonthYear(clean));
+
+      // Jika query adalah rekap bulanan atau daftar faktur toko (dan bukan nomor faktur tunggal)
+      const hasExplicitNo = /(?:faktur|invoice|nota|po|#)\s*[:#.]?\s*(\d{2,6})\b/i.test(clean);
+      if ((isListOrRekap || hasMonth) && !hasExplicitNo) {
+        return await this.handleMonthlyInvoicesQuery(text, senderName);
+      }
+
       const resolved = await this.resolveInvoiceData(text, senderName);
       if (resolved.notFoundMessage) {
         return resolved.notFoundMessage;
@@ -1080,6 +1198,246 @@ class WavisInteractiveEngine {
       console.error('[L-W.A.V.I.S QUERY INVOICE ERROR]', err.message);
       return `⚠️ Maaf ${senderName}, terjadi kendala saat mengambil data faktur: ${err.message}`;
     }
+  }
+
+  /**
+   * Menangani Permintaan Rekap / Daftar Faktur Bulanan per Toko
+   * Contoh: "list faktur mmm bulan november", "rekap faktur aw ff bulan ini"
+   */
+  async handleMonthlyInvoicesQuery(text, senderName = 'Kak') {
+    const clean = normalizeText(text);
+
+    // 1. Ekstraksi Toko
+    await this.autoPoProcessor?.refreshCacheIfNeeded?.();
+    const customers = this.autoPoProcessor?.cachedCustomers || [];
+    const matchedCustomer = this.matchCustomerFromQuery(clean, customers);
+
+    if (!matchedCustomer) {
+      return `🤖 *[L-W.A.V.I.S]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}! Untuk melihat rekap atau daftar faktur bulanan, mohon sebutkan nama tokonya ya. 😊\n\n` +
+        `💡 *Contoh:* ketik \`list faktur mmm bulan november\` atau \`rekap faktur aw ff bulan ini\`.`;
+    }
+
+    // 2. Ekstraksi Periode Bulan & Tahun
+    const monthNamesIndo = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const now = new Date();
+    const curYear = now.getFullYear() < 2026 ? 2026 : now.getFullYear();
+
+    const monthYear = extractMonthYear(clean) || {
+      month: now.getMonth() + 1,
+      year: curYear,
+      monthName: monthNamesIndo[now.getMonth()],
+      rawText: 'bulan ini'
+    };
+
+    const targetMonth = monthYear.month;
+    const targetYear = monthYear.year;
+    const targetMonthName = monthYear.monthName;
+
+    const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
+    let allCustomerTransactions = [];
+
+    // Ambil transaksi customer dari mockInvoices (untuk unit test) atau Firestore
+    if (!db && this.mockInvoices) {
+      const cNameNorm = normalizeText(matchedCustomer.customerName || matchedCustomer.name || '');
+      const cAliasNorm = normalizeText(matchedCustomer.aliasName || matchedCustomer.alias || '');
+      allCustomerTransactions = Object.values(this.mockInvoices).filter(inv => {
+        const invCust = normalizeText(inv.customerName || '');
+        const invAlias = normalizeText(inv.aliasName || '');
+        return (cNameNorm && (invCust.includes(cNameNorm) || cNameNorm.includes(invCust))) ||
+               (cAliasNorm && (invAlias.includes(cAliasNorm) || cAliasNorm.includes(invAlias) || invCust.includes(cAliasNorm)));
+      });
+    }
+
+    if (db) {
+      const queryCol = async (field, val) => {
+        if (!val) return [];
+        if (this.firebaseAdapter.mode === 'admin') {
+          const snap = await db.collection('transactions').where(field, '==', val).get();
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } else if (this.firebaseAdapter.clientSdk) {
+          const { collection, query, where, getDocs } = this.firebaseAdapter.clientSdk;
+          const snap = await getDocs(query(collection(db, 'transactions'), where(field, '==', val)));
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        return [];
+      };
+
+      if (matchedCustomer.id) {
+        allCustomerTransactions = await queryCol('customerId', matchedCustomer.id);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.customerName) {
+        allCustomerTransactions = await queryCol('customerName', matchedCustomer.customerName);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.aliasName) {
+        allCustomerTransactions = await queryCol('aliasName', matchedCustomer.aliasName);
+      }
+    }
+
+    const custDisplayName = matchedCustomer.aliasName ? `${matchedCustomer.aliasName} (${matchedCustomer.customerName})` : (matchedCustomer.customerName || 'Pelanggan');
+    const custShortName = matchedCustomer.aliasName || matchedCustomer.customerName || 'Pelanggan';
+
+    // Helper parsing tanggal invoice
+    const parseInvoiceDate = (inv) => {
+      if (inv.date?.toDate) return inv.date.toDate();
+      if (inv.date instanceof Date) return inv.date;
+      if (typeof inv.date === 'string' && inv.date) {
+        const d = new Date(inv.date);
+        if (!isNaN(d.getTime())) return d;
+      }
+      if (inv.createdAt?.toDate) return inv.createdAt.toDate();
+      if (inv.createdAt instanceof Date) return inv.createdAt;
+      if (typeof inv.createdAt === 'string' && inv.createdAt) {
+        const d = new Date(inv.createdAt);
+        if (!isNaN(d.getTime())) return d;
+      }
+      if (inv.tgl && typeof inv.tgl === 'string') {
+        const parts = inv.tgl.split('-');
+        if (parts.length === 3) {
+          const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          if (!isNaN(d.getTime())) return d;
+        }
+      }
+      return null;
+    };
+
+    // Filter transaksi yang sesuai target bulan & tahun
+    const monthlyInvoices = allCustomerTransactions.filter(inv => {
+      const d = parseInvoiceDate(inv);
+      if (!d) return false;
+      return (d.getMonth() + 1) === targetMonth && d.getFullYear() === targetYear;
+    });
+
+    // Urutkan transaksi dari yang paling baru
+    monthlyInvoices.sort((a, b) => {
+      const da = parseInvoiceDate(a) || new Date(0);
+      const db = parseInvoiceDate(b) || new Date(0);
+      return db.getTime() - da.getTime();
+    });
+
+    // Jika tidak ada transaksi di bulan tersebut
+    if (monthlyInvoices.length === 0) {
+      allCustomerTransactions.sort((a, b) => {
+        const da = parseInvoiceDate(a) || new Date(0);
+        const db = parseInvoiceDate(b) || new Date(0);
+        return db.getTime() - da.getTime();
+      });
+      const lastInv = allCustomerTransactions[0];
+      let lastInvInfo = '';
+      if (lastInv) {
+        const lTotal = Math.round(lastInv.grandTotal || 0).toLocaleString('id-ID');
+        lastInvInfo = `\n\n💡 *Faktur terakhir yang tercatat:*\n• Faktur *#${lastInv.invoiceNo || lastInv.id}* (Tgl: ${lastInv.tgl || '-'}, Total: Rp ${lTotal})`;
+      }
+
+      return `🤖 *[REKAP FAKTUR: L-W.A.V.I.S]*\n` +
+        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Halo ${senderName}! Tidak ditemukan riwayat faktur untuk *${custDisplayName}* pada periode *${targetMonthName} ${targetYear}*. ℹ️${lastInvInfo}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 *Tips:* Anda bisa mengecek bulan lain seperti \`list faktur ${custShortName} bulan lalu\` atau \`faktur ${custShortName}\` untuk faktur terakhir.`;
+    }
+
+    // Hitung Akumulasi Total
+    let totalOmset = 0;
+    let totalUnpaid = 0;
+    let totalCartons = 0;
+    let totalWeight = 0;
+    let unpaidCount = 0;
+
+    const cachedProds = this.autoPoProcessor?.cachedProducts || [];
+    const getIsiKtn = (it) => {
+      if (typeof it.isiKarton === 'number' && it.isiKarton > 0) return it.isiKarton;
+      if (cachedProds.length > 0) {
+        const found = cachedProds.find(p => (it.productId && p.id === it.productId) || (it.productName && (p.productName === it.productName || p.name === it.productName)));
+        if (found && found.isiKarton) return Number(found.isiKarton);
+      }
+      return 15;
+    };
+
+    monthlyInvoices.forEach(inv => {
+      const gTotal = Number(inv.grandTotal) || 0;
+      totalOmset += gTotal;
+
+      const isPaid = (inv.statusTransfer || '').toUpperCase() === 'PAID';
+      if (!isPaid) {
+        const paidPart = Number(inv.transferBankDetails?.totalPaid || inv.transferBankDetails?.amount || inv.paidAmount || 0);
+        totalUnpaid += Math.max(0, gTotal - paidPart);
+        unpaidCount++;
+      }
+
+      const items = Array.isArray(inv.items) ? inv.items : [];
+      let invCartons = 0;
+      let invWeight = Number(inv.totalWeightKg) || 0;
+
+      items.forEach(it => {
+        const isi = getIsiKtn(it);
+        const qty = Number(it.qty) || 0;
+        const ktn = (isi > 0 && qty > 0) ? (qty / isi) : (Number(it.cartonCount) || 0);
+        invCartons += ktn;
+        if (!inv.totalWeightKg) {
+          invWeight += Number(it.weightKg) || 0;
+        }
+      });
+
+      totalCartons += invCartons;
+      totalWeight += invWeight;
+    });
+
+    const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+    let textRes = `🤖 *[REKAP FAKTUR: L-W.A.V.I.S]*\n`;
+    textRes += `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n`;
+    textRes += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    textRes += `Halo ${senderName}! Berikut daftar faktur untuk *${custDisplayName}* periode *${targetMonthName} ${targetYear}*:\n\n`;
+    textRes += `📄 *DAFTAR FAKTUR (${monthlyInvoices.length} Transaksi):*\n`;
+    textRes += `────────────────────\n`;
+
+    monthlyInvoices.forEach((inv, idx) => {
+      const num = idx < 10 ? numberEmojis[idx] : `${idx + 1}.`;
+      const invNo = inv.invoiceNo || inv.id;
+      const tgl = inv.tgl || (parseInvoiceDate(inv) ? parseInvoiceDate(inv).toLocaleDateString('id-ID') : '-');
+      const totalStr = Math.round(inv.grandTotal || 0).toLocaleString('id-ID');
+      
+      const stKirim = inv.status || 'PENDING';
+      const stBayar = (inv.statusTransfer || '').toUpperCase() === 'PAID' ? 'PAID' : 'UNPAID';
+      const bayarIcon = stBayar === 'PAID' ? '🟢' : '🔴';
+
+      const items = Array.isArray(inv.items) ? inv.items : [];
+      let invKtn = 0;
+      items.forEach(it => {
+        const isi = getIsiKtn(it);
+        const qty = Number(it.qty) || 0;
+        invKtn += (isi > 0 && qty > 0) ? (qty / isi) : (Number(it.cartonCount) || 0);
+      });
+      const ktnStr = invKtn > 0 ? ` (${Math.round(invKtn * 10) / 10} Ktn)` : '';
+
+      textRes += `${num} *Faktur #${invNo}* (Tgl: ${tgl})\n`;
+      textRes += `   • Total: *Rp ${totalStr}*${ktnStr}\n`;
+      textRes += `   • Status: 🚚 ${stKirim} | 💳 ${bayarIcon} ${stBayar}\n\n`;
+    });
+
+    textRes += `────────────────────\n`;
+    textRes += `📊 *TOTAL AKUMULASI ${targetMonthName.toUpperCase()} ${targetYear}:*\n`;
+    textRes += `• Total Transaksi: *${monthlyInvoices.length} Faktur*\n`;
+    if (totalCartons > 0) {
+      textRes += `• Total Volume: *${Math.round(totalCartons * 10) / 10} Ktn*${totalWeight > 0 ? ` (${totalWeight.toFixed(2)} kg)` : ''}\n`;
+    }
+    textRes += `• Total Belanja (Omset): *Rp ${Math.round(totalOmset).toLocaleString('id-ID')}*\n`;
+    if (unpaidCount > 0) {
+      textRes += `• Sisa Belum Lunas: *Rp ${Math.round(totalUnpaid).toLocaleString('id-ID')}* (${unpaidCount} Faktur)\n`;
+    } else {
+      textRes += `• Status Pembayaran: *LUNAS SEMUA* ✅\n`;
+    }
+
+    textRes += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    textRes += `💡 *Ketik \`pdf [nomor]\` untuk mengunduh file dokumen PDF resmi salah satu faktur di atas (contoh: \`pdf ${monthlyInvoices[0].invoiceNo || monthlyInvoices[0].id}\`).* 😊`;
+
+    return textRes;
   }
 
   /**
