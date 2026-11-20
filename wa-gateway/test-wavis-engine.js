@@ -509,18 +509,28 @@ engine.setRawMessageStore((jid, id, msg) => {
   // 11. UJI MATRIKS HAK AKSES & KEAMANAN (KANTOR VS UMUM)
   console.log('\n--- Test 11: Uji Matriks Hak Akses & Keamanan (Kantor vs Umum) ---');
 
-  // Helper simulasi filter peran kontak
+  // Helper simulasi filter peran kontak (Prioritaskan KANTOR duluan)
   const officeNumbers = new Set(['6281234567890', '6281200000564']);
   const generalNumbers = new Set(['6287789733632', '6282100000871', '6282100000410']);
+  const mockLidToPhone = new Map([['33668835856433', '6287789733632']]);
 
-  function testContactRole(phone) {
-    if (generalNumbers.has(phone)) return 'GENERAL';
-    if (officeNumbers.has(phone)) return 'OFFICE';
+  function testContactRole(phone, rawJidOrLid) {
+    const p = (phone || '').replace(/\D/g, '');
+    if (p) {
+      if (officeNumbers.has(p)) return 'OFFICE';
+      if (generalNumbers.has(p)) return 'GENERAL';
+    }
+    const cleanLid = (rawJidOrLid || '').toString().split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (cleanLid && mockLidToPhone.has(cleanLid)) {
+      const mapped = mockLidToPhone.get(cleanLid);
+      if (officeNumbers.has(mapped)) return 'OFFICE';
+      if (generalNumbers.has(mapped)) return 'GENERAL';
+    }
     return 'OFFICE';
   }
 
-  function simulateSecurityFilter(phone, intent, senderName = 'Kak') {
-    const role = testContactRole(phone);
+  function simulateSecurityFilter(phone, intent, senderName = 'Kak', rawJidOrLid = null) {
+    const role = testContactRole(phone, rawJidOrLid);
     const isOffice = (role === 'OFFICE');
 
     if (!isOffice) {
@@ -579,6 +589,20 @@ engine.setRawMessageStore((jid, id, msg) => {
   assert.strictEqual(secOfficeCheck.allowed, true);
   assert.strictEqual(secOfficeCheck.isOffice, true);
   console.log('  ✓ 11B: Nomor Kantor (Pak Joko) → Diizinkan akses seluruh operasional L-W.A.V.I.S');
+
+  // 11C. Hot-Reload Role Toggle: Rogue beralih dari Umum ke Kantor seketika (tanpa restart)
+  generalNumbers.delete('6287789733632');
+  officeNumbers.add('6287789733632');
+
+  const secRogueOfficePhone = simulateSecurityFilter('6287789733632', 'QUERY_INVOICE', 'Rogue');
+  assert.strictEqual(secRogueOfficePhone.allowed, true, 'Rogue setelah diubah ke Kantor harus diizinkan cek faktur/PO');
+  assert.strictEqual(secRogueOfficePhone.isOffice, true);
+
+  // 11C-2. Pengujian via WhatsApp Privacy LID (@lid)
+  const secRogueLid = simulateSecurityFilter(null, 'QUERY_INVOICE', 'Rogue', '33668835856433@lid');
+  assert.strictEqual(secRogueLid.allowed, true, 'Rogue via WhatsApp LID harus berhasil terdeteksi sebagai Kantor');
+  assert.strictEqual(secRogueLid.isOffice, true);
+  console.log('  ✓ 11C: Hot-Reload Role Toggle (Rogue Umum -> Kantor & Pemetaan WhatsApp LID) → Lulus 100%!');
 
   console.log('✅ Test 11 PASSED: Matriks Hak Akses & Keamanan (Kantor vs Umum) Terverifikasi 100%!');
 

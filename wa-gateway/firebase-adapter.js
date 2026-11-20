@@ -504,14 +504,30 @@ class FirebaseAdapter {
         if (doc && doc.exists) {
           onSettings(doc.data());
         }
+      }, err => {
+        console.warn('[FIREBASE ADMIN SETTINGS WARN]', err.message);
       });
+      // Fallback listener ganda ke wa_bot_session/settings
+      this.db.collection('wa_bot_session').doc('settings').onSnapshot(doc => {
+        if (doc && doc.exists) {
+          onSettings(doc.data());
+        }
+      }, () => {});
     } else if (this.mode === 'client') {
       const { doc, onSnapshot } = this.clientSdk;
       onSnapshot(doc(this.clientDb, 'app_settings', 'wa_auto_po_settings'), snap => {
         if (snap && snap.exists()) {
           onSettings(snap.data());
         }
+      }, err => {
+        console.warn('[FIREBASE CLIENT SETTINGS WARN]', err.message);
       });
+      // Fallback listener ganda ke wa_bot_session/settings
+      onSnapshot(doc(this.clientDb, 'wa_bot_session', 'settings'), snap => {
+        if (snap && snap.exists()) {
+          onSettings(snap.data());
+        }
+      }, () => {});
     }
   }
 

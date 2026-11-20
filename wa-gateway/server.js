@@ -143,12 +143,22 @@ console.log(`[DEVICE IDENTIFIER] Perangkat: ${DEVICE_NAME} (ID: ${INSTANCE_ID})`
 // Claim master upfront so any older running device on another phone yields immediately
 firebaseAdapter.claimMaster(INSTANCE_ID, DEVICE_NAME, process.platform).catch(() => {});
 
-// Global process error handlers to prevent unexpected crashes
+// Global process error handlers to prevent unexpected crashes & handle Bad MAC gracefully
 process.on('uncaughtException', (err) => {
-  console.error('[GATEWAY PROCESS EXCEPTION]', err?.message || err);
+  const msg = err?.message || String(err || '');
+  if (msg.includes('Bad MAC') || err?.stack?.includes('Bad MAC')) {
+    console.warn('[E2EE NOTICE] ℹ️ Terdeteksi frame sinkronisasi multi-perangkat tertaut (Bad MAC diabaikan secara aman).');
+    return;
+  }
+  console.error('[GATEWAY PROCESS EXCEPTION]', msg);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('[GATEWAY UNHANDLED REJECTION]', reason?.message || reason);
+  const msg = reason?.message || String(reason || '');
+  if (msg.includes('Bad MAC') || reason?.stack?.includes('Bad MAC')) {
+    console.warn('[E2EE NOTICE] ℹ️ Terdeteksi frame sinkronisasi multi-perangkat tertaut (Bad MAC diabaikan secara aman).');
+    return;
+  }
+  console.error('[GATEWAY UNHANDLED REJECTION]', msg);
 });
 
 // Singleton State Management
@@ -199,21 +209,26 @@ function getContactRole(senderPhone, rawJidDigits) {
   if (!senderPhone && !rawJidDigits) return 'OFFICE';
   const p = cleanPhone(senderPhone);
   if (p) {
-    if (Array.from(generalNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
-      return 'GENERAL';
-    }
+    // 1. PRIORITAS KANTOR: Tim Internal PT PFS dicek pertama kali
     if (Array.from(officeNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
       return 'OFFICE';
     }
+    // 2. Jika tidak ada di daftar kantor, periksa apakah ada di daftar Umum
+    if (Array.from(generalNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
+      return 'GENERAL';
+    }
   }
-  if (rawJidDigits && lidToPhoneMap.has(rawJidDigits)) {
-    const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
+
+  // 3. Fallback via pemetaan WhatsApp Privacy LID (membersihkan @lid atau @s.whatsapp.net)
+  const cleanLid = rawJidDigits ? rawJidDigits.toString().split('@')[0].split(':')[0].replace(/\D/g, '') : '';
+  if (cleanLid && lidToPhoneMap.has(cleanLid)) {
+    const mappedPhone = cleanPhone(lidToPhoneMap.get(cleanLid));
     if (mappedPhone) {
-      if (Array.from(generalNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
-        return 'GENERAL';
-      }
       if (Array.from(officeNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
         return 'OFFICE';
+      }
+      if (Array.from(generalNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
+        return 'GENERAL';
       }
     }
   }
@@ -226,8 +241,9 @@ function isInteractiveAllowed(senderPhone, rawJidDigits) {
   if (p && Array.from(interactiveNumbers).some(it => p.endsWith(it) || it.endsWith(p) || p === it)) {
     return true;
   }
-  if (rawJidDigits && lidToPhoneMap.has(rawJidDigits)) {
-    const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
+  const cleanLid = rawJidDigits ? rawJidDigits.toString().split('@')[0].split(':')[0].replace(/\D/g, '') : '';
+  if (cleanLid && lidToPhoneMap.has(cleanLid)) {
+    const mappedPhone = cleanPhone(lidToPhoneMap.get(cleanLid));
     if (mappedPhone && Array.from(interactiveNumbers).some(it => mappedPhone.endsWith(it) || it.endsWith(mappedPhone) || mappedPhone === it)) {
       return true;
     }
@@ -444,6 +460,7 @@ async function flushMessageBuffer(bufferKey) {
   if (isInteractive && !isTransfer && interactiveIntent !== 'UNKNOWN') {
     const contactRole = getContactRole(buf.senderPhone, buf.senderJid);
     const isOffice = (contactRole === 'OFFICE');
+    console.log(`[ROLE CHECK] 👤 ${buf.senderName} (+${buf.senderPhone || buf.senderJid}) terdeteksi sebagai: [${contactRole}] [Intent: ${interactiveIntent}]`);
 
     // 1. FILTER PRIVASI & KEAMANAN: JIKA KONTAK BERPERAN UMUM / ORANG LUAR (NON-KANTOR)
     if (!isOffice) {
@@ -696,6 +713,11 @@ firebaseAdapter.listenToSettings((settings) => {
     interactiveNumbers = newInteractiveNumbers;
     officeNumbers = newOfficeNumbers;
     generalNumbers = newGeneralNumbers;
+
+    console.log(`[SETTINGS SYNC] 🔄 Whitelist kontak sinkron seketika: ${newOfficeNumbers.size} KANTOR, ${newGeneralNumbers.size} UMUM, ${newInteractiveNumbers.size} INTERAKTIF (Total: ${newNumbers.size} nomor).`);
+    whitelistContactsList.forEach(c => {
+      console.log(`  └─ 👤 ${c.name || 'Kontak'} (+${c.phone}) -> [${c.role}] [Interactive: ${c.interactive ? 'ON' : 'OFF'}]`);
+    });
   } else if (Array.isArray(settings.whitelistNumbers)) {
     whitelistContactsList = [];
     const newNumbers = new Set(
@@ -848,6 +870,9 @@ function cleanupSocket() {
   if (currentSock) {
     try {
       currentSock.ev.removeAllListeners();
+      if (currentSock.ws && typeof currentSock.ws.close === 'function') {
+        try { currentSock.ws.close(); } catch (_) {}
+      }
       currentSock.end?.();
     } catch (_) {}
     currentSock = null;
@@ -2115,7 +2140,8 @@ async function activateGatewayThisDevice(reason = 'MANUAL') {
 
   cleanupSocket();
   isConnecting = false;
-  setTimeout(startBaileys, 1000);
+  console.log('[TAKE-OVER] ⏳ Jeda aman handover (3.5 detik) agar WhatsApp membersihkan soket perangkat lama dan mencegah BAD MAC...');
+  setTimeout(startBaileys, 3500);
 }
 
 // Setup interactive stdin listener for instant takeover via Enter key in Termux
@@ -2259,7 +2285,8 @@ app.get('/api/qr', (req, res) => {
 app.post('/api/restart', (req, res) => {
   cleanupSocket();
   isConnecting = false;
-  setTimeout(startBaileys, 1000);
+  console.log('[TAKE-OVER] ⏳ Jeda aman handover (3.5 detik) agar WhatsApp membersihkan soket perangkat lama dan mencegah BAD MAC...');
+  setTimeout(startBaileys, 3500);
   res.json({ success: true, message: 'Gateway direstart.' });
 });
 
