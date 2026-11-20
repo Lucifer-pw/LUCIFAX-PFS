@@ -17,7 +17,8 @@ cd "$GATEWAY_DIR" || { echo "Folder $GATEWAY_DIR tidak ditemukan!"; exit 1; }
 
 # Tampilkan versi lokal saat ini
 if [ -f version.json ]; then
-  LOCAL_VER=$(grep -o '"gateway": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
+  LOCAL_VER=$(node -e "try{console.log(require('./version.json').gateway||'')}catch(_){}" 2>/dev/null)
+  [ -z "$LOCAL_VER" ] && LOCAL_VER=$(grep -o '"gateway": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
   echo "Versi lokal saat ini: v$LOCAL_VER"
 else
   echo "Versi lokal: TIDAK DIKETAHUI (version.json tidak ada)"
@@ -27,8 +28,8 @@ echo ""
 echo "Mengunduh file terbaru dari GitHub..."
 echo ""
 
-# Download semua file gateway (tambah ?t=timestamp untuk cache-busting GitHub CDN)
-FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pdf-generator.js fiva-logo.bin firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js test-wavis-engine.js version.json update.sh"
+# Download semua file gateway (kecuali update.sh disimpan terpisah agar tidak merusak eksekusi bash)
+FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pdf-generator.js fiva-logo.bin firebase-adapter.js notification-dispatcher.js ocr-engine.js bank-slip-parser.js test-wavis-engine.js version.json"
 CACHE_BUST="?t=$(date +%s)"
 
 for f in $FILES; do
@@ -40,16 +41,31 @@ for f in $FILES; do
   fi
 done
 
+# Download update.sh ke file sementara agar tidak terjadi 'syntax error near unexpected token else'
+printf "  update.sh ... "
+if curl -sL -o "update.sh.tmp" "$REPO_BASE/update.sh$CACHE_BUST"; then
+  echo "OK"
+else
+  echo "GAGAL"
+fi
+
 echo ""
 
-# Tampilkan versi baru
+# Tampilkan versi baru & changelog
 if [ -f version.json ]; then
-  NEW_VER=$(grep -o '"gateway": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
-  CHANGELOG=$(grep -o '"changelog": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
+  NEW_VER=$(node -e "try{console.log(require('./version.json').gateway||'')}catch(_){}" 2>/dev/null)
+  [ -z "$NEW_VER" ] && NEW_VER=$(grep -o '"gateway": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
+  CHANGELOG=$(node -e "try{console.log(require('./version.json').changelog||'')}catch(_){}" 2>/dev/null)
   echo "Update selesai! Versi baru: v$NEW_VER"
-  echo "Changelog: $CHANGELOG"
+  [ -n "$CHANGELOG" ] && echo "Changelog: $CHANGELOG"
 else
   echo "Update selesai!"
+fi
+
+# Ganti update.sh dengan file baru yang sudah didownload
+if [ -f "update.sh.tmp" ]; then
+  mv update.sh.tmp update.sh
+  chmod +x update.sh
 fi
 
 echo ""

@@ -10,7 +10,7 @@
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.282",
     "test-wavis-engine.js": "3.3.308",
-    "update.sh": "3.3.309"
+    "update.sh": "3.3.310"
   },
   "updatedAt": "2026-11-20",
   "changelog": "v3.3.310: Fix dobel respon menu saat alih perangkat (cluster de-duplication via Firestore listener & anti-replay sapaan lama >45s). Heningkan console.error Bad MAC dari libsignal. Sinkronisasi ID pesan klaster seketika saat takeover."
