@@ -2526,8 +2526,11 @@ async function checkForUpdates() {
       console.log(`║  Remote: v${(remote.gateway || '?').padEnd(38)}║`);
       console.log(`║  ${(remote.changelog || '').substring(0, 48).padEnd(48)}║`);
       console.log(`╠══════════════════════════════════════════════════╣`);
-      console.log(`║  Jalankan perintah berikut untuk update:         ║`);
-      console.log(`║  cd ~/wa-gateway && ./update.sh                  ║`);
+      if (process.platform === 'win32') {
+        console.log(`║  👉 Di Windows: Cukup jalankan update.bat        ║`);
+      } else {
+        console.log(`║  👉 Di Termux:  cd ~/wa-gateway && ./update.sh   ║`);
+      }
       console.log(`╚══════════════════════════════════════════════════╝\n`);
 
       // Simpan info update ke Firestore agar bisa dibaca oleh app Flutter
