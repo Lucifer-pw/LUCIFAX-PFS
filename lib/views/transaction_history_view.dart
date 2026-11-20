@@ -26,6 +26,7 @@ import '../models/wa_contact.dart';
 import 'transaction_entry_view.dart';
 import 'return_transaction_dialog.dart';
 import 'yearly_shipment_chart_dialog.dart';
+import 'repeat_order_dialog.dart';
 import '../services/vehicle_loading_service.dart';
 
 class TransactionHistoryView extends StatefulWidget {
@@ -5968,6 +5969,29 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
             ),
           ),
         ],
+        const SizedBox(width: 8),
+        // Tombol Daftar RO (Repeat Order & Customer Delay Monitoring)
+        SizedBox(
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              final customers = Provider.of<CustomerProvider>(context, listen: false).customers;
+              RepeatOrderDialog.show(
+                context,
+                allTransactions: trProvider.transactions,
+                allCustomers: customers,
+                initialMonthFilter: _monthFilter,
+              );
+            },
+            icon: const Icon(Icons.published_with_changes_rounded, color: Colors.white, size: 16),
+            label: const Text('Daftar RO', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
         if (!isKacab) ...[
           const SizedBox(width: 8),
           // Import Excel Button
