@@ -8,14 +8,23 @@ console.error = function (...args) {
     combined.includes('Bad MAC') ||
     combined.includes('Failed to decrypt message with any known session') ||
     combined.includes('SessionError: No matching sessions found') ||
-    combined.includes('No matching sessions found for message')
+    combined.includes('No matching sessions found for message') ||
+    combined.includes('Over 2000 messages into the future') ||
+    combined.includes('messages into the future') ||
+    combined.includes('Session error:SessionError') ||
+    combined.includes('SessionError')
   ) {
+    if (combined.includes('messages into the future') || combined.includes('Over 2000')) {
+      if (typeof cleanupCorruptedSessions === 'function') {
+        cleanupCorruptedSessions();
+      }
+    }
     return; // Abaikan secara senyap frame enkripsi ganda dari perangkat tertaut lain
   }
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.311'; // v3.3.311 - Smart PDF & Faktur Matcher via Toko & Nominal Range (X jt an)
+const GATEWAY_VERSION = '3.3.312'; // v3.3.312 - Auto-heal Signal session desync (Over 2000 messages) & silence stack trace
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -50,6 +59,38 @@ if (firebaseAdapter && typeof firebaseAdapter.setNotificationDispatcher === 'fun
 const app = express();
 const PORT = process.env.PORT || 3001;
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
+
+// Auto-Heal Corrupted Signal Sessions (Over 2000 messages into the future)
+// Membersihkan file session-*.json yang macet tanpa menghapus creds.json (tidak perlu scan QR ulang)
+let _isCleaningCorruptedSessions = false;
+let _lastSessionCleanupTime = 0;
+function cleanupCorruptedSessions() {
+  const now = Date.now();
+  if (_isCleaningCorruptedSessions || (now - _lastSessionCleanupTime < 30000)) return;
+  _isCleaningCorruptedSessions = true;
+  _lastSessionCleanupTime = now;
+  try {
+    if (fs.existsSync(AUTH_DIR)) {
+      const files = fs.readdirSync(AUTH_DIR);
+      let cleaned = 0;
+      for (const file of files) {
+        if (file.startsWith('session-') && file.endsWith('.json')) {
+          try {
+            fs.unlinkSync(path.join(AUTH_DIR, file));
+            cleaned++;
+          } catch (_) {}
+        }
+      }
+      if (cleaned > 0) {
+        console.log(`[L-W.A.V.I.S AUTO-HEAL] Berhasil mereset ${cleaned} file session Signal yang desinkron (Over 2000 messages). Sesi login WhatsApp tetap aktif & akan handshake ulang otomatis.`);
+      }
+    }
+  } catch (err) {
+    // Abaikan error background
+  } finally {
+    _isCleaningCorruptedSessions = false;
+  }
+}
 
 app.use(cors());
 app.use(express.json());

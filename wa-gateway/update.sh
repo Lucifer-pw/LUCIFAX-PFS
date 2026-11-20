@@ -62,12 +62,6 @@ else
   echo "Update selesai!"
 fi
 
-# Ganti update.sh dengan file baru yang sudah didownload
-if [ -f "update.sh.tmp" ]; then
-  mv update.sh.tmp update.sh
-  chmod +x update.sh
-fi
-
 echo ""
 echo "Restart gateway..."
 
@@ -90,3 +84,10 @@ echo "=============================================="
 echo "  Gateway berhasil diupdate dan direstart!"
 echo "=============================================="
 echo ""
+
+# Ganti update.sh dengan file baru di baris paling akhir agar bash tidak terganggu pergeseran file descriptor
+if [ -f "update.sh.tmp" ]; then
+  mv -f "update.sh.tmp" "update.sh" 2>/dev/null
+  chmod +x "update.sh" 2>/dev/null
+fi
+exit 0
