@@ -8,23 +8,23 @@ REPO_BASE="https://raw.githubusercontent.com/Lucifer-pw/LUCIFAX-PFS/main/wa-gate
 GATEWAY_DIR="$HOME/wa-gateway"
 
 echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║  🔄 L-W.A.V.I.S Gateway Updater                 ║"
-echo "╚══════════════════════════════════════════════════╝"
+echo "=============================================="
+echo "  L-W.A.V.I.S Gateway Updater"
+echo "=============================================="
 echo ""
 
-cd "$GATEWAY_DIR" || { echo "❌ Folder $GATEWAY_DIR tidak ditemukan!"; exit 1; }
+cd "$GATEWAY_DIR" || { echo "Folder $GATEWAY_DIR tidak ditemukan!"; exit 1; }
 
 # Tampilkan versi lokal saat ini
 if [ -f version.json ]; then
   LOCAL_VER=$(grep -o '"gateway": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
-  echo "📌 Versi lokal saat ini: v$LOCAL_VER"
+  echo "Versi lokal saat ini: v$LOCAL_VER"
 else
-  echo "📌 Versi lokal: TIDAK DIKETAHUI (version.json tidak ada)"
+  echo "Versi lokal: TIDAK DIKETAHUI (version.json tidak ada)"
 fi
 
 echo ""
-echo "⬇️  Mengunduh file terbaru dari GitHub..."
+echo "Mengunduh file terbaru dari GitHub..."
 echo ""
 
 # Download semua file gateway (tambah ?t=timestamp untuk cache-busting GitHub CDN)
@@ -32,11 +32,11 @@ FILES="server.js autonomous-po-processor.js wavis-interactive-engine.js wavis-pd
 CACHE_BUST="?t=$(date +%s)"
 
 for f in $FILES; do
-  echo -n "  📥 $f ... "
+  printf "  %s ... " "$f"
   if curl -sL -o "$f" "$REPO_BASE/$f$CACHE_BUST"; then
-    echo "✅"
+    echo "OK"
   else
-    echo "❌ GAGAL"
+    echo "GAGAL"
   fi
 done
 
@@ -46,31 +46,31 @@ echo ""
 if [ -f version.json ]; then
   NEW_VER=$(grep -o '"gateway": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
   CHANGELOG=$(grep -o '"changelog": "[^"]*"' version.json | head -1 | cut -d'"' -f4)
-  echo "✅ Update selesai! Versi baru: v$NEW_VER"
-  echo "📝 Changelog: $CHANGELOG"
+  echo "Update selesai! Versi baru: v$NEW_VER"
+  echo "Changelog: $CHANGELOG"
 else
-  echo "✅ Update selesai!"
+  echo "Update selesai!"
 fi
 
 echo ""
-echo "🔄 Restart gateway..."
+echo "Restart gateway..."
 
 # Restart: coba pm2 dulu, fallback manual
 if command -v pm2 &> /dev/null; then
   pm2 restart wa-gateway 2>/dev/null || pm2 restart server 2>/dev/null || {
-    echo "⚠️ pm2 restart gagal, restart manual..."
+    echo "pm2 restart gagal, restart manual..."
     pkill -f "node.*server.js" 2>/dev/null
-    sleep 1
+    sleep 2
     nohup node server.js > gateway.log 2>&1 &
   }
 else
   pkill -f "node.*server.js" 2>/dev/null
-  sleep 1
+  sleep 2
   nohup node server.js > gateway.log 2>&1 &
 fi
 
 echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║  ✅ Gateway berhasil diupdate dan direstart!     ║"
-echo "╚══════════════════════════════════════════════════╝"
+echo "=============================================="
+echo "  Gateway berhasil diupdate dan direstart!"
+echo "=============================================="
 echo ""
