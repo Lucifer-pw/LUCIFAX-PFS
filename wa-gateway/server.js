@@ -15,7 +15,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.310'; // v3.3.310 - Cluster de-duplication, silence Bad MAC libsignal, instant handover cache sync
+const GATEWAY_VERSION = '3.3.311'; // v3.3.311 - Smart PDF & Faktur Matcher via Toko & Nominal Range (X jt an)
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

@@ -944,5 +944,107 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 17 PASSED: Partikel Percakapan ("saja", "aja", "ya", dll) Terverifikasi 100%!');
 
+  // 18. UJI PENCARIAN CERDAS PDF FAKTUR VIA TOKO & NOMINAL RANGE ("X jt an") ATAU TOKO SAJA
+  console.log('\n--- Test 18: Uji Pencarian Cerdas PDF Faktur via Toko & Nominal Range ---');
+
+  // 18A. Uji Intent Detection untuk Permintaan PDF Toko & Nominal
+  const intentPdfShafa = engine.classifyIntent('pdf shafa ff');
+  assert.strictEqual(intentPdfShafa, 'SEND_PDF_INVOICE', 'pdf shafa ff harus dikenali sebagai SEND_PDF_INVOICE');
+  console.log('  ✓ 18A-1: "pdf shafa ff" → SEND_PDF_INVOICE');
+
+  const intentPdfAwNominal = engine.classifyIntent('kirimkan file pdf AW FF nominal 14jt an');
+  assert.strictEqual(intentPdfAwNominal, 'SEND_PDF_INVOICE', 'kirimkan file pdf AW FF nominal 14jt an harus SEND_PDF_INVOICE');
+  console.log('  ✓ 18A-2: "kirimkan file pdf AW FF nominal 14jt an" → SEND_PDF_INVOICE');
+
+  const intentPdfAwJutaan = engine.classifyIntent('pdf aw ff yang 14 jutaan');
+  assert.strictEqual(intentPdfAwJutaan, 'SEND_PDF_INVOICE', 'pdf aw ff yang 14 jutaan harus SEND_PDF_INVOICE');
+  console.log('  ✓ 18A-3: "pdf aw ff yang 14 jutaan" → SEND_PDF_INVOICE');
+
+  const intentQueryAwNominal = engine.classifyIntent('faktur aw ff nominal 14jt an');
+  assert.strictEqual(intentQueryAwNominal, 'QUERY_INVOICE', 'faktur aw ff nominal 14jt an harus QUERY_INVOICE');
+  console.log('  ✓ 18A-4: "faktur aw ff nominal 14jt an" → QUERY_INVOICE');
+
+  // 18B. Setup Mock Pelanggan & Mock Transaksi AW FF (Persis Tabel Nyata Dashboard Image)
+  engine.autoPoProcessor.cachedCustomers = [
+    { id: 'CUST_AW', customerName: 'AW FROZEN FOOD', aliasName: 'AW FF', city: 'SEMARANG' },
+    { id: 'CUST_SHAFA', customerName: 'SHAFA KHOIRUNISA HENANDRI', aliasName: 'SHAFA FF', city: 'BOYOLALI' }
+  ];
+
+  engine.mockInvoices['693'] = {
+    ...mockInvoice,
+    invoiceNo: '693',
+    customerName: 'AW FROZEN FOOD',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    grandTotal: 21654945,
+    tgl: '03-11-2026',
+    date: new Date('2026-11-03')
+  };
+
+  engine.mockInvoices['665'] = {
+    ...mockInvoice,
+    invoiceNo: '665',
+    customerName: 'AW FROZEN FOOD',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    grandTotal: 14182350,
+    tgl: '30-09-2026',
+    date: new Date('2026-09-30')
+  };
+
+  engine.mockInvoices['653'] = {
+    ...mockInvoice,
+    invoiceNo: '653',
+    customerName: 'AW FROZEN FOOD',
+    aliasName: 'AW FF',
+    city: 'SEMARANG',
+    grandTotal: 15542075,
+    tgl: '31-08-2026',
+    date: new Date('2026-08-31')
+  };
+
+  engine.mockInvoices['700'] = {
+    ...mockInvoice,
+    invoiceNo: '700',
+    customerName: 'SHAFA KHOIRUNISA HENANDRI',
+    aliasName: 'SHAFA FF',
+    city: 'BOYOLALI',
+    grandTotal: 1100730,
+    tgl: '20-11-2026',
+    date: new Date('2026-11-20')
+  };
+
+  // 18C. Uji Pencarian PDF Faktur via "AW FF nominal 14jt an" (Harus TEPAT #665, tolak #653)
+  const pdfAwMatchRes = await engine.handleSendPdfInvoice('kirimkan file pdf AW FF nominal 14jt an', 'Rogue');
+  assert(pdfAwMatchRes && pdfAwMatchRes.document, 'Harus berhasil menghasilkan dokumen PDF');
+  assert.strictEqual(pdfAwMatchRes.document.fileName, '665_AW_FF_SEMARANG_20260930.pdf', 'Harus memilih Faktur #665');
+  assert(pdfAwMatchRes.reply.includes('#665'), 'Pesan harus menyebutkan No. Invoice: #665');
+  assert(pdfAwMatchRes.reply.includes('14.182.350'), 'Pesan harus mencantumkan Grand Total Rp 14.182.350');
+  assert(pdfAwMatchRes.reply.includes('14jt an'), 'Pesan harus menyertakan subtitle kisaran 14jt an');
+  console.log('  ✓ 18C PASSED: "kirimkan file pdf AW FF nominal 14jt an" memilih #665 (Rp 14.182.350) dan menolak #653 (Rp 15.542.075)!');
+
+  // 18D. Uji Pencarian PDF Faktur via Toko Saja "pdf shafa ff" (Harus ambil Faktur Terakhir #700)
+  const pdfShafaRes = await engine.handleSendPdfInvoice('pdf shafa ff', 'Rogue');
+  assert(pdfShafaRes && pdfShafaRes.document, 'Harus berhasil menghasilkan dokumen PDF Shafa');
+  assert.strictEqual(pdfShafaRes.document.fileName, '700_SHAFA_FF_BOYOLALI_20261120.pdf', 'Harus memilih Faktur Terakhir #700');
+  assert(pdfShafaRes.reply.includes('#700'), 'Pesan harus mencantumkan No. Invoice: #700');
+  assert(pdfShafaRes.reply.includes('Faktur paling terakhir SHAFA FF'), 'Pesan harus menandai sebagai faktur terakhir');
+  console.log('  ✓ 18D PASSED: "pdf shafa ff" otomatis memilih Faktur Terakhir #700 (Rp 1.100.730)!');
+
+  // 18E. Uji Respon Santun Saat Nominal Tidak Ditemukan
+  const pdfNotFoundRes = await engine.handleSendPdfInvoice('pdf AW FF nominal 30jt an', 'Rogue');
+  assert(!pdfNotFoundRes.document, 'Tidak boleh generate document jika tidak ditemukan');
+  assert(pdfNotFoundRes.reply.includes('Tidak ditemukan faktur') && pdfNotFoundRes.reply.includes('30jt an'), 'Harus menjelaskan nominal 30jt an tidak ada');
+  assert(pdfNotFoundRes.reply.includes('Faktur terakhir AW FF'), 'Harus memberikan petunjuk faktur terakhir');
+  console.log('  ✓ 18E PASSED: Respon informatif saat nominal tidak ditemukan!');
+
+  // 18F. Uji handleInvoiceQuery Text ("faktur aw ff nominal 14jt an")
+  const queryTextRes = await engine.handleInvoiceQuery('faktur aw ff nominal 14jt an', 'Rogue');
+  assert(queryTextRes.includes('#665'), 'Query teks harus menampilkan Faktur #665');
+  assert(queryTextRes.includes('14.182.350'), 'Query teks harus memuat total Rp 14.182.350');
+  console.log('  ✓ 18F PASSED: Query teks faktur toko + nominal berhasil 100%!');
+
+  console.log('✅ Test 18 PASSED: Smart PDF & Faktur Matcher via Toko & Nominal Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

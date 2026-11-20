@@ -17,6 +17,77 @@ function normalizeText(str) {
     .trim();
 }
 
+/**
+ * Ekstraktor Rentang Nominal Percakapan (Conversational Nominal Parser)
+ * Mendeteksi pola "14jt an", "14 jutaan", "14.5jt", "nominal 14jt", dll.
+ * Khusus pola "X jt an" / "X jutaan": mengunci kepala X juta (X.000.000 s/d X.999.999).
+ */
+function extractNominalRange(str) {
+  if (!str) return null;
+  const clean = normalizeText(str);
+
+  const cleanPrefix = (s) => s.replace(/^(?:nominal|total|harga|sebesar|sekitar|senilai|kisaran|rp\.?)\s*/i, '').trim();
+
+  // 1. Pola angka desimal + jt / juta (contoh: 14.5jt, 14,1 juta)
+  const mDecimal = clean.match(/\b(?:nominal|total|harga|sebesar|sekitar|senilai|kisaran|rp|rp\.)?\s*(\d+[.,]\d+)\s*(?:jt|juta|million)\b/i);
+  if (mDecimal) {
+    const val = parseFloat(mDecimal[1].replace(',', '.'));
+    if (!isNaN(val) && val > 0) {
+      const target = val * 1000000;
+      const rawText = mDecimal[0].trim();
+      return {
+        type: 'SPECIFIC_JUTA',
+        target,
+        min: target * 0.98,
+        max: target * 1.02,
+        rawText,
+        cleanLabel: cleanPrefix(rawText),
+        numberText: mDecimal[1]
+      };
+    }
+  }
+
+  // 2. Pola angka kepala + jt an / jutaan / juta (contoh: 14jt an, 14 jutaan, 14jt, 14 juta)
+  const mJutaan = clean.match(/\b(?:nominal|total|harga|sebesar|sekitar|senilai|kisaran|rp|rp\.)?\s*(\d{1,4})\s*(?:jt\s*(?:an|-an)?|jutaan|juta\s*(?:an|-an)?)\b/i);
+  if (mJutaan) {
+    const base = parseInt(mJutaan[1], 10);
+    if (!isNaN(base) && base > 0) {
+      const min = base * 1000000;
+      const max = min + 999999;
+      const rawText = mJutaan[0].trim();
+      return {
+        type: 'HEAD_JUTAAN',
+        base,
+        min,
+        max,
+        rawText,
+        cleanLabel: cleanPrefix(rawText),
+        numberText: mJutaan[1]
+      };
+    }
+  }
+
+  // 3. Pola format nominal rupiah ribuan lengkap (contoh: nominal 14.182.350)
+  const mFullNumber = clean.match(/\b(?:nominal|total|harga|sebesar|senilai|rp|rp\.)\s*[:=]?\s*(\d{1,3}(?:\.\d{3}){2,3}|\d{7,9})\b/i);
+  if (mFullNumber) {
+    const val = parseInt(mFullNumber[1].replace(/\./g, ''), 10);
+    if (!isNaN(val) && val > 0) {
+      const rawText = mFullNumber[0].trim();
+      return {
+        type: 'EXACT_AMOUNT',
+        target: val,
+        min: val * 0.99,
+        max: val * 1.01,
+        rawText,
+        cleanLabel: cleanPrefix(rawText),
+        numberText: mFullNumber[1]
+      };
+    }
+  }
+
+  return null;
+}
+
 class WavisInteractiveEngine {
   constructor(firebaseAdapter, autoPoProcessor) {
     this.firebaseAdapter = firebaseAdapter;
@@ -282,7 +353,7 @@ class WavisInteractiveEngine {
 
     // 4. Cek Pola Query Faktur / Invoice atau Permintaan File Dokumen PDF Faktur
     const invoicePattern = /\b(faktur|invoice|nota)\b|\b(?:data|cek|tampilkan|lihat|info|kirimkan)\s+po\b|\bpo\s*(?:no|nomor|nomer|#)?\s*\d{2,6}\b/i;
-    if (invoicePattern.test(clean) || (isPdfRequest && /\b\d{2,6}\b/.test(clean))) {
+    if (invoicePattern.test(clean) || isPdfRequest) {
       if (/\b(revisi|ubah|ganti|tambah|tambahkan|kurang|batal|edit|tukar|hapus|dihapus|di\s*hapus|buang|dibuang|cancel|coret)\b/i.test(clean)) {
         return 'REVISE_PO';
       }
@@ -796,69 +867,213 @@ class WavisInteractiveEngine {
   }
 
   /**
-   * Menampilkan Data Faktur / Invoice Spesifik (#693, #697, #699, dll)
+   * Helper Resolusi Faktur Cerdas Bertingkat:
+   * Level 1: Eksplisit nomor faktur (#700, 697)
+   * Level 2: Pelanggan + Rentang Nominal "X jt an" (contoh: 'AW FF nominal 14jt an' -> Faktur #665)
+   * Level 3: Pelanggan saja (contoh: 'shafa ff' -> Faktur terakhir toko tersebut)
    */
-  async handleInvoiceQuery(text, senderName = 'Kak') {
+  async resolveInvoiceData(text, senderName = 'Kak', payload = null) {
     const clean = normalizeText(text);
-    // Regex presisi multi-tahap: Menangani 'kirimkan data PO nomor invoice 697', 'faktur 699', 'invoice #693', dll.
+
+    // 0. Ekstraksi rentang nominal jika pengguna mencari berdasarkan kisaran uang (misal '14jt an')
+    const nominalRange = extractNominalRange(clean);
+
+    // Bersihkan pola nominal dari teks saat mencari nomor faktur agar '14' dari '14jt an' tidak dianggap sebagai nomor faktur #14
+    let cleanForNo = clean;
+    if (nominalRange) {
+      cleanForNo = clean.replace(/\b(?:nominal|total|harga|sebesar|sekitar|senilai|kisaran|rp|rp\.)?\s*\d+(?:[.,]\d+)?\s*(?:jt|juta|jutaan)\s*(?:an|-an)?\b/gi, ' ');
+    }
+
     const regexPrefix = /(?:faktur|invoice|nota|po|nomor|nomer|#)\s*[:#.]?\s*([a-zA-Z]{1,3}\d{1,6})\b/i;
     const regexDistance = /(?:faktur|invoice|nota|po).*?\b(\d{2,8})\b/i;
     const regexAnyNumber = /\b(\d{2,8})\b/;
-    const match = clean.match(regexPrefix) || clean.match(regexDistance) || clean.match(regexAnyNumber);
-    
-    if (!match || !match[1]) {
-      return `🤖 *[L-W.A.V.I.S]*\n` +
-        `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Halo ${senderName}! Untuk menampilkan rincian data faktur atau invoice, mohon sebutkan nomor fakturnya ya. 😊\n\n` +
-        `💡 *Contoh:* ketik \`faktur 697\` atau \`kirimkan data PO nomor invoice 697\`.`;
+    const match = cleanForNo.match(regexPrefix) || cleanForNo.match(regexDistance) || cleanForNo.match(regexAnyNumber);
+
+    let explicitInvNo = match && match[1] ? match[1].replace(/^[#]/, '').trim() : null;
+
+    if (!explicitInvNo && payload && payload.quotedMessageText) {
+      const qMatch = payload.quotedMessageText.match(/(?:invoice|faktur|nota|po|#)\s*[:#.]?\s*(\d{2,6})/i);
+      if (qMatch) explicitInvNo = qMatch[1];
     }
 
-    const rawInv = match[1].replace(/^[#]/, '').trim();
-    const invNo = rawInv;
+    const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
 
-    try {
-      const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
+    // LEVEL 1: Jika ada nomor faktur eksplisit (dan BUKAN query pencarian nominal toko)
+    if (explicitInvNo && !nominalRange) {
       let invData = null;
-
       if (!db && this.mockInvoices) {
-        invData = this.mockInvoices[invNo] || null;
-      } else if (!db) {
-        return `⚠️ Maaf ${senderName}, koneksi database sedang tidak tersedia. Mohon coba beberapa saat lagi.`;
+        invData = this.mockInvoices[explicitInvNo] || null;
       }
-
-      if (!invData && db && this.firebaseAdapter && this.firebaseAdapter.mode === 'admin') {
-        const snap = await db.collection('transactions').doc(invNo).get();
-        if (snap.exists) {
-          invData = snap.data();
-        } else {
-          const qSnap = await db.collection('transactions').where('invoiceNo', '==', invNo).limit(1).get();
+      if (!invData && db && this.firebaseAdapter?.mode === 'admin') {
+        const snap = await db.collection('transactions').doc(explicitInvNo).get();
+        if (snap.exists) invData = snap.data();
+        else {
+          const qSnap = await db.collection('transactions').where('invoiceNo', '==', explicitInvNo).limit(1).get();
           if (!qSnap.empty) invData = qSnap.docs[0].data();
         }
-      } else if (!invData && db && this.firebaseAdapter && this.firebaseAdapter.clientSdk) {
+      } else if (!invData && db && this.firebaseAdapter?.clientSdk) {
         const { doc, getDoc, collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
-        const snap = await getDoc(doc(db, 'transactions', invNo));
-        if (snap.exists()) {
-          invData = snap.data();
-        } else {
-          const qSnap = await getDocs(query(collection(db, 'transactions'), where('invoiceNo', '==', invNo), limit(1)));
+        const snap = await getDoc(doc(db, 'transactions', explicitInvNo));
+        if (snap.exists()) invData = snap.data();
+        else {
+          const qSnap = await getDocs(query(collection(db, 'transactions'), where('invoiceNo', '==', explicitInvNo), limit(1)));
           if (!qSnap.empty) invData = qSnap.docs[0].data();
         }
       }
 
-      if (!invData) {
-        return `🤖 *[L-W.A.V.I.S]*\n` +
+      if (invData) {
+        if (!invData.invoiceNo) invData.invoiceNo = explicitInvNo;
+        return { invData, invNo: explicitInvNo, nominalRange: null, matchedCustomer: null };
+      }
+
+      // Jika nomor faktur eksplisit dicari tapi tidak ada di database
+      return {
+        notFoundMessage: `🤖 *[L-W.A.V.I.S]*\n` +
           `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `Halo ${senderName}! Data Faktur / Invoice *#${invNo}* tidak ditemukan di dalam sistem database. ❌\n\n` +
-          `Mohon periksa kembali nomor fakturnya ya! Jika butuh bantuan lebih lanjut, Admin akan siap membantu setelah aktif kembali. 😊`;
+          `Halo ${senderName}! Data Faktur / Invoice *#${explicitInvNo}* tidak ditemukan di dalam sistem database. ❌\n\n` +
+          `Mohon periksa kembali nomor fakturnya ya! Jika butuh bantuan lebih lanjut, Admin akan siap membantu setelah aktif kembali. 😊`
+      };
+    }
+
+    // LEVEL 2 & 3: Pencarian Berdasarkan Pelanggan (dengan atau tanpa rentang nominal)
+    await this.autoPoProcessor?.refreshCacheIfNeeded?.();
+    const customers = this.autoPoProcessor?.cachedCustomers || [];
+    const matchedCustomer = this.matchCustomerFromQuery(clean, customers);
+
+    if (!matchedCustomer) {
+      return {
+        notFoundMessage: `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Untuk menampilkan atau mengirimkan file PDF faktur, silakan sebutkan nomor faktur atau nama tokonya ya. 😊\n\n` +
+          `💡 *Contoh:*\n` +
+          `• Ketik nomor: \`pdf 700\` atau \`faktur 697\`\n` +
+          `• Ketik nama toko: \`pdf shafa ff\` (faktur terakhir)\n` +
+          `• Cari toko + nominal: \`pdf AW FF nominal 14jt an\``
+      };
+    }
+
+    // Ambil seluruh transaksi milik pelanggan ini
+    let allCustomerTransactions = [];
+    if (!db && this.mockInvoices) {
+      const cNameNorm = normalizeText(matchedCustomer.customerName || matchedCustomer.name || '');
+      const cAliasNorm = normalizeText(matchedCustomer.aliasName || matchedCustomer.alias || '');
+      allCustomerTransactions = Object.values(this.mockInvoices).filter(inv => {
+        const invCust = normalizeText(inv.customerName || '');
+        const invAlias = normalizeText(inv.aliasName || '');
+        return (cNameNorm && (invCust.includes(cNameNorm) || cNameNorm.includes(invCust))) ||
+               (cAliasNorm && (invAlias.includes(cAliasNorm) || cAliasNorm.includes(invAlias) || invCust.includes(cAliasNorm)));
+      });
+    }
+
+    if (db) {
+      const queryCol = async (field, val) => {
+        if (!val) return [];
+        if (this.firebaseAdapter.mode === 'admin') {
+          const snap = await db.collection('transactions').where(field, '==', val).get();
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } else if (this.firebaseAdapter.clientSdk) {
+          const { collection, query, where, getDocs } = this.firebaseAdapter.clientSdk;
+          const snap = await getDocs(query(collection(db, 'transactions'), where(field, '==', val)));
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        return [];
+      };
+
+      if (matchedCustomer.id) {
+        allCustomerTransactions = await queryCol('customerId', matchedCustomer.id);
+      }
+      if (allCustomerTransactions.length === 0 && matchedCustomer.customerName) {
+        allCustomerTransactions = await queryCol('customerName', matchedCustomer.customerName);
+      }
+    }
+
+    // Urutkan transaksi dari yang paling baru
+    allCustomerTransactions.sort((a, b) => {
+      const getTs = (inv) => {
+        if (inv.createdAt?.toDate) return inv.createdAt.toDate().getTime();
+        if (inv.createdAt) return new Date(inv.createdAt).getTime();
+        if (inv.tgl) {
+          const parts = String(inv.tgl).split('-');
+          if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+        }
+        const no = parseInt(String(inv.invoiceNo || inv.id || '0').replace(/\D/g, ''), 10);
+        return no || 0;
+      };
+      return getTs(b) - getTs(a);
+    });
+
+    const custDisplayName = matchedCustomer.aliasName || matchedCustomer.customerName || 'Pelanggan';
+
+    if (allCustomerTransactions.length === 0) {
+      return {
+        notFoundMessage: `🤖 *[L-W.A.V.I.S]*\n` +
+          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Halo ${senderName}! Belum ada riwayat transaksi atau faktur untuk *${custDisplayName}* di dalam sistem database. ℹ️`
+      };
+    }
+
+    // LEVEL 2: Pencarian Berdasarkan Rentang Nominal ("14jt an")
+    if (nominalRange) {
+      const matches = allCustomerTransactions.filter(inv => {
+        const total = Number(inv.grandTotal) || 0;
+        return total >= nominalRange.min && total <= nominalRange.max;
+      });
+
+      if (matches.length === 0) {
+        const latest = allCustomerTransactions[0];
+        const latestNominal = Math.round(latest.grandTotal || 0).toLocaleString('id-ID');
+        return {
+          notFoundMessage: `🤖 *[L-W.A.V.I.S]*\n` +
+            `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Halo ${senderName}! Tidak ditemukan faktur untuk *${custDisplayName}* di kisaran *${nominalRange.cleanLabel || nominalRange.rawText}* (Rp ${Math.round(nominalRange.min).toLocaleString('id-ID')} s/d Rp ${Math.round(nominalRange.max).toLocaleString('id-ID')}). ❌\n\n` +
+            `💡 *Faktur terakhir ${custDisplayName}:* Faktur *#${latest.invoiceNo || latest.id}* (Total: Rp ${latestNominal}, Tgl: ${latest.tgl || '-'}).`
+        };
       }
 
-      if (!invData.invoiceNo) invData.invoiceNo = invNo;
+      // Ambil faktur paling baru yang memenuhi rentang nominal
+      const selected = matches[0];
+      const invNo = selected.invoiceNo || selected.id;
+      if (!selected.invoiceNo) selected.invoiceNo = invNo;
+      return { invData: selected, invNo, nominalRange, matchedCustomer, matchCount: matches.length };
+    }
+
+    // LEVEL 3: Ambil Faktur Paling Terakhir Toko Tersebut (misal 'pdf shafa ff')
+    const latest = allCustomerTransactions[0];
+    const invNo = latest.invoiceNo || latest.id;
+    if (!latest.invoiceNo) latest.invoiceNo = invNo;
+    return { invData: latest, invNo, nominalRange: null, matchedCustomer, isLatestForCustomer: true };
+  }
+
+  /**
+   * Menampilkan Data Faktur / Invoice Spesifik (#693, #697, #699, dll)
+   * Mendukung pencarian via nomor faktur, nama toko, maupun rentang nominal.
+   */
+  async handleInvoiceQuery(text, senderName = 'Kak') {
+    try {
+      const resolved = await this.resolveInvoiceData(text, senderName);
+      if (resolved.notFoundMessage) {
+        return resolved.notFoundMessage;
+      }
+
+      const { invData, invNo, nominalRange, matchedCustomer, isLatestForCustomer } = resolved;
+      let title = 'DETAIL FAKTUR: L-W.A.V.I.S';
+      let subtitle = `Berikut rincian data Faktur #${invNo} yang tercatat di sistem:`;
+      if (nominalRange) {
+        const nomLabel = nominalRange.cleanLabel || nominalRange.rawText;
+        title = `DETAIL FAKTUR (${nomLabel.toUpperCase()}): L-W.A.V.I.S`;
+        subtitle = `Ditemukan Faktur #${invNo} cocok untuk ${(matchedCustomer?.aliasName || matchedCustomer?.customerName || '').toUpperCase()} (${nomLabel}):`;
+      } else if (isLatestForCustomer && matchedCustomer) {
+        title = `FAKTUR TERAKHIR (${(matchedCustomer.aliasName || matchedCustomer.customerName).toUpperCase()}): L-W.A.V.I.S`;
+        subtitle = `Berikut rincian Faktur #${invNo} paling terakhir untuk ${(matchedCustomer.aliasName || matchedCustomer.customerName).toUpperCase()}:`;
+      }
 
       return this.formatPoConfirmation(invData, senderName, {
-        title: 'DETAIL FAKTUR: L-W.A.V.I.S',
-        subtitle: `Berikut rincian data Faktur #${invNo} yang tercatat di sistem:`,
+        title,
+        subtitle,
         isQuery: true
       });
     } catch (err) {
@@ -1921,67 +2136,16 @@ class WavisInteractiveEngine {
 
   /**
    * Membuat dan Mengirimkan File PDF Faktur Penjualan Resmi
+   * Mendukung nomor faktur spesifik, nama toko + nominal (14jt an), maupun faktur terakhir toko.
    */
   async handleSendPdfInvoice(text, senderName = 'Kak', payload = null) {
-    const clean = normalizeText(text);
-    const regexPrefix = /(?:faktur|invoice|nota|po|nomor|nomer|#)\s*[:#.]?\s*([a-zA-Z]{1,3}\d{1,6})\b/i;
-    const regexDistance = /(?:faktur|invoice|nota|po).*?\b(\d{2,8})\b/i;
-    const regexAnyNumber = /\b(\d{2,8})\b/;
-    const match = clean.match(regexPrefix) || clean.match(regexDistance) || clean.match(regexAnyNumber);
-
-    let invNo = match && match[1] ? match[1].replace(/^[#]/, '').trim() : null;
-
-    if (!invNo && payload && payload.quotedMessageText) {
-      const qMatch = payload.quotedMessageText.match(/(?:invoice|faktur|nota|po|#)\s*[:#.]?\s*(\d{2,6})/i);
-      if (qMatch) invNo = qMatch[1];
-    }
-
-    if (!invNo) {
-      return {
-        reply: `🤖 *[L-W.A.V.I.S]*\n` +
-          `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
-          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `Halo ${senderName}! Untuk mengirimkan file dokumen PDF faktur, mohon sebutkan nomor fakturnya ya. 😊\n\n` +
-          `💡 *Contoh:* ketik \`kirimkan file pdf PO nomor 700\` atau \`pdf faktur 697\`.`
-      };
-    }
-
     try {
-      const db = this.firebaseAdapter?.db || this.firebaseAdapter?.clientDb;
-      let invData = null;
-
-      if (!db && this.mockInvoices) {
-        invData = this.mockInvoices[invNo] || null;
+      const resolved = await this.resolveInvoiceData(text, senderName, payload);
+      if (resolved.notFoundMessage) {
+        return { reply: resolved.notFoundMessage };
       }
 
-      if (!invData && db && this.firebaseAdapter?.mode === 'admin') {
-        const snap = await db.collection('transactions').doc(invNo).get();
-        if (snap.exists) {
-          invData = snap.data();
-        } else {
-          const qSnap = await db.collection('transactions').where('invoiceNo', '==', invNo).limit(1).get();
-          if (!qSnap.empty) invData = qSnap.docs[0].data();
-        }
-      } else if (!invData && db && this.firebaseAdapter?.clientSdk) {
-        const { doc, getDoc, collection, query, where, getDocs, limit } = this.firebaseAdapter.clientSdk;
-        const snap = await getDoc(doc(db, 'transactions', invNo));
-        if (snap.exists()) {
-          invData = snap.data();
-        } else {
-          const qSnap = await getDocs(query(collection(db, 'transactions'), where('invoiceNo', '==', invNo), limit(1)));
-          if (!qSnap.empty) invData = qSnap.docs[0].data();
-        }
-      }
-
-      if (!invData) {
-        return {
-          reply: `🤖 *[L-W.A.V.I.S]*\n` +
-            `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `Halo ${senderName}! Data Faktur / Invoice *#${invNo}* tidak ditemukan di dalam sistem database. ❌\n\n` +
-            `Mohon periksa kembali nomor fakturnya ya! Jika butuh bantuan lebih lanjut, Admin akan siap membantu setelah aktif kembali. 😊`
-        };
-      }
+      const { invData, invNo, nominalRange, matchedCustomer, isLatestForCustomer } = resolved;
 
       if (!invData.invoiceNo) invData.invoiceNo = invNo;
       if (invData.note && invData.note.toLowerCase().includes('revisi wa l-w.a.v.i.s')) {
@@ -1991,7 +2155,15 @@ class WavisInteractiveEngine {
       const pdfBuffer = WavisPdfGenerator.generateInvoicePdf(invData);
       const custDisplay = invData.aliasName ? `${invData.aliasName} (${invData.customerName})` : (invData.customerName || 'Pelanggan');
 
+      let contextSubtitle = '';
+      if (nominalRange) {
+        contextSubtitle = `_(Faktur cocok kisaran ${nominalRange.cleanLabel || nominalRange.rawText})_\n`;
+      } else if (isLatestForCustomer && matchedCustomer) {
+        contextSubtitle = `_(Faktur paling terakhir ${matchedCustomer.aliasName || matchedCustomer.customerName})_\n`;
+      }
+
       const caption = `📄 *[DOKUMEN RESMI FAKTUR PENJUALAN]*\n` +
+        contextSubtitle +
         `No. Invoice: #${invNo}\n` +
         `Pelanggan: ${custDisplay}\n` +
         `Grand Total: Rp ${Math.round(invData.grandTotal || 0).toLocaleString('id-ID')}\n` +
@@ -2009,7 +2181,7 @@ class WavisInteractiveEngine {
     } catch (err) {
       console.error('[L-W.A.V.I.S SEND PDF INVOICE ERROR]', err.message);
       return {
-        reply: `⚠️ Maaf ${senderName}, terjadi kendala saat membuat file dokumen PDF faktur #${invNo}: ${err.message}`
+        reply: `⚠️ Maaf ${senderName}, terjadi kendala saat membuat file dokumen PDF faktur: ${err.message}`
       };
     }
   }
