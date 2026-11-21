@@ -1,11 +1,11 @@
 {
-  "gateway": "3.3.315",
+  "gateway": "3.3.316",
   "files": {
     "server.js": "3.3.315",
     "autonomous-po-processor.js": "3.3.297",
     "wavis-interactive-engine.js": "3.3.313",
     "wavis-pdf-generator.js": "3.3.301",
-    "firebase-adapter.js": "3.3.315",
+    "firebase-adapter.js": "3.3.316",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.315",
@@ -14,5 +14,5 @@
     "update.bat": "3.3.310"
   },
   "updatedAt": "2026-11-21",
-  "changelog": "v3.3.315: Multi-layer Engine Self-Learning (ESL) & Bank Slip Parser: Ekstraksi cerdas nomor rekening, nama pemilik rekening (prefix/suffix PT/CV/UD), dan berita transfer ke Kamus AI permanen."
+  "changelog": "v3.3.316: Auto-authenticate Termux Client SDK as Developer and prioritize newest invoice (#698 over #408) in auto-match."
 }

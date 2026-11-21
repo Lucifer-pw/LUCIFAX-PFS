@@ -87,22 +87,28 @@ class FirebaseAdapter {
       };
       this.mode = 'client';
 
-      const email = process.env.FIREBASE_USER_EMAIL;
-      const password = process.env.FIREBASE_USER_PASSWORD;
+      const email = process.env.FIREBASE_USER_EMAIL || 'admin@fivasolo.com';
+      const password = process.env.FIREBASE_USER_PASSWORD || 'cabangjateng';
 
-      if (email && password) {
-        signInWithEmailAndPassword(this.clientAuth, email, password)
-          .then(userCred => {
-            console.log('[FIREBASE] Client SDK berhasil login sebagai:', userCred.user.email);
-          })
-          .catch(err => {
-            console.warn('[FIREBASE] Gagal login email, mencoba anonymous/direct:', err.message);
-          });
-      } else {
-        console.log('[FIREBASE] Berjalan via Firebase Client SDK (Web Config)');
-      }
+      this.authReadyPromise = signInWithEmailAndPassword(this.clientAuth, email, password)
+        .then(userCred => {
+          console.log('[FIREBASE] Client SDK berhasil login terautentikasi sebagai:', userCred.user.email);
+          return userCred;
+        })
+        .catch(err => {
+          console.warn('[FIREBASE] Gagal login email:', err.message);
+          return null;
+        });
     } catch (err) {
       console.error('[FIREBASE ERROR] Gagal menginisialisasi Firebase:', err.message);
+    }
+  }
+
+  async ensureAuthenticated() {
+    if (this.mode === 'client' && this.authReadyPromise) {
+      try {
+        await this.authReadyPromise;
+      } catch (_) {}
     }
   }
 
@@ -590,6 +596,8 @@ class FirebaseAdapter {
     const upperOcr = (rawOcrText || '').toUpperCase();
 
     try {
+      await this.ensureAuthenticated();
+
       // 0. ENGINE SELF-LEARNING (ESL): Ambil memori aturan yang pernah dipelajari
       let learnedRules = [];
       try {
@@ -719,6 +727,9 @@ class FirebaseAdapter {
         }
       }
 
+      // Prioritaskan faktur yang paling baru (misal #698 sebelum #408)
+      candidates.sort((a, b) => Number(b.noInvoice || 0) - Number(a.noInvoice || 0));
+
       // Jika berhasil dicocokkan via transactions, lakukan sinkronisasi otomatis ke receivables agar sinkron permanen
       if (candidates.length > 0) {
         const bestMatch = candidates[0];
@@ -764,6 +775,7 @@ class FirebaseAdapter {
         }
       });
 
+      candidates.sort((a, b) => Number(b.noInvoice || 0) - Number(a.noInvoice || 0));
       const unpaid = candidates.find(c => !c.isLunas);
       if (unpaid) return unpaid;
       if (candidates.length > 0) return candidates[0];
