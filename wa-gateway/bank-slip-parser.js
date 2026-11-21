@@ -263,22 +263,57 @@ function parseBankReceipt(rawText) {
   else if (upper.includes('HANA MAKMUR')) customerHint = 'HANA MAKMUR';
   else if (upper.includes('AW FF') || /\bAW\b/.test(upper)) customerHint = 'AW FF';
 
-  // Dynamic extraction from receipt lines (e.g. "Dari »— Wimbo Wiek Kustanto", "Pengirim: ...", "Dari: ...")
+  // Dynamic extraction from receipt lines (e.g. "Dari »— Wimbo Wiek Kustanto", "Pengirim: ...", "Dari Rekening: 238-2275757 / GRIYA...")
   let senderNameFromSlip = '';
-  const senderMatch = clean.match(/(?:Dari|Pengirim|Nama Pengirim|Dari Rekening|Nama)\s*[:=»\-–—\s]+([^\r\n@]+)/i);
-  if (senderMatch) {
-    const rawSender = senderMatch[1].trim();
-    if (!rawSender.toUpperCase().includes('REKENING') && !rawSender.toUpperCase().includes('BANK') && rawSender.length >= 3) {
-      senderNameFromSlip = rawSender;
-      if (!customerHint) {
-        customerHint = rawSender;
+  let senderAccount = '';
+
+  // 1. Ekstraksi spesifik format BCA / Bank: "Dari Rekening : [REK] / [NAMA] (Rp)"
+  const dariRekBcaMatch = clean.match(/(?:Dari\s*Rekening|Rekening\s*Asal)\s*[:=»\-–—\s]+([0-9\s\-]{5,20})(?:\s*[\/|\\]\s*([^\r\n()@]+))?/i);
+  if (dariRekBcaMatch) {
+    if (dariRekBcaMatch[1]) {
+      const rawAcc = dariRekBcaMatch[1].replace(/\s+/g, '').trim();
+      if (rawAcc.length >= 5) {
+        senderAccount = rawAcc;
+      }
+    }
+    if (dariRekBcaMatch[2]) {
+      const rawName = dariRekBcaMatch[2].replace(/\(Rp\)/gi, '').trim();
+      if (rawName.length >= 3 && !rawName.toUpperCase().includes('REKENING') && !rawName.toUpperCase().includes('BANK')) {
+        senderNameFromSlip = rawName;
+        if (!customerHint) customerHint = rawName;
       }
     }
   }
 
-  // Extract Company Name if present in OCR (e.g. "CV HANA MAKMUR") - Prioritas karena lebih bersih
-  const coMatches = Array.from(clean.matchAll(/\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 ]{3,30})/gi));
-  for (const m of coMatches) {
+  // 2. Ekstraksi umum nama pengirim (jika belum terisi)
+  if (!senderNameFromSlip) {
+    const senderMatch = clean.match(/(?:Nama\s*Pengirim|Dari\s*Rekening|Rekening\s*Asal|Pengirim|Dari|Nama)\s*[:=»\-–—\s]+([^\r\n@]+)/i);
+    if (senderMatch) {
+      let rawSender = senderMatch[1].trim();
+      if (rawSender.includes('/') || rawSender.includes('\\')) {
+        const parts = rawSender.split(/[\/\\]+/).map(p => p.trim());
+        if (parts.length >= 2) {
+          const part0 = parts[0].replace(/[^0-9\-]/g, '').trim();
+          const part1 = parts[1].replace(/\(Rp\)/gi, '').trim();
+          if (part0.length >= 5 && !senderAccount) senderAccount = part0;
+          if (part1.length >= 3 && !part1.toUpperCase().includes('REKENING') && !part1.toUpperCase().includes('BANK')) {
+            rawSender = part1;
+          }
+        }
+      }
+      if (!rawSender.toUpperCase().includes('REKENING') && !rawSender.toUpperCase().includes('BANK') && rawSender.length >= 3) {
+        senderNameFromSlip = rawSender;
+        if (!customerHint) {
+          customerHint = rawSender;
+        }
+      }
+    }
+  }
+
+  // 3. Extract Company Name if present in OCR (Prefix atau Suffix: "CV HANA MAKMUR" atau "GRIYA FROZEN FOOD CV")
+  // Pola A: Prefix (CV / PT / UD / TOKO di depan)
+  const coPrefixMatches = Array.from(clean.matchAll(/\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 &.,'-]{3,35})\b/gi));
+  for (const m of coPrefixMatches) {
     const rawCo = m[0].trim();
     const upCo = rawCo.toUpperCase();
     if (!upCo.includes('FIVA') && !upCo.includes('SEJAHTERA') && !upCo.includes('PUTRA')) {
@@ -288,7 +323,19 @@ function parseBankReceipt(rawText) {
     }
   }
 
-  // Extract Penyetor from physical teller slip (e.g. "Nama Penyetor : CV HANA MAKMUR" / "Penyetor : ...")
+  // Pola B: Suffix (CV / PT / UD / TOKO di belakang, misal: "GRIYA FROZEN FOOD CV")
+  const coSuffixMatches = Array.from(clean.matchAll(/\b([A-Za-z0-9 &.,'-]{3,35})[ \t]+(CV|PT|UD|TOKO)\b/gi));
+  for (const m of coSuffixMatches) {
+    const rawCo = m[0].trim();
+    const upCo = rawCo.toUpperCase();
+    if (!upCo.includes('FIVA') && !upCo.includes('SEJAHTERA') && !upCo.includes('PUTRA')) {
+      customerHint = rawCo;
+      senderNameFromSlip = rawCo;
+      break;
+    }
+  }
+
+  // 4. Extract Penyetor from physical teller slip (e.g. "Nama Penyetor : CV HANA MAKMUR" / "Penyetor : ...")
   if (!senderNameFromSlip) {
     const penyetorMatch = clean.match(/(?:Nama\s*Penyetor|Penyetor|Rep\s*stor|Nyetor)\s*[:=»\-–—\s]+([^\r\n/]+)/i);
     if (penyetorMatch) {
@@ -300,11 +347,13 @@ function parseBankReceipt(rawText) {
     }
   }
 
-  // Extract ID / No Rek Penyetor (e.g. "0979022222")
-  let penyetorId = '';
-  const idMatch = clean.match(/(?:No\.?\s*ID|Rek|Nyetor)\s*[:=.\s]+([0-9]{5,15})/i);
-  if (idMatch) {
-    penyetorId = idMatch[1].trim();
+  // 5. Extract ID / No Rek Penyetor (e.g. "0979022222" atau "238-2275757")
+  let penyetorId = senderAccount || '';
+  if (!penyetorId) {
+    const idMatch = clean.match(/(?:No\.?\s*ID|Rek(?:ening)?|Nyetor)\s*[:=.\s]+([0-9\s\-]{5,20})/i);
+    if (idMatch) {
+      penyetorId = idMatch[1].replace(/\s+/g, '').trim();
+    }
   }
 
   // Extract Recipient if available (e.g. "Ke 8175683107\nARSANDY VIDYA GUPTA PRAD")
@@ -365,7 +414,8 @@ function parseBankReceipt(rawText) {
     amount: amount || 0,
     isAmountUnclear: amount <= 0,
     refNumber,
-    penyetorId,
+    senderAccount,
+    penyetorId: penyetorId || senderAccount,
     berita,
     recipient,
     senderNameFromSlip,

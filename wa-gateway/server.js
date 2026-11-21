@@ -1424,7 +1424,7 @@ async function startBaileys() {
                 // JIKA BELUM ADA NOMOR FAKTUR DI BERITA: COCOKKAN KE KARTU PIUTANG SECARA OTOMATIS
                 if (!bankResult.invoiceNo && bankResult.amount > 0) {
                   try {
-                    const combinedHint = [bankResult.customerHint, bankResult.senderNameFromSlip, bankResult.berita, senderName].filter(Boolean).join(' ');
+                    const combinedHint = [bankResult.customerHint, bankResult.senderNameFromSlip, bankResult.senderAccount, bankResult.berita, senderName].filter(Boolean).join(' ');
                     const matchRec = await firebaseAdapter.findMatchingReceivable(combinedHint, bankResult.amount, ocrText);
                     if (matchRec) {
                       bankResult.invoiceNo = matchRec.noInvoice;
@@ -1780,7 +1780,7 @@ async function startBaileys() {
           const slipAmount = quotedBankResult.amount || 0;
           if (!targetInvoiceNo && slipAmount > 0) {
             try {
-              const combinedHint = [cleanText, quotedBankResult.customerHint, quotedBankResult.senderNameFromSlip, quotedBankResult.berita].filter(Boolean).join(' ');
+              const combinedHint = [cleanText, quotedBankResult.customerHint, quotedBankResult.senderNameFromSlip, quotedBankResult.senderAccount, quotedBankResult.berita].filter(Boolean).join(' ');
               matchedReceivable = await firebaseAdapter.findMatchingReceivable(combinedHint, slipAmount, quotedOcrText);
               if (matchedReceivable) {
                 targetInvoiceNo = matchedReceivable.noInvoice;

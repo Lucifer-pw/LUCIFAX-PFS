@@ -622,7 +622,11 @@ class FirebaseAdapter {
           const kw = (rule.keyword || '').toUpperCase().trim();
           const target = (rule.mappedValue || '').toUpperCase().trim();
           if (kw.length >= 3 && target.length >= 3) {
-            if (upperOcr.includes(kw) || cleanHint.includes(kw)) {
+            const kwDigits = kw.replace(/[^0-9]/g, '');
+            const ocrDigits = upperOcr.replace(/[^0-9]/g, '');
+            const isNumericMatch = (kwDigits.length >= 6 && ocrDigits.includes(kwDigits));
+            const isOcrHit = upperOcr.includes(kw) || cleanHint.includes(kw) || isNumericMatch;
+            if (isOcrHit) {
               if (cleanToko.includes(target) || target.includes(cleanToko)) {
                 console.log(`[ESL RULE HIT] 🧠 Pola terpelajar cocok: "${kw}" -> "${target}" pada Toko "${cleanToko}"`);
                 return true;

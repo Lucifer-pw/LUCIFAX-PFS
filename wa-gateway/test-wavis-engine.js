@@ -1151,5 +1151,33 @@ engine.setRawMessageStore((jid, id, msg) => {
 
   console.log('✅ Test 19 PASSED: Rekap Faktur Bulanan per Toko L-W.A.V.I.S Terverifikasi 100%!');
 
+  // 20. UJI PARSER BUKTI TRANSFER BCA & MULTI-LAYER SENDER (ESL ENHANCEMENT)
+  console.log('\n--- Test 20: Ekstraksi Cerdas Struk Transfer BCA (Rekening, Nama Pemilik, Berita) ---');
+  const { parseBankReceipt } = require('./bank-slip-parser');
+  const bcaSlipSample = `
+Transfer Dana ke Rekening BCA Lainnya - Status
+Informasi Transfer
+No. Referensi : 26112000450246
+Dari Rekening : 238-2275757 / GRIYA FROZEN FOOD CV (Rp)
+Rekening Tujuan : 230-6039099 / PUTRA FIVA SEJAHTERA PT (Rp)
+Jumlah : Rp 5,366,059.00
+Berita : BYR GRIYA FROZEN F
+Jenis Transfer : Transfer Sekarang
+Status : Dalam Proses
+`;
+
+  const parsedBca = parseBankReceipt(bcaSlipSample);
+  assert.strictEqual(parsedBca.isBankSlip, true, 'Harus terdeteksi sebagai bukti transfer bank');
+  assert.strictEqual(parsedBca.bank, 'BCA', 'Bank harus BCA');
+  assert.strictEqual(parsedBca.amount, 5366059, 'Nominal harus Rp 5.366.059');
+  assert.strictEqual(parsedBca.refNumber, '26112000450246', 'No Referensi harus 26112000450246');
+  assert.strictEqual(parsedBca.senderAccount, '238-2275757', 'Nomor rekening pengirim harus 238-2275757');
+  assert.strictEqual(parsedBca.senderNameFromSlip, 'GRIYA FROZEN FOOD CV', 'Nama pemilik rekening harus GRIYA FROZEN FOOD CV');
+  assert.strictEqual(parsedBca.customerHint, 'GRIYA FROZEN FOOD CV', 'Customer hint harus GRIYA FROZEN FOOD CV');
+  assert.strictEqual(parsedBca.berita, 'BYR GRIYA FROZEN F', 'Berita transfer harus BYR GRIYA FROZEN F');
+  console.log('  ✓ 20A PASSED: Struk BCA m-banking diekstraksi sempurna (Rekening, Nama Pemilik CV, Berita, Nominal)!');
+
+  console.log('✅ Test 20 PASSED: Bank Slip Multi-Layer Sender Extractor Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

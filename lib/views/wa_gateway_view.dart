@@ -2956,39 +2956,74 @@ Kirim besok pagi ya pak bc''';
       });
 
       // 5. 🧠 ENGINE SELF-LEARNING (ESL): Pelajari pola penyetor / kata kunci baru ke ai_knowledge_rules
-      String learnedClue = '';
+      final learnedClues = <String>[];
       try {
         final clues = <String>{};
         final info = chat.transferInfo ?? {};
+        final rawOcr = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''} ${info['rawOcrText'] ?? ''}';
 
+        // A. Nama pengirim dari struk
         final senderSlip = (info['senderNameFromSlip'] ?? '').toString().trim();
-        if (senderSlip.isNotEmpty && senderSlip.length >= 3) clues.add(senderSlip);
+        if (senderSlip.isNotEmpty && senderSlip.length >= 3 && !RegExp(r'^\d+$').hasMatch(senderSlip)) {
+          clues.add(senderSlip);
+        }
 
+        // B. Customer Hint dari parser
         final hint = (info['customerHint'] ?? '').toString().trim();
-        if (hint.isNotEmpty && hint.length >= 3) clues.add(hint);
+        if (hint.isNotEmpty && hint.length >= 3 && !RegExp(r'^\d+$').hasMatch(hint)) {
+          clues.add(hint);
+        }
 
+        // C. Berita transfer (baik teks asli maupun setelah dibersihkan dari kata umum)
         final berita = (info['berita'] ?? '').toString().trim();
-        if (berita.isNotEmpty && berita.length >= 4) {
-          final cleanBerita = berita.replaceAll(RegExp(r'\b(dari|ke|transfer|pembayaran|bi-fast|an)\b', caseSensitive: false), '').trim();
+        if (berita.isNotEmpty && berita.length >= 3) {
+          clues.add(berita);
+          final cleanBerita = berita.replaceAll(RegExp(r'\b(dari|ke|transfer|pembayaran|byr|bi-fast|an)\b', caseSensitive: false), '').trim();
           if (cleanBerita.length >= 3) clues.add(cleanBerita);
         }
 
-        // Ambil nama perusahaan (CV / PT / UD / TOKO) dari teks OCR atau pesan
-        final rawOcr = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''} ${info['rawOcrText'] ?? ''}';
-        final coMatches = RegExp(r'\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 ]{3,30})', caseSensitive: false).allMatches(rawOcr);
-        for (final m in coMatches) {
+        // D. Deteksi Nama Perusahaan (CV / PT / UD / TOKO) baik prefix maupun suffix
+        // Pola 1: Prefix (misal: "CV GRIYA MAKMUR")
+        final prefixMatches = RegExp(r"\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 &.,'-]{3,35})\b", caseSensitive: false).allMatches(rawOcr);
+        for (final m in prefixMatches) {
           final co = m.group(0)!.trim();
           final up = co.toUpperCase();
           if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA') && co.length >= 4) {
             clues.add(co);
+            final baseName = (m.group(2) ?? '').trim();
+            if (baseName.length >= 4) clues.add(baseName);
           }
         }
 
-        // Ambil ID / No Rek Penyetor (misal 0979022222)
-        final idMatch = RegExp(r'(?:No\.?\s*ID|Rek|Nyetor)\s*[:=.\s]+([0-9]{5,15})', caseSensitive: false).firstMatch(rawOcr);
-        if (idMatch != null) {
-          final penId = idMatch.group(1)!.trim();
-          if (penId.length >= 5) clues.add(penId);
+        // Pola 2: Suffix (misal: "GRIYA FROZEN FOOD CV")
+        final suffixMatches = RegExp(r"\b([A-Za-z0-9 &.,'-]{3,35})[ \t]+(CV|PT|UD|TOKO)\b", caseSensitive: false).allMatches(rawOcr);
+        for (final m in suffixMatches) {
+          final co = m.group(0)!.trim();
+          final up = co.toUpperCase();
+          if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA') && co.length >= 4) {
+            clues.add(co);
+            final baseName = (m.group(1) ?? '').trim();
+            if (baseName.length >= 4) clues.add(baseName);
+          }
+        }
+
+        // E. Deteksi Nomor Rekening Pengirim (misal: "238-2275757" atau "2382275757")
+        final senderAcc = (info['senderAccount'] ?? info['penyetorId'] ?? '').toString().trim();
+        if (senderAcc.isNotEmpty && senderAcc.length >= 5) {
+          clues.add(senderAcc);
+          final cleanDigits = senderAcc.replaceAll(RegExp(r'[^0-9]'), '');
+          if (cleanDigits.length >= 5) clues.add(cleanDigits);
+        }
+
+        // Ekstrak rekening dari teks OCR langsung (format "Dari Rekening : 238-2275757")
+        final accMatches = RegExp(r'(?:Dari\s*Rekening|Rekening\s*Asal|No\.?\s*ID|Rek(?:ening)?|Nyetor)\s*[:=.\s]+([0-9\s\-]{6,20})', caseSensitive: false).allMatches(rawOcr);
+        for (final am in accMatches) {
+          final rawAcc = am.group(1)!.trim();
+          final cleanAcc = rawAcc.replaceAll(RegExp(r'[^0-9]'), '');
+          if (cleanAcc.length >= 6 && !cleanAcc.contains('2306039099')) {
+            clues.add(rawAcc);
+            clues.add(cleanAcc);
+          }
         }
 
         final rulesCol = FirebaseFirestore.instance.collection('ai_knowledge_rules');
@@ -3016,7 +3051,7 @@ Kirim besok pagi ya pak bc''';
                 'learnedAt': DateTime.now().toIso8601String(),
               }
             });
-            learnedClue = cleanClue;
+            learnedClues.add(cleanClue);
             debugPrint('[ESL LEARNER] 🧠 Pola baru dipelajari: "$cleanClue" -> "$custName"');
           }
         }
@@ -3025,7 +3060,9 @@ Kirim besok pagi ya pak bc''';
       }
 
       if (mounted) {
-        final eslMsg = learnedClue.isNotEmpty ? '\n🧠 [ESL] Pola transfer "$learnedClue" otomatis disimpan ke memori AI.' : '';
+        final eslMsg = learnedClues.isNotEmpty
+            ? '\n🧠 [ESL] ${learnedClues.length} pola transfer (${learnedClues.take(3).join(', ')}${learnedClues.length > 3 ? '...' : ''}) otomatis disimpan ke memori AI.'
+            : '';
         if (willBeLunas) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -3154,10 +3191,30 @@ Kirim besok pagi ya pak bc''';
   }
 
   Future<void> _showLinkToInvoiceDialog(BuildContext context, IncomingPoChat chat) async {
-    String detectedHint = (chat.transferInfo?['customerHint'] ?? '').toString();
-    if (detectedHint.isEmpty) {
-      final allText = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''}';
-      final coMatch = RegExp(r'\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 ]{3,30})', caseSensitive: false).firstMatch(allText);
+    String detectedHint = (chat.transferInfo?['customerHint'] ?? '').toString().trim();
+    if (detectedHint.isEmpty || RegExp(r'^\d+$').hasMatch(detectedHint)) {
+      final senderSlip = (chat.transferInfo?['senderNameFromSlip'] ?? '').toString().trim();
+      if (senderSlip.isNotEmpty && !RegExp(r'^\d+$').hasMatch(senderSlip)) {
+        detectedHint = senderSlip;
+      }
+    }
+
+    final allText = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''} ${chat.transferInfo?['rawOcrText'] ?? ''}';
+    if (detectedHint.isEmpty || RegExp(r'^\d+$').hasMatch(detectedHint)) {
+      // Coba cari suffix nama perusahaan: e.g. "GRIYA FROZEN FOOD CV"
+      final coSuffix = RegExp(r"\b([A-Za-z0-9 &.,'-]{3,35})[ \t]+(CV|PT|UD|TOKO)\b", caseSensitive: false).firstMatch(allText);
+      if (coSuffix != null) {
+        final co = coSuffix.group(0)!.trim();
+        final up = co.toUpperCase();
+        if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA')) {
+          detectedHint = co;
+        }
+      }
+    }
+
+    if (detectedHint.isEmpty || RegExp(r'^\d+$').hasMatch(detectedHint)) {
+      // Coba cari prefix nama perusahaan: e.g. "CV GRIYA MAKMUR"
+      final coMatch = RegExp(r"\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 &.,'-]{3,35})\b", caseSensitive: false).firstMatch(allText);
       if (coMatch != null) {
         final co = coMatch.group(0)!.trim();
         final up = co.toUpperCase();
@@ -3166,6 +3223,15 @@ Kirim besok pagi ya pak bc''';
         }
       }
     }
+
+    if (detectedHint.isEmpty || RegExp(r'^\d+$').hasMatch(detectedHint)) {
+      final berita = (chat.transferInfo?['berita'] ?? '').toString().trim();
+      if (berita.isNotEmpty && berita.length >= 4) {
+        final cleanB = berita.replaceAll(RegExp(r'\b(dari|ke|transfer|pembayaran|byr|bi-fast|an)\b', caseSensitive: false), '').trim();
+        if (cleanB.length >= 3) detectedHint = cleanB;
+      }
+    }
+
     if (detectedHint.isEmpty && (chat.messageType == 'TRANSFER_SLIP_REPLY' || chat.isQuotedReply || chat.messageText.length <= 40)) {
       final mt = chat.messageText.trim();
       final up = mt.toUpperCase();
@@ -3588,16 +3654,28 @@ Kirim besok pagi ya pak bc''';
     ).firstMatch(rawOcr);
     final String targetAcc = targetAccMatch != null ? targetAccMatch.group(1)! : '';
 
-    // Ekstrak pengirim struk jika ada
-    final senderMatch = RegExp(
-      r'(?:Pengirim|Dari Rekening|Nama Pengirim)\s*[:=]?\s*([A-Za-z0-9\s.,]+)',
-      caseSensitive: false,
-    ).firstMatch(rawOcr);
-    String senderFromSlip = '';
-    if (senderMatch != null) {
-      final s = senderMatch.group(1)!.trim();
-      if (!s.toUpperCase().contains('DETAIL') && !s.toUpperCase().contains('TRANSAKSI') && s.length <= 40) {
-        senderFromSlip = s;
+    // Ekstrak pengirim & rekening struk jika ada
+    final senderAccFromInfo = (chat.transferInfo?['senderAccount'] ?? chat.transferInfo?['penyetorId'] ?? '').toString().trim();
+    final senderNameInfo = (chat.transferInfo?['senderNameFromSlip'] ?? '').toString().trim();
+
+    String senderFromSlip = senderNameInfo;
+    if (senderFromSlip.isEmpty || RegExp(r'^\d+$').hasMatch(senderFromSlip)) {
+      final senderMatch = RegExp(
+        r'(?:Dari\s*Rekening|Rekening\s*Asal|Nama\s*Pengirim|Pengirim)\s*[:=»\-–—\s]+([^\r\n@]+)',
+        caseSensitive: false,
+      ).firstMatch(rawOcr);
+      if (senderMatch != null) {
+        String s = senderMatch.group(1)!.trim();
+        if (s.contains('/') || s.contains('\\')) {
+          final parts = s.split(RegExp(r'[\/\\]+')).map((p) => p.trim()).toList();
+          if (parts.length >= 2) {
+            final p1 = parts[1].replaceAll(RegExp(r'\(Rp\)', caseSensitive: false), '').trim();
+            if (p1.length >= 3) s = p1;
+          }
+        }
+        if (!s.toUpperCase().contains('DETAIL') && !s.toUpperCase().contains('TRANSAKSI') && s.length <= 50) {
+          senderFromSlip = s;
+        }
       }
     }
 
@@ -3950,11 +4028,11 @@ Kirim besok pagi ya pak bc''';
 
                 // 3. Full Width Slip Details (Pengirim, Tujuan, Berita, No Ref)
                 const SizedBox(height: 6),
-                if (customerHint.isNotEmpty || senderFromSlip.isNotEmpty) ...[
+                if (customerHint.isNotEmpty || senderFromSlip.isNotEmpty || senderAccFromInfo.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 2),
                     child: Text(
-                      'Pengirim: ${customerHint.isNotEmpty ? customerHint : senderFromSlip}',
+                      'Pengirim: ${customerHint.isNotEmpty ? customerHint : (senderFromSlip.isNotEmpty ? senderFromSlip : "-")}${senderAccFromInfo.isNotEmpty && !customerHint.contains(senderAccFromInfo) && !senderFromSlip.contains(senderAccFromInfo) ? " ($senderAccFromInfo)" : ""}',
                       style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                   ),
