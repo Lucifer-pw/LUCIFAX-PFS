@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.316'; // v3.3.316 - Multi-layer ESL auto-matching & auto-settle client SDK auth
+const GATEWAY_VERSION = '3.3.317'; // v3.3.317 - Move sender resolution before media OCR to fix TDZ ReferenceError on senderName
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -1216,6 +1216,117 @@ async function startBaileys() {
         } catch (_) {}
       }
 
+      const remoteJid = m.key.remoteJid || '';
+      const isLid = remoteJid.endsWith('@lid');
+      const rawJidDigits = remoteJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+
+      // Extract sender phone
+      let senderPhone = '';
+      if (m.key.senderPn) {
+        senderPhone = cleanPhone(m.key.senderPn);
+      } else if (m.key.participantPn) {
+        senderPhone = cleanPhone(m.key.participantPn);
+      }
+
+      if (!senderPhone && !isLid) {
+        senderPhone = cleanPhone(rawJidDigits);
+      }
+
+      if (!senderPhone && isLid && lidToPhoneMap.has(rawJidDigits)) {
+        senderPhone = lidToPhoneMap.get(rawJidDigits);
+      }
+
+      let senderName = m.pushName || 'Kontak WhatsApp';
+
+      // Name matching fallback against whitelistContactsList
+      const cleanPushName = (m.pushName || '').trim().toLowerCase();
+      let matchedContact = null;
+      if (cleanPushName) {
+        matchedContact = whitelistContactsList.find(c => {
+          const cn = c.name.toLowerCase().trim();
+          return cn.length >= 3 && cleanPushName.length >= 3 && (cleanPushName === cn || cn.split(/\s+/).includes(cleanPushName) || cleanPushName.split(/\s+/).includes(cn));
+        });
+      }
+
+      if (matchedContact) {
+        if (!senderPhone || isLid) {
+          senderPhone = matchedContact.phone;
+        }
+        if (isLid && rawJidDigits) {
+          whitelistLids.add(rawJidDigits);
+          lidToPhoneMap.set(rawJidDigits, matchedContact.phone);
+          phoneToLidMap.set(matchedContact.phone, rawJidDigits);
+          console.log(`[AUTO-LEARN LID] Memetakan WhatsApp LID ${rawJidDigits} ke ${matchedContact.name} (+${matchedContact.phone})`);
+        }
+        if (!m.pushName || m.pushName === 'Kontak WhatsApp') {
+          senderName = matchedContact.name;
+        }
+      }
+
+      if (!senderPhone) {
+        senderPhone = rawJidDigits;
+      }
+
+      // 1. CEK KHUSUS STATUS OFF: Jika nomor atau WhatsApp LID ini dimatikan (OFF), LANGSUNG BLOKIR!
+      const isSenderDisabled =
+        (senderPhone && Array.from(disabledNumbers).some(dn => senderPhone.endsWith(dn) || dn.endsWith(senderPhone) || senderPhone === dn)) ||
+        (rawJidDigits && disabledLids.has(rawJidDigits)) ||
+        (isLid && lidToPhoneMap.has(rawJidDigits) && Array.from(disabledNumbers).some(dn => lidToPhoneMap.get(rawJidDigits).endsWith(dn) || dn.endsWith(lidToPhoneMap.get(rawJidDigits))));
+
+      if (isSenderDisabled) {
+        if (!isHistorySync) {
+          console.log(`[STRICT FILTER BLOCKED] ⛔ Pesan dari ${senderName} (+${senderPhone || rawJidDigits}) diblokir seketika karena status kontak sedang DIMATIKAN (OFF).`);
+        }
+        return;
+      }
+
+      // STRICT WHITELIST CHECK
+      if (strictWhitelistOnly && whitelistNumbers.size > 0) {
+        let isAllowed = false;
+
+        if (senderPhone) {
+          isAllowed = Array.from(whitelistNumbers).some(wn => {
+            const cleanWn = cleanPhone(wn);
+            return cleanWn.length >= 7 && (senderPhone.endsWith(cleanWn) || cleanWn.endsWith(senderPhone) || senderPhone === cleanWn);
+          });
+        }
+
+        if (!isAllowed && rawJidDigits && whitelistLids.has(rawJidDigits)) {
+          if (lidToPhoneMap.has(rawJidDigits)) {
+            const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
+            if (Array.from(whitelistNumbers).some(wn => cleanPhone(wn) === mappedPhone || mappedPhone.endsWith(cleanPhone(wn)))) {
+              isAllowed = true;
+              senderPhone = mappedPhone;
+            } else {
+              isAllowed = false;
+            }
+          }
+        }
+
+        if (!isAllowed && matchedContact) {
+          const mcPhone = cleanPhone(matchedContact.phone);
+          if (Array.from(whitelistNumbers).some(wn => cleanPhone(wn) === mcPhone || mcPhone.endsWith(cleanPhone(wn)))) {
+            isAllowed = true;
+          }
+        }
+
+        if (!isAllowed) {
+          if (!isHistorySync) {
+            console.log(`[STRICT FILTER BLOCKED] Pesan dari ${senderName} (+${senderPhone || rawJidDigits}) diblokir karena nomor tidak terdaftar.`);
+          }
+          return;
+        }
+      }
+
+      // Catat msgId ke cache memory agar tidak ganda
+      if (msgId) {
+        processedMessageIds.add(msgId);
+        if (processedMessageIds.size > 5000) {
+          const firstEntry = processedMessageIds.values().next().value;
+          processedMessageIds.delete(firstEntry);
+        }
+      }
+
       // =========================================================================
       // DETEKSI TIPE PESAN: Forwarded vs Quoted Reply vs Biasa
       // =========================================================================
@@ -1475,117 +1586,6 @@ async function startBaileys() {
         }
       } else if (isImageMessage && !bankResult.isBankSlip && ocrText && ocrText.length > 0) {
         cleanText = `${rawCaption}\n${ocrText}`;
-      }
-
-      const remoteJid = m.key.remoteJid || '';
-      const isLid = remoteJid.endsWith('@lid');
-      const rawJidDigits = remoteJid.split('@')[0].split(':')[0].replace(/\D/g, '');
-
-      // Extract sender phone
-      let senderPhone = '';
-      if (m.key.senderPn) {
-        senderPhone = cleanPhone(m.key.senderPn);
-      } else if (m.key.participantPn) {
-        senderPhone = cleanPhone(m.key.participantPn);
-      }
-
-      if (!senderPhone && !isLid) {
-        senderPhone = cleanPhone(rawJidDigits);
-      }
-
-      if (!senderPhone && isLid && lidToPhoneMap.has(rawJidDigits)) {
-        senderPhone = lidToPhoneMap.get(rawJidDigits);
-      }
-
-      let senderName = m.pushName || 'Kontak WhatsApp';
-
-      // Name matching fallback against whitelistContactsList
-      const cleanPushName = (m.pushName || '').trim().toLowerCase();
-      let matchedContact = null;
-      if (cleanPushName) {
-        matchedContact = whitelistContactsList.find(c => {
-          const cn = c.name.toLowerCase().trim();
-          return cn.length >= 3 && cleanPushName.length >= 3 && (cleanPushName === cn || cn.split(/\s+/).includes(cleanPushName) || cleanPushName.split(/\s+/).includes(cn));
-        });
-      }
-
-      if (matchedContact) {
-        if (!senderPhone || isLid) {
-          senderPhone = matchedContact.phone;
-        }
-        if (isLid && rawJidDigits) {
-          whitelistLids.add(rawJidDigits);
-          lidToPhoneMap.set(rawJidDigits, matchedContact.phone);
-          phoneToLidMap.set(matchedContact.phone, rawJidDigits);
-          console.log(`[AUTO-LEARN LID] Memetakan WhatsApp LID ${rawJidDigits} ke ${matchedContact.name} (+${matchedContact.phone})`);
-        }
-        if (!m.pushName || m.pushName === 'Kontak WhatsApp') {
-          senderName = matchedContact.name;
-        }
-      }
-
-      if (!senderPhone) {
-        senderPhone = rawJidDigits;
-      }
-
-      // 1. CEK KHUSUS STATUS OFF: Jika nomor atau WhatsApp LID ini dimatikan (OFF), LANGSUNG BLOKIR!
-      const isSenderDisabled =
-        (senderPhone && Array.from(disabledNumbers).some(dn => senderPhone.endsWith(dn) || dn.endsWith(senderPhone) || senderPhone === dn)) ||
-        (rawJidDigits && disabledLids.has(rawJidDigits)) ||
-        (isLid && lidToPhoneMap.has(rawJidDigits) && Array.from(disabledNumbers).some(dn => lidToPhoneMap.get(rawJidDigits).endsWith(dn) || dn.endsWith(lidToPhoneMap.get(rawJidDigits))));
-
-      if (isSenderDisabled) {
-        if (!isHistorySync) {
-          console.log(`[STRICT FILTER BLOCKED] ⛔ Pesan dari ${senderName} (+${senderPhone || rawJidDigits}) diblokir seketika karena status kontak sedang DIMATIKAN (OFF).`);
-        }
-        return;
-      }
-
-      // STRICT WHITELIST CHECK
-      if (strictWhitelistOnly && whitelistNumbers.size > 0) {
-        let isAllowed = false;
-
-        if (senderPhone) {
-          isAllowed = Array.from(whitelistNumbers).some(wn => {
-            const cleanWn = cleanPhone(wn);
-            return cleanWn.length >= 7 && (senderPhone.endsWith(cleanWn) || cleanWn.endsWith(senderPhone) || senderPhone === cleanWn);
-          });
-        }
-
-        if (!isAllowed && rawJidDigits && whitelistLids.has(rawJidDigits)) {
-          if (lidToPhoneMap.has(rawJidDigits)) {
-            const mappedPhone = cleanPhone(lidToPhoneMap.get(rawJidDigits));
-            if (Array.from(whitelistNumbers).some(wn => cleanPhone(wn) === mappedPhone || mappedPhone.endsWith(cleanPhone(wn)))) {
-              isAllowed = true;
-              senderPhone = mappedPhone;
-            } else {
-              isAllowed = false;
-            }
-          }
-        }
-
-        if (!isAllowed && matchedContact) {
-          const mcPhone = cleanPhone(matchedContact.phone);
-          if (Array.from(whitelistNumbers).some(wn => cleanPhone(wn) === mcPhone || mcPhone.endsWith(cleanPhone(wn)))) {
-            isAllowed = true;
-          }
-        }
-
-        if (!isAllowed) {
-          if (!isHistorySync) {
-            console.log(`[STRICT FILTER BLOCKED] Pesan dari ${senderName} (+${senderPhone || rawJidDigits}) diblokir karena nomor tidak terdaftar.`);
-          }
-          return;
-        }
-      }
-
-      // Catat msgId ke cache memory agar tidak ganda
-      if (msgId) {
-        processedMessageIds.add(msgId);
-        if (processedMessageIds.size > 5000) {
-          const firstEntry = processedMessageIds.values().next().value;
-          processedMessageIds.delete(firstEntry);
-        }
       }
 
       const tag = isHistorySync ? '[CHAT TERTUNDA / HISTORY]' : '[CHAT MASUK]';
