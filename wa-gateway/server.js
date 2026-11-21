@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.313'; // v3.3.313 - Rekap Faktur Bulanan Toko (list faktur mmm bulan november) & akumulasi omset
+const GATEWAY_VERSION = '3.3.316'; // v3.3.316 - Multi-layer ESL auto-matching & auto-settle client SDK auth
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

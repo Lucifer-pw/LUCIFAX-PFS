@@ -1,7 +1,7 @@
 {
   "gateway": "3.3.316",
   "files": {
-    "server.js": "3.3.315",
+    "server.js": "3.3.316",
     "autonomous-po-processor.js": "3.3.297",
     "wavis-interactive-engine.js": "3.3.313",
     "wavis-pdf-generator.js": "3.3.301",

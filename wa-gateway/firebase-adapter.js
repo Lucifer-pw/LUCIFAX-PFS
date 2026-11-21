@@ -105,10 +105,22 @@ class FirebaseAdapter {
   }
 
   async ensureAuthenticated() {
-    if (this.mode === 'client' && this.authReadyPromise) {
-      try {
-        await this.authReadyPromise;
-      } catch (_) {}
+    if (this.mode === 'client') {
+      if (this.authReadyPromise) {
+        try {
+          await this.authReadyPromise;
+        } catch (_) {}
+      }
+      if (!this.clientAuth?.currentUser) {
+        try {
+          const { signInWithEmailAndPassword } = require('firebase/auth');
+          const email = process.env.FIREBASE_USER_EMAIL || 'admin@fivasolo.com';
+          const password = process.env.FIREBASE_USER_PASSWORD || 'cabangjateng';
+          await signInWithEmailAndPassword(this.clientAuth, email, password);
+        } catch (e) {
+          console.warn('[FIREBASE RE-AUTH WARN]:', e.message);
+        }
+      }
     }
   }
 
@@ -263,11 +275,12 @@ class FirebaseAdapter {
   }
 
   async saveIncomingChat(chatData) {
+    await this.ensureAuthenticated();
     const payload = {
       ...chatData,
       receivedAt: chatData.receivedAt || new Date(),
-      status: 'pending',
-      processedAt: null
+      status: chatData.status || 'pending',
+      processedAt: chatData.processedAt !== undefined ? chatData.processedAt : null
     };
 
     if (this.mode === 'admin') {
@@ -835,6 +848,7 @@ class FirebaseAdapter {
   }
 
   async checkInvoiceExists(invoiceNo) {
+    await this.ensureAuthenticated();
     const invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
     if (!invClean) return false;
     try {
@@ -859,6 +873,7 @@ class FirebaseAdapter {
   }
 
   async settleInvoicePayment(invoiceNo, paymentData = {}) {
+    await this.ensureAuthenticated();
     let invClean = String(invoiceNo || '').replace(/\D/g, '').trim();
     if (!invClean) return { success: false };
 
