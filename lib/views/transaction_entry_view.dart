@@ -342,6 +342,7 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
     final trProvider = Provider.of<TransactionProvider>(context);
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser!;
     final isDeveloper = user.isDeveloper;
+    final isDabActive = trProvider.isDabModeActive;
 
     final isDesktop = MediaQuery.of(context).size.width > 1000;
     final isMobile = MediaQuery.of(context).size.width < 768;
@@ -660,6 +661,60 @@ class _TransactionEntryViewState extends State<TransactionEntryView> {
                             ],
                           );
                         },
+                      ),
+                    ],
+                    if (isDabActive) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF78350F).withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.7)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Nomor Invoice Manual (Mode DAB):',
+                                  style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              key: const ValueKey('dab_custom_invoice_no'),
+                              initialValue: trProvider.customInvoiceNo,
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              decoration: InputDecoration(
+                                labelText: 'Nomor Faktur / Invoice Manual (DAB)',
+                                labelStyle: const TextStyle(color: Colors.amberAccent, fontSize: 12),
+                                hintText: 'Contoh: 221, 243 (kosongkan jika ingin auto)',
+                                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                isDense: true,
+                                filled: true,
+                                fillColor: const Color(0xFF1E293B),
+                                prefixIcon: const Icon(Icons.tag_rounded, color: Colors.amberAccent, size: 18),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.amberAccent)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.amberAccent, width: 2)),
+                              ),
+                              onChanged: (val) {
+                                trProvider.setCustomInvoiceNo(val);
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              '💡 Khusus Mode DAB: Anda dapat menginput nomor invoice manual (misal faktur lama Excel). Jika dikosongkan, sistem memakai nomor otomatis.',
+                              style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 10, fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],

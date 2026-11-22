@@ -707,6 +707,7 @@ class FirebaseService {
     String invoiceType = 'PO', // 'PO', 'SA', or 'LA'
     String? customSaNo,
     String? customLaNo,
+    String? customInvoiceNo,
     String? idempotencyKey,
     List<String> sourceInvoices = const [],
     String lampiranInvoiceNo = '',
@@ -735,7 +736,9 @@ class FirebaseService {
     final now = DateTime.now();
     String docId = '';
 
-    if (invoiceType == 'SA') {
+    if (customInvoiceNo != null && customInvoiceNo.trim().isNotEmpty) {
+      docId = customInvoiceNo.trim().replaceAll('#', '');
+    } else if (invoiceType == 'SA') {
       if (customSaNo != null && customSaNo.trim().isNotEmpty) {
         String clean = customSaNo.trim().toUpperCase();
         if (!clean.startsWith('SA')) {
@@ -811,12 +814,15 @@ class FirebaseService {
     final String initialTransferStatus = isZeroNominal ? 'PAID' : 'UNPAID';
     final DateTime? initialTransferDate = isZeroNominal ? now : null;
 
+    final bool isManualInvoice = (customInvoiceNo != null && customInvoiceNo.trim().isNotEmpty);
+    final DateTime effectiveDate = isManualInvoice ? deliveryDate : now;
+
     final trDoc = model_tr.Transaction(
       invoiceNo: docId,
       customerId: customerId,
       customerName: customerName,
       aliasName: aliasName,
-      date: now,
+      date: effectiveDate,
       deliveryDate: null,
       city: city,
       province: province,
@@ -828,7 +834,7 @@ class FirebaseService {
       statusTransfer: initialTransferStatus,
       transferDate: initialTransferDate,
       createdBy: createdBy,
-      createdAt: now,
+      createdAt: effectiveDate,
       sourceInvoices: sourceInvoices,
       lampiranInvoiceNo: lampiranInvoiceNo,
       isLampiran: (invoiceType == 'LA') || isLampiran,

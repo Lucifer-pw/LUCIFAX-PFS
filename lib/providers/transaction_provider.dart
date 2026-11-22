@@ -27,6 +27,7 @@ class TransactionProvider extends ChangeNotifier {
   String _invoiceType = 'PO'; // 'PO', 'SA', or 'LA'
   String _customSaNo = '';
   String _customLaNo = '';
+  String _customInvoiceNo = '';
 
   // Developer Administrative Bypass (DAB) Mode - pure data correction without mutating warehouse stock
   bool _isDabModeActive = false;
@@ -52,6 +53,12 @@ class TransactionProvider extends ChangeNotifier {
   String get invoiceType => _invoiceType;
   String get customSaNo => _customSaNo;
   String get customLaNo => _customLaNo;
+  String get customInvoiceNo => _customInvoiceNo;
+
+  void setCustomInvoiceNo(String val) {
+    _customInvoiceNo = val;
+    notifyListeners();
+  }
 
   void setInvoiceType(String type, {String? customSaNo, String? customLaNo}) {
     _invoiceType = type;
@@ -218,6 +225,9 @@ class TransactionProvider extends ChangeNotifier {
     _selectedCountry = null;
     _note = "";
     _deliveryDate = DateTime.now();
+    _customInvoiceNo = '';
+    _customSaNo = '';
+    _customLaNo = '';
     notifyListeners();
   }
 
@@ -245,6 +255,7 @@ class TransactionProvider extends ChangeNotifier {
       invoiceType: _invoiceType,
       customSaNo: _customSaNo,
       customLaNo: _customLaNo,
+      customInvoiceNo: _isDabModeActive && _customInvoiceNo.trim().isNotEmpty ? _customInvoiceNo.trim() : null,
       idempotencyKey: idempotencyKey,
     );
 
