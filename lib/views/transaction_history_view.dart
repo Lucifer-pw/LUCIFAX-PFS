@@ -610,7 +610,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     Customer? selectedCustomer;
     try {
       selectedCustomer = customers.firstWhere((c) => c.id == tr.customerId);
-    } catch (_) {}
+    } catch (_) {
+      try {
+        final trName = tr.customerName.trim().toLowerCase();
+        final trAlias = tr.aliasName.trim().toLowerCase();
+        selectedCustomer = customers.firstWhere((c) =>
+            (trName.isNotEmpty && (c.customerName.trim().toLowerCase() == trName || c.aliasName.trim().toLowerCase() == trName)) ||
+            (trAlias.isNotEmpty && (c.customerName.trim().toLowerCase() == trAlias || c.aliasName.trim().toLowerCase() == trAlias)));
+      } catch (_) {
+        if (tr.customerName.isNotEmpty || tr.aliasName.isNotEmpty || tr.customerId.isNotEmpty) {
+          selectedCustomer = Customer(
+            id: tr.customerId.isNotEmpty ? tr.customerId : 'LEGACY_${tr.invoiceNo}',
+            customerName: tr.customerName.isNotEmpty ? tr.customerName : (tr.aliasName.isNotEmpty ? tr.aliasName : 'Pelanggan'),
+            aliasName: tr.aliasName.isNotEmpty ? tr.aliasName : tr.customerName,
+            address: '',
+            city: tr.city,
+            province: tr.province,
+            country: tr.country,
+            phone: '-',
+            ktpNumber: '-',
+          );
+        }
+      }
+    }
 
     DateTime deliveryDate = tr.deliveryDate ?? tr.date;
     final noteController = TextEditingController(text: tr.note);
@@ -807,14 +829,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               try {
                 final updatedTransaction = model_tr.Transaction(
                   invoiceNo: tr.invoiceNo,
-                  customerId: selectedCustomer!.id,
-                  customerName: selectedCustomer!.customerName,
-                  aliasName: selectedCustomer!.aliasName,
+                  customerId: selectedCustomer?.id ?? tr.customerId,
+                  customerName: selectedCustomer?.customerName ?? tr.customerName,
+                  aliasName: selectedCustomer?.aliasName ?? tr.aliasName,
                   date: tr.date,
                   deliveryDate: deliveryDate,
-                  city: selectedCustomer!.city,
-                  province: selectedCustomer!.province,
-                  country: selectedCustomer!.country,
+                  city: selectedCustomer?.city ?? tr.city,
+                  province: selectedCustomer?.province ?? tr.province,
+                  country: selectedCustomer?.country ?? tr.country,
                   items: editedItems,
                   grandTotal: grandTotal,
                   note: noteController.text.trim(),
@@ -824,6 +846,14 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   erpSyncDate: tr.erpSyncDate,
                   createdBy: tr.createdBy,
                   createdAt: tr.createdAt,
+                  returnAmount: tr.returnAmount,
+                  hasReturn: tr.hasReturn,
+                  movedItems: tr.movedItems,
+                  movedToInvoice: tr.movedToInvoice,
+                  isLocked: tr.isLocked,
+                  sourceInvoices: tr.sourceInvoices,
+                  lampiranInvoiceNo: tr.lampiranInvoiceNo,
+                  isLampiran: tr.isLampiran,
                 );
 
                 await Provider.of<TransactionProvider>(context, listen: false).updateTransaction(updatedTransaction);
@@ -1425,7 +1455,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
-                              onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving ? null : submitChanges,
+                              onPressed: (selectedCustomer == null && tr.customerName.isEmpty) || editedItems.isEmpty || isSaving ? null : submitChanges,
                               child: isSaving
                                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                                   : Text(
@@ -1446,7 +1476,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isDabActive ? const Color(0xFFD97706) : const Color(0xFF0284C7),
                         ),
-                        onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving ? null : submitChanges,
+                        onPressed: (selectedCustomer == null && tr.customerName.isEmpty) || editedItems.isEmpty || isSaving ? null : submitChanges,
                         child: isSaving
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : Text(isDabActive ? 'Simpan (Bypass Stok)' : 'Simpan Perubahan'),
