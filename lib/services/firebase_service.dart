@@ -2067,8 +2067,23 @@ class FirebaseService {
   }
 
   // Update existing transaction with stock and ERP summary updates
-  Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
+  Future<void> updateTransaction(model_tr.Transaction updatedTr, {bool bypassStock = false}) async {
     final docRef = _db.collection('transactions').doc(updatedTr.invoiceNo.toString());
+
+    // DEVELOPER ADMINISTRATIVE BYPASS (DAB) MODE:
+    // Pure data correction (e.g. removing duplicate items from historical Excel migrations).
+    // Mutasi stok fisik gudang DILEWATI 100% agar tidak mengembalikan barang ke stok riil 2026.
+    if (bypassStock) {
+      final Map<String, dynamic> data = updatedTr.toMap();
+      data['erpSyncDate'] = updatedTr.erpSyncDate != null 
+          ? Timestamp.fromDate(updatedTr.erpSyncDate!) 
+          : null;
+      await docRef.set(data, SetOptions(merge: true));
+
+      // Auto-sync updated transaction data to receivables collection
+      await syncReceivableFromTransaction(updatedTr);
+      return;
+    }
 
     // 1. READ OLD TRANSACTION FIRST
     final oldSnapInit = await docRef.get();
@@ -2242,9 +2257,20 @@ class FirebaseService {
 
 
   // Delete transaction (with stock restoration if DIKIRIM, excluding LA documents which use single-cut stock)
-  Future<void> deleteTransaction(dynamic invoiceNo) async {
+  Future<void> deleteTransaction(dynamic invoiceNo, {bool bypassStock = false}) async {
     final invClean = invoiceNo.toString().replaceAll('#', '').trim();
     final docRef = _db.collection('transactions').doc(invClean);
+
+    if (bypassStock) {
+      // DEVELOPER ADMINISTRATIVE BYPASS (DAB):
+      // Pure deletion without stock restoration
+      await docRef.delete();
+      final recQuery = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+      for (var rDoc in recQuery.docs) {
+        await rDoc.reference.delete();
+      }
+      return;
+    }
 
     final initSnap = await docRef.get();
     if (!initSnap.exists) {

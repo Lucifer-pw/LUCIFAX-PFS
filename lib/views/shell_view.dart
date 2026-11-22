@@ -51,7 +51,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.316';
+  String _appVersion = '3.3.318';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
@@ -393,13 +393,13 @@ class _ShellViewState extends State<ShellView> {
         });
       } else if (mounted) {
         setState(() {
-          _appVersion = '3.3.316';
+          _appVersion = '3.3.318';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '3.3.316';
+          _appVersion = '3.3.318';
         });
       }
     }
@@ -424,6 +424,177 @@ class _ShellViewState extends State<ShellView> {
         info: updateInfo,
         currentVersion: _appVersion,
       ),
+    );
+  }
+
+  void _handleDabSecretTrigger(BuildContext context, dynamic user) {
+    // DAB (Developer Administrative Bypass) is strictly for developer role
+    final role = (user.role as String).toLowerCase();
+    if (role != 'developer') return;
+
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+
+    if (trProvider.isDabModeActive) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.amberAccent, size: 24),
+              SizedBox(width: 8),
+              Text('Mode DAB Aktif', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'Mode DAB (Developer Administrative Bypass) saat ini sedang AKTIF.\n\nApakah Anda ingin menonaktifkannya dan kembali ke mode normal (stok gudang terikat)?',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD97706),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.power_settings_new_rounded, size: 16, color: Colors.white),
+              label: const Text('Matikan Mode DAB', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                trProvider.setDabMode(false);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Mode DAB telah dinonaktifkan. Sistem kembali ke mode normal.'),
+                    backgroundColor: Color(0xFF475569),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final pinController = TextEditingController();
+    String? errorText;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            void verifyAndActivate() {
+              final inputPin = pinController.text.trim();
+              final expectedPin = (user.developerPin as String?) ?? '464646';
+
+              if (inputPin == expectedPin) {
+                trProvider.setDabMode(true);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Row(
+                      children: [
+                        Icon(Icons.security_rounded, color: Colors.amberAccent, size: 22),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '🛡️ MODE DAB AKTIF!\nPerubahan & penghapusan transaksi TIDAK AKAN memutasi stok fisik gudang.',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: const Color(0xFFB45309),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              } else {
+                setDialogState(() {
+                  errorText = 'PIN salah! Akses ditolak.';
+                  pinController.clear();
+                });
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.admin_panel_settings_rounded, color: Colors.amberAccent, size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Mode DAB (Bypass Stok)',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Developer Administrative Bypass Mode memungkinkan koreksi atau penghapusan data transaksi lama (migrasi Excel) murni pada data tanpa memutasi stok fisik gudang.',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Masukkan PIN Developer:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    autofocus: true,
+                    maxLength: 6,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, letterSpacing: 8, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      counterText: '',
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      hintText: '••••••',
+                      hintStyle: const TextStyle(color: Color(0xFF475569), letterSpacing: 4),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.amberAccent, width: 2)),
+                    ),
+                    onSubmitted: (_) => verifyAndActivate(),
+                  ),
+                  if (errorText != null) ...[
+                    const SizedBox(height: 8),
+                    Text(errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber[700],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.lock_open_rounded, size: 16, color: Colors.black),
+                  label: const Text('Buka Mode DAB', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  onPressed: verifyAndActivate,
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1334,46 +1505,107 @@ class _ShellViewState extends State<ShellView> {
           // User profile chips and sign-out
           Padding(
             padding: EdgeInsets.symmetric(horizontal: isMobile ? 6.0 : 12.0),
-            child: Row(
-              children: [
-                if (!isMobile) ...[
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        user.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            child: Consumer<TransactionProvider>(
+              builder: (context, trProvider, _) {
+                final isDab = trProvider.isDabModeActive;
+                return Row(
+                  children: [
+                    if (!isMobile) ...[
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            user.name,
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isDab) ...[
+                                Container(
+                                  margin: const EdgeInsets.only(right: 5),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.amberAccent, width: 1),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 9),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        'DAB ON',
+                                        style: TextStyle(color: Colors.amberAccent, fontSize: 8, fontWeight: FontWeight.w900),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              Text(
+                                user.role.toUpperCase(),
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      Text(
-                        user.role.toUpperCase(),
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
+                      const SizedBox(width: 10),
                     ],
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                CircleAvatar(
-                  radius: isMobile ? 14 : 18,
-                  backgroundColor: const Color(0xFF334155),
-                  child: Text(
-                    user.name.substring(0, 1).toUpperCase(),
-                    style: TextStyle(
-                      color: const Color(0xFF38BDF8),
-                      fontWeight: FontWeight.bold,
-                      fontSize: isMobile ? 12 : 14,
+                    Tooltip(
+                      message: isDab
+                          ? '🛡️ Mode DAB AKTIF (Bypass Stok Gudang)\nDobel klik avatar untuk mematikan mode.'
+                          : 'Dobel klik avatar untuk menu DAB (Developer)',
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onDoubleTap: () => _handleDabSecretTrigger(context, user),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          padding: EdgeInsets.all(isDab ? 2 : 0),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isDab ? Colors.amberAccent : Colors.transparent,
+                              width: isDab ? 2.5 : 0,
+                            ),
+                            boxShadow: isDab
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.amber.withOpacity(0.6),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: CircleAvatar(
+                            radius: isMobile ? 14 : 18,
+                            backgroundColor: isDab ? const Color(0xFF78350F) : const Color(0xFF334155),
+                            child: Text(
+                              user.name.substring(0, 1).toUpperCase(),
+                              style: TextStyle(
+                                color: isDab ? Colors.amberAccent : const Color(0xFF38BDF8),
+                                fontWeight: FontWeight.bold,
+                                fontSize: isMobile ? 12 : 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                SizedBox(width: isMobile ? 2 : 6),
-                IconButton(
-                  icon: Icon(Icons.logout_rounded, color: Colors.redAccent, size: isMobile ? 20 : 24),
-                  tooltip: 'Keluar',
-                  onPressed: () async {
-                    await authProvider.signOut();
-                  },
-                ),
-              ],
+                    SizedBox(width: isMobile ? 2 : 6),
+                    IconButton(
+                      icon: Icon(Icons.logout_rounded, color: Colors.redAccent, size: isMobile ? 20 : 24),
+                      tooltip: 'Keluar',
+                      onPressed: () async {
+                        await authProvider.signOut();
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           )
         ],

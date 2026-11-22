@@ -8,6 +8,7 @@ class UserProfile {
   final bool isOnline;
   final DateTime? lastSeen;
   final DateTime? lastLogin;
+  final String? developerPin;
 
   UserProfile({
     required this.uid,
@@ -17,6 +18,7 @@ class UserProfile {
     this.isOnline = false,
     this.lastSeen,
     this.lastLogin,
+    this.developerPin,
   });
 
   factory UserProfile.fromMap(Map<String, dynamic> map, String uid) {
@@ -34,6 +36,7 @@ class UserProfile {
       isOnline: map['isOnline'] == true,
       lastSeen: parseDate(map['lastSeen']),
       lastLogin: parseDate(map['lastLogin']),
+      developerPin: map['developerPin'] ?? '464646',
     );
   }
 
@@ -45,6 +48,7 @@ class UserProfile {
       'isOnline': isOnline,
       if (lastSeen != null) 'lastSeen': Timestamp.fromDate(lastSeen!),
       if (lastLogin != null) 'lastLogin': Timestamp.fromDate(lastLogin!),
+      if (developerPin != null) 'developerPin': developerPin,
     };
   }
 

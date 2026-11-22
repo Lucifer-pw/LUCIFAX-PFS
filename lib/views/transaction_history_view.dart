@@ -591,7 +591,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
   }
 
   void _showEditTransactionDialog(model_tr.Transaction tr) {
-    if (tr.isLocked) {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final isDabActive = trProvider.isDabModeActive;
+
+    if (tr.isLocked && !isDabActive) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Invoice #${tr.invoiceNo} sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk mengedit.'),
@@ -1280,9 +1283,33 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Edit Transaksi #${tr.invoiceNo}',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 15 : 18),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Edit Transaksi #${tr.invoiceNo}',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 15 : 18),
+                      ),
+                      if (isDabActive) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.amberAccent),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 12),
+                              SizedBox(width: 4),
+                              Text('DAB MODE (BYPASS STOK)', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
@@ -1292,60 +1319,92 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
               ),
               content: SizedBox(
                 width: isMobile ? double.maxFinite : 980,
-                child: isMobile
-                    ? SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                height: isMobile ? null : MediaQuery.of(context).size.height * 0.75,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (isDabActive)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF78350F).withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                        ),
+                        child: const Row(
                           children: [
-                            buildTransactionForm(),
-                            const SizedBox(height: 16),
-                            const Divider(color: Color(0xFF334155)),
-                            const SizedBox(height: 10),
-                            buildProductForm(),
-                            const SizedBox(height: 16),
-                            const Divider(color: Color(0xFF334155)),
-                            const SizedBox(height: 10),
-                            buildItemsTable(),
-                            const SizedBox(height: 14),
-                            buildTotalFooter(),
+                            Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Mode DAB Aktif: Menghapus item atau mengubah data faktur ini TIDAK AKAN mengubah/mengembalikan stok fisik gudang.',
+                                style: TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ],
                         ),
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left Form Panel
-                          Expanded(
-                            flex: 4,
-                            child: SingleChildScrollView(
+                      ),
+                    Expanded(
+                      flex: isMobile ? 0 : 1,
+                      child: isMobile
+                          ? SingleChildScrollView(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   buildTransactionForm(),
                                   const SizedBox(height: 16),
                                   const Divider(color: Color(0xFF334155)),
                                   const SizedBox(height: 10),
                                   buildProductForm(),
+                                  const SizedBox(height: 16),
+                                  const Divider(color: Color(0xFF334155)),
+                                  const SizedBox(height: 10),
+                                  buildItemsTable(),
+                                  const SizedBox(height: 14),
+                                  buildTotalFooter(),
                                 ],
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          // Right Table Panel
-                          Expanded(
-                            flex: 5,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: buildItemsTable()),
-                                const SizedBox(height: 12),
-                                buildTotalFooter(),
+                                // Left Form Panel
+                                Expanded(
+                                  flex: 4,
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        buildTransactionForm(),
+                                        const SizedBox(height: 16),
+                                        const Divider(color: Color(0xFF334155)),
+                                        const SizedBox(height: 10),
+                                        buildProductForm(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 20),
+                                // Right Table Panel
+                                Expanded(
+                                  flex: 5,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(child: buildItemsTable()),
+                                      const SizedBox(height: 12),
+                                      buildTotalFooter(),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
+                    ),
+                  ],
+                ),
               ),
               actions: isMobile
                   ? [
@@ -1362,14 +1421,17 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             flex: 2,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0284C7),
+                                backgroundColor: isDabActive ? const Color(0xFFD97706) : const Color(0xFF0284C7),
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
                               onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving ? null : submitChanges,
                               child: isSaving
                                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Text('Simpan Perubahan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  : Text(
+                                      isDabActive ? 'Simpan (Bypass Stok)' : 'Simpan Perubahan',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
                             ),
                           ),
                         ],
@@ -1381,11 +1443,13 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         child: const Text('Batal', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDabActive ? const Color(0xFFD97706) : const Color(0xFF0284C7),
+                        ),
                         onPressed: selectedCustomer == null || editedItems.isEmpty || isSaving ? null : submitChanges,
                         child: isSaving
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Simpan Perubahan'),
+                            : Text(isDabActive ? 'Simpan (Bypass Stok)' : 'Simpan Perubahan'),
                       ),
                     ],
             );
@@ -5355,8 +5419,9 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
 
   void _deleteTransaction(dynamic invoiceNo) {
     final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final isDabActive = trProvider.isDabModeActive;
     final tr = trProvider.transactions.where((t) => t.invoiceNo.toString() == invoiceNo.toString()).firstOrNull;
-    if (tr != null && tr.isLocked) {
+    if (tr != null && tr.isLocked && !isDabActive) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Invoice #$invoiceNo sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk menghapus.'),
@@ -5371,10 +5436,62 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
-          title: Text('Hapus Transaksi #$invoiceNo?', style: const TextStyle(color: Colors.white)),
-          content: const Text(
-            'Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.',
-            style: TextStyle(color: Color(0xFF94A3B8)),
+          title: Row(
+            children: [
+              Text('Hapus Transaksi #$invoiceNo?', style: const TextStyle(color: Colors.white)),
+              if (isDabActive) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.amberAccent),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 12),
+                      SizedBox(width: 4),
+                      Text('DAB MODE', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.',
+                style: TextStyle(color: Color(0xFF94A3B8)),
+              ),
+              if (isDabActive) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF78350F).withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Mode DAB Aktif: Data faktur & piutang akan dihapus MURNI tanpa mengembalikan barang ke stok fisik gudang.',
+                          style: TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
           actions: [
             TextButton(
@@ -5389,7 +5506,10 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Transaksi #$invoiceNo berhasil dihapus.'), backgroundColor: Colors.redAccent),
+                    SnackBar(
+                      content: Text('Transaksi #$invoiceNo berhasil dihapus${isDabActive ? ' (Bypass Stok DAB)' : ''}.'),
+                      backgroundColor: Colors.redAccent,
+                    ),
                   );
                 }
               },

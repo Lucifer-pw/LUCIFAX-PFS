@@ -28,6 +28,15 @@ class TransactionProvider extends ChangeNotifier {
   String _customSaNo = '';
   String _customLaNo = '';
 
+  // Developer Administrative Bypass (DAB) Mode - pure data correction without mutating warehouse stock
+  bool _isDabModeActive = false;
+  bool get isDabModeActive => _isDabModeActive;
+
+  void setDabMode(bool active) {
+    _isDabModeActive = active;
+    notifyListeners();
+  }
+
   List<model_tr.Transaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
 
@@ -295,7 +304,7 @@ class TransactionProvider extends ChangeNotifier {
     final trIndex = _transactions.indexWhere((t) => t.invoiceNo.toString() == invoiceNo.toString());
     if (trIndex != -1) {
       final tr = _transactions[trIndex];
-      final status = (tr.status ?? '').toUpperCase();
+      final status = tr.status.toUpperCase();
       if (status != 'DIKIRIM') {
         throw Exception("Transaksi #${tr.invoiceNo} belum berstatus DIKIRIM (Masih $status). Lakukan pengiriman fisik terlebih dahulu!");
       }
@@ -304,13 +313,15 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateTransaction(model_tr.Transaction updatedTr) async {
-    await _dbService.updateTransaction(updatedTr);
+  Future<void> updateTransaction(model_tr.Transaction updatedTr, {bool? bypassStock}) async {
+    final bool bypass = bypassStock ?? _isDabModeActive;
+    await _dbService.updateTransaction(updatedTr, bypassStock: bypass);
     notifyListeners();
   }
 
-  Future<void> deleteTransaction(dynamic invoiceNo) async {
-    await _dbService.deleteTransaction(invoiceNo);
+  Future<void> deleteTransaction(dynamic invoiceNo, {bool? bypassStock}) async {
+    final bool bypass = bypassStock ?? _isDabModeActive;
+    await _dbService.deleteTransaction(invoiceNo, bypassStock: bypass);
     notifyListeners();
   }
 
