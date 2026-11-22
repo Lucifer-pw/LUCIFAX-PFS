@@ -1336,8 +1336,9 @@ class FirebaseService {
   Future<void> updateTransactionDeliveryStatus(
     dynamic invoiceNo,
     String newStatus,
-    DateTime? newDeliveryDate,
-  ) async {
+    DateTime? newDeliveryDate, {
+    bool bypassStock = false,
+  }) async {
     final invClean = invoiceNo.toString().replaceAll('#', '').trim();
     final docRef = _db.collection('transactions').doc(invClean);
 
@@ -1348,6 +1349,48 @@ class FirebaseService {
     }
     final initTr = model_tr.Transaction.fromMap(initSnap.data()!, initSnap.id);
     final String oldStatus = initTr.status;
+
+    // DEVELOPER ADMINISTRATIVE BYPASS (DAB):
+    // Pure delivery status & delivery date change WITHOUT mutating physical warehouse stock!
+    if (bypassStock) {
+      final effectiveTglKirim = (newStatus == 'PENDING')
+          ? null
+          : (newDeliveryDate != null ? Timestamp.fromDate(newDeliveryDate) : Timestamp.fromDate(DateTime.now()));
+
+      await docRef.update({
+        'status': newStatus,
+        'deliveryDate': effectiveTglKirim,
+      });
+
+      final isLa = initTr.isLampiran ||
+          invClean.toUpperCase().startsWith('LA') ||
+          getResolvedSourceInvoices(initTr).isNotEmpty;
+
+      if (isLa) {
+        final sourceIds = getResolvedSourceInvoices(initTr);
+        for (var srcId in sourceIds) {
+          await _db.collection('transactions').doc(srcId).update({
+            'status': newStatus,
+            'deliveryDate': effectiveTglKirim,
+          });
+          final cRecSnap = await _db.collection('receivables').where('noInvoice', isEqualTo: srcId).get();
+          for (var cDoc in cRecSnap.docs) {
+            await cDoc.reference.update({'tglKirim': effectiveTglKirim});
+          }
+        }
+      }
+
+      // Sync receivables
+      try {
+        final recSnap = await _db.collection('receivables').where('noInvoice', isEqualTo: invClean).get();
+        for (var doc in recSnap.docs) {
+          await doc.reference.update({'tglKirim': effectiveTglKirim});
+        }
+      } catch (e) {
+        debugPrint("Error syncing receivables in updateTransactionDeliveryStatus DAB: $e");
+      }
+      return;
+    }
 
     final isLa = initTr.isLampiran ||
         invClean.toUpperCase().startsWith('LA') ||

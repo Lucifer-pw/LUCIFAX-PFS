@@ -291,8 +291,9 @@ class TransactionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateDeliveryStatus(dynamic invoiceNo, String status, DateTime? deliveryDate) async {
-    await _dbService.updateTransactionDeliveryStatus(invoiceNo, status, deliveryDate);
+  Future<void> updateDeliveryStatus(dynamic invoiceNo, String status, DateTime? deliveryDate, {bool? bypassStock}) async {
+    final bool bypass = bypassStock ?? _isDabModeActive;
+    await _dbService.updateTransactionDeliveryStatus(invoiceNo, status, deliveryDate, bypassStock: bypass);
     notifyListeners();
   }
 

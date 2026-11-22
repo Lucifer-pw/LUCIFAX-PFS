@@ -2738,7 +2738,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
   // Update delivery status (DIKIRIM / PENDING) & delivery date dialog
   void _showUpdateDeliveryStatusDialog(model_tr.Transaction tr) {
-    if (tr.isLocked) {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final isDabActive = trProvider.isDabModeActive;
+
+    if (tr.isLocked && !isDabActive) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Invoice #${tr.invoiceNo} sedang dikunci (LOCKED) 🔒. Buka kunci terlebih dahulu untuk mengubah status pengiriman.'),
@@ -2760,7 +2763,30 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
-              title: Text('Update Status Pengiriman #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
+              title: Row(
+                children: [
+                  Text('Update Status Pengiriman #${tr.invoiceNo}', style: const TextStyle(color: Colors.white)),
+                  if (isDabActive) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.amberAccent),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 12),
+                          SizedBox(width: 4),
+                          Text('DAB MODE', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2780,9 +2806,11 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           const CircularProgressIndicator(color: Color(0xFF38BDF8)),
                           const SizedBox(height: 16),
                           Text(
-                            currentDeliveryStatus == 'DIKIRIM'
-                                ? 'Memproses Potong Stok & Update Status DIKIRIM...'
-                                : 'Memproses Mengembalikan Stok & Update Status PENDING...',
+                            isDabActive
+                                ? 'Memproses Update Status (Bypass Stok DAB)...'
+                                : (currentDeliveryStatus == 'DIKIRIM'
+                                    ? 'Memproses Potong Stok & Update Status DIKIRIM...'
+                                    : 'Memproses Mengembalikan Stok & Update Status PENDING...'),
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
@@ -2796,6 +2824,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       ),
                     ),
                   ] else ...[
+                    if (isDabActive) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF78350F).withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Mode DAB Aktif: Mengubah status ke DIKIRIM TIDAK AKAN memotong stok fisik gudang.',
+                                style: TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const Text(
                       'Pilih Status Barang Delivered:',
                       style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
@@ -2806,9 +2857,15 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       dropdownColor: const Color(0xFF1E293B),
                       style: const TextStyle(color: Colors.white),
                       decoration: _buildInputDecoration(hint: 'Status Pengiriman'),
-                      items: const [
-                        DropdownMenuItem(value: 'DIKIRIM', child: Text('DIKIRIM (Stok Berkurang)')),
-                        DropdownMenuItem(value: 'PENDING', child: Text('PENDING (Belum Dikirim)')),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'DIKIRIM',
+                          child: Text(isDabActive ? 'DIKIRIM (Bypass Stok - Mode DAB)' : 'DIKIRIM (Stok Berkurang)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'PENDING',
+                          child: Text(isDabActive ? 'PENDING (Bypass Stok - Mode DAB)' : 'PENDING (Belum Dikirim)'),
+                        ),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -2860,7 +2917,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (tr.isLampiran || tr.invoiceNo.toString().toUpperCase().startsWith('LA'))
+                                if (isDabActive)
+                                  const Text(
+                                    'Mode DAB: Perubahan status pengiriman tidak akan menambah atau mengurangi stok barang di database produk.',
+                                    style: TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold),
+                                  )
+                                else if (tr.isLampiran || tr.invoiceNo.toString().toUpperCase().startsWith('LA'))
                                   Text(
                                     currentDeliveryStatus == 'DIKIRIM'
                                         ? 'Invoice Lampiran: Mengubah ke DIKIRIM akan otomatis memotong stok untuk invoice sampel (SA) yang masih PENDING dan menandai seluruh sampel DIKIRIM (tanpa double stock).'
@@ -2898,7 +2960,9 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isSubmitting ? Colors.grey[800] : const Color(0xFF0284C7),
+                    backgroundColor: isSubmitting
+                        ? Colors.grey[800]
+                        : (isDabActive ? const Color(0xFFD97706) : const Color(0xFF0284C7)),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
                   onPressed: isSubmitting
@@ -2909,11 +2973,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           });
                           try {
                             final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-                            await trProvider.updateDeliveryStatus(tr.invoiceNo, currentDeliveryStatus, currentDeliveryDate);
+                            await trProvider.updateDeliveryStatus(
+                              tr.invoiceNo,
+                              currentDeliveryStatus,
+                              currentDeliveryDate,
+                              bypassStock: isDabActive,
+                            );
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('✅ Status pengiriman & stok berhasil diperbarui!'), backgroundColor: Colors.teal),
+                                SnackBar(
+                                  content: Text(isDabActive
+                                      ? '✅ Status pengiriman berhasil diperbarui (Bypass Stok DAB)!'
+                                      : '✅ Status pengiriman & stok berhasil diperbarui!'),
+                                  backgroundColor: Colors.teal,
+                                ),
                               );
                             }
                           } catch (e) {
