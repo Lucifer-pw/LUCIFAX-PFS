@@ -4057,6 +4057,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       context: context,
       builder: (context) {
         int tabIndex = 0; // 0 = Rekap Kode Induk, 1 = Per Invoice/Drop Point
+        bool showOnlyDeficit = false;
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -4170,8 +4171,32 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                           ),
                         ],
                       ),
+                      if (summary.totalDeficitSkuCount > 0) ...[
+                        const SizedBox(height: 5),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text('🚨', style: TextStyle(fontSize: 15)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Perhatian: ${summary.totalDeficitSkuCount} SKU kurang stok! Butuh order pabrik: ${summary.totalDeficitKartonStr}.',
+                                  style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ] else ...[
-                      // Website / Desktop: 1 Horizontal Row of 4 Cards
+                      // Website / Desktop: 1 Horizontal Row of 5 Cards
                       Row(
                         children: [
                           Expanded(
@@ -4210,6 +4235,18 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               'SKU Induk',
                               '${summary.items.length} Macam',
                               const Color(0xFFA78BFA),
+                              isMobile: false,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildLoadingMetricCard(
+                              summary.totalDeficitSkuCount > 0 ? '🚨' : '✅',
+                              summary.totalDeficitSkuCount > 0 ? 'Butuh Restock' : 'Stok Gudang',
+                              summary.totalDeficitSkuCount > 0
+                                  ? '${summary.totalDeficitKartonStr} (${summary.totalDeficitSkuCount} SKU)'
+                                  : 'Aman Cukup',
+                              summary.totalDeficitSkuCount > 0 ? const Color(0xFFEF4444) : const Color(0xFF10B981),
                               isMobile: false,
                             ),
                           ),
@@ -4280,7 +4317,12 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     // ── Tab Content ──
                     Expanded(
                       child: tabIndex == 0
-                          ? _buildLoadingKodeIndukTab(summary, isMobile)
+                          ? _buildLoadingKodeIndukTab(
+                              summary,
+                              isMobile,
+                              showOnlyDeficit: showOnlyDeficit,
+                              onToggleDeficitFilter: (val) => setDialogState(() => showOnlyDeficit = val),
+                            )
                           : _buildLoadingDropPointTab(summary, isMobile),
                     ),
 
@@ -4288,7 +4330,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
 
                     // ── Action Buttons ──
                     if (isMobile) ...[
-                      // Mobile: 1 Row with 2 Expanded Buttons
+                      // Mobile: 1 Row with 3 Compact Buttons
                       Row(
                         children: [
                           Expanded(
@@ -4303,10 +4345,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   ),
                                 );
                               },
-                              icon: const Icon(Icons.copy_rounded, size: 14, color: Colors.black),
+                              icon: const Icon(Icons.copy_rounded, size: 13, color: Colors.black),
                               label: const Text(
-                                'Salin Format WA',
-                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                                'WA Sopir',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF10B981),
@@ -4314,7 +4356,31 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                final text = VehicleLoadingService.generateRestockFactoryOrderWhatsAppText(summary);
+                                Clipboard.setData(ClipboardData(text: text));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🏭 Format Order Pabrik berhasil disalin!'),
+                                    backgroundColor: Color(0xFFD97706),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.factory_rounded, size: 13, color: Colors.white),
+                              label: const Text(
+                                'Order Pabrik',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFD97706),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: () async {
@@ -4328,10 +4394,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   }
                                 }
                               },
-                              icon: const Icon(Icons.print_rounded, size: 14, color: Colors.black),
+                              icon: const Icon(Icons.print_rounded, size: 13, color: Colors.black),
                               label: const Text(
-                                'Cetak PDF Surat Muat',
-                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                                'Surat Muat',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF38BDF8),
@@ -4342,7 +4408,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         ],
                       ),
                     ] else ...[
-                      // Desktop: Center-aligned Compact Buttons
+                      // Desktop: Center-aligned 3 Buttons
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -4358,13 +4424,32 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                               );
                             },
                             icon: const Icon(Icons.copy_rounded, size: 15, color: Colors.black),
-                            label: const Text('Salin Format WA', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: const Text('Salin Format WA Sopir', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF10B981),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              final text = VehicleLoadingService.generateRestockFactoryOrderWhatsAppText(summary);
+                              Clipboard.setData(ClipboardData(text: text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🏭 Format Order Pabrik berhasil disalin! Paste di WhatsApp pabrik/supplier.'),
+                                  backgroundColor: Color(0xFFD97706),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.factory_rounded, size: 15, color: Colors.white),
+                            label: const Text('Salin Order Pabrik (WA)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD97706),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
                           ElevatedButton.icon(
                             onPressed: () async {
                               try {
@@ -4381,7 +4466,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             label: const Text('Cetak PDF Surat Muat', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF38BDF8),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                             ),
                           ),
                         ],
@@ -4449,7 +4534,16 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     );
   }
 
-  Widget _buildLoadingKodeIndukTab(VehicleLoadingSummary summary, bool isMobile) {
+  Widget _buildLoadingKodeIndukTab(
+    VehicleLoadingSummary summary,
+    bool isMobile, {
+    required bool showOnlyDeficit,
+    required ValueChanged<bool> onToggleDeficitFilter,
+  }) {
+    final displayedItems = showOnlyDeficit
+        ? summary.items.where((i) => i.isDeficit).toList()
+        : summary.items;
+
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -4457,104 +4551,429 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFF334155)),
       ),
-      child: Scrollbar(
-        thumbVisibility: true,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          padding: const EdgeInsets.only(bottom: 6),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columnSpacing: isMobile ? 10 : 14,
-              horizontalMargin: isMobile ? 8 : 10,
-              headingRowHeight: 32,
-              dataRowMinHeight: 34,
-              dataRowMaxHeight: 46,
-              headingRowColor: MaterialStateProperty.all(const Color(0xFF10B981).withOpacity(0.15)),
-              headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
-              columns: const [
-                DataColumn(label: Text('NO')),
-                DataColumn(label: Text('KODE INDUK')),
-                DataColumn(label: Text('NAMA BARANG FISIK')),
-                DataColumn(label: Text('ISI/KTN'), numeric: true),
-                DataColumn(label: Text('TOTAL KTN'), numeric: true),
-                DataColumn(label: Text('TOTAL PCS'), numeric: true),
-                DataColumn(label: Text('BERAT'), numeric: true),
-                DataColumn(label: Text('ALOKASI TOKO / FAKTUR')),
-              ],
-              rows: summary.items.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final item = entry.value;
-                final isEven = idx % 2 == 0;
-
-                return DataRow(
-                  color: MaterialStateProperty.all(
-                    isEven ? Colors.transparent : Colors.white.withOpacity(0.02),
+      child: Column(
+        children: [
+          // ── Filter Bar & Deficit Alert ──
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 8 : 12,
+              vertical: isMobile ? 6 : 8,
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E293B),
+              border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+            ),
+            child: Row(
+              children: [
+                // Filter chip: Semua SKU
+                InkWell(
+                  onTap: () => onToggleDeficitFilter(false),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 8 : 10,
+                      vertical: isMobile ? 4 : 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: !showOnlyDeficit
+                          ? const Color(0xFF38BDF8).withOpacity(0.2)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: !showOnlyDeficit
+                            ? const Color(0xFF38BDF8)
+                            : const Color(0xFF475569),
+                      ),
+                    ),
+                    child: Text(
+                      'Semua SKU (${summary.items.length})',
+                      style: TextStyle(
+                        color: !showOnlyDeficit ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                        fontWeight: FontWeight.bold,
+                        fontSize: isMobile ? 10 : 11,
+                      ),
+                    ),
                   ),
-                  cells: [
-                    DataCell(Text('${idx + 1}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5))),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
-                        ),
-                        child: Text(
-                          item.kodeInduk,
-                          style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
-                        ),
+                ),
+                const SizedBox(width: 8),
+
+                // Filter chip: Butuh Restock (Order Pabrik)
+                InkWell(
+                  onTap: () => onToggleDeficitFilter(true),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 8 : 10,
+                      vertical: isMobile ? 4 : 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: showOnlyDeficit
+                          ? const Color(0xFFEF4444).withOpacity(0.25)
+                          : (summary.totalDeficitSkuCount > 0
+                              ? const Color(0xFFEF4444).withOpacity(0.12)
+                              : Colors.transparent),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: showOnlyDeficit
+                            ? const Color(0xFFEF4444)
+                            : (summary.totalDeficitSkuCount > 0
+                                ? const Color(0xFFEF4444).withOpacity(0.6)
+                                : const Color(0xFF475569)),
+                        width: showOnlyDeficit ? 1.5 : 1,
                       ),
                     ),
-                    DataCell(
-                      ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: isMobile ? 180 : 250),
-                        child: Text(
-                          item.canonicalProductName,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
-                          overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          summary.totalDeficitSkuCount > 0 ? '🚨' : '📦',
+                          style: TextStyle(fontSize: isMobile ? 11 : 12),
                         ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Butuh Restock (${summary.totalDeficitSkuCount})',
+                          style: TextStyle(
+                            color: summary.totalDeficitSkuCount > 0
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFF94A3B8),
+                            fontWeight: FontWeight.bold,
+                            fontSize: isMobile ? 10 : 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Deficit Alert Summary on the right
+                if (summary.totalDeficitSkuCount > 0)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 6 : 9,
+                      vertical: isMobile ? 3 : 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.factory_rounded, size: 13, color: Color(0xFFEF4444)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Defisit Muatan: ${summary.totalDeficitKartonStr} (${NumberFormat('#,##0', 'id_ID').format(summary.totalDeficitQty.toInt())} Pcs)',
+                          style: TextStyle(
+                            color: const Color(0xFFEF4444),
+                            fontWeight: FontWeight.bold,
+                            fontSize: isMobile ? 9.5 : 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 6 : 9,
+                      vertical: isMobile ? 3 : 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF10B981)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Stok Gudang Cukup',
+                          style: TextStyle(
+                            color: const Color(0xFF10B981),
+                            fontWeight: FontWeight.bold,
+                            fontSize: isMobile ? 9.5 : 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // ── Table Content or Empty State ──
+          Expanded(
+            child: displayedItems.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.task_alt_rounded, size: 48, color: Color(0xFF10B981)),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Alhamdulillah! Semua Stok Gudang Mencukupi',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Tidak ada barang yang defisit atau butuh order restock ke pabrik.',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 14),
+                          ElevatedButton.icon(
+                            onPressed: () => onToggleDeficitFilter(false),
+                            icon: const Icon(Icons.list_alt_rounded, size: 14),
+                            label: const Text('Tampilkan Semua SKU'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF334155),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    DataCell(Text('${item.isiKarton}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5))),
-                    DataCell(
-                      Text(
-                        item.totalKartonFormatted,
-                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11.5),
-                      ),
-                    ),
-                    DataCell(Text(NumberFormat('#,##0', 'id_ID').format(item.totalQty), style: const TextStyle(color: Colors.white, fontSize: 10.5))),
-                    DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 10.5))),
-                    DataCell(
-                      ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: isMobile ? 260 : 480),
-                        child: Wrap(
-                          spacing: 4,
-                          runSpacing: 2,
-                          children: item.allocations.map((alloc) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF38BDF8).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                  )
+                : Scrollbar(
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columnSpacing: isMobile ? 10 : 14,
+                          horizontalMargin: isMobile ? 8 : 10,
+                          headingRowHeight: 34,
+                          dataRowMinHeight: 36,
+                          dataRowMaxHeight: 50,
+                          headingRowColor: MaterialStateProperty.all(const Color(0xFF10B981).withOpacity(0.15)),
+                          headingTextStyle: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
+                          columns: const [
+                            DataColumn(label: Text('NO')),
+                            DataColumn(label: Text('KODE INDUK')),
+                            DataColumn(label: Text('NAMA BARANG FISIK')),
+                            DataColumn(label: Text('ISI/KTN'), numeric: true),
+                            DataColumn(label: Text('TOTAL KTN'), numeric: true),
+                            DataColumn(label: Text('TOTAL PCS'), numeric: true),
+                            DataColumn(label: Text('STOK GUDANG'), numeric: true),
+                            DataColumn(label: Text('SISA STOK'), numeric: true),
+                            DataColumn(label: Text('STATUS RESTOCK (ORDER PABRIK)')),
+                            DataColumn(label: Text('BERAT'), numeric: true),
+                            DataColumn(label: Text('ALOKASI TOKO / FAKTUR')),
+                          ],
+                          rows: displayedItems.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final item = entry.value;
+                            final isEven = idx % 2 == 0;
+
+                            return DataRow(
+                              color: MaterialStateProperty.all(
+                                item.isDeficit
+                                    ? const Color(0xFFEF4444).withOpacity(0.12)
+                                    : (isEven ? Colors.transparent : Colors.white.withOpacity(0.02)),
                               ),
-                              child: Text(
-                                '#${alloc.invoiceNo} ${alloc.customerName}: ${alloc.kartonFormatted}',
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.w600),
-                              ),
+                              cells: [
+                                DataCell(Text('${idx + 1}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5))),
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: item.isDeficit
+                                          ? const Color(0xFFEF4444).withOpacity(0.2)
+                                          : const Color(0xFF10B981).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: item.isDeficit
+                                            ? const Color(0xFFEF4444).withOpacity(0.5)
+                                            : const Color(0xFF10B981).withOpacity(0.4),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      item.kodeInduk,
+                                      style: TextStyle(
+                                        color: item.isDeficit ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: isMobile ? 180 : 240),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          item.canonicalProductName,
+                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (item.isDeficit)
+                                          const Text(
+                                            '🚨 Stok kurang untuk muatan ini',
+                                            style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 9, fontWeight: FontWeight.w500),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                DataCell(Text('${item.isiKarton}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5))),
+                                DataCell(
+                                  Text(
+                                    item.totalKartonFormatted,
+                                    style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                  ),
+                                ),
+                                DataCell(Text(NumberFormat('#,##0', 'id_ID').format(item.totalQty), style: const TextStyle(color: Colors.white, fontSize: 10.5))),
+                                // STOK GUDANG
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        item.currentStockKtnFormatted,
+                                        style: const TextStyle(color: Color(0xFFE2E8F0), fontWeight: FontWeight.bold, fontSize: 11),
+                                      ),
+                                      Text(
+                                        '${NumberFormat('#,##0', 'id_ID').format(item.currentStockPcs.toInt())} pcs',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // SISA STOK
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        item.remainingStockKtnFormatted,
+                                        style: TextStyle(
+                                          color: item.isDeficit
+                                              ? const Color(0xFFEF4444)
+                                              : (item.remainingStockPcs == 0 ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${item.remainingStockPcs >= 0 ? "+" : ""}${NumberFormat('#,##0', 'id_ID').format(item.remainingStockPcs.toInt())} pcs',
+                                        style: TextStyle(
+                                          color: item.isDeficit
+                                              ? const Color(0xFFFCA5A5)
+                                              : (item.remainingStockPcs == 0 ? const Color(0xFFFDE68A) : const Color(0xFF6EE7B7)),
+                                          fontSize: 9,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // STATUS RESTOCK (ORDER PABRIK)
+                                DataCell(
+                                  item.isDeficit
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEF4444).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.6)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFEF4444)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'ORDER: ${item.deficitKtnFormatted} (${NumberFormat('#,##0', 'id_ID').format(item.deficitPcs.toInt())} pcs)',
+                                                style: const TextStyle(
+                                                  color: Color(0xFFEF4444),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : (item.remainingStockPcs == 0
+                                          ? Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF59E0B).withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(5),
+                                                border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+                                              ),
+                                              child: const Text(
+                                                '⚠️ Pas 0 Ktn',
+                                                style: TextStyle(
+                                                  color: Color(0xFFF59E0B),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            )
+                                          : Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF10B981).withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(5),
+                                                border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                                              ),
+                                              child: Text(
+                                                '✅ Cukup (Sisa ${item.remainingStockKtnFormatted})',
+                                                style: const TextStyle(
+                                                  color: Color(0xFF10B981),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            )),
+                                ),
+                                DataCell(Text('${item.totalWeightKg.toStringAsFixed(1)} kg', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 10.5))),
+                                DataCell(
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: isMobile ? 260 : 480),
+                                    child: Wrap(
+                                      spacing: 4,
+                                      runSpacing: 2,
+                                      children: item.allocations.map((alloc) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF38BDF8).withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                                          ),
+                                          child: Text(
+                                            '#${alloc.invoiceNo} ${alloc.customerName}: ${alloc.kartonFormatted}',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.w600),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             );
                           }).toList(),
                         ),
                       ),
                     ),
-                  ],
-                );
-              }).toList(),
-            ),
+                  ),
           ),
-        ),
+        ],
       ),
     );
   }

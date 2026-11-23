@@ -45,6 +45,8 @@ class VehicleLoadingItem {
   double totalQty; // total pcs
   double totalKarton;
   double totalWeightKg;
+  double currentStockPcs; // Stok fisik saat ini di gudang (pcs) berdasarkan kodeInduk
+  double currentStockKtn; // Stok fisik saat ini di gudang (karton)
   final List<VehicleLoadingAllocation> allocations;
 
   VehicleLoadingItem({
@@ -55,6 +57,8 @@ class VehicleLoadingItem {
     required this.totalQty,
     required this.totalKarton,
     required this.totalWeightKg,
+    this.currentStockPcs = 0.0,
+    this.currentStockKtn = 0.0,
     List<VehicleLoadingAllocation>? allocations,
   }) : allocations = allocations ?? [];
 
@@ -62,6 +66,38 @@ class VehicleLoadingItem {
     if (totalKarton <= 0) return '0 Ktn';
     if (totalKarton % 1 == 0) return '${totalKarton.toInt()} Ktn';
     return '${totalKarton.toStringAsFixed(1)} Ktn';
+  }
+
+  // Sisa stok fisik setelah dikurangi muatan skim ini
+  double get remainingStockPcs => currentStockPcs - totalQty;
+  double get remainingStockKtn => currentStockKtn - totalKarton;
+
+  // Status apakah stok kurang / minus (butuh restock order pabrik)
+  bool get isDeficit => remainingStockPcs < 0;
+
+  // Berapa karton & pcs kekurangannya (untuk order pabrik)
+  double get deficitPcs => isDeficit ? (totalQty - currentStockPcs) : 0.0;
+  double get deficitKtn => isDeficit ? (totalKarton - currentStockKtn) : 0.0;
+
+  String get currentStockKtnFormatted {
+    if (currentStockKtn <= 0) return '0 Ktn';
+    if (currentStockKtn % 1 == 0) return '${currentStockKtn.toInt()} Ktn';
+    return '${currentStockKtn.toStringAsFixed(1)} Ktn';
+  }
+
+  String get remainingStockKtnFormatted {
+    final r = remainingStockKtn;
+    if (r == 0) return '0 Ktn';
+    final sign = r > 0 ? '+' : '';
+    if (r % 1 == 0) return '$sign${r.toInt()} Ktn';
+    return '$sign${r.toStringAsFixed(1)} Ktn';
+  }
+
+  String get deficitKtnFormatted {
+    final d = deficitKtn;
+    if (d <= 0) return '0 Ktn';
+    if (d % 1 == 0) return '${d.toInt()} Ktn';
+    return '${d.toStringAsFixed(1)} Ktn';
   }
 }
 
@@ -123,6 +159,17 @@ class VehicleLoadingSummary {
     if (grandTotalKarton % 1 == 0) return '${grandTotalKarton.toInt()} Ktn';
     return '${grandTotalKarton.toStringAsFixed(1)} Ktn';
   }
+
+  // Defisit / Kebutuhan Restock Pabrik
+  int get totalDeficitSkuCount => items.where((i) => i.isDeficit).length;
+  double get totalDeficitKarton => items.where((i) => i.isDeficit).fold(0.0, (sum, i) => sum + i.deficitKtn);
+  double get totalDeficitQty => items.where((i) => i.isDeficit).fold(0.0, (sum, i) => sum + i.deficitPcs);
+
+  String get totalDeficitKartonStr {
+    if (totalDeficitKarton <= 0) return '0 Ktn';
+    if (totalDeficitKarton % 1 == 0) return '${totalDeficitKarton.toInt()} Ktn';
+    return '${totalDeficitKarton.toStringAsFixed(1)} Ktn';
+  }
 }
 
 class VehicleLoadingService {
@@ -148,10 +195,24 @@ class VehicleLoadingService {
     final byId = {for (var p in products) p.id.toLowerCase().trim(): p};
     final byName = {for (var p in products) p.name.toLowerCase().trim(): p};
     final byKodeInduk = <String, List<Product>>{};
+    final Map<String, double> stockByKodeInduk = {};
+    final Map<String, int> isiKartonByKodeInduk = {};
+
     for (var p in products) {
       final k = p.kodeInduk.toLowerCase().trim();
       if (k.isNotEmpty) {
         byKodeInduk.putIfAbsent(k, () => []).add(p);
+        // Track physical stock per kodeInduk (taking max across price variants/docs)
+        if (!stockByKodeInduk.containsKey(k) || p.stock > stockByKodeInduk[k]!) {
+          stockByKodeInduk[k] = p.stock;
+        }
+        if (p.isiKarton > 0 && !isiKartonByKodeInduk.containsKey(k)) {
+          isiKartonByKodeInduk[k] = p.isiKarton;
+        }
+      }
+      final idKey = p.id.toLowerCase().trim();
+      if (idKey.isNotEmpty && !stockByKodeInduk.containsKey(idKey)) {
+        stockByKodeInduk[idKey] = p.stock;
       }
     }
 
@@ -236,12 +297,16 @@ class VehicleLoadingService {
         }
 
         final canonicalName = getCanonicalNameForKodeInduk(effectiveKodeInduk, matched, item.cleanProductName);
+        final kLookup = effectiveKodeInduk.toLowerCase().trim();
         final int isiKarton = (matched != null && matched.isiKarton > 0)
             ? matched.isiKarton
-            : _inferIsiKartonFromName(canonicalName);
+            : (isiKartonByKodeInduk[kLookup] ?? _inferIsiKartonFromName(canonicalName));
 
         final double itemKarton = (isiKarton > 0 && item.qty > 0) ? (item.qty / isiKarton) : 0.0;
         final double itemWeight = item.weightKg > 0 ? item.weightKg : (item.qty * item.sizeGrams / 1000.0);
+
+        final double stockPcs = stockByKodeInduk[kLookup] ?? (matched?.stock ?? 0.0);
+        final double stockKtn = (isiKarton > 0 && stockPcs > 0) ? (stockPcs / isiKarton) : 0.0;
 
         invKarton += itemKarton;
         invQty += item.qty;
@@ -272,6 +337,8 @@ class VehicleLoadingService {
             totalQty: item.qty,
             totalKarton: itemKarton,
             totalWeightKg: itemWeight,
+            currentStockPcs: stockPcs,
+            currentStockKtn: stockKtn,
             allocations: [allocation],
           );
         } else {
@@ -280,6 +347,10 @@ class VehicleLoadingService {
           existing.totalKarton += itemKarton;
           existing.totalWeightKg += itemWeight;
           existing.allocations.add(allocation);
+          if (existing.currentStockPcs == 0 && stockPcs > 0) {
+            existing.currentStockPcs = stockPcs;
+            existing.currentStockKtn = stockKtn;
+          }
         }
       }
 
@@ -376,6 +447,43 @@ class VehicleLoadingService {
     }
     buf.writeln('═════════════════════════════');
     buf.writeln('✨ _Dicetak otomatis oleh L-W.A.V.I.S - PT PUTRA FIVA SEJAHTERA (Jawa Tengah)_');
+
+    return buf.toString();
+  }
+
+  /// Generates clean WhatsApp text specifically for ordering deficit goods from the factory
+  static String generateRestockFactoryOrderWhatsAppText(VehicleLoadingSummary summary) {
+    final now = DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now());
+    final deficitItems = summary.items.where((i) => i.isDeficit).toList();
+
+    final buf = StringBuffer();
+    buf.writeln('🏭 *LIST ORDER RESTOCK PABRIK (ANALISA SKIM MUATAN)*');
+    buf.writeln('📅 *Waktu Analisa:* $now');
+    buf.writeln('📋 *Status Muatan:* ${summary.selectedTransactions.length} Faktur terpilih (${summary.grandTotalKartonStr})');
+    buf.writeln('═════════════════════════════');
+    buf.writeln('🚨 *TOTAL KEKURANGAN STOK GUDANG:*');
+    buf.writeln('• *Total Butuh Order Pabrik:* *${summary.totalDeficitKartonStr}* (${NumberFormat('#,##0', 'id_ID').format(summary.totalDeficitQty)} Pcs)');
+    buf.writeln('• *Jumlah SKU yang Kurang:* *${summary.totalDeficitSkuCount} Macam Barang*');
+    buf.writeln('═════════════════════════════');
+    buf.writeln('');
+
+    if (deficitItems.isEmpty) {
+      buf.writeln('✅ *ALHAMDULILLAH, SEMUA STOK FISIK DI GUDANG MENCUKUPI.*');
+      buf.writeln('Tidak ada barang yang defisit untuk muatan ini.');
+    } else {
+      buf.writeln('📦 *RINCIAN KEKURANGAN PER KODE INDUK:*');
+      for (int i = 0; i < deficitItems.length; i++) {
+        final item = deficitItems[i];
+        buf.writeln('${i + 1}. *[${item.kodeInduk}] ${item.canonicalProductName}*');
+        buf.writeln('   🚨 *KURANG / BUTUH: ${item.deficitKtnFormatted}* (${NumberFormat('#,##0', 'id_ID').format(item.deficitPcs)} pcs) • Isi: ${item.isiKarton}/Ktn');
+        buf.writeln('   ↳ Kebutuhan Skim: ${item.totalKartonFormatted} (${NumberFormat('#,##0', 'id_ID').format(item.totalQty)} pcs)');
+        buf.writeln('   ↳ Stok Gudang Saat Ini: ${item.currentStockKtnFormatted} (${NumberFormat('#,##0', 'id_ID').format(item.currentStockPcs)} pcs)');
+        buf.writeln('');
+      }
+      buf.writeln('═════════════════════════════');
+      buf.writeln('Mohon untuk segera diproses kirim / produksi dari pabrik.');
+    }
+    buf.writeln('✨ _PT PUTRA FIVA SEJAHTERA (Cabang Jawa Tengah)_');
 
     return buf.toString();
   }
@@ -520,6 +628,40 @@ class VehicleLoadingService {
         },
         build: (pw.Context context) {
           return [
+            if (summary.totalDeficitSkuCount > 0) ...[
+              pw.Container(
+                padding: const pw.EdgeInsets.all(7),
+                margin: const pw.EdgeInsets.only(bottom: 10),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#FEF2F2'),
+                  borderRadius: pw.BorderRadius.circular(5),
+                  border: pw.Border.all(color: PdfColor.fromHex('#EF4444'), width: 1),
+                ),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('🚨 ', style: pw.TextStyle(font: fontBold, fontSize: 10)),
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'PERHATIAN: DEFISIT STOK GUDANG (${summary.totalDeficitSkuCount} SKU Butuh Order Pabrik)',
+                            style: pw.TextStyle(font: fontBold, fontSize: 9, color: PdfColor.fromHex('#991B1B')),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Kekurangan total: ${summary.totalDeficitKartonStr} (${NumberFormat("#,##0", "id_ID").format(summary.totalDeficitQty)} pcs). Barang bertanda [KURANG: X Ktn] belum mencukupi di fisik gudang.',
+                            style: pw.TextStyle(font: fontRegular, fontSize: 8, color: PdfColor.fromHex('#B91C1C')),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // Table Rekap Kode Induk
             pw.Text(
               'REKAP MUATAN BARANG FISIK (BERDASARKAN KODE INDUK):',
@@ -556,7 +698,9 @@ class VehicleLoadingService {
                   final idx = entry.key;
                   final item = entry.value;
                   final isEven = idx % 2 == 0;
-                  final rowColor = isEven ? PdfColors.white : PdfColor.fromHex('#F1F5F9');
+                  final rowColor = item.isDeficit
+                      ? PdfColor.fromHex('#FEF2F2')
+                      : (isEven ? PdfColors.white : PdfColor.fromHex('#F1F5F9'));
 
                   final allocStrings = item.allocations
                       .map((a) => '#${a.invoiceNo} ${a.customerName}: ${a.kartonFormatted}')
@@ -572,7 +716,33 @@ class VehicleLoadingService {
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
-                            pw.Text(item.canonicalProductName, style: pw.TextStyle(font: fontBold, fontSize: 8.5, color: textDark)),
+                            pw.Row(
+                              children: [
+                                pw.Expanded(
+                                  child: pw.Text(
+                                    item.canonicalProductName,
+                                    style: pw.TextStyle(
+                                      font: fontBold,
+                                      fontSize: 8.5,
+                                      color: item.isDeficit ? PdfColor.fromHex('#B91C1C') : textDark,
+                                    ),
+                                  ),
+                                ),
+                                if (item.isDeficit)
+                                  pw.Container(
+                                    padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: pw.BoxDecoration(
+                                      color: PdfColor.fromHex('#FEE2E2'),
+                                      borderRadius: pw.BorderRadius.circular(2),
+                                      border: pw.Border.all(color: PdfColor.fromHex('#EF4444'), width: 0.5),
+                                    ),
+                                    child: pw.Text(
+                                      'KURANG: ${item.deficitKtnFormatted}',
+                                      style: pw.TextStyle(font: fontBold, fontSize: 7, color: PdfColor.fromHex('#991B1B')),
+                                    ),
+                                  ),
+                              ],
+                            ),
                             pw.SizedBox(height: 1.5),
                             pw.Text('↳ $allocStrings', style: pw.TextStyle(font: fontRegular, fontSize: 7, color: textGray)),
                           ],
