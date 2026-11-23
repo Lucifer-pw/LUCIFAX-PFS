@@ -51,6 +51,9 @@ class ChatOrderDraft {
   String rawChatBlock;
   String note;
   bool isRevisionOrder;
+  String customInvoiceNo;
+  DateTime? customDeliveryDate;
+  String initialStatus;
 
   ChatOrderDraft({
     required this.customerRawName,
@@ -63,6 +66,9 @@ class ChatOrderDraft {
     required this.rawChatBlock,
     this.note = '',
     this.isRevisionOrder = false,
+    this.customInvoiceNo = '',
+    this.customDeliveryDate,
+    this.initialStatus = 'PENDING',
   });
 
   double get grandTotal => items.fold(0.0, (sum, item) => sum + item.subtotal);

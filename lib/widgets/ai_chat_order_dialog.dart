@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/customer.dart';
+import '../models/product.dart';
 import '../models/transaction.dart' as model_tr;
 import '../models/chat_order_draft.dart';
 import '../models/ai_knowledge_rule.dart';
 import '../providers/customer_provider.dart';
 import '../providers/product_provider.dart';
+import '../providers/transaction_provider.dart';
 import '../services/firebase_service.dart';
 import '../services/ai_chat_parser_service.dart';
 
@@ -35,6 +37,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
   bool _isSavingAll = false;
   bool _isSyncingMemory = false;
   List<ChatOrderDraft> _parsedDrafts = [];
+  final Map<ChatOrderDraft, TextEditingController> _invoiceControllers = {};
   final NumberFormat _rupiahFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   @override
@@ -86,6 +89,10 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
   @override
   void dispose() {
     _chatInputController.dispose();
+    for (var c in _invoiceControllers.values) {
+      c.dispose();
+    }
+    _invoiceControllers.clear();
     super.dispose();
   }
 
@@ -585,7 +592,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                             );
                             await _firebaseService.saveAiKnowledgeRule(aliasRule);
 
-                            if (mounted) {
+                            if (dialogCtx.mounted) {
                               Navigator.pop(dialogCtx, finalCustomer);
                             }
                           } catch (e) {
@@ -610,6 +617,616 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
           },
         );
       },
+    );
+  }
+
+  Future<void> _showEditDraftItemDialog(ChatOrderDraft draft, [ChatOrderItemDraft? existingItem]) async {
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    final products = List<Product>.from(productProvider.products)
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    if (products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Daftar produk master masih kosong!'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    Product selectedProduct = existingItem != null
+        ? products.firstWhere(
+            (p) => p.id == existingItem.productId,
+            orElse: () => products.firstWhere(
+              (p) => p.name.toLowerCase().trim() == existingItem.productName.toLowerCase().trim(),
+              orElse: () => products.first,
+            ),
+          )
+        : products.first;
+
+    final qtyInputController = TextEditingController(
+      text: existingItem != null
+          ? (existingItem.qtyInput % 1 == 0 ? existingItem.qtyInput.toInt().toString() : existingItem.qtyInput.toString())
+          : '1',
+    );
+    String selectedUnit = existingItem != null ? existingItem.qtyUnit.toLowerCase() : 'pack';
+    if (!['pack', 'karton', 'roll'].contains(selectedUnit)) {
+      selectedUnit = 'pack';
+    }
+
+    final qtyPcsController = TextEditingController(
+      text: existingItem != null
+          ? (existingItem.qtyPcs % 1 == 0 ? existingItem.qtyPcs.toInt().toString() : existingItem.qtyPcs.toString())
+          : '1',
+    );
+
+    final priceController = TextEditingController(
+      text: existingItem != null
+          ? (existingItem.price % 1 == 0 ? existingItem.price.toInt().toString() : existingItem.price.toString())
+          : (selectedProduct.price % 1 == 0 ? selectedProduct.price.toInt().toString() : selectedProduct.price.toString()),
+    );
+
+    final discountPercentController = TextEditingController(
+      text: existingItem != null
+          ? (existingItem.discountPercent % 1 == 0 ? existingItem.discountPercent.toInt().toString() : existingItem.discountPercent.toString())
+          : '0',
+    );
+
+    bool isBonus = existingItem?.isBonus ?? false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            void updateQtyPcs() {
+              final qIn = double.tryParse(qtyInputController.text.replaceAll(',', '.')) ?? 0.0;
+              if (selectedUnit == 'karton') {
+                final isi = selectedProduct.isiKarton > 0 ? selectedProduct.isiKarton : 20;
+                final computed = (qIn * isi);
+                qtyPcsController.text = computed % 1 == 0 ? computed.toInt().toString() : computed.toString();
+              } else {
+                qtyPcsController.text = qIn % 1 == 0 ? qIn.toInt().toString() : qIn.toString();
+              }
+            }
+
+            double calcSubtotal() {
+              if (isBonus) return 0.0;
+              final p = double.tryParse(priceController.text.replaceAll(',', '.')) ?? 0.0;
+              final q = double.tryParse(qtyPcsController.text.replaceAll(',', '.')) ?? 0.0;
+              final disc = double.tryParse(discountPercentController.text.replaceAll(',', '.')) ?? 0.0;
+              final raw = p * q;
+              if (disc > 0) {
+                return (raw * (1 - disc / 100)).clamp(0.0, double.infinity);
+              }
+              return raw;
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amberAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      existingItem != null ? Icons.edit_note_rounded : Icons.add_circle_outline_rounded,
+                      color: Colors.amberAccent,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          existingItem != null ? 'Edit Barang Draft PO' : 'Tambah Barang Draft PO',
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Mode DAB Aktif (Bebas Edit Tanpa Mutasi Stok)',
+                          style: TextStyle(color: Colors.amberAccent, fontSize: 10.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Pilih Produk Searchable Autocomplete
+                      const Text('Pilih Produk Master:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      Autocomplete<Product>(
+                        initialValue: TextEditingValue(text: selectedProduct.name),
+                        displayStringForOption: (Product p) => p.name,
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return products;
+                          }
+                          final q = textEditingValue.text.toLowerCase();
+                          return products.where((p) => p.name.toLowerCase().contains(q) || p.kodeInduk.toLowerCase().contains(q));
+                        },
+                        onSelected: (Product selection) {
+                          setDialogState(() {
+                            selectedProduct = selection;
+                            if (existingItem == null || !isBonus) {
+                              priceController.text = (selection.price % 1 == 0 ? selection.price.toInt() : selection.price).toString();
+                            }
+                            updateQtyPcs();
+                          });
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              hintText: 'Cari nama barang...',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 18),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 8,
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 220, maxWidth: 460),
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF334155)),
+                                  itemBuilder: (context, index) {
+                                    final prod = options.elementAt(index);
+                                    final isSel = prod.id == selectedProduct.id;
+                                    return ListTile(
+                                      dense: true,
+                                      tileColor: isSel ? const Color(0xFF0284C7).withOpacity(0.25) : null,
+                                      title: Text(
+                                        prod.name,
+                                        style: TextStyle(color: isSel ? const Color(0xFF38BDF8) : Colors.white, fontSize: 12, fontWeight: isSel ? FontWeight.bold : FontWeight.normal),
+                                      ),
+                                      trailing: Text(
+                                        _rupiahFormatter.format(prod.price),
+                                        style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                      onTap: () => onSelected(prod),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Qty Input & Satuan
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Qty Chat / Input:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: qtyInputController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: const Color(0xFF0F172A),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                  onChanged: (_) {
+                                    setDialogState(() {
+                                      updateQtyPcs();
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Satuan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: selectedUnit,
+                                  dropdownColor: const Color(0xFF0F172A),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: const Color(0xFF0F172A),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'pack', child: Text('PACK')),
+                                    DropdownMenuItem(value: 'karton', child: Text('KARTON')),
+                                    DropdownMenuItem(value: 'roll', child: Text('ROLL')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setDialogState(() {
+                                        selectedUnit = val;
+                                        updateQtyPcs();
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Total Pack/Pcs:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: qtyPcsController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: const Color(0xFF0F172A),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                  onChanged: (_) => setDialogState(() {}),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Harga Unit & Diskon
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Harga Unit (Rp):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: priceController,
+                                  enabled: !isBonus,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: TextStyle(color: isBonus ? Colors.grey : Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    prefixText: 'Rp ',
+                                    prefixStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                                    filled: true,
+                                    fillColor: const Color(0xFF0F172A),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                  onChanged: (_) => setDialogState(() {}),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Diskon (%):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: discountPercentController,
+                                  enabled: !isBonus,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: TextStyle(color: isBonus ? Colors.grey : Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    suffixText: '%',
+                                    suffixStyle: const TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                    filled: true,
+                                    fillColor: const Color(0xFF0F172A),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  ),
+                                  onChanged: (_) => setDialogState(() {}),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Bonus Checkbox
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            isBonus = !isBonus;
+                            if (isBonus) {
+                              priceController.text = '0';
+                              discountPercentController.text = '0';
+                            } else {
+                              priceController.text = (selectedProduct.price % 1 == 0 ? selectedProduct.price.toInt() : selectedProduct.price).toString();
+                            }
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: isBonus,
+                              activeColor: Colors.pinkAccent,
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  isBonus = val ?? false;
+                                  if (isBonus) {
+                                    priceController.text = '0';
+                                    discountPercentController.text = '0';
+                                  } else {
+                                    priceController.text = (selectedProduct.price % 1 == 0 ? selectedProduct.price.toInt() : selectedProduct.price).toString();
+                                  }
+                                });
+                              },
+                            ),
+                            const Text(
+                              '🎁 BONUS (Gratis / Harga Rp 0)',
+                              style: TextStyle(color: Colors.pinkAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Live Subtotal Preview
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Subtotal Item:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                            Text(
+                              _rupiahFormatter.format(calcSubtotal()),
+                              style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber[700],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () {
+                    final qIn = double.tryParse(qtyInputController.text.replaceAll(',', '.')) ?? 1.0;
+                    final qPcs = double.tryParse(qtyPcsController.text.replaceAll(',', '.')) ?? qIn;
+                    final pVal = isBonus ? 0.0 : (double.tryParse(priceController.text.replaceAll(',', '.')) ?? 0.0);
+                    final discVal = isBonus ? 0.0 : (double.tryParse(discountPercentController.text.replaceAll(',', '.')) ?? 0.0);
+
+                    if (existingItem != null) {
+                      existingItem.productId = selectedProduct.id;
+                      existingItem.productName = selectedProduct.name;
+                      existingItem.qtyInput = qIn;
+                      existingItem.qtyUnit = selectedUnit;
+                      existingItem.qtyPcs = qPcs;
+                      existingItem.price = pVal;
+                      existingItem.discountPercent = discVal;
+                      existingItem.sizeGrams = selectedProduct.sizeGrams;
+                      existingItem.isBonus = isBonus;
+                    } else {
+                      draft.items.add(
+                        ChatOrderItemDraft(
+                          productId: selectedProduct.id,
+                          productName: selectedProduct.name,
+                          rawText: 'MANUAL DAB',
+                          qtyUnit: selectedUnit,
+                          qtyInput: qIn,
+                          qtyPcs: qPcs,
+                          price: pVal,
+                          discountPercent: discVal,
+                          sizeGrams: selectedProduct.sizeGrams,
+                          isBonus: isBonus,
+                        ),
+                      );
+                    }
+
+                    Navigator.pop(dialogCtx);
+                    setState(() {});
+                  },
+                  icon: const Icon(Icons.check_rounded, color: Colors.black, size: 16),
+                  label: Text(
+                    existingItem != null ? 'Simpan Perubahan' : 'Tambahkan ke Draft',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDabDraftControlBar(ChatOrderDraft draft, int draftIndex, bool isMobile) {
+    final invCtrl = _invoiceControllers.putIfAbsent(
+      draft,
+      () => TextEditingController(text: draft.customInvoiceNo),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withOpacity(0.35)),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 16),
+              SizedBox(width: 6),
+              Text(
+                'DAB OVERRIDE:',
+                style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ],
+          ),
+          // Input No. Invoice Manual DAB
+          SizedBox(
+            width: 150,
+            child: TextFormField(
+              controller: invCtrl,
+              onChanged: (val) => draft.customInvoiceNo = val,
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: const Color(0xFF0F172A),
+                labelText: 'No. Invoice',
+                labelStyle: const TextStyle(color: Colors.amberAccent, fontSize: 11),
+                prefixText: '#',
+                prefixStyle: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                hintText: 'e.g. 221',
+                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Colors.amberAccent)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.amber.withOpacity(0.4))),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              ),
+            ),
+          ),
+          // Tanggal Pengiriman / Efektif
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: draft.customDeliveryDate ?? DateTime.now(),
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2035),
+              );
+              if (picked != null) {
+                setState(() {
+                  draft.customDeliveryDate = picked;
+                });
+              }
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.calendar_today_rounded, color: Color(0xFF38BDF8), size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    DateFormat('dd MMM yyyy').format(draft.customDeliveryDate ?? DateTime.now()),
+                    style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Status Selector (PENDING / DIKIRIM Bypass)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFF334155)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: draft.initialStatus,
+                dropdownColor: const Color(0xFF1E293B),
+                style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                items: const [
+                  DropdownMenuItem(value: 'PENDING', child: Text('Status: PENDING')),
+                  DropdownMenuItem(value: 'DIKIRIM', child: Text('Status: DIKIRIM (Bypass)', style: TextStyle(color: Colors.amberAccent))),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      draft.initialStatus = val;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          // Hapus Draft
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+            tooltip: 'Hapus Draft Ini (DAB)',
+            onPressed: () {
+              setState(() {
+                _invoiceControllers.remove(draft)?.dispose();
+                _parsedDrafts.removeAt(draftIndex);
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -669,6 +1286,8 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
       });
     }
 
+    if (!mounted) return;
+
     if (draft.items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Daftar barang masih kosong untuk toko ini!'), backgroundColor: Colors.orange),
@@ -693,31 +1312,48 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
 
       final grandTotal = draft.grandTotal;
 
-      // Call createTransaction with named parameters (Status PENDING, UNPAID, stock NOT deducted)
+      if (!mounted) return;
+
+      final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+      final isDabActive = trProvider.isDabModeActive;
+
+      final String? manualInvoice = (isDabActive && draft.customInvoiceNo.trim().isNotEmpty)
+          ? draft.customInvoiceNo.trim()
+          : null;
+      final String initialStatus = isDabActive ? draft.initialStatus : 'PENDING';
+      final DateTime deliveryDate = (isDabActive && draft.customDeliveryDate != null)
+          ? draft.customDeliveryDate!
+          : DateTime.now();
+
+      // Call createTransaction with named parameters (Status PENDING or DIKIRIM, stock NOT deducted)
       final createdTr = await _firebaseService.createTransaction(
         customerId: targetCustomer.id,
         customerName: targetCustomer.customerName,
         aliasName: targetCustomer.aliasName,
-        deliveryDate: DateTime.now(),
+        deliveryDate: deliveryDate,
         city: targetCustomer.city.isNotEmpty ? targetCustomer.city : 'SEMARANG',
         province: targetCustomer.province.isNotEmpty ? targetCustomer.province : 'JAWA TENGAH',
         country: 'INDONESIA',
         items: trItems,
         grandTotal: grandTotal,
         note: draft.note,
-        createdBy: 'AI Chat Scanner',
+        createdBy: isDabActive ? 'DAB Admin' : 'AI Chat Scanner',
+        customInvoiceNo: manualInvoice,
+        status: initialStatus,
       );
       final createdInvoiceNo = createdTr.invoiceNo;
 
       if (mounted) {
+        final statusSuffix = initialStatus == 'DIKIRIM' ? 'Status DIKIRIM (Bypass Stok)' : 'Status PENDING';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ PO Toko ${draft.customerName} berhasil dibuat! (Invoice #$createdInvoiceNo - Status PENDING)'),
+            content: Text('✅ PO Toko ${draft.customerName} berhasil dibuat! (Invoice #$createdInvoiceNo - $statusSuffix)'),
             backgroundColor: Colors.teal,
           ),
         );
 
         setState(() {
+          _invoiceControllers.remove(draft)?.dispose();
           _parsedDrafts.removeAt(draftIndex);
         });
       }
@@ -764,9 +1400,11 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
     setState(() => _isSavingAll = false);
 
     if (mounted) {
+      final isDab = Provider.of<TransactionProvider>(context, listen: false).isDabModeActive;
+      final modeSuffix = isDab ? ' (Mode DAB)' : ' dengan status PENDING';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('🎉 Berhasil membuat $successCount PO baru dengan status PENDING!'),
+          content: Text('🎉 Berhasil membuat $successCount PO baru$modeSuffix!'),
           backgroundColor: Colors.teal,
         ),
       );
@@ -779,6 +1417,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 768;
+    final isDabActive = Provider.of<TransactionProvider>(context).isDabModeActive;
 
     return Dialog(
       backgroundColor: const Color(0xFF1E293B),
@@ -801,26 +1440,58 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF38BDF8).withOpacity(0.15),
+                          color: (isDabActive ? Colors.amber : const Color(0xFF38BDF8)).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF38BDF8), size: 24),
+                        child: Icon(
+                          isDabActive ? Icons.shield_rounded : Icons.auto_awesome_rounded,
+                          color: isDabActive ? Colors.amberAccent : const Color(0xFF38BDF8),
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Scan Chat WhatsApp → Auto PO',
-                              style: TextStyle(color: Colors.white, fontSize: isMobile ? 15 : 18, fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            Row(
+                              children: [
+                                Text(
+                                  'Scan Chat WhatsApp → Auto PO',
+                                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 15 : 18, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (isDabActive) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Colors.amberAccent),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.shield_rounded, color: Colors.amberAccent, size: 12),
+                                        SizedBox(width: 4),
+                                        Text('DAB MODE', style: TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Otomatis mengenali toko, kuantiti, dan histori nota',
-                              style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 10 : 11),
+                              isDabActive
+                                  ? 'Mode DAB Aktif: Input No. Invoice manual & edit item bebas tanpa mutasi stok fisik.'
+                                  : 'Otomatis mengenali toko, kuantiti, dan histori nota',
+                              style: TextStyle(
+                                color: isDabActive ? Colors.amberAccent.withOpacity(0.85) : const Color(0xFF94A3B8),
+                                fontSize: isMobile ? 10 : 11,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -860,6 +1531,10 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                         InkWell(
                           onTap: () => setState(() {
                             _chatInputController.clear();
+                            for (var c in _invoiceControllers.values) {
+                              c.dispose();
+                            }
+                            _invoiceControllers.clear();
                             _parsedDrafts.clear();
                           }),
                           child: const Text('Bersihkan Teks', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
@@ -980,7 +1655,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                     const SizedBox(height: 8),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
+                        backgroundColor: isDabActive ? const Color(0xFFD97706) : Colors.teal,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -988,7 +1663,10 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                       icon: _isSavingAll
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.done_all_rounded, color: Colors.white, size: 16),
-                      label: const Text('Buat Semua PO Sekaligus (Status PENDING)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      label: Text(
+                        isDabActive ? 'Buat Semua PO Sekaligus (Mode DAB)' : 'Buat Semua PO Sekaligus (Status PENDING)',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ],
@@ -1017,7 +1695,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                   if (_parsedDrafts.length > 1)
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
+                        backgroundColor: isDabActive ? const Color(0xFFD97706) : Colors.teal,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1025,7 +1703,10 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                       icon: _isSavingAll
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.done_all_rounded, color: Colors.white, size: 16),
-                      label: const Text('Buat Semua PO Sekaligus (Status PENDING)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      label: Text(
+                        isDabActive ? 'Buat Semua PO Sekaligus (Mode DAB)' : 'Buat Semua PO Sekaligus (Status PENDING)',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
                     ),
                 ],
               ),
@@ -1099,7 +1780,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                           itemCount: _parsedDrafts.length,
                           itemBuilder: (context, index) {
                             final draft = _parsedDrafts[index];
-                            return _buildDraftCard(draft, index);
+                            return _buildDraftCard(draft, index, isDabActive);
                           },
                         ),
             ),
@@ -1109,7 +1790,7 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
     );
   }
 
-  Widget _buildDraftCard(ChatOrderDraft draft, int draftIndex) {
+  Widget _buildDraftCard(ChatOrderDraft draft, int draftIndex, bool isDabActive) {
     final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
     final isMobile = MediaQuery.of(context).size.width < 768;
 
@@ -1236,13 +1917,16 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                             const SizedBox(),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0284C7),
+                              backgroundColor: isDabActive ? const Color(0xFFD97706) : const Color(0xFF0284C7),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () => _createTransactionFromDraft(draft, draftIndex),
-                            icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 14),
-                            label: const Text('Buat PO Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                            icon: Icon(isDabActive ? Icons.shield_rounded : Icons.add_shopping_cart_rounded, color: Colors.white, size: 14),
+                            label: Text(
+                              isDabActive ? 'Buat PO (DAB)' : 'Buat PO Transaksi',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                            ),
                           ),
                         ],
                       ),
@@ -1351,17 +2035,24 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                       const SizedBox(width: 12),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
+                          backgroundColor: isDabActive ? const Color(0xFFD97706) : const Color(0xFF0284C7),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: () => _createTransactionFromDraft(draft, draftIndex),
-                        icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 16),
-                        label: const Text('Buat PO Transaksi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        icon: Icon(isDabActive ? Icons.shield_rounded : Icons.add_shopping_cart_rounded, color: Colors.white, size: 16),
+                        label: Text(
+                          isDabActive ? 'Buat PO (DAB)' : 'Buat PO Transaksi',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
                       ),
                     ],
                   ),
           ),
+
+          // DAB Control Bar (Shown exclusively when DAB mode is active)
+          if (isDabActive)
+            _buildDabDraftControlBar(draft, draftIndex, isMobile),
 
           // Items Table
           Padding(
@@ -1372,24 +2063,35 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SizedBox(
-                      width: 520,
+                      width: isDabActive ? 600 : 520,
                       child: Table(
-                        columnWidths: const {
-                          0: FlexColumnWidth(2.5), // Nama Barang
-                          1: FlexColumnWidth(1.2), // Kuantiti Chat
-                          2: FlexColumnWidth(1.2), // Total Pack
-                          3: FlexColumnWidth(1.4), // Harga Unit (Histori)
-                          4: FlexColumnWidth(1.4), // Subtotal
-                        },
+                        columnWidths: isDabActive
+                            ? const {
+                                0: FlexColumnWidth(2.2), // Nama Barang
+                                1: FlexColumnWidth(1.1), // Kuantiti Chat
+                                2: FlexColumnWidth(1.1), // Total Pack
+                                3: FlexColumnWidth(1.3), // Harga Unit (Histori)
+                                4: FlexColumnWidth(1.3), // Subtotal
+                                5: FlexColumnWidth(1.0), // AKSI
+                              }
+                            : const {
+                                0: FlexColumnWidth(2.5), // Nama Barang
+                                1: FlexColumnWidth(1.2), // Kuantiti Chat
+                                2: FlexColumnWidth(1.2), // Total Pack
+                                3: FlexColumnWidth(1.4), // Harga Unit (Histori)
+                                4: FlexColumnWidth(1.4), // Subtotal
+                              },
                         children: [
                           TableRow(
                             decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFF334155)))),
-                            children: const [
-                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                              Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                            children: [
+                              const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                              if (isDabActive)
+                                const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('AKSI', textAlign: TextAlign.center, style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold))),
                             ],
                           ),
                           ...draft.items.map((item) {
@@ -1457,31 +2159,71 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                                     style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
                                 ),
+                                if (isDabActive)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 16),
+                                          tooltip: 'Edit Item (DAB)',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () => _showEditDraftItemDialog(draft, item),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                          tooltip: 'Hapus Item (DAB)',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            setState(() {
+                                              draft.items.remove(item);
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                               ],
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
                   )
                 else
                   Table(
-                    columnWidths: const {
-                      0: FlexColumnWidth(2.5), // Nama Barang
-                      1: FlexColumnWidth(1.2), // Kuantiti Chat
-                      2: FlexColumnWidth(1.2), // Total Pack
-                      3: FlexColumnWidth(1.4), // Harga Unit (Histori)
-                      4: FlexColumnWidth(1.4), // Subtotal
-                    },
+                    columnWidths: isDabActive
+                        ? const {
+                            0: FlexColumnWidth(2.3), // Nama Barang
+                            1: FlexColumnWidth(1.0), // Kuantiti Chat
+                            2: FlexColumnWidth(1.0), // Total Pack
+                            3: FlexColumnWidth(1.3), // Harga Unit (Histori)
+                            4: FlexColumnWidth(1.3), // Subtotal
+                            5: FlexColumnWidth(0.9), // AKSI
+                          }
+                        : const {
+                            0: FlexColumnWidth(2.5), // Nama Barang
+                            1: FlexColumnWidth(1.2), // Kuantiti Chat
+                            2: FlexColumnWidth(1.2), // Total Pack
+                            3: FlexColumnWidth(1.4), // Harga Unit (Histori)
+                            4: FlexColumnWidth(1.4), // Subtotal
+                          },
                     children: [
                       TableRow(
                         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFF334155)))),
-                        children: const [
-                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                        children: [
+                          const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('NAMA BARANG', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('QTY CHAT', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('TOTAL PACK', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('HARGA UNIT', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold))),
+                          if (isDabActive)
+                            const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('AKSI', textAlign: TextAlign.center, style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold))),
                         ],
                       ),
                       ...draft.items.map((item) {
@@ -1549,11 +2291,60 @@ class _AiChatOrderDialogContentState extends State<_AiChatOrderDialogContent> {
                                 style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
                               ),
                             ),
+                            if (isDabActive)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_rounded, color: Colors.amberAccent, size: 16),
+                                      tooltip: 'Edit Item (DAB)',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _showEditDraftItemDialog(draft, item),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                      tooltip: 'Hapus Item (DAB)',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () {
+                                        setState(() {
+                                          draft.items.remove(item);
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         );
-                      }).toList(),
+                      }),
                     ],
                   ),
+                if (isDabActive) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.amberAccent,
+                        side: BorderSide(color: Colors.amber.withOpacity(0.5)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () => _showEditDraftItemDialog(draft),
+                      icon: const Icon(Icons.add_rounded, size: 15, color: Colors.amberAccent),
+                      label: const Text(
+                        '+ Tambah Barang Manual (DAB)',
+                        style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
             const Divider(color: Color(0xFF334155)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

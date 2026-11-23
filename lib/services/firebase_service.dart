@@ -712,6 +712,7 @@ class FirebaseService {
     List<String> sourceInvoices = const [],
     String lampiranInvoiceNo = '',
     bool isLampiran = false,
+    String status = 'PENDING',
   }) async {
     // Idempotency check: if this key was already used, return existing transaction
     if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
@@ -823,14 +824,14 @@ class FirebaseService {
       customerName: customerName,
       aliasName: aliasName,
       date: effectiveDate,
-      deliveryDate: null,
+      deliveryDate: (status == 'DIKIRIM') ? effectiveDate : null,
       city: city,
       province: province,
       country: country,
       items: items,
       grandTotal: grandTotal,
       note: note,
-      status: 'PENDING',
+      status: status,
       statusTransfer: initialTransferStatus,
       transferDate: initialTransferDate,
       createdBy: createdBy,
@@ -840,7 +841,7 @@ class FirebaseService {
       isLampiran: (invoiceType == 'LA') || isLampiran,
     );
 
-    // Save transaction (status PENDING = no stock deduction, no ERP sync)
+    // Save transaction (in createTransaction, stock is never deducted)
     await _db.collection('transactions').doc(docId).set(trDoc.toMap());
 
     // Save idempotency key to prevent duplicate creation
@@ -855,8 +856,8 @@ class FirebaseService {
       }
     }
 
-    // Auto-sync to receivables collection if UNPAID
-    if (trDoc.statusTransfer == 'UNPAID') {
+    // Auto-sync to receivables collection if UNPAID or DIKIRIM
+    if (trDoc.statusTransfer == 'UNPAID' || status == 'DIKIRIM') {
       try {
         await syncReceivableFromTransaction(trDoc);
       } catch (e) {
