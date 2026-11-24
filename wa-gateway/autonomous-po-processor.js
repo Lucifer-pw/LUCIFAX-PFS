@@ -3,7 +3,7 @@
  * Memungkinkan pembuatan PO / Faktur Penjualan secara mandiri dari HP (Termux)
  * saat laptop kasir mati / aplikasi Flutter belum dibuka.
  */
-const APO_VERSION = '3.3.275'; // v3.3.275 - Universal phonetic/fuzzy typo, smart gramatur, and slang karton (krton)
+const APO_VERSION = '3.3.325'; // v3.3.325 - Safety guard anti-nomor telepon, batasan batas wajar kuantiti, dan deteksi dokumen ERP/faktur fisik
 
 // Helper Fonetik & Jarak Kemiripan Kata Universal
 function normalizePhonetic(w) {

@@ -1,8 +1,8 @@
 {
-  "gateway": "3.3.317",
+  "gateway": "3.3.325",
   "files": {
-    "server.js": "3.3.317",
-    "autonomous-po-processor.js": "3.3.297",
+    "server.js": "3.3.325",
+    "autonomous-po-processor.js": "3.3.325",
     "wavis-interactive-engine.js": "3.3.313",
     "wavis-pdf-generator.js": "3.3.301",
     "firebase-adapter.js": "3.3.316",
@@ -13,6 +13,6 @@
     "update.sh": "3.3.312",
     "update.bat": "3.3.310"
   },
-  "updatedAt": "2026-11-22",
-  "changelog": "v3.3.317: Move sender resolution before media OCR to fix TDZ ReferenceError on senderName during auto-matching."
+  "updatedAt": "2026-11-24",
+  "changelog": "v3.3.325: Deteksi otomatis faktur fisik Fiva & instruksi masuk ERP (Bukan PO), proteksi anti-nomor fax/telepon terbaca kuantiti, dan batasan batas wajar pesanan."
 }

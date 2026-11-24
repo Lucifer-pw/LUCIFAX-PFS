@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.317'; // v3.3.317 - Move sender resolution before media OCR to fix TDZ ReferenceError on senderName
+const GATEWAY_VERSION = '3.3.325'; // v3.3.325 - Deteksi faktur fisik Fiva & instruksi masuk ERP sebagai non-PO, filter anti-nomor telepon/fax
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
