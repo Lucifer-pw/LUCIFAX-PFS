@@ -158,7 +158,7 @@ class _WaGatewayViewState extends State<WaGatewayView> {
   }
 
   Future<void> _processSingleChatToPo(IncomingPoChat chat, {bool isAuto = false}) async {
-    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP') return;
+    if (chat.isTransferSlip || chat.messageType == 'TRANSFER_SLIP' || chat.messageType == 'ERP_REPORT' || chat.dismissReason == 'LAPORAN_MASUK_ERP') return;
     if (_isProcessingBatch && !isAuto) return;
     if (!isAuto) setState(() => _isProcessingBatch = true);
 
@@ -166,6 +166,35 @@ class _WaGatewayViewState extends State<WaGatewayView> {
       final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
       final productProvider = Provider.of<ProductProvider>(context, listen: false);
       final parserService = AiChatParserService(_firebaseService);
+
+      final textLower = chat.messageText.toLowerCase();
+      final captionLower = (chat.caption ?? '').toLowerCase();
+      final bool isFivaInvoice = textLower.contains('fiva solo food') || textLower.contains('putra fiva') ||
+          (textLower.contains('invoice') && textLower.contains('diterima'));
+      final bool isErpText = captionLower.contains('msk erp') || captionLower.contains('masuk erp') ||
+          textLower.startsWith('msk erp') || textLower.startsWith('masuk erp');
+
+      if (isFivaInvoice || isErpText) {
+        final hasOrderVerbs = RegExp(r'\b(order|pesan|krm|kirim)\b').hasMatch(textLower);
+        if (!hasOrderVerbs || isFivaInvoice) {
+          debugPrint('[AI PARSER] 📄 Chat ini terdeteksi sebagai Laporan/Instruksi Masuk ERP atau Faktur Fisik Fiva. Bukan PO baru.');
+          await _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed');
+          await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
+            'dismissReason': 'LAPORAN_MASUK_ERP',
+            'messageType': 'ERP_REPORT',
+            'isOrderDetected': false,
+          }).catchError((_) {});
+          if (!isAuto && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Pesan ini terdeteksi sebagai Laporan/Instruksi Masuk ERP (Bukan PO).'),
+                backgroundColor: Colors.purple,
+              ),
+            );
+          }
+          return;
+        }
+      }
 
       List<AiKnowledgeRule> rulesSnap = [];
       String generalInstructions = '';
@@ -192,17 +221,23 @@ class _WaGatewayViewState extends State<WaGatewayView> {
 
       // Validate: Must have at least 1 item with qty > 0
       if (drafts.isEmpty || drafts.first.items.isEmpty) {
-        // Casual chat / non-order
+        // Casual chat / non-order / ERP report
+        final reason = (isFivaInvoice || isErpText) ? 'LAPORAN_MASUK_ERP' : 'BUKAN_ORDER';
+        final mType = (isFivaInvoice || isErpText) ? 'ERP_REPORT' : chat.messageType;
         await _firebaseService.updateIncomingPoChatStatus(chat.id, 'dismissed');
         await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
-          'dismissReason': 'BUKAN_ORDER',
+          'dismissReason': reason,
+          'messageType': mType,
+          'isOrderDetected': false,
         }).catchError((_) {});
 
         if (!isAuto && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pesan ini terdeteksi bukan format pesanan (status: DIABAIKAN).'),
-              backgroundColor: Colors.orange,
+            SnackBar(
+              content: Text(reason == 'LAPORAN_MASUK_ERP'
+                  ? 'Pesan ini terdeteksi sebagai Laporan/Instruksi Masuk ERP (status: DIABAIKAN).'
+                  : 'Pesan ini terdeteksi bukan format pesanan (status: DIABAIKAN).'),
+              backgroundColor: reason == 'LAPORAN_MASUK_ERP' ? Colors.purple : Colors.orange,
             ),
           );
         }
@@ -4838,7 +4873,11 @@ Kirim besok pagi ya pak bc''';
               const SizedBox(height: 8),
             ] else if (chat.status == 'dismissed') ...[
               Text(
-                chat.dismissReason == 'BUKAN_ORDER' ? '⚠️ Bukan format pesanan barang' : 'Diabaikan secara manual',
+                chat.dismissReason == 'LAPORAN_MASUK_ERP'
+                    ? '📄 Laporan / Instruksi Masuk ERP'
+                    : (chat.dismissReason == 'BUKAN_ORDER'
+                        ? '⚠️ Bukan format pesanan barang'
+                        : 'Diabaikan secara manual'),
                 style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 8),
@@ -4942,7 +4981,11 @@ Kirim besok pagi ya pak bc''';
                   }(),
                 ] else if (chat.status == 'dismissed') ...[
                   Text(
-                    chat.dismissReason == 'BUKAN_ORDER' ? '⚠️ Bukan format pesanan barang' : 'Diabaikan secara manual',
+                    chat.dismissReason == 'LAPORAN_MASUK_ERP'
+                        ? '📄 Laporan / Instruksi Masuk ERP'
+                        : (chat.dismissReason == 'BUKAN_ORDER'
+                            ? '⚠️ Bukan format pesanan barang'
+                            : 'Diabaikan secara manual'),
                     style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
                   ),
                 ] else ...[
@@ -5108,6 +5151,10 @@ Kirim besok pagi ya pak bc''';
             bg = const Color(0xFF0F766E);
             fg = const Color(0xFF5EEAD4);
             label = 'BARANG DATANG (PABRIK)';
+          } else if (chat.messageType == 'ERP_REPORT' || chat.dismissReason == 'LAPORAN_MASUK_ERP') {
+            bg = const Color(0xFF581C87); // Ungu Tua
+            fg = const Color(0xFFD8B4FE); // Ungu Muda
+            label = 'LAPORAN MASUK ERP';
           } else {
             bg = const Color(0xFF334155);
             fg = const Color(0xFF94A3B8);

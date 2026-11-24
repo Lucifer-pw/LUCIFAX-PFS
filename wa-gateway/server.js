@@ -1737,6 +1737,66 @@ async function startBaileys() {
       }
 
       // =========================================================================
+      // KHUSUS DOKUMEN FAKTUR PENJUALAN FIVA FISIK / LAPORAN MASUK ERP:
+      // Pengirim mengirim foto lembaran nota/faktur yang SUDAH dicetak oleh Fiva
+      // (ber-kop FIVA SOLO FOOD, PUTRA FIVA, memuat DITERIMA OLEH, HORMAT KAMI,
+      // PENGIRIM, NO INVOICE) ATAU pesan bertema "Msk erp hr ini" / "Masuk ERP".
+      // Ini adalah LAPORAN STATUS ERP / FAKTUR LAMA, BUKAN PO PENJUALAN BARU!
+      // JANGAN PERNAH dibuatkan Faktur Penjualan baru oleh Auto-PO!
+      // =========================================================================
+      const cleanLowerDoc = (cleanText || '').toLowerCase();
+      const captionLowerDoc = (rawCaption || '').toLowerCase();
+      const isFivaSalesInvoiceDoc =
+        (upperOcr.includes('FIVA SOLO FOOD') || upperOcr.includes('PUTRA FIVA') || (upperOcr.includes('INVOICE') && upperOcr.includes('MBG'))) &&
+        (upperOcr.includes('DITERIMA OLEH') || upperOcr.includes('DITERIMA OLAH') || upperOcr.includes('HORMAT KAMI') || upperOcr.includes('PENGIRIM') || upperOcr.includes('SUBTOTAL') || upperOcr.includes('PURWODADI') || upperOcr.includes('JATIBENING') || upperOcr.includes('021-849') || upperOcr.includes('021849'));
+
+      const isErpInstructionDoc = isImageMessage && (
+        isFivaSalesInvoiceDoc ||
+        /\b(msk\s*erp|masuk\s*erp|sync\s*erp|input\s*erp|list\s*erp)\b/i.test(cleanLowerDoc) ||
+        /\b(msk\s*erp|masuk\s*erp)\b/i.test(captionLowerDoc)
+      );
+
+      if (isFivaSalesInvoiceDoc || isErpInstructionDoc) {
+        console.log(`[LAPORAN ERP] 📄 Terdeteksi Dokumen Faktur Fisik Fiva / Instruksi Masuk ERP dari ${senderName}! (Bukan PO Penjualan Baru)`);
+        if (imageBuffer && !imageUrl) {
+          try {
+            const filename = `faktur_erp_${Date.now()}_${msgId || 'img'}.jpg`;
+            imageUrl = await firebaseAdapter.uploadReceiptImage(imageBuffer, filename);
+          } catch (_) {}
+        }
+
+        const erpPayload = {
+          senderJid: remoteJid,
+          senderPhone,
+          senderName,
+          messageText: `[DOKUMEN FAKTUR FISIK / LAPORAN MASUK ERP]${rawCaption ? ' ' + rawCaption : ''}`.trim(),
+          isOrderDetected: false,
+          messageType: 'ERP_REPORT',
+          hasImage: true,
+          imageUrl: imageUrl || null,
+          transferInfo: null,
+          matchedInvoiceNo: null,
+          status: 'dismissed', // Otomatis masuk tab Diabaikan / Bukan Order
+          dismissReason: 'LAPORAN_MASUK_ERP',
+          caption: rawCaption || '',
+          rawOcrText: ocrText || '',
+          messageCount: 1,
+          messageId: msgId || '',
+          messageIds: msgId ? [msgId] : [],
+          receivedAt: new Date(msgTimeMs)
+        };
+
+        recentChats.unshift({
+          ...erpPayload,
+          receivedAt: new Date()
+        });
+        if (recentChats.length > 20) recentChats.pop();
+
+        await firebaseAdapter.saveIncomingChat(erpPayload);
+        return; // Selesai! Tidak lanjut ke antrean PO
+      }
+
+      // =========================================================================
       // KHUSUS FORWARDED & QUOTED REPLY: BYPASS BUFFER & KIRIM TERPISAH
       // Forwarded message = 1 PO dari 1 toko (sudah lengkap dalam 1 bubble)
       // Quoted reply = revisi/balasan ke invoice foto (harus jadi dokumen sendiri)
@@ -1925,6 +1985,18 @@ async function startBaileys() {
           // FILTER: Abaikan foto daftar menu restoran / warung makan
           if (isImg && _looksLikeRestaurantMenu(t)) return false;
 
+          // FILTER: Abaikan dokumen faktur fisik Fiva / cetakan dot-matrix nota penjualan (Bukan PO Baru!)
+          if (isImg && (t.includes('fiva solo food') || t.includes('putra fiva') || t.includes('diterima oleh') || t.includes('diterima olah') || t.includes('hormat kami'))) {
+            return false;
+          }
+
+          // FILTER: Abaikan pesan instruksi ERP tanpa format order eksplisit
+          if (/\b(msk\s*erp|masuk\s*erp|sync\s*erp|input\s*erp|list\s*erp)\b/i.test(t)) {
+            if (!/\b(order|pesan|krm|kirim)\b/i.test(t) || !hasQtyPattern) {
+              return false;
+            }
+          }
+
           const hasOrderWord = /\b(po|order|pesanan|pesan|nota|invoice|krm|kirim|antar|muat)\b/i.test(t);
           const hasUnitWord = /\b(k|ktn|karton|dus|box|roll|rol|pack|pak|pcs|bal|ball|bks|bungkus|ikat)\b/i.test(t);
           const hasProductWord = /\b(rolade|rollade|kornet|fiva|sosis|baso|bakso|beres|brs|nugget|tempura|siomay|otak|kaki naga|scallop|miniku)\b/i.test(t);
@@ -2063,6 +2135,18 @@ async function startBaileys() {
         if (_looksLikeScreenshot(t)) return false;
         // FILTER: Abaikan foto daftar menu restoran / warung makan
         if (isImg && _looksLikeRestaurantMenu(t)) return false;
+
+        // FILTER: Abaikan dokumen faktur fisik Fiva / cetakan dot-matrix nota penjualan (Bukan PO Baru!)
+        if (isImg && (t.includes('fiva solo food') || t.includes('putra fiva') || t.includes('diterima oleh') || t.includes('diterima olah') || t.includes('hormat kami'))) {
+          return false;
+        }
+
+        // FILTER: Abaikan pesan instruksi ERP tanpa format order eksplisit
+        if (/\b(msk\s*erp|masuk\s*erp|sync\s*erp|input\s*erp|list\s*erp)\b/i.test(t)) {
+          if (!/\b(order|pesan|krm|kirim)\b/i.test(t) || !hasQtyPattern) {
+            return false;
+          }
+        }
 
         // INTERACTIVE GUARD: Teks pertanyaan, query faktur/stok/piutang, atau sapaan BUKAN order PO baru
         if (!isImg) {

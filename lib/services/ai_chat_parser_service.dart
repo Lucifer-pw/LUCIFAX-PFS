@@ -24,6 +24,27 @@ class AiChatParserService {
     final drafts = <ChatOrderDraft>[];
     if (rawChat.trim().isEmpty) return drafts;
 
+    final lowerChat = rawChat.toLowerCase();
+
+    // Guard 1: Deteksi dokumen faktur fisik Fiva / cetakan dot-matrix nota penjualan (Bukan PO Baru!)
+    final isFivaPhysicalInvoice = (lowerChat.contains('fiva solo food') || lowerChat.contains('putra fiva') || (lowerChat.contains('invoice') && lowerChat.contains('mbg'))) &&
+        (lowerChat.contains('diterima oleh') || lowerChat.contains('diterima olah') || lowerChat.contains('hormat kami') || lowerChat.contains('pengirim') || lowerChat.contains('jatibening') || lowerChat.contains('021849') || lowerChat.contains('021-849'));
+    if (isFivaPhysicalInvoice) {
+      debugPrint('[AI PARSER] 📄 Terdeteksi foto/teks faktur fisik Fiva (Bukan PO Penjualan). Skip pembuatan draft PO.');
+      return drafts;
+    }
+
+    // Guard 2: Deteksi chat administratif Laporan/Instruksi Masuk ERP tanpa pesanan eksplisit
+    // Contoh: "Msk erp hr ini yaa lee", "Msk erp hari ini 1. MMM", "Msk Erp hr ini... Berkah tempura"
+    final isErpInstructionOnly = RegExp(r'^(?:assalam[a-z\s.,]*\n)?(?:total\s+rp[^\n]*\n)?\s*(?:msk\s*erp|masuk\s*erp|sync\s*erp|list\s*erp|laporan\s*erp)\b', caseSensitive: false).hasMatch(rawChat.trim());
+    if (isErpInstructionOnly) {
+      final hasExplicitOrderItems = rawChat.split('\n').any((l) => _looksLikeOrderLine(l));
+      if (!hasExplicitOrderItems) {
+        debugPrint('[AI PARSER] 📋 Terdeteksi instruksi/laporan Masuk ERP tanpa pesanan barang. Skip pembuatan draft PO.');
+        return drafts;
+      }
+    }
+
     // 1. Separate rules by type
     final customerRules = rules.where((r) => r.type == 'customer_alias').toList();
     final productRules = rules.where((r) => r.type == 'product_alias').toList();

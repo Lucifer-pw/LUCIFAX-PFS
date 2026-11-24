@@ -677,8 +677,25 @@ class AutonomousPoProcessor {
   async parseOrderChat(rawChat, senderPhone, pushName) {
     await this.refreshCacheIfNeeded();
 
+    const lowerChat = rawChat.toLowerCase();
+    // Guard 1: Deteksi dokumen faktur fisik Fiva (Bukan PO Penjualan Baru!)
+    if ((lowerChat.includes('fiva solo food') || lowerChat.includes('putra fiva') || (lowerChat.includes('invoice') && lowerChat.includes('mbg'))) &&
+        (lowerChat.includes('diterima oleh') || lowerChat.includes('diterima olah') || lowerChat.includes('hormat kami') || lowerChat.includes('pengirim') || lowerChat.includes('jatibening') || lowerChat.includes('021849') || lowerChat.includes('021-849'))) {
+      console.log('[AUTONOMOUS PO] 📄 Terdeteksi foto/teks faktur fisik Fiva (Bukan PO). Skip.');
+      return null;
+    }
+
     const lines = rawChat.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return null;
+
+    // Guard 2: Deteksi instruksi/laporan Masuk ERP tanpa pesanan eksplisit
+    if (/^(?:assalam[a-z\s.,]*\n)?(?:total\s+rp[^\n]*\n)?\s*(?:msk\s*erp|masuk\s*erp|sync\s*erp|list\s*erp|laporan\s*erp)\b/i.test(rawChat.trim())) {
+      const hasExplicitOrderItems = lines.some(l => /(?:^|\s|\.\.\.)\d+(?:[.,]\d+)?\s*(k|ktn|karton|dus|box|pack|pak|pcs|bal|ball|roll|rol)\b/i.test(l));
+      if (!hasExplicitOrderItems) {
+        console.log('[AUTONOMOUS PO] 📋 Terdeteksi instruksi/laporan Masuk ERP tanpa pesanan barang. Skip.');
+        return null;
+      }
+    }
 
     const customer = this.resolveCustomer(lines, senderPhone, pushName);
     if (!customer) {

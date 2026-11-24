@@ -1669,4 +1669,52 @@ Krm hr Kamis
     expect(draftsGriya.first.items[0].qtyUnit, 'karton');
     expect(draftsGriya.first.items[0].qtyPcs, 150.0); // 10 karton * 15 pcs
   });
+
+  test('ERP and Printed Fiva Invoice photo produces 0 drafts and is never mistaken as new PO', () async {
+    final parser = AiChatParserService();
+    final products = [
+      Product(id: 'RA-1000', name: 'ROLLADE AYAM 1000 G ( MBG )', price: 47000, stock: 100, isiKarton: 10, sizeGrams: 1000),
+    ];
+    final customers = [
+      Customer(id: 'K006', customerName: 'SUNARDI', aliasName: 'NARDI FF', address: 'PURWODADI', city: 'PURWODADI', province: 'JAWA TENGAH', country: 'INDONESIA', phone: '', ktpNumber: ''),
+    ];
+
+    // Case A: Photo of printed invoice from Fiva Solo Food (Pak BC / Nardi FF)
+    const ocrFivaInvoice = '''
+Assalaam mualaikum bapak....🙏🙏🙏
+Total Rp. 32.900.000
+1 . FIVA SOLO FOOD & MEAT SUPPLY No invoice Toni
+Fax: 02184972737 Tanggal Pengiriman : 01-10-2026
+Alamat : PURWODADI. JAWA TENGAH
+NAMA BARANG | QTY | HARGA | DISKON | SUBTOTAL
+ROLLADE AYAM 1000 G (MBG) 400 Rp 47.000 0.00% Rp 18.800.000
+Diterima Olah
+Hormat Kami: Setiawan
+''';
+    final draftsA = await parser.parseChatOrders(
+      rawChat: ocrFivaInvoice,
+      products: products,
+      customers: customers,
+      rules: [],
+    );
+    expect(draftsA.isEmpty, isTrue, reason: 'Foto faktur cetak Fiva fisik bukan PO baru!');
+
+    // Case B: "Msk erp hr ini yaa lee"
+    final draftsB = await parser.parseChatOrders(
+      rawChat: 'Msk erp hr ini yaa lee',
+      products: products,
+      customers: customers,
+      rules: [],
+    );
+    expect(draftsB.isEmpty, isTrue, reason: 'Chat instruksi masuk ERP tanpa item bukan PO!');
+
+    // Case C: "Msk erp hari ini\n1. MMM"
+    final draftsC = await parser.parseChatOrders(
+      rawChat: 'Msk erp hari ini\n1. MMM',
+      products: products,
+      customers: customers,
+      rules: [],
+    );
+    expect(draftsC.isEmpty, isTrue, reason: 'Daftar nama toko masuk ERP bukan PO!');
+  });
 }
