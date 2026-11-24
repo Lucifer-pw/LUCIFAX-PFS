@@ -851,8 +851,10 @@ class AiChatParserService {
 
       int score = 0;
 
-      // Exact match after cleaning stopwords
-      if (queryCleaned == cNameClean || (cAliasClean.isNotEmpty && queryCleaned == cAliasClean)) {
+      // Exact match after cleaning stopwords (must have at least 2 letters)
+      if (queryCleaned.length >= 3 &&
+          RegExp(r'[a-zA-Z]{2,}').hasMatch(queryCleaned) &&
+          (queryCleaned == cNameClean || (cAliasClean.isNotEmpty && queryCleaned == cAliasClean))) {
         return c; // 100% exact match
       }
 
@@ -878,22 +880,28 @@ class AiChatParserService {
       }
 
       // 3. Direct Substring / Whole Word Containment (whole words only to prevent e.g. "selasa" matching "ela")
-      if (cNameClean.isNotEmpty && containsWordOrPhrase(queryCleaned, cNameClean)) {
-        score += 80;
-      }
-      if (cAliasClean.isNotEmpty && containsWordOrPhrase(queryCleaned, cAliasClean)) {
-        score += 70;
-      }
-      if (cNameClean.isNotEmpty && containsWordOrPhrase(cNameClean, queryCleaned)) {
-        score += 60;
-      }
-      if (cAliasClean.isNotEmpty && containsWordOrPhrase(cAliasClean, queryCleaned)) {
-        score += 60;
+      // Query MUST have at least 3 chars and at least 2 letters (never match single digits like "1" or "2"!)
+      final bool queryHasLetters = RegExp(r'[a-zA-Z]{2,}').hasMatch(queryCleaned);
+      if (queryCleaned.length >= 3 && queryHasLetters) {
+        if (cNameClean.isNotEmpty && containsWordOrPhrase(queryCleaned, cNameClean)) {
+          score += 80;
+        }
+        if (cAliasClean.isNotEmpty && containsWordOrPhrase(queryCleaned, cAliasClean)) {
+          score += 70;
+        }
+        if (cNameClean.isNotEmpty && containsWordOrPhrase(cNameClean, queryCleaned)) {
+          score += 60;
+        }
+        if (cAliasClean.isNotEmpty && containsWordOrPhrase(cAliasClean, queryCleaned)) {
+          score += 60;
+        }
       }
 
       // 4. Token Overlap (city names already stripped from queryTokens)
       int matchedTokens = 0;
       for (var token in queryTokens) {
+        // Only tokens with letters can match customer tokens (never pure numbers)
+        if (!RegExp(r'[a-zA-Z]').hasMatch(token)) continue;
         if (cTokens.contains(token)) {
           score += 30;
           matchedTokens++;
@@ -981,8 +989,10 @@ class AiChatParserService {
       productText = productText.substring(7).trim();
     }
 
-    // Nama produk wajib memiliki minimal 2 karakter dan mengandung huruf
-    if (productText.length < 2 || !RegExp(r'[a-zA-Z]').hasMatch(productText)) {
+    // Nama produk wajib memiliki minimal 3 karakter dan minimal 3 huruf
+    // Mencegah serpihan OCR 1-2 huruf seperti "la", "ee", "co", "FF" dicocokkan ke produk!
+    final letterCount = RegExp(r'[a-zA-Z]').allMatches(productText).length;
+    if (productText.length < 3 || letterCount < 3) {
       return null;
     }
 
@@ -1156,6 +1166,12 @@ class AiChatParserService {
       qtyPcs = qtyInfo.qty * isiKarton;
     }
 
+    // Realistic quantity ceiling: Max 5,000 cartons or 50,000 pcs for frozen food distribution
+    // Mencegah nomor telepon/fax/barcode atau halusinasi OCR menjadi kuantiti miliaran pcs!
+    if (qtyInfo.qty > 5000 || qtyPcs > 50000 || qtyPcs <= 0) {
+      return null;
+    }
+
     String finalUnit = qtyInfo.unit;
     if (finalUnit == 'pack') {
       final pName = matchedProduct.name.toLowerCase();
@@ -1274,6 +1290,20 @@ class AiChatParserService {
 
   /// Extracts quantity and unit from line, returning cleaned product text
   _QtyUnitResolution _extractQuantityAndUnit(String line, List<AiKnowledgeRule> unitRules) {
+    final lowerLine = line.toLowerCase().trim();
+    // Mencegah baris informasi kontak, fax, telepon, no invoice atau tanggal dianggap pemisah kuantiti
+    if (lowerLine.startsWith('fax') ||
+        lowerLine.startsWith('tel') ||
+        lowerLine.startsWith('phone') ||
+        lowerLine.startsWith('hp') ||
+        lowerLine.startsWith('wa') ||
+        lowerLine.startsWith('no invoice') ||
+        lowerLine.startsWith('no.') ||
+        lowerLine.contains('tanggal pengiriman') ||
+        lowerLine.contains('tgl pengiriman')) {
+      return _QtyUnitResolution(qty: 1.0, unit: 'pack', cleanedText: '', hadExplicitQty: false);
+    }
+
     double qty = 1.0;
     String unit = 'pack';
     // Pisahkan angka yang menempel dengan satuan gram / kg (misal 215gr -> 215 gr, 500g -> 500 g)
@@ -1288,6 +1318,11 @@ class AiChatParserService {
 
     if (separatorMatch != null) {
       final rawQty = _parseIndonesianNumber(separatorMatch.group(2) ?? '1');
+      // Cegah nomor telepon / fax / barcode (7 digit atau lebih) menjadi kuantiti
+      if (rawQty >= 100000 || RegExp(r'\b\d{7,}\b').hasMatch(separatorMatch.group(2) ?? '')) {
+        return _QtyUnitResolution(qty: 1.0, unit: 'pack', cleanedText: '', hadExplicitQty: false);
+      }
+
       final matchedUnitStr = (separatorMatch.group(4) ?? '').toLowerCase().trim();
 
       if (matchedUnitStr.isNotEmpty) {
@@ -1314,6 +1349,10 @@ class AiChatParserService {
 
     if (explicitUnitMatch != null) {
       final rawQty = _parseIndonesianNumber(explicitUnitMatch.group(1) ?? '1');
+      if (rawQty >= 100000 || RegExp(r'\b\d{7,}\b').hasMatch(explicitUnitMatch.group(1) ?? '')) {
+        return _QtyUnitResolution(qty: 1.0, unit: 'pack', cleanedText: '', hadExplicitQty: false);
+      }
+
       final matchedUnitStr = (explicitUnitMatch.group(3) ?? '').toLowerCase().trim();
       final res = _resolveUnitRule(matchedUnitStr, unitRules);
       qty = rawQty * res.multiplier;
@@ -1327,7 +1366,11 @@ class AiChatParserService {
     // Pattern 3: Number at the end of line like "Rolade sapi 1000g 35"
     final endNumberMatch = RegExp(r'\b(\d+([.,]\d+)*)$').firstMatch(line);
     if (endNumberMatch != null) {
-      qty = _parseIndonesianNumber(endNumberMatch.group(1) ?? '1');
+      final rawQty = _parseIndonesianNumber(endNumberMatch.group(1) ?? '1');
+      if (rawQty >= 100000 || RegExp(r'\b\d{7,}\b').hasMatch(endNumberMatch.group(1) ?? '')) {
+        return _QtyUnitResolution(qty: 1.0, unit: 'pack', cleanedText: '', hadExplicitQty: false);
+      }
+      qty = rawQty;
       cleaned = line.substring(0, endNumberMatch.start).trim();
       final lowerCleaned = cleaned.toLowerCase();
       if (lowerCleaned.endsWith('roll') || lowerCleaned.endsWith('rol')) {
@@ -2136,6 +2179,44 @@ class AiChatParserService {
   bool _isIgnoredLine(String line) {
     final lower = line.toLowerCase().trim();
     if (_isInstructionOrScheduleLine(line)) return true;
+
+    // Ignore letterhead, fax, tel, contact info, invoice meta
+    if (lower.contains('fiva solo food') ||
+        lower.contains('putra fiva') ||
+        lower.contains('meat supply') ||
+        lower.startsWith('fax') ||
+        lower.startsWith('tel:') ||
+        lower.startsWith('telp') ||
+        lower.startsWith('phone') ||
+        lower.startsWith('alamat') ||
+        lower.startsWith('kepada') ||
+        lower.startsWith('no invoice') ||
+        lower.startsWith('tanggal pengiriman') ||
+        lower.startsWith('tgl pengiriman') ||
+        lower.startsWith('tgl kirim')) {
+      return true;
+    }
+
+    // Ignore invoice table headers & footers & totals
+    if (lower.contains('nama barang') ||
+        lower.contains('subtotal') ||
+        lower.contains('sub total') ||
+        lower.contains('grand total') ||
+        lower.contains('total rp') ||
+        lower.contains('diterima oleh') ||
+        lower.contains('diterima olah') ||
+        lower.contains('ditortlma') ||
+        lower.contains('hormat kami') ||
+        lower.contains('jatibening') ||
+        lower.contains('bekasi') ||
+        lower.contains('pembangunan ii')) {
+      return true;
+    }
+
+    // Ignore OCR noise with mostly punctuation/symbols (e.g. "— ——— ———", "---", "| ----- EC")
+    final cleanAlphaNum = lower.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (cleanAlphaNum.length <= 1) return true;
+
     return lower.startsWith('waalaikumsalam') ||
         lower.startsWith('assalamualaikum') ||
         lower.startsWith('pagi ') ||

@@ -216,6 +216,24 @@ class _WaGatewayViewState extends State<WaGatewayView> {
         final draft = drafts[dIdx];
         if (draft.items.isEmpty) continue;
 
+        // Safety Guard: Cegah PO sampah OCR / nomor fax terbaca kuantiti (> 500 Jt atau > 20.000 pcs)
+        if (draft.grandTotal > 500000000 || draft.items.any((it) => it.qtyPcs > 20000)) {
+          debugPrint('[AI PARSER SAFETY GUARD] ⛔ GrandTotal Rp ${draft.grandTotal} atau kuantiti melebihi batas wajar (> Rp 500 Jt atau > 20.000 pcs). Auto-PO dialihkan ke review.');
+          await _firebaseService.updateIncomingPoChatStatus(chat.id, 'review_needed');
+          await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
+            'dismissReason': 'KUANTITI_ATAU_TOTAL_DI_LUAR_BATAS_WAJAR',
+          }).catchError((_) {});
+          if (!isAuto && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⚠️ Kuantiti atau Grand Total di luar batas wajar (> Rp 500 Jt). Butuh verifikasi manual.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+          return;
+        }
+
         // Resolve or Auto-Register Customer for THIS draft
         Customer targetCustomer;
         if (draft.customerId.isNotEmpty) {

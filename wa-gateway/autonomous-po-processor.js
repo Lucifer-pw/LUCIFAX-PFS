@@ -138,6 +138,10 @@ class AutonomousPoProcessor {
     for (let i = 0; i < Math.min(lines.length, 3); i++) {
       const lineClean = lines[i].replace(/[^a-zA-Z0-9\s]/g, ' ').trim().toLowerCase();
       if (!lineClean || lineClean.length < 2) continue;
+      // Skip jika line adalah header, kontak, nomor fax, atau invoice
+      if (/^(fax|tel|telp|phone|hp|wa|alamat|kepada|no\s*invoice|tgl|tanggal|subtotal|grand\s*total)/i.test(lineClean)) continue;
+      const validLetters = lineClean.replace(/[^a-zA-Z]/g, '');
+      if (validLetters.length < 2) continue;
 
       // Cek rule alias
       const ruleMatch = custRules.find(r => {
@@ -161,6 +165,8 @@ class AutonomousPoProcessor {
       // Cek nama customer / alias langsung dengan proteksi kata pendek
       const isSafeCustomerMatch = (targetName, queryLine) => {
         if (!targetName || !queryLine || queryLine.length < 3) return false;
+        const validQueryLetters = queryLine.replace(/[^a-zA-Z]/g, '');
+        if (validQueryLetters.length < 3) return false;
         if (targetName === queryLine) return true;
         if (queryLine.includes(targetName)) return true;
         // targetName mengandung queryLine HANYA jika queryLine >= 4 huruf dan cocok kata utuh
@@ -697,12 +703,19 @@ class AutonomousPoProcessor {
     const items = [];
     for (const line of lines) {
       const lower = line.toLowerCase();
-      // Skip instruksi / sapaan / header toko
+      // Skip instruksi / sapaan / header toko / nomor surat / footer OCR
       if (lower.startsWith('krm') || lower.startsWith('kirim') || lower.startsWith('kirimkan') ||
           lower.startsWith('pengiriman') || lower.startsWith('salam') || lower.startsWith('pagi') ||
           lower.startsWith('siang') || lower.startsWith('catatan') || lower.startsWith('note') ||
           lower.startsWith('nb:') || lower.startsWith('jadwal') || lower.startsWith('titip') ||
-          lower.startsWith('masuk erp') || lower.startsWith('faktur')) {
+          lower.startsWith('masuk erp') || lower.startsWith('faktur') ||
+          lower.startsWith('fax') || lower.startsWith('tel') || lower.startsWith('phone') ||
+          lower.startsWith('hp') || lower.startsWith('wa') || lower.startsWith('alamat') ||
+          lower.startsWith('kepada') || lower.startsWith('no invoice') || lower.startsWith('tgl') ||
+          lower.startsWith('tanggal') || lower.startsWith('nama barang') || lower.startsWith('subtotal') ||
+          lower.startsWith('sub total') || lower.startsWith('grand total') || lower.startsWith('total rp') ||
+          lower.startsWith('diterima') || lower.startsWith('hormat kami') || lower.startsWith('fiva') ||
+          lower.startsWith('putra fiva') || lower.startsWith('meat supply')) {
         continue;
       }
       // Skip makanan / minuman matang restoran (ayam bakar, nasi goreng, es teh, dll)
@@ -726,6 +739,12 @@ class AutonomousPoProcessor {
     const bonusNote = this.applyBonusRules(items, customer);
 
     const grandTotal = items.reduce((sum, it) => sum + (it.subtotal || 0), 0);
+
+    // Safety guard: Cegah grand total / kuantiti tidak wajar (> Rp 500 Jt atau > 20.000 pcs)
+    if (grandTotal > 500000000 || items.some(it => (it.qty || 0) > 20000)) {
+      console.warn(`[AUTONOMOUS PO] ⛔ GrandTotal Rp ${grandTotal} atau kuantiti melebihi batas wajar (> Rp 500 Jt atau > 20.000 pcs). Auto-PO dibatalkan.`);
+      return null;
+    }
 
     // Clean up internal fields
     for (const item of items) {
@@ -765,7 +784,7 @@ class AutonomousPoProcessor {
         qtyUnit = 'karton';
       }
     }
-    if (qtyInput <= 0) return null;
+    if (qtyInput <= 0 || qtyInput >= 50000 || (qtyUnit === 'karton' && qtyInput > 5000)) return null;
 
     // Bersihkan teks barang
     let cleanProd = lower
@@ -774,6 +793,9 @@ class AutonomousPoProcessor {
       .replace(/\.\.\..*$/, '')
       .replace(/[^a-zA-Z0-9\s]/g, ' ')
       .trim();
+
+    const validLetters = cleanProd.replace(/[^a-zA-Z]/g, '');
+    if (validLetters.length < 3) return null;
 
     // Normalisasi slang
     cleanProd = cleanProd
