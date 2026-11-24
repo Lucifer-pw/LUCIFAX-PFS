@@ -472,15 +472,22 @@ class WavisInteractiveEngine {
     }
 
     // 5. Cek Pola Sapaan / Menu Bantuan / Pertanyaan Kemampuan AI
-    const greetingPattern = /\b(halo|hello|pagi|siang|sore|malam|assalamualaikum|bantuan|menu|wavis|hai|bisa apa|bisa bantu apa|tugasmu|fungsi wavis|siapa kamu|fitur|cara pakai|standby)\b/i;
-    if (greetingPattern.test(clean)) {
-      return 'GREETING_MENU';
-    }
+    // PENTING: Jangan anggap sapaan/fallback jika pesan mengandung kuantiti barang atau instruksi kirim PO!
+    const hasOrderPattern = /\b\d+\s*(?:k|ktn|karton|dus|box|bal|roll|rol|pack|pak|pcs|bj|biji)\b/i.test(clean) ||
+      /\.{2,}\s*\d+\s*[a-z]/i.test(clean) ||
+      /\b(?:krm|kirim)\s+(?:bsk|besok|hari\s*ini|pagi|siang|sore)\b/i.test(clean);
 
-    // 6. Cek Pola Pertanyaan / Instruksi Operasional Umum (Smart Fallback agar bot TIDAK BISU)
-    const inquiryPattern = /\b(apakah|bisa|bisakah|tolong|bagaimana|gimana|tampilkan|kirimkan|cek|info|tanya|minta|adakah)\b|\?/i;
-    if (inquiryPattern.test(clean)) {
-      return 'SMART_FALLBACK';
+    if (!hasOrderPattern) {
+      const greetingPattern = /\b(halo|hello|pagi|siang|sore|malam|assalamualaikum|bantuan|menu|wavis|hai|bisa apa|bisa bantu apa|tugasmu|fungsi wavis|siapa kamu|fitur|cara pakai|standby)\b/i;
+      if (greetingPattern.test(clean)) {
+        return 'GREETING_MENU';
+      }
+
+      // 6. Cek Pola Pertanyaan / Instruksi Operasional Umum (Smart Fallback agar bot TIDAK BISU)
+      const inquiryPattern = /\b(apakah|bisa|bisakah|tolong|bagaimana|gimana|tampilkan|kirimkan|cek|info|tanya|minta|adakah)\b|\?/i;
+      if (inquiryPattern.test(clean)) {
+        return 'SMART_FALLBACK';
+      }
     }
 
     return 'UNKNOWN';

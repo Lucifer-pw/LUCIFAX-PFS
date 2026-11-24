@@ -1246,6 +1246,133 @@ class FirebaseAdapter {
       console.warn('[MARK CHAT PROCESSED ERROR]', e.message);
     }
   }
+
+  async findRecentDuplicateTransaction(customerId, customerName, items, windowHours = 24) {
+    try {
+      if (!Array.isArray(items) || items.length === 0) return null;
+      const cleanCustId = (customerId || '').trim().toLowerCase();
+      const cleanCust = (customerName || '').trim().toLowerCase();
+      const now = Date.now();
+      const maxAgeMs = windowHours * 60 * 60 * 1000;
+
+      let snap = null;
+      if (this.mode === 'admin' && this.db) {
+        snap = await this.db.collection('transactions')
+          .orderBy('createdAt', 'desc')
+          .limit(100)
+          .get();
+      } else if (this.mode === 'client' && this.clientDb) {
+        const { collection, getDocs, query, orderBy, limit } = this.clientSdk;
+        snap = await getDocs(query(collection(this.clientDb, 'transactions'), orderBy('createdAt', 'desc'), limit(100)));
+      }
+
+      if (!snap || snap.empty) return null;
+
+      // Filter item inti (non-bonus) dari pesanan baru
+      const coreNewItems = items.filter(it => !it.isBonus);
+      if (coreNewItems.length === 0) return null;
+
+      for (const docSnap of snap.docs) {
+        const trData = docSnap.data();
+        let trCreatedAt = 0;
+        if (trData.createdAt) {
+          if (typeof trData.createdAt.toDate === 'function') trCreatedAt = trData.createdAt.toDate().getTime();
+          else if (trData.createdAt._seconds) trCreatedAt = trData.createdAt._seconds * 1000;
+          else trCreatedAt = new Date(trData.createdAt).getTime();
+        } else if (trData.date) {
+          if (typeof trData.date.toDate === 'function') trCreatedAt = trData.date.toDate().getTime();
+          else if (trData.date._seconds) trCreatedAt = trData.date._seconds * 1000;
+          else trCreatedAt = new Date(trData.date).getTime();
+        }
+
+        if (!trCreatedAt || isNaN(trCreatedAt)) continue;
+        const ageMs = now - trCreatedAt;
+        if (ageMs > maxAgeMs || ageMs < -60000) continue; // di luar rentang waktu windowHours
+
+        // Cek kecocokan customer
+        const docCustId = (trData.customerId || '').toString().trim().toLowerCase();
+        const cName = (trData.customerName || '').toString().trim().toLowerCase();
+        const cAlias = (trData.aliasName || '').toString().trim().toLowerCase();
+
+        let matchCust = false;
+        if (cleanCustId && docCustId) {
+          matchCust = (docCustId === cleanCustId || docCustId.replace(/g/g, '') === cleanCustId.replace(/g/g, ''));
+        }
+        if (!matchCust && cleanCust) {
+          matchCust = (cName === cleanCust || cAlias === cleanCust || (cName && cleanCust.includes(cName)) || (cAlias && cleanCust.includes(cAlias)));
+        }
+
+        if (!matchCust) continue;
+
+        // Bandingkan item barang dan kuantiti
+        const trItems = (trData.items || []).filter(it => !it.isBonus);
+        if (trItems.length !== coreNewItems.length) continue;
+
+        let allItemsMatch = true;
+        for (const newItem of coreNewItems) {
+          const nPId = (newItem.productId || '').trim().toLowerCase();
+          const nPName = (newItem.productName || '').trim().toLowerCase();
+          const nQty = Number(newItem.qty) || 0;
+
+          const matchedExisting = trItems.find(ex => {
+            const exPId = (ex.productId || '').trim().toLowerCase();
+            const exPName = (ex.productName || '').trim().toLowerCase();
+            const exQty = Number(ex.qty) || 0;
+
+            const isSameProduct = (nPId && exPId && nPId === exPId) || (nPName && exPName && nPName === exPName);
+            return isSameProduct && exQty === nQty;
+          });
+
+          if (!matchedExisting) {
+            allItemsMatch = false;
+            break;
+          }
+        }
+
+        if (allItemsMatch) {
+          const diffHours = Math.max(0.1, (now - trCreatedAt) / (60 * 60 * 1000));
+          return {
+            invoiceNo: trData.invoiceNo || docSnap.id,
+            createdAt: trCreatedAt,
+            diffHours: Math.round(diffHours * 10) / 10,
+            customerName: trData.customerName || trData.aliasName || customerName,
+            grandTotal: trData.grandTotal || 0,
+            items: trData.items
+          };
+        }
+      }
+
+      return null;
+    } catch (err) {
+      console.warn('[DEDUP CHECK ERROR]', err.message);
+      return null;
+    }
+  }
+
+  async markChatAsDuplicate(chatDocId, existingInvoiceNo, reason = 'Pesanan kembar identik dalam 24 jam') {
+    if (!chatDocId) return;
+    const invStr = String(existingInvoiceNo).replace(/\D/g, '');
+    const updatePayload = {
+      status: 'processed',
+      createdInvoiceNo: invStr,
+      createdTransactionId: invStr,
+      isDuplicate: true,
+      duplicateReason: reason,
+      processedAt: new Date()
+    };
+    try {
+      if (this.mode === 'admin') {
+        await this.db.collection('incoming_po_chats').doc(chatDocId).update(updatePayload);
+        await this.db.collection('incoming_wa_orders').doc(chatDocId).set(updatePayload, { merge: true }).catch(() => {});
+      } else if (this.mode === 'client') {
+        const { doc, updateDoc, setDoc } = this.clientSdk;
+        await updateDoc(doc(this.clientDb, 'incoming_po_chats', chatDocId), updatePayload);
+        await setDoc(doc(this.clientDb, 'incoming_wa_orders', chatDocId), updatePayload, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('[MARK CHAT DUPLICATE ERROR]', e.message);
+    }
+  }
 }
 
 module.exports = new FirebaseAdapter();

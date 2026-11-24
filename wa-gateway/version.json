@@ -1,18 +1,18 @@
 {
-  "gateway": "3.3.325",
+  "gateway": "3.3.326",
   "files": {
-    "server.js": "3.3.325",
-    "autonomous-po-processor.js": "3.3.325",
-    "wavis-interactive-engine.js": "3.3.313",
+    "server.js": "3.3.326",
+    "autonomous-po-processor.js": "3.3.326",
+    "wavis-interactive-engine.js": "3.3.326",
     "wavis-pdf-generator.js": "3.3.301",
-    "firebase-adapter.js": "3.3.316",
+    "firebase-adapter.js": "3.3.326",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
     "bank-slip-parser.js": "3.3.315",
-    "test-wavis-engine.js": "3.3.315",
+    "test-wavis-engine.js": "3.3.326",
     "update.sh": "3.3.312",
     "update.bat": "3.3.310"
   },
-  "updatedAt": "2026-11-24",
-  "changelog": "v3.3.325: Deteksi otomatis faktur fisik Fiva & instruksi masuk ERP (Bukan PO), proteksi anti-nomor fax/telepon terbaca kuantiti, dan batasan batas wajar pesanan."
+  "updatedAt": "2026-11-25",
+  "changelog": "v3.3.326: Prioritas intent PO anti-sapaan (instruksi kirim 'KRM BSK PAGI' tidak dibajak salam), perbaikan subtotal diskon riwayat pelanggan di Termux, dan proteksi deduplikasi faktur kembar 24 jam."
 }

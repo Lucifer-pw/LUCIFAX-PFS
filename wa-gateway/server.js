@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.325'; // v3.3.325 - Deteksi faktur fisik Fiva & instruksi masuk ERP sebagai non-PO, filter anti-nomor telepon/fax
+const GATEWAY_VERSION = '3.3.326'; // v3.3.326 - Prioritas intent PO anti-sapaan ("pagi/siang"), diskon riwayat pelanggan di Termux, & proteksi deduplikasi faktur ganda 24 jam
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
@@ -464,9 +464,15 @@ async function flushMessageBuffer(bufferKey) {
     console.log(`[L-W.A.V.I.S CLASSIFY] 🧠 Intent dari ${buf.senderName}: ${interactiveIntent}`);
 
     // Jika pesan terklasifikasi sebagai interaksi L-W.A.V.I.S, cegah agar TIDAK dianggap sebagai ORDER_PO!
+    // KECUALI jika intent adalah GREETING_MENU / SMART_FALLBACK dan pesan aslinya mengandung order (ORDER_PO)
     if (interactiveIntent !== 'UNKNOWN') {
-      chatPayload.messageType = 'INTERACTIVE_QUERY';
-      chatPayload.isOrderDetected = false;
+      if (['GREETING_MENU', 'SMART_FALLBACK'].includes(interactiveIntent) && (buf.isOrderDetected || chatPayload.isOrderDetected)) {
+        console.log(`[L-W.A.V.I.S GUARD] 🛡️ Pesan dari ${buf.senderName} mengandung pesanan (ORDER_PO), abaikan intent ${interactiveIntent} agar pesanan tidak dibajak!`);
+        interactiveIntent = 'UNKNOWN';
+      } else {
+        chatPayload.messageType = 'INTERACTIVE_QUERY';
+        chatPayload.isOrderDetected = false;
+      }
     }
   }
 

@@ -105,6 +105,8 @@ const intentTests = [
   { text: 'halo mas', expected: 'GREETING_MENU' },
   { text: 'pagi admin', expected: 'GREETING_MENU' },
   { text: 'assalamualaikum wavis', expected: 'GREETING_MENU' },
+  { text: 'Nine ff GKJ\nBERES COKLAT 24S....19 K\nKRM BSK PAGI', expected: 'UNKNOWN' },
+  { text: 'Pagi admin, pesan:\nBRS MERAH 24S 10 ktn\nKirim siang', expected: 'UNKNOWN' },
   { text: 'apakah kamu bisa menampilkan data faktur atau invoice nomer 693', expected: 'QUERY_INVOICE' },
   { text: 'faktur 699', expected: 'QUERY_INVOICE' },
   { text: 'kirimkan data PO nomor invoice 697', expected: 'QUERY_INVOICE' },
@@ -1178,6 +1180,77 @@ Status : Dalam Proses
   console.log('  ✓ 20A PASSED: Struk BCA m-banking diekstraksi sempurna (Rekening, Nama Pemilik CV, Berita, Nominal)!');
 
   console.log('✅ Test 20 PASSED: Bank Slip Multi-Layer Sender Extractor Terverifikasi 100%!');
+
+  // --- Test 21: Rumus Subtotal Diskon Otonom Termux (Nine FF 5% Discount) ---
+  console.log('\n--- Test 21: Rumus Diskon Subtotal Otonom Termux ---');
+  const AutonomousPoProcessor = require('./autonomous-po-processor');
+  const mockAdapter = {
+    cachedCustomers: [],
+    cachedProducts: [],
+    cachedRules: []
+  };
+  const autoProcessor = new AutonomousPoProcessor(mockAdapter);
+
+  const mockProd = { id: 'BRS-24', productName: 'BRS COKLAT 24S 500 G', price: 30688, isiKarton: 15, sizeGrams: 500 };
+  const mockHistoryPricing = { price: 30688, discountPercent: 5, discountAmount: 0, invoiceNo: '691' };
+  const orderItemDraft = autoProcessor.buildTransactionItem(mockProd, 19, 'karton', mockHistoryPricing);
+
+  assert.strictEqual(orderItemDraft.qty, 285, 'Total qty harus 285 pcs (19 x 15)');
+  assert.strictEqual(orderItemDraft.price, 30688, 'Harga unit harus Rp 30.688');
+  assert.strictEqual(orderItemDraft.discountPercent, 5, 'Diskon persen harus 5%');
+  assert.strictEqual(orderItemDraft.subtotal, 8308776, 'Subtotal bersih dengan diskon 5% harus Rp 8.308.776 (bukan 8.746.080)');
+  console.log(`  ✓ 21A PASSED: Subtotal dengan diskon 5%: 285 pcs @ Rp 30.688 (Disc 5%) = Rp ${orderItemDraft.subtotal.toLocaleString('id-ID')} (Tepat Rp 8.308.776)!`);
+  console.log('✅ Test 21 PASSED: Perhitungan Diskon Riwayat Pelanggan Otonom Terverifikasi 100%!');
+
+  // --- Test 22: Logika Deduplikasi Pesanan Kembar 24 Jam ---
+  console.log('\n--- Test 22: Logika Deduplikasi Pesanan Kembar 24 Jam ---');
+  const firebaseAdapter = require('./firebase-adapter');
+  const testItems = [
+    { productId: 'BRS-24', productName: 'BRS COKLAT 24S 500 G', qty: 285, price: 30688, isBonus: false }
+  ];
+
+  // Mock snap transactions untuk pengujian findRecentDuplicateTransaction
+  const originalMode = firebaseAdapter.mode;
+  const originalDb = firebaseAdapter.db;
+  firebaseAdapter.mode = 'admin';
+  firebaseAdapter.db = {
+    collection: (colName) => ({
+      orderBy: () => ({
+        limit: () => ({
+          get: async () => ({
+            empty: false,
+            docs: [
+              {
+                id: '702',
+                data: () => ({
+                  invoiceNo: '702',
+                  customerId: 'AB003',
+                  customerName: 'ANISA APRILIANA',
+                  aliasName: 'NINE FF',
+                  createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 jam lalu
+                  items: [
+                    { productId: 'BRS-24', productName: 'BRS COKLAT 24S 500 G', qty: 285, price: 30688, isBonus: false }
+                  ],
+                  grandTotal: 8308776
+                })
+              }
+            ]
+          })
+        })
+      })
+    })
+  };
+
+  const dupResult = await firebaseAdapter.findRecentDuplicateTransaction('AB003', 'NINE FF', testItems, 24);
+  assert(dupResult !== null, 'Harus mendeteksi duplikasi pesanan');
+  assert.strictEqual(dupResult.invoiceNo, '702', 'Harus mendeteksi kembar dengan Invoice #702');
+  assert.strictEqual(dupResult.diffHours, 5, 'Jeda waktu harus 5 jam');
+  console.log(`  ✓ 22A PASSED: Berhasil mendeteksi duplikat pesanan dengan Invoice #${dupResult.invoiceNo} (${dupResult.diffHours} jam lalu)!`);
+
+  // Pulihkan adapter
+  firebaseAdapter.mode = originalMode;
+  firebaseAdapter.db = originalDb;
+  console.log('✅ Test 22 PASSED: Logika Proteksi Anti-Duplikasi 24 Jam Terverifikasi 100%!');
 
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

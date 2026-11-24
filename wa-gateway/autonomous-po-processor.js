@@ -351,7 +351,12 @@ class AutonomousPoProcessor {
       pricingSource = `HISTORY (Invoice #${historyPricing.invoiceNo || '?'})`;
     }
 
-    const subtotal = Math.round(qtyPcs * price);
+    let subtotal = Math.round(qtyPcs * price);
+    if (discountPercent > 0) {
+      subtotal = Math.round(qtyPcs * price * (1 - discountPercent / 100));
+    } else if (discountAmount > 0) {
+      subtotal = Math.max(0, Math.round(qtyPcs * price - (discountAmount * qtyPcs)));
+    }
     const productName = prod.productName || prod.name || 'PRODUK';
 
     console.log(`[AUTONOMOUS PO]   📦 ${productName} | Qty: ${qtyPcs} pcs (${qtyInput} ${qtyUnit}) | Harga: Rp ${price.toLocaleString('id-ID')} [${pricingSource}] | Diskon: ${discountPercent}% | Subtotal: Rp ${subtotal.toLocaleString('id-ID')}`);
@@ -1009,6 +1014,45 @@ class AutonomousPoProcessor {
       const chatDocRecheck = await this.firebaseAdapter.getChatDocument(chatDocId);
       if (chatDocRecheck && chatDocRecheck.status === 'processed') {
         console.log(`[AUTONOMOUS PO] ⏭️ Chat ${chatDocId} sudah diproses saat parsing. SKIP.`);
+        return null;
+      }
+
+      // 2b. DEDUPLICATION GUARD (Rentang 12 - 24 Jam):
+      // Cegah pembuatan faktur ganda jika customer yang sama memesan barang & kuantiti yang identik persis dalam 24 jam
+      const duplicateTr = await this.firebaseAdapter.findRecentDuplicateTransaction(
+        parsed.customer.id,
+        parsed.customer.customerName || parsed.customer.aliasName,
+        parsed.items,
+        24 // Window 24 jam (1 hari operasional)
+      );
+
+      if (duplicateTr) {
+        console.log(`[AUTONOMOUS PO DEDUP] 🛡️⚠️ Terdeteksi pesanan kembar identik untuk ${parsed.customer.customerName} (Invoice #${duplicateTr.invoiceNo} dibuat ${duplicateTr.diffHours} jam lalu). Auto-PO baru DIBATALKAN untuk mencegah duplikasi faktur.`);
+
+        if (chatDocId) {
+          await this.firebaseAdapter.markChatAsDuplicate(
+            chatDocId,
+            duplicateTr.invoiceNo,
+            `Pesanan kembar identik dengan Faktur #${duplicateTr.invoiceNo} (${duplicateTr.diffHours} jam lalu)`
+          );
+        }
+
+        // Kirim konfirmasi informatif ke WhatsApp agar pengirim tahu pesanannya sudah masuk di faktur sebelumnya
+        if (this.wavisEngine && chatPayload.senderJid) {
+          try {
+            const senderGreeting = chatPayload.senderName || 'Kak';
+            const dedupReply = `🤖 *[L-W.A.V.I.S: NOTIFIKASI PESANAN]*\n` +
+              `_(Lucifax-Whatsapp Assistant Vision Interactive System)_\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `Halo ${senderGreeting}! 👋\n\n` +
+              `Pesanan ini identik dengan pesanan yang sudah tercatat sebelumnya di *Faktur #${duplicateTr.invoiceNo}* (${duplicateTr.diffHours} jam lalu).\n\n` +
+              `✅ *Faktur #${duplicateTr.invoiceNo}* sudah aman di antrean kasir kami dan tidak dibuatkan faktur dobel ya. Terima kasih! 🙏😊`;
+            await this.wavisEngine.sendReply(chatPayload.senderJid, dedupReply, null, chatPayload.senderPhone);
+          } catch (replyErr) {
+            console.warn('[DEDUP REPLY WARN]', replyErr.message);
+          }
+        }
+
         return null;
       }
 
