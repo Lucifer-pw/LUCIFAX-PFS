@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.329'; // v3.3.329 - Perbaikan Remote Print faktur non-angka (#SA69, #LA) & Penggabungan Invoice ke Lampiran (LA) yang ada
+const GATEWAY_VERSION = '3.3.330'; // v3.3.330 - Dynamic green arrow down & cost decrease indicator di Billing Report
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

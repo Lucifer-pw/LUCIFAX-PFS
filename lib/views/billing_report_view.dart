@@ -17,6 +17,7 @@ class BillingReportView extends StatefulWidget {
 class _BillingReportViewState extends State<BillingReportView> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   StreamSubscription? _subscription;
+  List<BillingCost> _allCosts = [];
   List<BillingCost> _costs = [];
   bool _isLoading = true;
 
@@ -31,6 +32,7 @@ class _BillingReportViewState extends State<BillingReportView> {
   static const Color gcpBlue = Color(0xFF3B82F6);
   static const Color gcpBlueLink = Color(0xFF8AB4F8);
   static const Color gcpRed = Color(0xFFF28B82); // Red for cost increase
+  static const Color gcpGreen = Color(0xFF81C995); // Green for cost decrease
   static const Color gcpTextPrimary = Color(0xFFE8EAED);
   static const Color gcpTextSecondary = Color(0xFF9AA0A6);
 
@@ -93,6 +95,7 @@ class _BillingReportViewState extends State<BillingReportView> {
           c.date.year == _selectedYear && c.date.month == _selectedMonth).toList();
 
       setState(() {
+        _allCosts = allCosts;
         _costs = currentMonthCosts;
         _isLoading = false;
       });
@@ -388,7 +391,31 @@ class _BillingReportViewState extends State<BillingReportView> {
 
     final double totalCost = dailyCosts.values.fold(0.0, (sum, v) => sum + v);
 
-    // Exact or calculated values matching Google Cloud screenshot
+    int prevMonth = _selectedMonth - 1;
+    int prevYear = _selectedYear;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear = _selectedYear - 1;
+    }
+
+    double getMonthTotal(int y, int m) {
+      if (y == 2026 && m == 8) {
+        final Map<int, double> map = Map.from(_defaultAugust2026Costs);
+        for (var c in _allCosts.where((c) => c.date.year == y && c.date.month == m)) {
+          if (c.amount <= 0) {
+            map.remove(c.date.day);
+          } else {
+            map[c.date.day] = c.amount;
+          }
+        }
+        return map.values.fold(0.0, (sum, v) => sum + v);
+      }
+      final costs = _allCosts.where((c) => c.date.year == y && c.date.month == m);
+      return costs.fold(0.0, (sum, c) => sum + (c.amount > 0 ? c.amount : 0.0));
+    }
+
+    final double prevMonthTotal = getMonthTotal(prevYear, prevMonth);
+
     double forecastedCost = 0.0;
     double diffAmount = 0.0;
     double pctChange = 0.0;
@@ -396,16 +423,24 @@ class _BillingReportViewState extends State<BillingReportView> {
     double forecastPctChange = 0.0;
 
     if (totalCost > 0) {
-      final ratio = totalCost / 86528.45;
-      diffAmount = 40324.70 * ratio;
-      pctChange = 126.49 * ratio;
+      if (prevMonthTotal > 0) {
+        diffAmount = totalCost - prevMonthTotal;
+        pctChange = ((totalCost - prevMonthTotal) / prevMonthTotal) * 100.0;
+      } else {
+        diffAmount = totalCost;
+        pctChange = 100.0;
+      }
 
-      // Right Side: Forecasted Total including PPN 11%
-      final double taxAmount = (totalCost * 0.11).roundToDouble();
-      forecastedCost = totalCost + taxAmount;
-      final forecastRatio = forecastedCost / 86528.45;
-      forecastDiffAmount = 40298.53 * forecastRatio;
-      forecastPctChange = 126.42 * forecastRatio;
+      // Forecast based on elapsed days in current month
+      final double dailyAverage = maxDay > 0 ? (totalCost / maxDay) : 0.0;
+      forecastedCost = dailyAverage * daysInMonth;
+      if (prevMonthTotal > 0) {
+        forecastDiffAmount = forecastedCost - prevMonthTotal;
+        forecastPctChange = ((forecastedCost - prevMonthTotal) / prevMonthTotal) * 100.0;
+      } else {
+        forecastDiffAmount = forecastedCost;
+        forecastPctChange = 100.0;
+      }
     }
 
     return Scaffold(
@@ -993,11 +1028,19 @@ class _BillingReportViewState extends State<BillingReportView> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.arrow_upward, color: gcpRed, size: 13),
+                              Icon(
+                                diffAmount >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                                color: diffAmount >= 0 ? gcpRed : gcpGreen,
+                                size: 13,
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 '${pctChange.abs().toStringAsFixed(2)}%',
-                                style: const TextStyle(color: gcpRed, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  color: diffAmount >= 0 ? gcpRed : gcpGreen,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1054,11 +1097,19 @@ class _BillingReportViewState extends State<BillingReportView> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.arrow_upward, color: gcpRed, size: 13),
+                              Icon(
+                                forecastDiffAmount >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                                color: forecastDiffAmount >= 0 ? gcpRed : gcpGreen,
+                                size: 13,
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 '${forecastPctChange.abs().toStringAsFixed(2)}%',
-                                style: const TextStyle(color: gcpRed, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  color: forecastDiffAmount >= 0 ? gcpRed : gcpGreen,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1370,9 +1421,20 @@ class _BillingReportViewState extends State<BillingReportView> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Icon(Icons.arrow_upward, color: gcpRed, size: 12),
+                      Icon(
+                        pctChange >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                        color: pctChange >= 0 ? gcpRed : gcpGreen,
+                        size: 12,
+                      ),
                       const SizedBox(width: 2),
-                      Text('${pctChange.toStringAsFixed(0)}%', style: const TextStyle(color: gcpRed, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      Text(
+                        '${pctChange.abs().toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          color: pctChange >= 0 ? gcpRed : gcpGreen,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),

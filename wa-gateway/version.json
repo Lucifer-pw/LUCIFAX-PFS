@@ -1,18 +1,18 @@
 {
-  "gateway": "3.3.329",
+  "gateway": "3.3.330",
   "files": {
-    "server.js": "3.3.329",
+    "server.js": "3.3.330",
     "autonomous-po-processor.js": "3.3.326",
     "wavis-interactive-engine.js": "3.3.326",
     "wavis-pdf-generator.js": "3.3.301",
     "firebase-adapter.js": "3.3.326",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
-    "bank-slip-parser.js": "3.3.329",
+    "bank-slip-parser.js": "3.3.330",
     "test-wavis-engine.js": "3.3.329",
     "update.sh": "3.3.312",
     "update.bat": "3.3.310"
   },
-  "updatedAt": "2026-11-25",
-  "changelog": "v3.3.329: Perbaikan remote print cetak kantor untuk nomor faktur non-angka (seperti #SA69 dan #LA2), serta penambahan fitur penggabungan/penyisipan invoice ke faktur Lampiran (LA) yang sudah ada."
+  "updatedAt": "2026-11-26",
+  "changelog": "v3.3.330: Penyesuaian indikator dinamis panah hijau turun & perhitungan penurunan biaya di Billing Report."
 }
