@@ -123,7 +123,7 @@ class FirebaseService {
       final docRef = _db.collection('remote_print_commands').doc();
       final cmd = RemotePrintCommand(
         id: docRef.id,
-        invoiceNo: invoiceNo is int ? invoiceNo : int.tryParse(invoiceNo.toString()) ?? 0,
+        invoiceNo: invoiceNo.toString().replaceAll('#', '').trim(),
         customerName: customerName,
         deliveryDate: deliveryDate,
         printedDeliveryDate: printedDeliveryDate,
@@ -959,6 +959,178 @@ class FirebaseService {
     }
 
     return createdLa;
+  }
+
+  // Add / Merge source transactions into an existing Lampiran (LA) transaction
+  Future<model_tr.Transaction> addTransactionsToExistingLampiran({
+    required String targetLaInvoiceNo,
+    required List<model_tr.Transaction> newSourceTransactions,
+    String? customNote,
+  }) async {
+    final cleanLaNo = targetLaInvoiceNo.replaceAll('#', '').trim().toUpperCase();
+    final laDocRef = _db.collection('transactions').doc(cleanLaNo);
+    final laSnap = await laDocRef.get();
+    if (!laSnap.exists || laSnap.data() == null) {
+      throw Exception("Invoice Lampiran #$cleanLaNo tidak ditemukan di database!");
+    }
+
+    final existingLa = model_tr.Transaction.fromMap(laSnap.data()!, laSnap.id);
+
+    // 1. Get existing source invoice numbers
+    final existingSourceIds = getResolvedSourceInvoices(existingLa);
+
+    // 2. Collect all new source invoice numbers
+    final newSourceIds = newSourceTransactions
+        .map((t) => t.invoiceNo.toString().replaceAll('#', '').trim())
+        .where((e) => e.isNotEmpty && !existingSourceIds.contains(e))
+        .toList();
+
+    if (newSourceIds.isEmpty) {
+      return existingLa; // Nothing new to add
+    }
+
+    // 3. Combined source IDs
+    final List<String> combinedSourceIds = [...existingSourceIds, ...newSourceIds];
+
+    // 4. Fetch all existing source transactions if possible to do a clean full aggregation
+    final List<model_tr.Transaction> allSourceTransactions = [];
+    for (var srcId in existingSourceIds) {
+      try {
+        final srcSnap = await _db.collection('transactions').doc(srcId).get();
+        if (srcSnap.exists && srcSnap.data() != null) {
+          allSourceTransactions.add(model_tr.Transaction.fromMap(srcSnap.data()!, srcSnap.id));
+        }
+      } catch (e) {
+        debugPrint("Error fetching existing source invoice $srcId: $e");
+      }
+    }
+
+    final Map<String, model_tr.TransactionItem> mergedMap = {};
+
+    if (allSourceTransactions.length == existingSourceIds.length) {
+      // Clean full aggregation from all individual source transactions
+      final allToAggregate = [...allSourceTransactions, ...newSourceTransactions];
+      for (var src in allToAggregate) {
+        for (var item in src.items) {
+          final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+          if (mergedMap.containsKey(key)) {
+            final existing = mergedMap[key]!;
+            final double combinedQty = existing.qty + item.qty;
+            final double combinedSubtotal = existing.subtotal + item.subtotal;
+            mergedMap[key] = model_tr.TransactionItem(
+              productId: existing.productId.isNotEmpty ? existing.productId : item.productId,
+              productName: existing.productName,
+              price: existing.price > 0 ? existing.price : item.price,
+              qty: combinedQty,
+              discountPercent: existing.discountPercent,
+              subtotal: combinedSubtotal,
+              sizeGrams: existing.sizeGrams > 0 ? existing.sizeGrams : item.sizeGrams,
+              isBonus: existing.isBonus && item.isBonus,
+            );
+          } else {
+            mergedMap[key] = model_tr.TransactionItem(
+              productId: item.productId,
+              productName: item.productName,
+              price: item.price,
+              qty: item.qty,
+              discountPercent: item.discountPercent,
+              subtotal: item.subtotal,
+              sizeGrams: item.sizeGrams,
+              isBonus: item.isBonus,
+            );
+          }
+        }
+      }
+    } else {
+      // Baseline with existing items from existingLa, then add newSourceTransactions items
+      for (var item in existingLa.items) {
+        final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+        mergedMap[key] = item;
+      }
+      for (var src in newSourceTransactions) {
+        for (var item in src.items) {
+          final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+          if (mergedMap.containsKey(key)) {
+            final existing = mergedMap[key]!;
+            final double combinedQty = existing.qty + item.qty;
+            final double combinedSubtotal = existing.subtotal + item.subtotal;
+            mergedMap[key] = model_tr.TransactionItem(
+              productId: existing.productId.isNotEmpty ? existing.productId : item.productId,
+              productName: existing.productName,
+              price: existing.price > 0 ? existing.price : item.price,
+              qty: combinedQty,
+              discountPercent: existing.discountPercent,
+              subtotal: combinedSubtotal,
+              sizeGrams: existing.sizeGrams > 0 ? existing.sizeGrams : item.sizeGrams,
+              isBonus: existing.isBonus && item.isBonus,
+            );
+          } else {
+            mergedMap[key] = model_tr.TransactionItem(
+              productId: item.productId,
+              productName: item.productName,
+              price: item.price,
+              qty: item.qty,
+              discountPercent: item.discountPercent,
+              subtotal: item.subtotal,
+              sizeGrams: item.sizeGrams,
+              isBonus: item.isBonus,
+            );
+          }
+        }
+      }
+    }
+
+    final mergedItems = mergedMap.values.toList();
+    final double calculatedGrandTotal = mergedItems.fold(0.0, (sum, i) => sum + i.subtotal);
+
+    final String finalNote = (customNote != null && customNote.trim().isNotEmpty)
+        ? customNote.trim()
+        : 'Lampiran penggabungan dari Invoice: #${combinedSourceIds.join(', #')}';
+
+    // 5. Update Firestore in a batch
+    final batch = _db.batch();
+    batch.update(laDocRef, {
+      'sourceInvoices': combinedSourceIds,
+      'items': mergedItems.map((e) => e.toMap()).toList(),
+      'grandTotal': calculatedGrandTotal,
+      'note': finalNote,
+    });
+
+    for (var srcId in newSourceIds) {
+      batch.update(_db.collection('transactions').doc(srcId), {
+        'lampiranInvoiceNo': cleanLaNo,
+      });
+    }
+
+    await batch.commit();
+
+    return model_tr.Transaction(
+      invoiceNo: existingLa.invoiceNo,
+      customerId: existingLa.customerId,
+      customerName: existingLa.customerName,
+      aliasName: existingLa.aliasName,
+      date: existingLa.date,
+      deliveryDate: existingLa.deliveryDate,
+      city: existingLa.city,
+      province: existingLa.province,
+      country: existingLa.country,
+      items: mergedItems,
+      grandTotal: calculatedGrandTotal,
+      note: finalNote,
+      status: existingLa.status,
+      statusTransfer: existingLa.statusTransfer,
+      transferDate: existingLa.transferDate,
+      erpSyncDate: existingLa.erpSyncDate,
+      isLocked: existingLa.isLocked,
+      hasReturn: existingLa.hasReturn,
+      returnAmount: existingLa.returnAmount,
+      createdBy: existingLa.createdBy,
+      createdAt: existingLa.createdAt,
+      sourceInvoices: combinedSourceIds,
+      lampiranInvoiceNo: existingLa.lampiranInvoiceNo,
+      isLampiran: true,
+      transferReceiptUrl: existingLa.transferReceiptUrl,
+    );
   }
 
   Future<void> updateTransactionTransferStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {

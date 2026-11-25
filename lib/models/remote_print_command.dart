@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RemotePrintCommand {
   final String id;
-  final int invoiceNo;
+  final String invoiceNo;
   final String customerName;
   final DateTime? deliveryDate;
   final DateTime printedDeliveryDate;
@@ -63,9 +63,7 @@ class RemotePrintCommand {
 
     return RemotePrintCommand(
       id: doc.id,
-      invoiceNo: data['invoiceNo'] is int
-          ? data['invoiceNo']
-          : int.tryParse(data['invoiceNo']?.toString() ?? '0') ?? 0,
+      invoiceNo: data['invoiceNo']?.toString() ?? '0',
       customerName: data['customerName']?.toString() ?? '',
       deliveryDate: parseNullableDate(data['deliveryDate']),
       printedDeliveryDate: parseDate(data['printedDeliveryDate']),

@@ -51,7 +51,7 @@ class ShellView extends StatefulWidget {
 
 class _ShellViewState extends State<ShellView> {
   int _currentIndex = 0;
-  String _appVersion = '3.3.328';
+  String _appVersion = '3.3.329';
   String _menuSearchQuery = '';
   final TextEditingController _menuSearchController = TextEditingController();
   StreamSubscription<List<RemotePrintCommand>>? _printCommandSubscription;
@@ -279,19 +279,30 @@ class _ShellViewState extends State<ShellView> {
       // 2. Find transaction model
       final trProvider = Provider.of<TransactionProvider>(context, listen: false);
       model_tr.Transaction? tr;
+      final cleanCmdNo = cmd.invoiceNo.toString().replaceAll('#', '').trim().toUpperCase();
       try {
-        tr = trProvider.transactions.firstWhere((t) => t.invoiceNo.toString() == cmd.invoiceNo.toString());
+        tr = trProvider.transactions.firstWhere((t) {
+          final tClean = t.invoiceNo.toString().replaceAll('#', '').trim().toUpperCase();
+          return tClean == cleanCmdNo;
+        });
       } catch (_) {}
 
       if (tr == null) {
-        // Fallback: query from Firestore directly if not found in memory
-        final snap = await FirebaseFirestore.instance
-            .collection('transactions')
-            .where('invoiceNo', isEqualTo: cmd.invoiceNo)
-            .limit(1)
-            .get();
-        if (snap.docs.isNotEmpty) {
-          tr = model_tr.Transaction.fromMap(snap.docs.first.data(), snap.docs.first.id);
+        // Fallback 1: check doc id directly first
+        final docSnap = await FirebaseFirestore.instance.collection('transactions').doc(cleanCmdNo).get();
+        if (docSnap.exists && docSnap.data() != null) {
+          tr = model_tr.Transaction.fromMap(docSnap.data()!, docSnap.id);
+        } else {
+          // Fallback 2: Check query by string and int
+          final intVal = int.tryParse(cleanCmdNo);
+          final snap = await FirebaseFirestore.instance
+              .collection('transactions')
+              .where('invoiceNo', whereIn: intVal != null ? [cleanCmdNo, intVal] : [cleanCmdNo])
+              .limit(1)
+              .get();
+          if (snap.docs.isNotEmpty) {
+            tr = model_tr.Transaction.fromMap(snap.docs.first.data(), snap.docs.first.id);
+          }
         }
       }
 
@@ -393,13 +404,13 @@ class _ShellViewState extends State<ShellView> {
         });
       } else if (mounted) {
         setState(() {
-          _appVersion = '3.3.328';
+          _appVersion = '3.3.329';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _appVersion = '3.3.328';
+          _appVersion = '3.3.329';
         });
       }
     }

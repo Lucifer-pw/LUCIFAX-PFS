@@ -293,6 +293,20 @@ class TransactionProvider extends ChangeNotifier {
     return tr;
   }
 
+  Future<model_tr.Transaction> addTransactionsToExistingLampiran({
+    required String targetLaInvoiceNo,
+    required List<model_tr.Transaction> newSourceTransactions,
+    String? customNote,
+  }) async {
+    final tr = await _dbService.addTransactionsToExistingLampiran(
+      targetLaInvoiceNo: targetLaInvoiceNo,
+      newSourceTransactions: newSourceTransactions,
+      customNote: customNote,
+    );
+    notifyListeners();
+    return tr;
+  }
+
   Future<void> updatePaymentStatus(dynamic invoiceNo, String status, DateTime? transferDate) async {
     await _dbService.updateTransactionTransferStatus(invoiceNo, status, transferDate);
   }

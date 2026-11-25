@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.328'; // v3.3.328 - Deteksi mutasi rekening koran / switching CR & BRImo (TRF [NAMA])
+const BSP_VERSION = '3.3.329'; // v3.3.329 - Deteksi mutasi rekening koran / switching CR & BRImo (TRF [NAMA])
 
 /**
  * Robust Currency Parser

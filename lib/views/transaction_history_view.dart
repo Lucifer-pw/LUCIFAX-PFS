@@ -1747,6 +1747,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
     final isMobile = MediaQuery.of(context).size.width < 600;
     final recProv = Provider.of<ReceivableProvider>(context, listen: false);
     final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+    final bool isThisLa = tr.isLampiran || invClean.toUpperCase().startsWith('LA') || tr.sourceInvoices.isNotEmpty;
+    final String linkedLaNo = tr.lampiranInvoiceNo.replaceAll('#', '').trim();
     Receivable? matchedRec;
     try {
       matchedRec = recProv.receivables.firstWhere((r) => r.noInvoice == invClean);
@@ -2645,6 +2647,37 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (isThisLa) ...[
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showManageLaSourcesDialog(tr);
+                    },
+                    icon: const Icon(Icons.playlist_add_rounded, color: Colors.purpleAccent, size: 18),
+                    label: const Text('Kelola / Tambah Asal', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.purpleAccent, width: 1.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ] else if (linkedLaNo.isEmpty) ...[
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showCreateLampiranDialog([tr]);
+                    },
+                    icon: const Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 18),
+                    label: const Text('Gabung ke Lampiran (LA)', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
               ],
               OutlinedButton.icon(
                 onPressed: () => _showPrintDialog(tr, isDownload: true),
@@ -5118,7 +5151,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
       },
     );
   }
-  void _showCreateLampiranDialog(List<model_tr.Transaction> selectedList) {
+  void _showCreateLampiranDialog(List<model_tr.Transaction> selectedList, {model_tr.Transaction? initialTargetLa}) {
     if (selectedList.isEmpty) return;
 
     final firstTr = selectedList.first;
@@ -5131,67 +5164,90 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         ? customerInfo['secondLine']!.replaceAll(RegExp(r'[\(\)]'), '').trim()
         : firstTr.customerName;
 
-    // Aggregate items across all selected transactions
-    final Map<String, model_tr.TransactionItem> aggregatedMap = {};
-    for (var tr in selectedList) {
-      for (var item in tr.items) {
-        final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
-        if (aggregatedMap.containsKey(key)) {
-          final existing = aggregatedMap[key]!;
-          aggregatedMap[key] = model_tr.TransactionItem(
-            productId: existing.productId.isNotEmpty ? existing.productId : item.productId,
-            productName: existing.productName,
-            price: existing.price > 0 ? existing.price : item.price,
-            qty: existing.qty + item.qty,
-            discountPercent: existing.discountPercent,
-            subtotal: existing.subtotal + item.subtotal,
-            sizeGrams: existing.sizeGrams > 0 ? existing.sizeGrams : item.sizeGrams,
-            isBonus: existing.isBonus && item.isBonus,
-          );
-        } else {
-          aggregatedMap[key] = model_tr.TransactionItem(
-            productId: item.productId,
-            productName: item.productName,
-            price: item.price,
-            qty: item.qty,
-            discountPercent: item.discountPercent,
-            subtotal: item.subtotal,
-            sizeGrams: item.sizeGrams,
-            isBonus: item.isBonus,
-          );
-        }
-      }
-    }
-
-    final aggregatedItems = aggregatedMap.values.toList();
-    final double totalKg = aggregatedItems.fold(0.0, (sum, i) => sum + i.weightKg);
-
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     final prodMap = {for (var p in productProvider.products) p.name.toLowerCase().trim(): p};
     final prodCodeMap = {for (var p in productProvider.products) p.kodeInduk.toLowerCase().trim(): p};
     final prodIdMap = {for (var p in productProvider.products) p.id: p};
 
-    double totalKarton = 0.0;
-    for (var item in aggregatedItems) {
-      Product? product = prodMap[item.productName.toLowerCase().trim()] ??
-          prodCodeMap[item.productId.toLowerCase().trim()] ??
-          prodIdMap[item.productId];
-      final isiKarton = product?.isiKarton ?? 0;
-      if (isiKarton > 0 && item.qty > 0) {
-        totalKarton += (item.qty / isiKarton);
+    // Find all existing LA transactions of this customer
+    final availableLaList = trProvider.transactions.where((t) {
+      final tClean = t.invoiceNo.toString().replaceAll('#', '').trim().toUpperCase();
+      final isLa = t.isLampiran || tClean.startsWith('LA') || t.sourceInvoices.isNotEmpty;
+      if (!isLa) return false;
+      if (t.customerId.isNotEmpty && firstTr.customerId.isNotEmpty) {
+        return t.customerId == firstTr.customerId;
+      }
+      return t.customerName.toLowerCase().trim() == firstTr.customerName.toLowerCase().trim();
+    }).toList();
+
+    String lampiranMode = (initialTargetLa != null || availableLaList.isNotEmpty) ? 'APPEND' : 'NEW';
+    String? selectedTargetLaNo = initialTargetLa != null
+        ? initialTargetLa.invoiceNo.toString().replaceAll('#', '').trim()
+        : (availableLaList.isNotEmpty ? availableLaList.first.invoiceNo.toString().replaceAll('#', '').trim() : null);
+
+    model_tr.Transaction? getTargetLa() {
+      if (selectedTargetLaNo == null || availableLaList.isEmpty) return null;
+      try {
+        return availableLaList.firstWhere(
+          (t) => t.invoiceNo.toString().replaceAll('#', '').trim().toUpperCase() == selectedTargetLaNo!.toUpperCase(),
+        );
+      } catch (_) {
+        return availableLaList.first;
       }
     }
-    final totalKartonStr = (totalKarton % 1 == 0 ? totalKarton.toInt().toString() : totalKarton.toStringAsFixed(1)) + ' Ktn';
 
+    // Helper to aggregate items from a list of transactions
+    List<model_tr.TransactionItem> aggregateItemsFromList(List<model_tr.Transaction> trList) {
+      final Map<String, model_tr.TransactionItem> aggregatedMap = {};
+      for (var tr in trList) {
+        for (var item in tr.items) {
+          final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+          if (aggregatedMap.containsKey(key)) {
+            final existing = aggregatedMap[key]!;
+            aggregatedMap[key] = model_tr.TransactionItem(
+              productId: existing.productId.isNotEmpty ? existing.productId : item.productId,
+              productName: existing.productName,
+              price: existing.price > 0 ? existing.price : item.price,
+              qty: existing.qty + item.qty,
+              discountPercent: existing.discountPercent,
+              subtotal: existing.subtotal + item.subtotal,
+              sizeGrams: existing.sizeGrams > 0 ? existing.sizeGrams : item.sizeGrams,
+              isBonus: existing.isBonus && item.isBonus,
+            );
+          } else {
+            aggregatedMap[key] = model_tr.TransactionItem(
+              productId: item.productId,
+              productName: item.productName,
+              price: item.price,
+              qty: item.qty,
+              discountPercent: item.discountPercent,
+              subtotal: item.subtotal,
+              sizeGrams: item.sizeGrams,
+              isBonus: item.isBonus,
+            );
+          }
+        }
+      }
+      return aggregatedMap.values.toList();
+    }
+
+    final newItemsOnly = aggregateItemsFromList(selectedList);
+
+    // Initial note setup
     final sourceInvoiceListStr = selectedList.map((t) => '#${t.invoiceNo}').join(', ');
+    final targetLaInit = getTargetLa();
+    final existingSourceIdsInit = targetLaInit != null ? _firebaseService.getResolvedSourceInvoices(targetLaInit) : <String>[];
+    final combinedSourceIdsInit = {...existingSourceIdsInit, ...selectedList.map((t) => t.invoiceNo.toString().replaceAll('#', '').trim())}.toList();
+
     final noteController = TextEditingController(
-      text: 'Lampiran penggabungan dari Invoice: $sourceInvoiceListStr',
+      text: lampiranMode == 'APPEND' && targetLaInit != null
+          ? 'Lampiran penggabungan dari Invoice: #${combinedSourceIdsInit.join(', #')}'
+          : 'Lampiran penggabungan dari Invoice: $sourceInvoiceListStr',
     );
     final customLaController = TextEditingController();
     DateTime chosenDeliveryDate = DateTime.now();
-
-    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     showDialog(
       context: context,
@@ -5199,6 +5255,67 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
         bool isSaving = false;
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final targetLa = getTargetLa();
+            final existingSourceIds = targetLa != null ? _firebaseService.getResolvedSourceInvoices(targetLa) : <String>[];
+            final combinedSourceIds = {...existingSourceIds, ...selectedList.map((t) => t.invoiceNo.toString().replaceAll('#', '').trim())}.toList();
+
+            // Compute display items depending on mode
+            final List<model_tr.TransactionItem> displayItems;
+            if (lampiranMode == 'APPEND' && targetLa != null) {
+              final Map<String, model_tr.TransactionItem> mergedMap = {};
+              for (var item in targetLa.items) {
+                final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+                mergedMap[key] = item;
+              }
+              for (var tr in selectedList) {
+                for (var item in tr.items) {
+                  final key = item.productId.isNotEmpty ? item.productId.trim().toLowerCase() : item.productName.trim().toLowerCase();
+                  if (mergedMap.containsKey(key)) {
+                    final existing = mergedMap[key]!;
+                    mergedMap[key] = model_tr.TransactionItem(
+                      productId: existing.productId.isNotEmpty ? existing.productId : item.productId,
+                      productName: existing.productName,
+                      price: existing.price > 0 ? existing.price : item.price,
+                      qty: existing.qty + item.qty,
+                      discountPercent: existing.discountPercent,
+                      subtotal: existing.subtotal + item.subtotal,
+                      sizeGrams: existing.sizeGrams > 0 ? existing.sizeGrams : item.sizeGrams,
+                      isBonus: existing.isBonus && item.isBonus,
+                    );
+                  } else {
+                    mergedMap[key] = model_tr.TransactionItem(
+                      productId: item.productId,
+                      productName: item.productName,
+                      price: item.price,
+                      qty: item.qty,
+                      discountPercent: item.discountPercent,
+                      subtotal: item.subtotal,
+                      sizeGrams: item.sizeGrams,
+                      isBonus: item.isBonus,
+                    );
+                  }
+                }
+              }
+              displayItems = mergedMap.values.toList();
+            } else {
+              displayItems = newItemsOnly;
+            }
+
+            final double displayTotalKg = displayItems.fold(0.0, (sum, i) => sum + i.weightKg);
+            double displayTotalKarton = 0.0;
+            for (var item in displayItems) {
+              Product? product = prodMap[item.productName.toLowerCase().trim()] ??
+                  prodCodeMap[item.productId.toLowerCase().trim()] ??
+                  prodIdMap[item.productId];
+              final isiKarton = product?.isiKarton ?? 0;
+              if (isiKarton > 0 && item.qty > 0) {
+                displayTotalKarton += (item.qty / isiKarton);
+              }
+            }
+            final displayTotalKartonStr = (displayTotalKarton % 1 == 0
+                ? displayTotalKarton.toInt().toString()
+                : displayTotalKarton.toStringAsFixed(1)) + ' Ktn';
+
             return AlertDialog(
               backgroundColor: const Color(0xFF1E293B),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -5210,13 +5327,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       color: Colors.cyanAccent.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 22),
+                    child: Icon(
+                      lampiranMode == 'APPEND' ? Icons.link_rounded : Icons.description_rounded,
+                      color: Colors.cyanAccent,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Buat Invoice Lampiran (LA)',
-                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      lampiranMode == 'APPEND'
+                          ? 'Gabungkan Invoice ke Lampiran #${selectedTargetLaNo ?? ""}'
+                          : 'Buat Invoice Lampiran (LA) Baru',
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -5228,6 +5351,95 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Mode Selector (if existing LA exists)
+                      if (availableLaList.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      lampiranMode = 'APPEND';
+                                      final tgt = getTargetLa();
+                                      final ex = tgt != null ? _firebaseService.getResolvedSourceInvoices(tgt) : <String>[];
+                                      final comb = {...ex, ...selectedList.map((t) => t.invoiceNo.toString().replaceAll('#', '').trim())}.toList();
+                                      noteController.text = 'Lampiran penggabungan dari Invoice: #${comb.join(', #')}';
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9),
+                                    decoration: BoxDecoration(
+                                      color: lampiranMode == 'APPEND' ? Colors.cyanAccent.withOpacity(0.2) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: lampiranMode == 'APPEND' ? Border.all(color: Colors.cyanAccent) : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.link_rounded, size: 16, color: lampiranMode == 'APPEND' ? Colors.cyanAccent : Colors.white60),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Tambahkan ke LA yang Ada (${availableLaList.length})',
+                                          style: TextStyle(
+                                            color: lampiranMode == 'APPEND' ? Colors.cyanAccent : Colors.white60,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      lampiranMode = 'NEW';
+                                      noteController.text = 'Lampiran penggabungan dari Invoice: $sourceInvoiceListStr';
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9),
+                                    decoration: BoxDecoration(
+                                      color: lampiranMode == 'NEW' ? Colors.cyanAccent.withOpacity(0.2) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: lampiranMode == 'NEW' ? Border.all(color: Colors.cyanAccent) : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.add_circle_outline_rounded, size: 16, color: lampiranMode == 'NEW' ? Colors.cyanAccent : Colors.white60),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Buat Invoice LA Baru',
+                                          style: TextStyle(
+                                            color: lampiranMode == 'NEW' ? Colors.cyanAccent : Colors.white60,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
                       // Info Header
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -5241,7 +5453,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             Row(
                               children: [
                                 const SizedBox(
-                                  width: 120,
+                                  width: 140,
                                   child: Text('Pelanggan:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
                                 ),
                                 Expanded(
@@ -5256,8 +5468,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             Row(
                               children: [
                                 const SizedBox(
-                                  width: 120,
-                                  child: Text('Invoice Asal:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                  width: 140,
+                                  child: Text('Invoice Yang Dipilih:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
                                 ),
                                 Expanded(
                                   child: Text(
@@ -5267,60 +5479,145 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                 ),
                               ],
                             ),
+                            if (lampiranMode == 'APPEND' && targetLa != null) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 140,
+                                    child: Text('Invoice Tergabung:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      '${combinedSourceIds.length} Invoice (#${combinedSourceIds.join(', #')})',
+                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
                       const SizedBox(height: 14),
 
-                      // Counter Auto & Custom LA
-                      FutureBuilder<String>(
-                        future: _firebaseService.peekNextInvoiceNo(type: 'LA'),
-                        builder: (context, snapshot) {
-                          final autoLaNo = snapshot.data ?? 'LA1';
-                          return Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.cyanAccent.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.auto_awesome_rounded, color: Colors.cyanAccent, size: 16),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Nomor Invoice Lampiran Berikutnya: $autoLaNo',
-                                      style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: customLaController,
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                                  decoration: InputDecoration(
-                                    labelText: 'No. Invoice LA Custom (Opsional - default: $autoLaNo)',
-                                    labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
-                                    hintText: 'Biarkan kosong untuk otomatis $autoLaNo',
-                                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                    isDense: true,
-                                    filled: true,
-                                    fillColor: const Color(0xFF0F172A),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      // Mode specifics
+                      if (lampiranMode == 'APPEND' && availableLaList.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.cyanAccent.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.link_rounded, color: Colors.cyanAccent, size: 16),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Pilih Invoice Lampiran Tujuan:',
+                                    style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                value: selectedTargetLaNo,
+                                dropdownColor: const Color(0xFF0F172A),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0xFF0F172A),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 14),
+                                items: availableLaList.map((la) {
+                                  final cleanNo = la.invoiceNo.toString().replaceAll('#', '').trim();
+                                  final itemCount = la.items.length;
+                                  final kg = la.items.fold(0.0, (s, i) => s + i.weightKg).toStringAsFixed(1);
+                                  return DropdownMenuItem<String>(
+                                    value: cleanNo,
+                                    child: Text(
+                                      '#$cleanNo (Saat ini: $itemCount item, $kg Kg)',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      selectedTargetLaNo = val;
+                                      final tgt = getTargetLa();
+                                      final ex = tgt != null ? _firebaseService.getResolvedSourceInvoices(tgt) : <String>[];
+                                      final comb = {...ex, ...selectedList.map((t) => t.invoiceNo.toString().replaceAll('#', '').trim())}.toList();
+                                      noteController.text = 'Lampiran penggabungan dari Invoice: #${comb.join(', #')}';
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ] else ...[
+                        // Counter Auto & Custom LA
+                        FutureBuilder<String>(
+                          future: _firebaseService.peekNextInvoiceNo(type: 'LA'),
+                          builder: (context, snapshot) {
+                            final autoLaNo = snapshot.data ?? 'LA1';
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.cyanAccent.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.auto_awesome_rounded, color: Colors.cyanAccent, size: 16),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Nomor Invoice Lampiran Berikutnya: $autoLaNo',
+                                        style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    controller: customLaController,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    decoration: InputDecoration(
+                                      labelText: 'No. Invoice LA Custom (Opsional - default: $autoLaNo)',
+                                      labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                                      hintText: 'Biarkan kosong untuk otomatis $autoLaNo',
+                                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                      isDense: true,
+                                      filled: true,
+                                      fillColor: const Color(0xFF0F172A),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                      ],
 
                       // Aggregated Table Items
-                      const Text('Rincian Total Barang Gabungan:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        lampiranMode == 'APPEND'
+                            ? 'Pratinjau Total Barang Gabungan di #${selectedTargetLaNo ?? "LA"}:'
+                            : 'Rincian Total Barang Gabungan:',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
                       const SizedBox(height: 8),
                       Container(
                         constraints: const BoxConstraints(maxHeight: 220),
@@ -5352,7 +5649,7 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                                   Padding(padding: EdgeInsets.all(8), child: Text('Total Kg', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11), textAlign: TextAlign.right)),
                                 ],
                               ),
-                              ...aggregatedItems.asMap().entries.map((entry) {
+                              ...displayItems.asMap().entries.map((entry) {
                                 final idx = entry.key;
                                 final item = entry.value;
                                 Product? p = prodMap[item.productName.toLowerCase().trim()] ??
@@ -5393,8 +5690,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Total: ${aggregatedItems.length} Jenis Barang ($totalKartonStr)', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
-                            Text('Total Berat: ${totalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text('Total: ${displayItems.length} Jenis Barang ($displayTotalKartonStr)', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text('Total Berat: ${displayTotalKg.toStringAsFixed(2)} Kg', style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -5423,54 +5720,86 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   child: const Text('Batal', style: TextStyle(color: Colors.white70)),
                 ),
                 ElevatedButton.icon(
-                  onPressed: isSaving ? null : () async {
-                    setDialogState(() => isSaving = true);
-                    try {
-                      final userName = authProvider.currentUser?.name ?? authProvider.currentUser?.username ?? 'Admin';
-                      await trProvider.createMergedLampiranTransaction(
-                        sourceTransactions: selectedList,
-                        customerId: firstTr.customerId,
-                        customerName: firstTr.customerName,
-                        aliasName: firstTr.aliasName,
-                        deliveryDate: chosenDeliveryDate,
-                        city: firstTr.city,
-                        province: firstTr.province,
-                        country: firstTr.country,
-                        note: noteController.text.trim(),
-                        createdBy: userName,
-                        customLaNo: customLaController.text.trim().isNotEmpty ? customLaController.text.trim() : null,
-                      );
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() => isSaving = true);
+                          try {
+                            if (lampiranMode == 'APPEND') {
+                              final tgt = getTargetLa();
+                              if (tgt == null) throw Exception("Invoice Lampiran tujuan belum dipilih.");
+                              await trProvider.addTransactionsToExistingLampiran(
+                                targetLaInvoiceNo: tgt.invoiceNo.toString(),
+                                newSourceTransactions: selectedList,
+                                customNote: noteController.text.trim().isNotEmpty ? noteController.text.trim() : null,
+                              );
+                              if (mounted) {
+                                setState(() {
+                                  _selectedInvoiceNos.clear();
+                                });
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('🎉 Berhasil menambahkan invoice ke Invoice Lampiran #${tgt.invoiceNo}!'),
+                                    backgroundColor: Colors.teal,
+                                  ),
+                                );
+                              }
+                            } else {
+                              final userName = authProvider.currentUser?.name ?? authProvider.currentUser?.username ?? 'Admin';
+                              await trProvider.createMergedLampiranTransaction(
+                                sourceTransactions: selectedList,
+                                customerId: firstTr.customerId,
+                                customerName: firstTr.customerName,
+                                aliasName: firstTr.aliasName,
+                                deliveryDate: chosenDeliveryDate,
+                                city: firstTr.city,
+                                province: firstTr.province,
+                                country: firstTr.country,
+                                note: noteController.text.trim(),
+                                createdBy: userName,
+                                customLaNo: customLaController.text.trim().isNotEmpty ? customLaController.text.trim() : null,
+                              );
 
-                      if (mounted) {
-                        setState(() {
-                          _selectedInvoiceNos.clear();
-                        });
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('🎉 Berhasil membuat Invoice Lampiran (LA)!'),
-                            backgroundColor: Colors.teal,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      setDialogState(() => isSaving = false);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal membuat Invoice Lampiran: $e'), backgroundColor: Colors.redAccent),
-                        );
-                      }
-                    }
-                  },
+                              if (mounted) {
+                                setState(() {
+                                  _selectedInvoiceNos.clear();
+                                });
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🎉 Berhasil membuat Invoice Lampiran (LA)!'),
+                                    backgroundColor: Colors.teal,
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal memproses Invoice Lampiran: $e'), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                          }
+                        },
                   icon: isSaving
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                         )
-                      : const Icon(Icons.check_circle_rounded, size: 16, color: Colors.black),
+                      : Icon(
+                          lampiranMode == 'APPEND' ? Icons.link_rounded : Icons.check_circle_rounded,
+                          size: 16,
+                          color: Colors.black,
+                        ),
                   label: Text(
-                    isSaving ? 'Menyimpan Invoice...' : 'Simpan Invoice Lampiran',
+                    isSaving
+                        ? 'Menyimpan Invoice...'
+                        : (lampiranMode == 'APPEND'
+                            ? 'Gabungkan ke #${selectedTargetLaNo ?? "LA"}'
+                            : 'Simpan Invoice Lampiran'),
                     style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -5478,6 +5807,166 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     disabledBackgroundColor: Colors.cyanAccent.withOpacity(0.5),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showManageLaSourcesDialog(model_tr.Transaction laTr) {
+    final trProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final cleanLaNo = laTr.invoiceNo.toString().replaceAll('#', '').trim().toUpperCase();
+    final existingSourceIds = _firebaseService.getResolvedSourceInvoices(laTr);
+
+    // Find candidate invoices of the same customer not already linked to an LA
+    final candidateInvoices = trProvider.transactions.where((t) {
+      final tClean = t.invoiceNo.toString().replaceAll('#', '').trim().toUpperCase();
+      final isLa = t.isLampiran || tClean.startsWith('LA') || t.sourceInvoices.isNotEmpty;
+      if (isLa) return false;
+      if (existingSourceIds.contains(tClean)) return false;
+      if (t.lampiranInvoiceNo.isNotEmpty && t.lampiranInvoiceNo.toUpperCase() != cleanLaNo) return false;
+
+      // Match customer
+      if (t.customerId.isNotEmpty && laTr.customerId.isNotEmpty) {
+        return t.customerId == laTr.customerId;
+      }
+      return t.customerName.toLowerCase().trim() == laTr.customerName.toLowerCase().trim();
+    }).toList();
+
+    if (candidateInvoices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tidak ada invoice tambahan lain yang tersedia untuk ${laTr.aliasName.isNotEmpty ? laTr.aliasName : laTr.customerName}.'),
+          backgroundColor: Colors.orangeAccent,
+        ),
+      );
+      return;
+    }
+
+    final Set<String> toAddNos = {};
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.purpleAccent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.playlist_add_rounded, color: Colors.purpleAccent, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Kelola / Tambah Invoice ke #$cleanLaNo', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text('${laTr.aliasName.isNotEmpty ? laTr.aliasName : laTr.customerName}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 600,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Text(
+                        'Invoice asal saat ini (${existingSourceIds.length}): #${existingSourceIds.join(', #')}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Pilih Invoice yang Ingin Ditambahkan ke Lampiran Ini:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 250),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: candidateInvoices.length,
+                        separatorBuilder: (_, __) => const Divider(color: Color(0xFF334155), height: 1),
+                        itemBuilder: (context, idx) {
+                          final cand = candidateInvoices[idx];
+                          final candNo = cand.invoiceNo.toString().replaceAll('#', '').trim();
+                          final isChecked = toAddNos.contains(candNo);
+                          final totalKg = cand.items.fold(0.0, (s, i) => s + i.weightKg);
+
+                          return CheckboxListTile(
+                            value: isChecked,
+                            activeColor: Colors.cyanAccent,
+                            checkColor: Colors.black,
+                            title: Row(
+                              children: [
+                                Text('#$candNo', style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(width: 8),
+                                Text(DateFormat('dd-MM-yyyy').format(cand.date), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                const Spacer(),
+                                Text('${cand.items.length} item (${totalKg.toStringAsFixed(2)} Kg)', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                              ],
+                            ),
+                            subtitle: Text(
+                              cand.items.map((i) => '${i.qty.toInt()}x ${i.productName}').join(', '),
+                              style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onChanged: (val) {
+                              setDialogState(() {
+                                if (val == true) {
+                                  toAddNos.add(candNo);
+                                } else {
+                                  toAddNos.remove(candNo);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Batal', style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton.icon(
+                  onPressed: toAddNos.isEmpty
+                      ? null
+                      : () {
+                          Navigator.pop(ctx);
+                          final selectedToAdd = candidateInvoices.where((t) => toAddNos.contains(t.invoiceNo.toString().replaceAll('#', '').trim())).toList();
+                          _showCreateLampiranDialog(selectedToAdd, initialTargetLa: laTr);
+                        },
+                  icon: const Icon(Icons.link_rounded, size: 16),
+                  label: Text('Lanjutkan Gabung (${toAddNos.length})'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
                 ),
               ],
             );
@@ -6796,7 +7285,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                                   : null,
                                                               icon: Icon(Icons.description_rounded, size: 15, color: isSameCustomer ? Colors.black : Colors.white38),
                                                               label: Text(
-                                                                'Buat LA',
+                                                                'Buat / Gabung LA',
                                                                 style: TextStyle(
                                                                   color: isSameCustomer ? Colors.black : Colors.white38,
                                                                   fontWeight: FontWeight.bold,
@@ -6863,7 +7352,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                           : null,
                                                       icon: Icon(Icons.description_rounded, size: 16, color: isSameCustomer ? Colors.black : Colors.white38),
                                                       label: Text(
-                                                        'Buat LA',
+                                                        'Buat / Gabung LA',
                                                         style: TextStyle(
                                                           color: isSameCustomer ? Colors.black : Colors.white38,
                                                           fontWeight: FontWeight.bold,
@@ -7332,6 +7821,10 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                             _showReturnProductDialog(tr);
                                                           } else if (action == 'move_items') {
                                                             _showMoveInvoiceItemsDialog(tr);
+                                                          } else if (action == 'merge_la') {
+                                                            _showCreateLampiranDialog([tr]);
+                                                          } else if (action == 'manage_la_sources') {
+                                                            _showManageLaSourcesDialog(tr);
                                                           } else if (action == 'update_status') {
                                                             _showUnifiedUpdateStatusDialog(tr);
                                                           } else if (action == 'edit') {
@@ -7399,6 +7892,30 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                             ),
                                                           ),
                                                           if (!isKacab) ...[
+                                                            if (!isThisLa && linkedLaNo.isEmpty) ...[
+                                                              const PopupMenuItem(
+                                                                value: 'merge_la',
+                                                                child: Row(
+                                                                  children: [
+                                                                    Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 18),
+                                                                    SizedBox(width: 10),
+                                                                    Text('Gabung ke Lampiran (LA)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ],
+                                                            if (isThisLa) ...[
+                                                              const PopupMenuItem(
+                                                                value: 'manage_la_sources',
+                                                                child: Row(
+                                                                  children: [
+                                                                    Icon(Icons.playlist_add_rounded, color: Colors.purpleAccent, size: 18),
+                                                                    SizedBox(width: 10),
+                                                                    Text('Kelola / Tambah Invoice Asal', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ],
                                                             const PopupMenuItem(
                                                               value: 'move_items',
                                                               child: Row(

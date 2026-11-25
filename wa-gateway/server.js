@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.328'; // v3.3.328 - Deteksi otomatis mutasi rekening koran / switching CR & BRImo (TRF [NAMA]) untuk integrasi ESL piutang
+const GATEWAY_VERSION = '3.3.329'; // v3.3.329 - Perbaikan Remote Print faktur non-angka (#SA69, #LA) & Penggabungan Invoice ke Lampiran (LA) yang ada
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
