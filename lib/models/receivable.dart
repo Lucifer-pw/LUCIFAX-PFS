@@ -6,6 +6,7 @@ class PaymentRecord {
   final DateTime date;
   final String note;
   final String paymentMethod;
+  final String? receiptUrl;
   final DateTime? createdAt;
 
   PaymentRecord({
@@ -14,6 +15,7 @@ class PaymentRecord {
     required this.date,
     this.note = '',
     this.paymentMethod = 'Transfer',
+    this.receiptUrl,
     this.createdAt,
   });
 
@@ -37,6 +39,7 @@ class PaymentRecord {
       date: parsedDate,
       note: map['note'] ?? '',
       paymentMethod: map['paymentMethod'] ?? 'Transfer',
+      receiptUrl: (map['receiptUrl'] ?? map['proofUrl'] ?? map['imageUrl'])?.toString(),
       createdAt: parsedCreatedAt,
     );
   }
@@ -48,6 +51,7 @@ class PaymentRecord {
       'date': Timestamp.fromDate(date),
       'note': note,
       'paymentMethod': paymentMethod,
+      if (receiptUrl != null && receiptUrl!.isNotEmpty) 'receiptUrl': receiptUrl,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }
@@ -93,6 +97,14 @@ class Receivable {
     return (effectiveNominal - effectivePaidAmount).clamp(0.0, double.infinity);
   }
   bool get isPartiallyPaid => !isLunas && effectivePaidAmount > 0 && remainingAmount > 0;
+  String? get latestReceiptUrl {
+    for (final p in payments.reversed) {
+      if (p.receiptUrl != null && p.receiptUrl!.isNotEmpty) {
+        return p.receiptUrl;
+      }
+    }
+    return null;
+  }
 
   factory Receivable.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};

@@ -88,6 +88,7 @@ class Transaction {
   final List<String> sourceInvoices; // List of source invoice numbers if this is an LA invoice (e.g. ['SA58', 'SA59', ...])
   final String lampiranInvoiceNo; // Target LA invoice number if this invoice is merged into an LA (e.g. 'LA2')
   final bool isLampiran; // true if this invoice is an LA / Lampiran invoice
+  final String? transferReceiptUrl;
 
   Transaction({
     required this.invoiceNo,
@@ -116,6 +117,7 @@ class Transaction {
     this.sourceInvoices = const [],
     this.lampiranInvoiceNo = '',
     this.isLampiran = false,
+    this.transferReceiptUrl,
   });
 
   double get netGrandTotal => (grandTotal - returnAmount).clamp(0.0, double.infinity);
@@ -180,6 +182,7 @@ class Transaction {
       sourceInvoices: sourceInvoicesList,
       lampiranInvoiceNo: lampiranInvNo,
       isLampiran: isLampiran,
+      transferReceiptUrl: map['transferReceiptUrl'] ?? map['receiptUrl'],
     );
   }
 
@@ -211,6 +214,7 @@ class Transaction {
       'sourceInvoices': sourceInvoices,
       'lampiranInvoiceNo': lampiranInvoiceNo,
       'isLampiran': isLampiran,
+      if (transferReceiptUrl != null && transferReceiptUrl!.isNotEmpty) 'transferReceiptUrl': transferReceiptUrl,
     };
   }
 }

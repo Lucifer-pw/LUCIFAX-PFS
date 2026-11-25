@@ -1789,8 +1789,11 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                               ),
                                             ),
                                             DataCell(
-                                              InkWell(
-                                                onTap: () => _showPaymentDialog(
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  InkWell(
+                                                    onTap: () => _showPaymentDialog(
                                                   context,
                                                   provider,
                                                   item,
@@ -1851,7 +1854,28 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                                                   ),
                                                 ),
                                               ),
-                                            ),
+                                              if (item.latestReceiptUrl != null && item.latestReceiptUrl!.isNotEmpty) ...[
+                                                const SizedBox(width: 6),
+                                                Tooltip(
+                                                  message: 'Lihat Foto Bukti Transfer (Arsip Jateng)',
+                                                  child: InkWell(
+                                                    onTap: () => _showReceiptImageDialog(context, item.latestReceiptUrl!),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(5),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFF0284C7).withOpacity(0.2),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.6)),
+                                                      ),
+                                                      child: const Icon(Icons.photo_camera_rounded, color: Color(0xFF38BDF8), size: 14),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
                                             DataCell(
                                               PopupMenuButton<String>(
                                                 icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
@@ -2270,6 +2294,79 @@ class _ReceivableListViewState extends State<ReceivableListView> {
                       ),
                     ],
                   ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showReceiptImageDialog(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Foto Bukti Transfer (Arsip Jateng)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (c, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
+                      },
+                      errorBuilder: (c, err, st) {
+                        return const Center(
+                          child: Text('Gagal memuat gambar bukti transfer.', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF38BDF8)),
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('Tutup'),
                 ),
               ),
             ],

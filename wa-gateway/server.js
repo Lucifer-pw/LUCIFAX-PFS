@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.327'; // v3.3.327 - Deteksi otomatis mutasi rekening koran / switching CR & BRImo (TRF [NAMA]) untuk integrasi ESL piutang
+const GATEWAY_VERSION = '3.3.328'; // v3.3.328 - Deteksi otomatis mutasi rekening koran / switching CR & BRImo (TRF [NAMA]) untuk integrasi ESL piutang
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

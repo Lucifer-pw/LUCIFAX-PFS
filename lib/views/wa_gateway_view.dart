@@ -2845,7 +2845,19 @@ Kirim besok pagi ya pak bc''';
   DateTime _extractTransferDateTime(IncomingPoChat chat) {
     final rawDate = (chat.transferInfo?['rawDate'] ?? '').toString().trim();
     final rawOcr = (chat.transferInfo?['rawOcrText'] ?? chat.quotedOcrText ?? '').toString();
-    final combined = '$rawDate\n$rawOcr';
+    final combined = '$rawDate\n$rawOcr\n${chat.messageText}\n${chat.caption ?? ""}'.trim();
+
+    // 0. Prioritaskan rawDate yang sudah diekstrak parser struk jika valid (e.g. "24/11/2026")
+    if (rawDate.isNotEmpty) {
+      final rawDmy = RegExp(r'([0-3]?[0-9])[\/\-\.]([0-1]?[0-9])[\/\-\.]([0-9]{2,4})').firstMatch(rawDate);
+      if (rawDmy != null) {
+        final d = int.tryParse(rawDmy.group(1)!) ?? 1;
+        final m = int.tryParse(rawDmy.group(2)!) ?? 1;
+        var y = int.tryParse(rawDmy.group(3)!) ?? DateTime.now().year;
+        if (y < 100) y += 2000;
+        return DateTime(y, m, d, 12, 0, 0);
+      }
+    }
 
     // 1. Time matcher: "18:05:55" or "15:50:16" or "18:05"
     int hr = 12, min = 0, sec = 0;
@@ -2953,8 +2965,22 @@ Kirim besok pagi ya pak bc''';
       }
 
       final transferDateTime = _extractTransferDateTime(chat);
-      final double payAmount = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
-      final double effectivePay = payAmount > 0 ? payAmount : (effectiveNominal - currentPaid);
+      final double totalPayFromSlip = ((chat.transferInfo?['amount'] as num?) ?? 0).toDouble();
+      final double unpaidOnThisInv = (effectiveNominal - currentPaid).clamp(0.0, double.infinity);
+      double effectivePay = 0.0;
+      double excessBalance = 0.0;
+      if (totalPayFromSlip > 0) {
+        if (totalPayFromSlip >= unpaidOnThisInv && unpaidOnThisInv > 0) {
+          effectivePay = unpaidOnThisInv;
+          excessBalance = totalPayFromSlip - unpaidOnThisInv;
+        } else {
+          effectivePay = totalPayFromSlip;
+          excessBalance = 0.0;
+        }
+      } else {
+        effectivePay = unpaidOnThisInv;
+        excessBalance = 0.0;
+      }
       final double newPaidAmount = currentPaid + effectivePay;
       final bool willBeLunas = newPaidAmount >= (effectiveNominal - 1.0);
       final double remainingAfter = willBeLunas ? 0.0 : (effectiveNominal - newPaidAmount);
@@ -3004,13 +3030,28 @@ Kirim besok pagi ya pak bc''';
       }
 
       // 4. Update koleksi incoming_po_chats
+      final updatedTransferInfo = Map<String, dynamic>.from(chat.transferInfo ?? {});
+      if (excessBalance > 0) {
+        updatedTransferInfo['amount'] = excessBalance;
+        updatedTransferInfo['originalAmount'] = totalPayFromSlip;
+        updatedTransferInfo['allocatedInvoices'] = [
+          ...?((chat.transferInfo?['allocatedInvoices'] as List?) ?? []),
+          {
+            'invoiceNo': invClean,
+            'amount': effectivePay,
+            'settledAt': DateTime.now().toIso8601String(),
+          }
+        ];
+      }
+      final bool isSlipFullyUsed = excessBalance <= 0;
       await FirebaseFirestore.instance.collection('incoming_po_chats').doc(chat.id).update({
-        'status': 'processed',
-        'isPaymentApplied': true,
+        'status': isSlipFullyUsed ? 'processed' : 'pending',
+        'isPaymentApplied': isSlipFullyUsed,
         'messageType': 'TRANSFER_SLIP',
-        'matchedInvoiceNo': invClean,
+        'matchedInvoiceNo': isSlipFullyUsed ? invClean : null,
         'isPartialPayment': !willBeLunas,
-        'remainingAmount': remainingAfter,
+        'remainingAmount': excessBalance,
+        if (excessBalance > 0) 'transferInfo': updatedTransferInfo,
         'processedAt': FieldValue.serverTimestamp(),
       });
 
@@ -3025,6 +3066,16 @@ Kirim besok pagi ya pak bc''';
         final senderSlip = (info['senderNameFromSlip'] ?? '').toString().trim();
         if (senderSlip.isNotEmpty && senderSlip.length >= 3 && !RegExp(r'^\d+$').hasMatch(senderSlip)) {
           clues.add(senderSlip);
+        }
+
+        // Ekstrak pola mutasi bank: TRF [NAMA] (misal: "TRF ZULIANA")
+        final trfMatches = RegExp(r'\bTRF\s+([A-Za-z]{3,30})\b', caseSensitive: false).allMatches(rawOcr);
+        for (final tm in trfMatches) {
+          final name = tm.group(1)!.trim();
+          final up = name.toUpperCase();
+          if (!up.contains('BRI') && !up.contains('BCA') && !up.contains('MANDIRI') && !up.contains('BNI') && !up.contains('CR') && !up.contains('DB')) {
+            clues.add(name);
+          }
         }
 
         // B. Customer Hint dari parser
@@ -3116,6 +3167,21 @@ Kirim besok pagi ya pak bc''';
         }
       } catch (eslErr) {
         debugPrint('[ESL LEARNER WARNING] $eslErr');
+      }
+
+      if (excessBalance > 0 && mounted) {
+        final nextChat = chat.copyWith(
+          transferInfo: updatedTransferInfo,
+          remainingAmount: excessBalance,
+        );
+        _showExcessBalanceDialog(
+          context,
+          nextChat,
+          invClean,
+          effectivePay,
+          excessBalance,
+          custName,
+        );
       }
 
       if (mounted) {
@@ -5185,6 +5251,199 @@ Kirim besok pagi ya pak bc''';
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
       child: Text(label, style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  void _showExcessBalanceDialog(
+    BuildContext context,
+    IncomingPoChat chat,
+    String prevInvoiceNo,
+    double paidAmount,
+    double excessBalance,
+    String customerName,
+  ) {
+    final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return Dialog(
+          backgroundColor: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 550, maxHeight: 600),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF059669).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Faktur #$prevInvoiceNo Berhasil Lunas!', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text('Pelunasan: ${currencyFormatter.format(paidAmount)}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      onPressed: () => Navigator.pop(dialogCtx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.savings_rounded, color: Color(0xFF38BDF8), size: 24),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Sisa Saldo Transfer Tersedia:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                            Text(
+                              currencyFormatter.format(excessBalance),
+                              style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Tautkan sisa saldo ke faktur tertunggak $customerName lainnya:',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Consumer<ReceivableProvider>(
+                    builder: (ctx, recProv, _) {
+                      final candidates = recProv.receivables.where((r) {
+                        return !r.isLunas &&
+                               r.noInvoice.replaceAll('#', '').trim() != prevInvoiceNo &&
+                               (r.toko.toLowerCase().contains(customerName.toLowerCase()) || customerName.toLowerCase().contains(r.toko.toLowerCase()));
+                      }).toList();
+
+                      if (candidates.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text(
+                              'Tidak ada faktur tertunggak lainnya untuk pelanggan ini.\nSisa saldo disimpan pada struk di WA Gateway.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return ListView.separated(
+                        itemCount: candidates.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (c, idx) {
+                          final cand = candidates[idx];
+                          final isExact = (cand.nominal - excessBalance).abs() <= 100 || (cand.remainingAmount - excessBalance).abs() <= 100;
+
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isExact ? const Color(0xFF064E3B).withOpacity(0.4) : const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isExact ? const Color(0xFF10B981) : const Color(0xFF334155),
+                                width: isExact ? 1.5 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text('Faktur #${cand.noInvoice}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                          if (isExact) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF059669),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text('COCOK PERSIS DENGAN SISA', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        'Tagihan: ${currencyFormatter.format(cand.nominal)}'
+                                        '${cand.remainingAmount > 0 && cand.remainingAmount < cand.nominal ? " (Sisa: " + currencyFormatter.format(cand.remainingAmount) + ")" : ""}',
+                                        style: TextStyle(
+                                          color: isExact ? const Color(0xFF6EE7B7) : Colors.amberAccent,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isExact ? const Color(0xFF10B981) : const Color(0xFF0284C7),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(dialogCtx);
+                                    _confirmTransferPayment(chat, cand.noInvoice);
+                                  },
+                                  icon: const Icon(Icons.link_rounded, size: 14, color: Colors.white),
+                                  label: const Text('Tautkan Sisa', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(dialogCtx),
+                    child: const Text('Tutup (Tautkan Nanti)', style: TextStyle(color: Color(0xFF94A3B8))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
