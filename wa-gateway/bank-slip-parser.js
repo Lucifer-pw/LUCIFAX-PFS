@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.282'; // v3.3.282
+const BSP_VERSION = '3.3.327'; // v3.3.327 - Deteksi mutasi rekening koran / switching CR & BRImo (TRF [NAMA])
 
 /**
  * Robust Currency Parser
@@ -97,11 +97,11 @@ function parseBankReceipt(rawText) {
   // Bank name indicators
   const isBca = upper.includes('BCA') || upper.includes('KLIKBCA') || upper.includes('TRSF E-BANKING') || upper.includes('FTSCY') || upper.includes('WS95051') || upper.includes('M-TRANSFER') || upper.includes('M-BCA') || upper.includes('M TRANSFER') || upper.includes('2306039099') || upper.includes('23060') || upper.includes('5306039099') || upper.includes('PURBALINGGA');
   const isMandiri = upper.includes('MANDIRI') || upper.includes('LIVIN');
-  const isBri = upper.includes('BRI') || upper.includes('BRIMO');
+  const isBri = upper.includes('BRI') || upper.includes('BRIMO') || upper.includes('BRI MOB');
   const isBni = upper.includes('BNI') || upper.includes('WONDR');
 
   // E-banking / mutasi indicators
-  const isEBanking = upper.includes('E-BANKING') || upper.includes('TRSF') || upper.includes('MUTASI') || upper.includes('REKENING KORAN');
+  const isEBanking = upper.includes('E-BANKING') || upper.includes('TRSF') || upper.includes('MUTASI') || upper.includes('REKENING KORAN') || upper.includes('SWITCHING');
   const isFivaRelated = upper.includes('FIVA') || upper.includes('SEJAHTE') || upper.includes('TITIP INV');
 
   // Teller / slip setoran fisik indicators
@@ -135,7 +135,12 @@ function parseBankReceipt(rawText) {
     'SETOR TUNAI',
     'PENYETOR',
     'TELLER',
-    'BEBAS BIAYA ADM'
+    'BEBAS BIAYA ADM',
+    'SWITCHING CR',
+    'SWITCHING',
+    'NEW BRI MOB',
+    'BI-FAST',
+    'TRF '
   ];
 
   let keywordHits = 0;
@@ -159,6 +164,10 @@ function parseBankReceipt(rawText) {
     upper.includes('TRSF E-BANKING') ||
     upper.includes('M-TRANSFER') ||
     upper.includes('M-BCA') ||
+    upper.includes('SWITCHING CR') ||
+    upper.includes('NEW BRI MOB') ||
+    upper.includes('BI-FAST') ||
+    (/\bTRF\s+[A-Za-z]/i.test(clean) && /\b(?:CR|DB)\b/i.test(clean)) ||
     (isTellerSlip && (isBca || isFivaRelated)) ||
     (isEBanking && isFivaRelated) ||
     (upper.includes('BERHASIL') && (isBca || isMandiri || isBri || isBni));
@@ -281,6 +290,18 @@ function parseBankReceipt(rawText) {
       if (rawName.length >= 3 && !rawName.toUpperCase().includes('REKENING') && !rawName.toUpperCase().includes('BANK')) {
         senderNameFromSlip = rawName;
         if (!customerHint) customerHint = rawName;
+      }
+    }
+  }
+
+  // 1b. Ekstraksi format mutasi rekening koran: "TRF [NAMA PENGIRIM]" (misal: "TRF ZULIANA 0998" atau "TRF ZULIANA")
+  if (!senderNameFromSlip) {
+    const trfMutasiMatch = clean.match(/\bTRF\s+([A-Za-z0-9\s&.,'-]{3,30}?)(?:\s+\d{4,8}|\s*,\s*\d|\s+CR|\s+DB|\r?\n|$)/i);
+    if (trfMutasiMatch) {
+      const rawSender = trfMutasiMatch[1].trim();
+      if (rawSender.length >= 3 && !rawSender.toUpperCase().includes('BANK') && !rawSender.toUpperCase().includes('SWITCHING')) {
+        senderNameFromSlip = rawSender;
+        if (!customerHint) customerHint = rawSender;
       }
     }
   }

@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.326'; // v3.3.326 - Prioritas intent PO anti-sapaan ("pagi/siang"), diskon riwayat pelanggan di Termux, & proteksi deduplikasi faktur ganda 24 jam
+const GATEWAY_VERSION = '3.3.327'; // v3.3.327 - Deteksi otomatis mutasi rekening koran / switching CR & BRImo (TRF [NAMA]) untuk integrasi ESL piutang
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

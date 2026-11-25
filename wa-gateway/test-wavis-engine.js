@@ -1252,5 +1252,25 @@ Status : Dalam Proses
   firebaseAdapter.db = originalDb;
   console.log('✅ Test 22 PASSED: Logika Proteksi Anti-Duplikasi 24 Jam Terverifikasi 100%!');
 
+  // --- Test 23: Deteksi Mutasi Rekening Koran / Switching CR & BRImo (TRF [NAMA]) ---
+  console.log('\n--- Test 23: Deteksi Mutasi Rekening Koran / Switching CR & BRImo ---');
+  const sampleMutasiImage = `SWITCHING CR\n24/11/2026 TRF ZULIANA 0998, 32,900,000.00 CR\n002 NEW BRI MOB`;
+  const resMutasi1 = parseBankReceipt(sampleMutasiImage);
+  assert.strictEqual(resMutasi1.isBankSlip, true, 'Mutasi Gambar 2 harus terdeteksi sebagai bank slip');
+  assert.strictEqual(resMutasi1.bank, 'BRI', 'Bank harus terdeteksi BRI dari NEW BRI MOB');
+  assert.strictEqual(resMutasi1.amount, 32900000, 'Nominal mutasi harus Rp 32.900.000');
+  assert.strictEqual(resMutasi1.senderNameFromSlip, 'ZULIANA', 'Nama pengirim mutasi harus ZULIANA');
+  assert.strictEqual(resMutasi1.customerHint, 'ZULIANA', 'Customer hint mutasi harus ZULIANA');
+  assert.strictEqual(resMutasi1.rawDate, '24/11/2026', 'Tanggal harus 24/11/2026');
+  console.log(`  ✓ 23A PASSED: Mutasi rekening koran Gambar 2 berhasil diekstrak (Bank: ${resMutasi1.bank}, Pengirim: ${resMutasi1.senderNameFromSlip}, Nominal: Rp ${resMutasi1.amount.toLocaleString('id-ID')})!`);
+
+  const sampleMutasiText = `mas\nmau tanya\nini punya jateng apa bukan?\nSWITCHING CR\n24/11/2026 TRF ZULIANA 0998 32.900.000.00 CR\n002 NEW BRI MOB`;
+  const resMutasi2 = parseBankReceipt(sampleMutasiText);
+  assert.strictEqual(resMutasi2.isBankSlip, true, 'Chat teks mutasi Bu Silvi harus terdeteksi sebagai bank slip');
+  assert.strictEqual(resMutasi2.amount, 32900000, 'Nominal mutasi teks harus Rp 32.900.000');
+  assert.strictEqual(resMutasi2.senderNameFromSlip, 'ZULIANA', 'Nama pengirim mutasi teks harus ZULIANA');
+  console.log(`  ✓ 23B PASSED: Chat teks mutasi Bu Silvi berhasil terdeteksi sebagai TRANSFER_SLIP!`);
+  console.log('✅ Test 23 PASSED: Deteksi Mutasi Rekening Koran & Ekstraksi ESL ZULIANA Terverifikasi 100%!');
+
   console.log('\n🎉 SEMUA PENGUJIAN UNIT WavisInteractiveEngine LULUS 100%! 🚀');
 })();

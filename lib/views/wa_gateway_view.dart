@@ -422,7 +422,13 @@ class _WaGatewayViewState extends State<WaGatewayView> {
            text.contains('PUTRA FIVA') ||
            text.contains('UTRA FIVA') ||
            text.contains('2306039099') ||
-           text.contains('5306039099');
+           text.contains('5306039099') ||
+           text.contains('SWITCHING CR') ||
+           text.contains('SWITCHING') ||
+           text.contains('NEW BRI MOB') ||
+           text.contains('BI-FAST') ||
+           (text.contains('TRF ') && (text.contains('CR') || text.contains('DB'))) ||
+           RegExp(r'\b\d{1,3}(?:[.,]\d{3})+\s*(?:CR|DB)\b').hasMatch(text);
   }
 
   void _checkAndAutoProcess(List<IncomingPoChat> chats, WaAutoPoSettings settings) {
