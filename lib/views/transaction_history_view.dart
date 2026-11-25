@@ -1877,19 +1877,21 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                             ),
                           ),
                         ],
-                        const PopupMenuItem(
-                          value: 'odoo',
-                          child: Row(
-                            children: [
-                              Icon(Icons.rocket_launch_rounded, color: Color(0xFFA855F7), size: 18),
-                              SizedBox(width: 8),
-                              Text(
-                                'Siapkan ke Odoo',
-                                style: TextStyle(color: Color(0xFFA855F7), fontSize: 13, fontWeight: FontWeight.bold),
-                              ),
-                            ],
+                        if (!isKacab) ...[
+                          const PopupMenuItem(
+                            value: 'odoo',
+                            child: Row(
+                              children: [
+                                Icon(Icons.rocket_launch_rounded, color: Color(0xFFA855F7), size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Siapkan ke Odoo',
+                                  style: TextStyle(color: Color(0xFFA855F7), fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ],
@@ -2689,17 +2691,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _prepareOdooTransfer(tr),
-                icon: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 16),
-                label: const Text('Siapkan ke Odoo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              if (!isKacab) ...[
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _prepareOdooTransfer(tr),
+                  icon: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 16),
+                  label: const Text('Siapkan ke Odoo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () => _showPrintDialog(tr, isDownload: false),
@@ -7201,6 +7205,11 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                             distinctCustomerKeys.add(key);
                                           }
                                           final bool isSameCustomer = distinctCustomerKeys.length == 1;
+                                          final bool hasLaSelected = selectedTrList.any((t) {
+                                            final tClean = t.invoiceNo.toString().replaceAll('#', '').trim();
+                                            return t.isLampiran || tClean.toUpperCase().startsWith('LA') || laToChildrenMap.containsKey(tClean);
+                                          });
+                                          final bool canCreateOrMergeLa = isSameCustomer && !hasLaSelected;
 
                                           // Compute quick summary for toolbar
                                           final productProvider = Provider.of<ProductProvider>(context, listen: false);
@@ -7278,22 +7287,22 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                           const SizedBox(width: 8),
                                                           Expanded(
                                                             child: ElevatedButton.icon(
-                                                              onPressed: isSameCustomer
+                                                              onPressed: canCreateOrMergeLa
                                                                   ? () {
                                                                       _showCreateLampiranDialog(selectedTrList);
                                                                     }
                                                                   : null,
-                                                              icon: Icon(Icons.description_rounded, size: 15, color: isSameCustomer ? Colors.black : Colors.white38),
+                                                              icon: Icon(Icons.description_rounded, size: 15, color: canCreateOrMergeLa ? Colors.black : Colors.white38),
                                                               label: Text(
                                                                 'Buat / Gabung LA',
                                                                 style: TextStyle(
-                                                                  color: isSameCustomer ? Colors.black : Colors.white38,
+                                                                  color: canCreateOrMergeLa ? Colors.black : Colors.white38,
                                                                   fontWeight: FontWeight.bold,
                                                                   fontSize: 11,
                                                                 ),
                                                               ),
                                                               style: ElevatedButton.styleFrom(
-                                                                backgroundColor: isSameCustomer ? Colors.cyanAccent : const Color(0xFF334155),
+                                                                backgroundColor: canCreateOrMergeLa ? Colors.cyanAccent : const Color(0xFF334155),
                                                                 padding: const EdgeInsets.symmetric(vertical: 8),
                                                               ),
                                                             ),
@@ -7345,22 +7354,22 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                                                     const SizedBox(width: 8),
                                                     // Buat LA button — only enabled if same customer
                                                     ElevatedButton.icon(
-                                                      onPressed: isSameCustomer
+                                                      onPressed: canCreateOrMergeLa
                                                           ? () {
                                                               _showCreateLampiranDialog(selectedTrList);
                                                             }
                                                           : null,
-                                                      icon: Icon(Icons.description_rounded, size: 16, color: isSameCustomer ? Colors.black : Colors.white38),
+                                                      icon: Icon(Icons.description_rounded, size: 16, color: canCreateOrMergeLa ? Colors.black : Colors.white38),
                                                       label: Text(
                                                         'Buat / Gabung LA',
                                                         style: TextStyle(
-                                                          color: isSameCustomer ? Colors.black : Colors.white38,
+                                                          color: canCreateOrMergeLa ? Colors.black : Colors.white38,
                                                           fontWeight: FontWeight.bold,
                                                           fontSize: 12,
                                                         ),
                                                       ),
                                                       style: ElevatedButton.styleFrom(
-                                                        backgroundColor: isSameCustomer ? Colors.cyanAccent : const Color(0xFF334155),
+                                                        backgroundColor: canCreateOrMergeLa ? Colors.cyanAccent : const Color(0xFF334155),
                                                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                                       ),
                                                     ),
@@ -7415,7 +7424,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
 
                                               // Allow cross-customer selection for Vehicle Loading (Skim Muatan)
                                               // Only block LA invoices and those already linked to an LA
-                                              final bool canSelect = !isThisLa && linkedLaNo.isEmpty;
+                                              final bool canSelect = linkedLaNo.isEmpty;
 
                                               final String selectTooltip = isThisLa
                                                   ? 'Invoice Lampiran tidak dapat dipilih'

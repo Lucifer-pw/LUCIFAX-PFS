@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.330'; // v3.3.330 - Dynamic green arrow down & cost decrease indicator di Billing Report
+const BSP_VERSION = '3.3.331'; // v3.3.331 - Izin centang faktur LA untuk Skim Muatan & sembunyikan Odoo bagi Kacab
 
 /**
  * Robust Currency Parser

@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.330'; // v3.3.330 - Dynamic green arrow down & cost decrease indicator di Billing Report
+const GATEWAY_VERSION = '3.3.331'; // v3.3.331 - Izin centang faktur LA untuk Skim Muatan & sembunyikan Odoo bagi Kacab
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
