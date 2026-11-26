@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.332'; // v3.3.332 - Month range filter di Ranking Kacab, Month picker Daftar RO, & UI cleanup detail invoice
+const GATEWAY_VERSION = '3.3.333'; // v3.3.333 - Dialog kalender bulan interaktif di Laporan Weekly Kacab
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

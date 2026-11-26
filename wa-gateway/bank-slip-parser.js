@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.332'; // v3.3.332 - Month range filter di Ranking Kacab, Month picker Daftar RO, & UI cleanup detail invoice
+const BSP_VERSION = '3.3.333'; // v3.3.333 - Dialog kalender bulan interaktif di Laporan Weekly Kacab
 
 /**
  * Robust Currency Parser

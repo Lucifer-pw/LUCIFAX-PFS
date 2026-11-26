@@ -293,6 +293,137 @@ class _RankingKacabViewState extends State<RankingKacabView> {
     }
   }
 
+
+  Future<void> _showMonthYearPickerDialog({required bool isStart}) async {
+    final now = DateTime.now();
+    final currentTarget = isStart
+        ? DateTime(_startYear, _startMonth, 1)
+        : DateTime(_startYear, _startMonth + 2, 1);
+
+    int tempYear = currentTarget.year;
+
+    final result = await showDialog<DateTime>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setPickerState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear--;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$tempYear',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear++;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 320,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: 12,
+                  itemBuilder: (context, idx) {
+                    final mIndex = idx + 1;
+                    final isSelected = mIndex == currentTarget.month && tempYear == currentTarget.year;
+                    final isCurrent = mIndex == now.month && tempYear == now.year;
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx, DateTime(tempYear, mIndex, 1));
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF0284C7)
+                              : (isCurrent ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : (isCurrent ? const Color(0xFF38BDF8).withOpacity(0.6) : const Color(0xFF334155)),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          _monthNamesIndo[idx],
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : (isCurrent ? const Color(0xFF38BDF8) : Colors.white70),
+                            fontWeight: isSelected || isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      if (isStart) {
+        setState(() {
+          _startMonth = result.month;
+          _startYear = result.year;
+          _updateMonthNames();
+        });
+      } else {
+        final start = DateTime(result.year, result.month - 2, 1);
+        setState(() {
+          _startMonth = start.month;
+          _startYear = start.year;
+          _updateMonthNames();
+        });
+      }
+    }
+  }
+
   void _onStartMonthChanged(String? val) {
     if (val == null) return;
     final parts = val.split('_');
@@ -990,61 +1121,49 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // Range Awal
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF0284C7)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('Dari: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
-                                DropdownButton<String>(
-                                  value: safeStartValue,
-                                  underline: const SizedBox(),
-                                  dropdownColor: const Color(0xFF1E293B),
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                  items: _singleMonthOptions.map((opt) {
-                                    return DropdownMenuItem<String>(
-                                      value: opt['key'] as String,
-                                      child: Text(opt['label'] as String),
-                                    );
-                                  }).toList(),
-                                  onChanged: _onStartMonthChanged,
-                                ),
-                              ],
+                          // Range Awal (Dialog Kalender Bulan)
+                          InkWell(
+                            onTap: () => _showMonthYearPickerDialog(isStart: true),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF0284C7)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Dari: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('$_month1Name $_startYear', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 14),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
-                          // Range Akhir / Batas
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF0284C7)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('Sampai: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
-                                DropdownButton<String>(
-                                  value: safeEndValue,
-                                  underline: const SizedBox(),
-                                  dropdownColor: const Color(0xFF1E293B),
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                  items: _singleMonthOptions.map((opt) {
-                                    return DropdownMenuItem<String>(
-                                      value: opt['key'] as String,
-                                      child: Text(opt['label'] as String),
-                                    );
-                                  }).toList(),
-                                  onChanged: _onEndMonthChanged,
-                                ),
-                              ],
+                          // Range Akhir / Batas (Dialog Kalender Bulan)
+                          InkWell(
+                            onTap: () => _showMonthYearPickerDialog(isStart: false),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF0284C7)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Sampai: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('$_month3Name', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 14),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1170,60 +1289,48 @@ class _RankingKacabViewState extends State<RankingKacabView> {
                             },
                           ),
                         ),
-                        // Range Awal
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF0284C7)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('Dari: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
-                              DropdownButton<String>(
-                                value: safeStartValue,
-                                underline: const SizedBox(),
-                                dropdownColor: const Color(0xFF1E293B),
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                items: _singleMonthOptions.map((opt) {
-                                  return DropdownMenuItem<String>(
-                                    value: opt['key'] as String,
-                                    child: Text(opt['label'] as String),
-                                  );
-                                }).toList(),
-                                onChanged: _onStartMonthChanged,
-                              ),
-                            ],
+                        // Range Awal (Dialog Kalender Bulan)
+                        InkWell(
+                          onTap: () => _showMonthYearPickerDialog(isStart: true),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Dari: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('$_month1Name $_startYear', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                              ],
+                            ),
                           ),
                         ),
-                        // Range Akhir / Batas
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF0284C7)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('Sampai: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
-                              DropdownButton<String>(
-                                value: safeEndValue,
-                                underline: const SizedBox(),
-                                dropdownColor: const Color(0xFF1E293B),
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                items: _singleMonthOptions.map((opt) {
-                                  return DropdownMenuItem<String>(
-                                    value: opt['key'] as String,
-                                    child: Text(opt['label'] as String),
-                                  );
-                                }).toList(),
-                                onChanged: _onEndMonthChanged,
-                              ),
-                            ],
+                        // Range Akhir / Batas (Dialog Kalender Bulan)
+                        InkWell(
+                          onTap: () => _showMonthYearPickerDialog(isStart: false),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Sampai: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('$_month3Name', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                              ],
+                            ),
                           ),
                         ),
                         PopupMenuButton<String>(
