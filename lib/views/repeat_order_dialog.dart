@@ -125,12 +125,15 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
 
     _availableMonths = sorted;
 
+    final currentMonthKey = DateFormat('MM-yyyy').format(DateTime.now());
     if (widget.initialMonthFilter != 'SEMUA' && _availableMonths.contains(widget.initialMonthFilter)) {
       _selectedMonth = widget.initialMonthFilter;
+    } else if (_availableMonths.contains(currentMonthKey)) {
+      _selectedMonth = currentMonthKey;
     } else if (_availableMonths.isNotEmpty) {
       _selectedMonth = _availableMonths.first;
     } else {
-      _selectedMonth = DateFormat('MM-yyyy').format(DateTime.now());
+      _selectedMonth = currentMonthKey;
       _availableMonths = [_selectedMonth];
     }
   }
@@ -285,6 +288,137 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
     return results;
   }
 
+  Future<void> _showMonthYearPicker() async {
+    final now = DateTime.now();
+    int tempYear = now.year;
+    try {
+      final parts = _selectedMonth.split('-');
+      if (parts.length == 2) {
+        tempYear = int.parse(parts[1]);
+      }
+    } catch (_) {}
+
+    final months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setPickerState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear--;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$tempYear',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF38BDF8)),
+                    onPressed: () {
+                      setPickerState(() {
+                        tempYear++;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 320,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: 12,
+                  itemBuilder: (context, idx) {
+                    final mIndex = idx + 1;
+                    final mString = mIndex.toString().padLeft(2, '0');
+                    final filterValue = '$mString-$tempYear';
+                    final isSelected = _selectedMonth == filterValue;
+                    final isCurrent = mIndex == now.month && tempYear == now.year;
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx, filterValue);
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF0284C7)
+                              : (isCurrent ? const Color(0xFF0284C7).withOpacity(0.25) : const Color(0xFF0F172A)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : (isCurrent ? const Color(0xFF38BDF8).withOpacity(0.6) : const Color(0xFF334155)),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          months[idx],
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : (isCurrent ? const Color(0xFF38BDF8) : Colors.white70),
+                            fontWeight: isSelected || isCurrent ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Batal', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _selectedMonth = result;
+        if (!_availableMonths.contains(result)) {
+          _availableMonths.add(result);
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final allAnalysis = _calculateAnalysis();
@@ -386,33 +520,27 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
                     ],
                   ),
                 ),
-                // Pilih Bulan Dropdown
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF334155)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedMonth,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
-                      icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
-                      items: _availableMonths.map((m) {
-                        return DropdownMenuItem<String>(
-                          value: m,
-                          child: Text('Bulan $m'),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _selectedMonth = val;
-                          });
-                        }
-                      },
+                // Tombol Pilih Bulan Kalender (Dialog Gambar 2)
+                InkWell(
+                  onTap: _showMonthYearPicker,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Bulan $_selectedMonth',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                      ],
                     ),
                   ),
                 ),

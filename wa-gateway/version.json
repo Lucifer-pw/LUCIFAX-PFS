@@ -1,18 +1,18 @@
 {
-  "gateway": "3.3.331",
+  "gateway": "3.3.332",
   "files": {
-    "server.js": "3.3.331",
+    "server.js": "3.3.332",
     "autonomous-po-processor.js": "3.3.326",
     "wavis-interactive-engine.js": "3.3.326",
     "wavis-pdf-generator.js": "3.3.301",
     "firebase-adapter.js": "3.3.326",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
-    "bank-slip-parser.js": "3.3.331",
+    "bank-slip-parser.js": "3.3.332",
     "test-wavis-engine.js": "3.3.329",
     "update.sh": "3.3.312",
     "update.bat": "3.3.310"
   },
   "updatedAt": "2026-11-26",
-  "changelog": "v3.3.331: Membuka izin centang faktur LA untuk Skim Muatan gabungan dan menyembunyikan tombol Siapkan ke Odoo dari role Kacab."
+  "changelog": "v3.3.332: Kalender pilih bulan interaktif di Daftar RO, perapihan lebar kode induk di Skim Muatan, pembersihan tombol footer Detail Invoice, dan filter 2-kolom rentang bulan di Laporan Weekly Kacab."
 }

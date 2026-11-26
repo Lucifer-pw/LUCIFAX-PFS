@@ -2634,22 +2634,8 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _showMoveInvoiceItemsDialog(tr);
-                  },
-                  icon: const Icon(Icons.swap_horiz_rounded, color: Colors.cyanAccent, size: 18),
-                  label: const Text('Pindah / Gabung Item', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 if (isThisLa) ...[
+                  const SizedBox(width: 8),
                   OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
@@ -2663,25 +2649,10 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                ] else if (linkedLaNo.isEmpty) ...[
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showCreateLampiranDialog([tr]);
-                    },
-                    icon: const Icon(Icons.description_rounded, color: Colors.cyanAccent, size: 18),
-                    label: const Text('Gabung ke Lampiran (LA)', style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                 ],
+                const SizedBox(width: 8),
               ],
-              OutlinedButton.icon(
+                            OutlinedButton.icon(
                 onPressed: () => _showPrintDialog(tr, isDownload: true),
                 icon: const Icon(Icons.download_rounded, color: Colors.redAccent, size: 18),
                 label: const Text('Download PDF', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
@@ -5118,15 +5089,19 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView> {
                         width: 20,
                         child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 9.5)),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        margin: const EdgeInsets.only(right: 6),
+                      SizedBox(
+                        width: 78,
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
                           color: const Color(0xFF10B981).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(3),
                           border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
                         ),
-                        child: Text(item.kodeInduk, style: const TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold)),
+                        child: Text(item.kodeInduk, style: const TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                        ),
                       ),
                       Expanded(
                         child: Text(

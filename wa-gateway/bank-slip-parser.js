@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.331'; // v3.3.331 - Izin centang faktur LA untuk Skim Muatan & sembunyikan Odoo bagi Kacab
+const BSP_VERSION = '3.3.332'; // v3.3.332 - Month range filter di Ranking Kacab, Month picker Daftar RO, & UI cleanup detail invoice
 
 /**
  * Robust Currency Parser

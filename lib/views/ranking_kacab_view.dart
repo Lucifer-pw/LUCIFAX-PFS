@@ -35,6 +35,7 @@ class _RankingKacabViewState extends State<RankingKacabView> {
   String _month3Name = 'Juli 2026';
 
   List<Map<String, String>> _periodOptions = [];
+  List<Map<String, dynamic>> _singleMonthOptions = [];
 
   static const List<String> _monthNamesIndo = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -79,6 +80,30 @@ class _RankingKacabViewState extends State<RankingKacabView> {
 
     _updateMonthNames();
     _buildPeriodOptions();
+    _buildSingleMonthOptions();
+  }
+
+  void _buildSingleMonthOptions() {
+    final List<Map<String, dynamic>> list = [];
+    final now = DateTime.now();
+    DateTime cursor = DateTime(now.year, now.month + 6, 1);
+    final DateTime limit = DateTime(2024, 1, 1);
+    final Set<String> seen = {};
+
+    while (!cursor.isBefore(limit)) {
+      final key = '${cursor.month}_${cursor.year}';
+      if (!seen.contains(key)) {
+        seen.add(key);
+        list.add({
+          'month': cursor.month,
+          'year': cursor.year,
+          'key': key,
+          'label': '${_getMonthName(cursor.month)} ${cursor.year}',
+        });
+      }
+      cursor = DateTime(cursor.year, cursor.month - 1, 1);
+    }
+    _singleMonthOptions = list;
   }
 
   void _updateMonthNames() {
@@ -265,6 +290,36 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       } else if (key == m3Key) {
         storeMap[aliasName]!['m3'] = _parseNum(storeMap[aliasName]!['m3']) + amount;
       }
+    }
+  }
+
+  void _onStartMonthChanged(String? val) {
+    if (val == null) return;
+    final parts = val.split('_');
+    if (parts.length == 2) {
+      final m = int.tryParse(parts[0]) ?? _startMonth;
+      final y = int.tryParse(parts[1]) ?? _startYear;
+      setState(() {
+        _startMonth = m;
+        _startYear = y;
+        _updateMonthNames();
+      });
+    }
+  }
+
+  void _onEndMonthChanged(String? val) {
+    if (val == null) return;
+    final parts = val.split('_');
+    if (parts.length == 2) {
+      final endM = int.tryParse(parts[0]) ?? (_startMonth + 2);
+      final endY = int.tryParse(parts[1]) ?? _startYear;
+      final endDate = DateTime(endY, endM, 1);
+      final startDate = DateTime(endDate.year, endDate.month - 2, 1);
+      setState(() {
+        _startMonth = startDate.month;
+        _startYear = startDate.year;
+        _updateMonthNames();
+      });
     }
   }
 
@@ -853,9 +908,18 @@ class _RankingKacabViewState extends State<RankingKacabView> {
       final city = item['city'].toString().toLowerCase();
       return alias.contains(q) || city.contains(q);
     }).toList();
-final selectedKey = '${_startMonth}_$_startYear';
+    final selectedKey = '${_startMonth}_$_startYear';
     final hasKey = _periodOptions.any((opt) => opt['value'] == selectedKey);
     final dropdownValue = hasKey ? selectedKey : (_periodOptions.isNotEmpty ? _periodOptions.first['value'] : null);
+
+    final m3Date = DateTime(_startYear, _startMonth + 2, 1);
+    final startMonthKey = '${_startMonth}_$_startYear';
+    final endMonthKey = '${m3Date.month}_${m3Date.year}';
+
+    final hasStartKey = _singleMonthOptions.any((o) => o['key'] == startMonthKey);
+    final hasEndKey = _singleMonthOptions.any((o) => o['key'] == endMonthKey);
+    final safeStartValue = hasStartKey ? startMonthKey : (_singleMonthOptions.isNotEmpty ? _singleMonthOptions.first['key'] as String? : null);
+    final safeEndValue = hasEndKey ? endMonthKey : (_singleMonthOptions.isNotEmpty ? _singleMonthOptions.first['key'] as String? : null);
 
     final isMobile = MediaQuery.of(context).size.width < 768;
 
@@ -926,25 +990,61 @@ final selectedKey = '${_startMonth}_$_startYear';
                             ),
                           ),
                           const SizedBox(width: 8),
+                          // Range Awal
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: const Color(0xFF1E293B),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: const Color(0xFF0284C7)),
                             ),
-                            child: DropdownButton<String>(
-                              value: dropdownValue,
-                              underline: const SizedBox(),
-                              dropdownColor: const Color(0xFF1E293B),
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              items: _periodOptions.map((opt) {
-                                return DropdownMenuItem(
-                                  value: opt['value'],
-                                  child: Text(opt['label']!),
-                                );
-                              }).toList(),
-                              onChanged: _onPeriodChanged,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Dari: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                DropdownButton<String>(
+                                  value: safeStartValue,
+                                  underline: const SizedBox(),
+                                  dropdownColor: const Color(0xFF1E293B),
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  items: _singleMonthOptions.map((opt) {
+                                    return DropdownMenuItem<String>(
+                                      value: opt['key'] as String,
+                                      child: Text(opt['label'] as String),
+                                    );
+                                  }).toList(),
+                                  onChanged: _onStartMonthChanged,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // Range Akhir / Batas
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF0284C7)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Sampai: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                DropdownButton<String>(
+                                  value: safeEndValue,
+                                  underline: const SizedBox(),
+                                  dropdownColor: const Color(0xFF1E293B),
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  items: _singleMonthOptions.map((opt) {
+                                    return DropdownMenuItem<String>(
+                                      value: opt['key'] as String,
+                                      child: Text(opt['label'] as String),
+                                    );
+                                  }).toList(),
+                                  onChanged: _onEndMonthChanged,
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1070,6 +1170,7 @@ final selectedKey = '${_startMonth}_$_startYear';
                             },
                           ),
                         ),
+                        // Range Awal
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                           decoration: BoxDecoration(
@@ -1077,18 +1178,52 @@ final selectedKey = '${_startMonth}_$_startYear';
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: const Color(0xFF0284C7)),
                           ),
-                          child: DropdownButton<String>(
-                            value: dropdownValue,
-                            underline: const SizedBox(),
-                            dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                            items: _periodOptions.map((opt) {
-                              return DropdownMenuItem(
-                                value: opt['value'],
-                                child: Text(opt['label']!),
-                              );
-                            }).toList(),
-                            onChanged: _onPeriodChanged,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Dari: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                              DropdownButton<String>(
+                                value: safeStartValue,
+                                underline: const SizedBox(),
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                items: _singleMonthOptions.map((opt) {
+                                  return DropdownMenuItem<String>(
+                                    value: opt['key'] as String,
+                                    child: Text(opt['label'] as String),
+                                  );
+                                }).toList(),
+                                onChanged: _onStartMonthChanged,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Range Akhir / Batas
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF0284C7)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Sampai: ', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                              DropdownButton<String>(
+                                value: safeEndValue,
+                                underline: const SizedBox(),
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                items: _singleMonthOptions.map((opt) {
+                                  return DropdownMenuItem<String>(
+                                    value: opt['key'] as String,
+                                    child: Text(opt['label'] as String),
+                                  );
+                                }).toList(),
+                                onChanged: _onEndMonthChanged,
+                              ),
+                            ],
                           ),
                         ),
                         PopupMenuButton<String>(
