@@ -1065,7 +1065,7 @@ class _ErpMatrixViewState extends State<ErpMatrixView> {
         }
       }
 
-      List<int>? fileBytes = excel.save();
+      List<int>? fileBytes = excel.encode();
       if (fileBytes != null) {
         final bytes = Uint8List.fromList(fileBytes);
         final fileName = 'Laporan_ERP_Stok_$_selectedMonthYear.xlsx'.replaceAll(' ', '_');

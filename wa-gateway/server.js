@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.333'; // v3.3.333 - Dialog kalender bulan interaktif di Laporan Weekly Kacab
+const GATEWAY_VERSION = '3.3.334'; // v3.3.334 - Perbaikan duplikasi download FlutterExcel pada export Stok Opname ERP
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
