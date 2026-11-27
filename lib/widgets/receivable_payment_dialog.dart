@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/receivable.dart';
 import '../providers/receivable_provider.dart';
 import '../providers/customer_provider.dart';
@@ -471,14 +472,36 @@ Future<void> showReceivablePaymentDialog(
                               icon: const Icon(Icons.photo_library_rounded, size: 16),
                               label: const Text('Pilih File / Galeri', style: TextStyle(fontSize: 12)),
                               onPressed: () async {
-                                final picker = ImagePicker();
-                                final photo = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-                                if (photo != null) {
-                                  final bytes = await photo.readAsBytes();
-                                  setDlgState(() {
-                                    selectedReceiptBytes = bytes;
-                                    selectedReceiptFileName = photo.name;
-                                  });
+                                try {
+                                  final picker = ImagePicker();
+                                  final photo = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                                  if (photo != null) {
+                                    final bytes = await photo.readAsBytes();
+                                    setDlgState(() {
+                                      selectedReceiptBytes = bytes;
+                                      selectedReceiptFileName = photo.name;
+                                    });
+                                    return;
+                                  }
+                                } catch (_) {}
+
+                                try {
+                                  final result = await FilePicker.platform.pickFiles(
+                                    type: FileType.custom,
+                                    allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+                                    withData: true,
+                                  );
+                                  if (result != null && result.files.isNotEmpty) {
+                                    final f = result.files.first;
+                                    if (f.bytes != null) {
+                                      setDlgState(() {
+                                        selectedReceiptBytes = f.bytes;
+                                        selectedReceiptFileName = f.name;
+                                      });
+                                    }
+                                  }
+                                } catch (e) {
+                                  debugPrint('File picker error: $e');
                                 }
                               },
                             ),
