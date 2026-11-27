@@ -614,10 +614,12 @@ class PrintService {
     final pdf = pw.Document();
     const pageFormat = PdfPageFormat.letter;
 
+    final validItems = items.where((r) => r.nominal > 0 && !r.keterangan.startsWith('DIPINDAH')).toList();
+
     final logoBytes = base64Decode(fivaLogoBase64);
     final logoImage = pw.MemoryImage(logoBytes);
-    final double totalTagihan = items.fold(0.0, (acc, r) => acc + r.nominal);
-    final double grandTotal = items.fold(0.0, (acc, r) => acc + (r.isLunas ? 0.0 : r.remainingAmount));
+    final double totalTagihan = validItems.fold(0.0, (acc, r) => acc + r.nominal);
+    final double grandTotal = validItems.fold(0.0, (acc, r) => acc + (r.isLunas ? 0.0 : r.remainingAmount));
     final dateStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
     pdf.addPage(

@@ -57,6 +57,18 @@ class _ReceivableListViewState extends State<ReceivableListView> {
       final cleanNo = r.noInvoice.replaceAll('#', '').trim();
       final tr = trMap[cleanNo];
       if (tr != null) {
+        final bool isMoved = tr.status == 'DIPINDAH' ||
+            tr.note.startsWith('DIPINDAH') ||
+            tr.movedToInvoice.isNotEmpty ||
+            tr.movedItems.isNotEmpty ||
+            tr.grandTotal <= 0;
+        if (isMoved) {
+          if (r.id.isNotEmpty) {
+            FirebaseFirestore.instance.collection('receivables').doc(r.id).delete()
+                .catchError((e) => debugPrint('[AUTO-HEAL DELETE MOVED RECEIVABLE ERROR]: $e'));
+          }
+          continue;
+        }
         final Map<String, dynamic> updates = {};
         if (tr.grandTotal > 0) {
           final effNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
@@ -70,6 +82,11 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         if (updates.isNotEmpty && r.id.isNotEmpty) {
           FirebaseFirestore.instance.collection('receivables').doc(r.id).update(updates)
               .catchError((e) => debugPrint('[AUTO-HEAL RECEIVABLE ERROR]: $e'));
+        }
+      } else if (r.keterangan.startsWith('DIPINDAH') || r.nominal <= 0) {
+        if (r.id.isNotEmpty) {
+          FirebaseFirestore.instance.collection('receivables').doc(r.id).delete()
+              .catchError((e) => debugPrint('[AUTO-HEAL DELETE ZERO RECEIVABLE ERROR]: $e'));
         }
       }
     }
@@ -627,7 +644,24 @@ class _ReceivableListViewState extends State<ReceivableListView> {
       });
     }
 
-    final enrichedReceivables = provider.receivables.map((r) {
+    final validReceivables = provider.receivables.where((r) {
+      final cleanNo = r.noInvoice.replaceAll('#', '').trim();
+      final matchingTr = trMap[cleanNo];
+      if (matchingTr != null) {
+        final bool isMoved = matchingTr.status == 'DIPINDAH' ||
+            matchingTr.note.startsWith('DIPINDAH') ||
+            matchingTr.movedToInvoice.isNotEmpty ||
+            matchingTr.movedItems.isNotEmpty ||
+            matchingTr.grandTotal <= 0;
+        if (isMoved) return false;
+      }
+      if (r.keterangan.startsWith('DIPINDAH') || r.nominal <= 0) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final enrichedReceivables = validReceivables.map((r) {
       final cleanNo = r.noInvoice.replaceAll('#', '').trim();
       final matchingTr = trMap[cleanNo];
 
@@ -640,17 +674,12 @@ class _ReceivableListViewState extends State<ReceivableListView> {
         if (effTglKirim == null && matchingTr.status == 'DIKIRIM' && matchingTr.deliveryDate != null) {
           effTglKirim = matchingTr.deliveryDate;
         }
-        if (matchingTr.status == 'DIPINDAH' || matchingTr.grandTotal <= 0) {
-          effNominal = 0.0;
-          effIsLunas = true;
-        } else if (matchingTr.grandTotal > 0) {
+        if (matchingTr.grandTotal > 0) {
           effNominal = (matchingTr.grandTotal - matchingTr.returnAmount).clamp(0.0, double.infinity);
           if (matchingTr.statusTransfer == 'PAID') {
             effIsLunas = true;
           }
         }
-      } else if (effNominal <= 0) {
-        effIsLunas = true;
       }
 
       return r.copyWith(

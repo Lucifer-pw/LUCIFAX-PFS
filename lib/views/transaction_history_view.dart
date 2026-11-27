@@ -6597,9 +6597,16 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           final isMoved = tr.status == 'DIPINDAH' ||
               tr.note.startsWith('DIPINDAH') ||
               tr.movedToInvoice.isNotEmpty ||
-              tr.movedItems.isNotEmpty;
+              tr.movedItems.isNotEmpty ||
+              tr.grandTotal <= 0;
           if (!isMoved) return false;
         } else if (_statusFilter == "DICICIL") {
+          final isMoved = tr.status == 'DIPINDAH' ||
+              tr.note.startsWith('DIPINDAH') ||
+              tr.movedToInvoice.isNotEmpty ||
+              tr.movedItems.isNotEmpty ||
+              tr.grandTotal <= 0;
+          if (isMoved) return false;
           final recProv = Provider.of<ReceivableProvider>(context, listen: false);
           final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
           Receivable? r;
@@ -6608,6 +6615,12 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           } catch (_) {}
           if (r == null || !r.isPartiallyPaid) return false;
         } else if (_statusFilter == "UNPAID") {
+          final isMoved = tr.status == 'DIPINDAH' ||
+              tr.note.startsWith('DIPINDAH') ||
+              tr.movedToInvoice.isNotEmpty ||
+              tr.movedItems.isNotEmpty ||
+              tr.grandTotal <= 0;
+          if (isMoved) return false;
           final recProv = Provider.of<ReceivableProvider>(context, listen: false);
           final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
           Receivable? r;
@@ -6616,6 +6629,12 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           } catch (_) {}
           if (tr.statusTransfer == 'PAID' || (r != null && (r.isLunas || r.isPartiallyPaid))) return false;
         } else if (_statusFilter == "PAID") {
+          final isMoved = tr.status == 'DIPINDAH' ||
+              tr.note.startsWith('DIPINDAH') ||
+              tr.movedToInvoice.isNotEmpty ||
+              tr.movedItems.isNotEmpty ||
+              tr.grandTotal <= 0;
+          if (isMoved) return false;
           if (tr.statusTransfer != 'PAID') return false;
         } else if (_statusFilter == "ERP_SYNC") {
           if (tr.erpSyncDate == null) return false;

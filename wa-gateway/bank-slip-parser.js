@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.335'; // v3.3.335 - Perbaikan duplikasi download FlutterExcel pada export Stok Opname ERP
+const BSP_VERSION = '3.3.336'; // v3.3.336 - Perbaikan duplikasi download FlutterExcel pada export Stok Opname ERP
 
 /**
  * Robust Currency Parser

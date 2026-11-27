@@ -759,10 +759,13 @@ class WavisInteractiveEngine {
         return getSec(b) - getSec(a);
       });
 
-      // Filter invoice yang belum lunas
+      // Filter invoice yang belum lunas (Abaikan faktur yang berstatus DIPINDAH)
       const unpaidInvoices = allCustomerTransactions.filter(inv => {
         const st = (inv.statusTransfer || '').toUpperCase();
-        return st !== 'PAID' && (Number(inv.grandTotal) || 0) > 0;
+        const status = (inv.status || '').toUpperCase();
+        const note = (inv.note || '').toUpperCase();
+        const isMoved = status === 'DIPINDAH' || note.startsWith('DIPINDAH') || Boolean(inv.movedToInvoice) || (Number(inv.grandTotal) || 0) <= 0;
+        return !isMoved && st !== 'PAID' && (Number(inv.grandTotal) || 0) > 0;
       });
 
       let totalRemaining = 0;

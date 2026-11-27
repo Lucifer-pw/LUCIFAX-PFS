@@ -1205,6 +1205,15 @@ class FirebaseService {
   Future<void> syncReceivableFromTransaction(model_tr.Transaction tr) async {
     try {
       final invClean = tr.invoiceNo.toString().replaceAll('#', '').trim();
+      final bool isMoved = tr.status == 'DIPINDAH' ||
+          tr.note.startsWith('DIPINDAH') ||
+          tr.movedToInvoice.isNotEmpty ||
+          tr.movedItems.isNotEmpty ||
+          tr.grandTotal <= 0;
+      if (isMoved) {
+        await deleteReceivableByInvoiceNo(invClean);
+        return;
+      }
       final customerName = tr.aliasName.trim().isNotEmpty ? tr.aliasName.trim() : tr.customerName.trim();
       final effectiveNominal = (tr.grandTotal - tr.returnAmount).clamp(0.0, double.infinity);
       final isLunas = (tr.statusTransfer == 'PAID');

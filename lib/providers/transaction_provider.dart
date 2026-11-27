@@ -100,7 +100,12 @@ class TransactionProvider extends ChangeNotifier {
           if (!hasSyncedPending && trList.isNotEmpty) {
             hasSyncedPending = true;
             for (final tr in trList) {
-              if (tr.status != 'DIKIRIM') {
+              final bool isMoved = tr.status == 'DIPINDAH' ||
+                  tr.note.startsWith('DIPINDAH') ||
+                  tr.movedToInvoice.isNotEmpty ||
+                  tr.movedItems.isNotEmpty ||
+                  tr.grandTotal <= 0;
+              if (tr.status != 'DIKIRIM' && !isMoved) {
                 _dbService.syncReceivableFromTransaction(tr);
               }
             }

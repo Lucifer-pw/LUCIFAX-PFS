@@ -706,6 +706,9 @@ class FirebaseAdapter {
         trDocs.forEach(({ id, data: d }) => {
           const statusTransfer = (d.statusTransfer || '').toUpperCase();
           if (statusTransfer === 'PAID') return; // Lewati yang sudah lunas
+          const status = (d.status || '').toUpperCase();
+          const note = (d.note || '').toUpperCase();
+          if (status === 'DIPINDAH' || note.startsWith('DIPINDAH') || d.movedToInvoice || Number(d.grandTotal || 0) <= 0) return; // Lewati faktur dipindah
 
           const noInvoice = String(d.invoiceNo || id || '').replace(/\D/g, '');
           const toko = (d.aliasName || d.customerName || '').toUpperCase();
