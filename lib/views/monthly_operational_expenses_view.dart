@@ -1694,37 +1694,49 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                 ),
           SizedBox(height: isMobile ? 8 : 10),
 
-          // KPI Cards (Responsive Stack on Mobile, Row on Desktop)
+          // KPI Cards (Horizontal Scroll on Mobile, Row on Desktop)
           isMobile
-              ? Column(
-                  children: [
-                    _buildKpiCard(
-                      title: 'TOTAL BIAYA OPERASIONAL',
-                      value: _currency.format(_totalOperational),
-                      subtitle: '${_operationalItems.length} Item Pengeluaran',
-                      icon: Icons.receipt_rounded,
-                      color: const Color(0xFF38BDF8),
-                      isMobile: isMobile,
-                    ),
-                    const SizedBox(height: 6),
-                    _buildKpiCard(
-                      title: 'TOTAL BIAYA OF COUNTRY',
-                      value: _currency.format(_totalOfCountry),
-                      subtitle: '${_ofCountryItems.length} Lokasi Luarkota',
-                      icon: Icons.commute_rounded,
-                      color: Colors.amberAccent,
-                      isMobile: isMobile,
-                    ),
-                    const SizedBox(height: 6),
-                    _buildKpiCard(
-                      title: 'TOTAL GRANDTOTAL (SEMUA)',
-                      value: _currency.format(_grandTotal),
-                      subtitle: 'Total Tagihan Bulan $_monthYearTitle',
-                      icon: Icons.monetization_on_rounded,
-                      color: Colors.greenAccent,
-                      isMobile: isMobile,
-                    ),
-                  ],
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 175,
+                        child: _buildKpiCard(
+                          title: 'BIAYA OPERASIONAL',
+                          value: _currency.format(_totalOperational),
+                          subtitle: '${_operationalItems.length} Item Pengeluaran',
+                          icon: Icons.receipt_rounded,
+                          color: const Color(0xFF38BDF8),
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 175,
+                        child: _buildKpiCard(
+                          title: 'BIAYA OF COUNTRY',
+                          value: _currency.format(_totalOfCountry),
+                          subtitle: '${_ofCountryItems.length} Lokasi Luarkota',
+                          icon: Icons.commute_rounded,
+                          color: Colors.amberAccent,
+                          isMobile: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 185,
+                        child: _buildKpiCard(
+                          title: 'GRANDTOTAL (SEMUA)',
+                          value: _currency.format(_grandTotal),
+                          subtitle: 'Bulan $_monthYearTitle',
+                          icon: Icons.monetization_on_rounded,
+                          color: Colors.greenAccent,
+                          isMobile: isMobile,
+                        ),
+                      ),
+                    ],
+                  ),
                 )
               : Row(
                   children: [
@@ -1762,7 +1774,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                     ),
                   ],
                 ),
-          SizedBox(height: isMobile ? 8 : 12),
+          SizedBox(height: isMobile ? 6 : 12),
 
           // MAIN BODY SECTION: ALL FITS IN ONE SINGLE SCREEN VIEW!
           Expanded(
@@ -1773,69 +1785,71 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                     children: [
                       // TABLE 1 SECTION HEADER & LIVE SEARCH BAR
                       isMobile
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '1. BIAYA OPERASIONAL BULAN $_monthYearTitle',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Container(
-                                        height: 34,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF1E293B),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: const Color(0xFF0284C7)),
+                          ? Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    '1. BIAYA OPERASIONAL',
+                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Container(
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1E293B),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFF0284C7)),
+                                      ),
+                                      child: TextField(
+                                        controller: _searchController,
+                                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                                        decoration: InputDecoration(
+                                          hintText: 'Cari biaya...',
+                                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 14),
+                                          suffixIcon: _searchQuery.isNotEmpty
+                                              ? IconButton(
+                                                  icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 12),
+                                                  padding: EdgeInsets.zero,
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _searchController.clear();
+                                                      _searchQuery = '';
+                                                    });
+                                                  },
+                                                )
+                                              : null,
+                                          border: InputBorder.none,
+                                          contentPadding: const EdgeInsets.symmetric(vertical: 7),
                                         ),
-                                        child: TextField(
-                                          controller: _searchController,
-                                          style: const TextStyle(color: Colors.white, fontSize: 11),
-                                          decoration: InputDecoration(
-                                            hintText: 'Cari nama biaya / rute...',
-                                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF38BDF8), size: 16),
-                                            suffixIcon: _searchQuery.isNotEmpty
-                                                ? IconButton(
-                                                    icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 14),
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        _searchController.clear();
-                                                        _searchQuery = '';
-                                                      });
-                                                    },
-                                                  )
-                                                : null,
-                                            border: InputBorder.none,
-                                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                                          ),
-                                          onChanged: (val) {
-                                            setState(() => _searchQuery = val.trim().toLowerCase());
-                                          },
-                                        ),
+                                        onChanged: (val) {
+                                          setState(() => _searchQuery = val.trim().toLowerCase());
+                                        },
                                       ),
                                     ),
-                                    if (!isKacab) ...[
-                                      const SizedBox(width: 6),
-                                      ElevatedButton.icon(
+                                  ),
+                                  if (!isKacab) ...[
+                                    const SizedBox(width: 6),
+                                    SizedBox(
+                                      height: 30,
+                                      child: ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF1E293B),
                                           foregroundColor: const Color(0xFF38BDF8),
                                           side: const BorderSide(color: Color(0xFF0284C7)),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                         ),
                                         onPressed: () => _showItemDialog(isOfCountry: false),
-                                        icon: const Icon(Icons.add_rounded, size: 14),
-                                        label: const Text('+ Item', style: TextStyle(fontSize: 11)),
+                                        icon: const Icon(Icons.add_rounded, size: 13),
+                                        label: const Text('+ Item', style: TextStyle(fontSize: 10)),
                                       ),
-                                    ],
+                                    ),
                                   ],
-                                ),
-                              ],
+                                ],
+                              ),
                             )
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1916,7 +1930,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                             children: [
                               // Fixed Table Header
                               Container(
-                                height: 36,
+                                height: isMobile ? 30 : 36,
                                 padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14),
                                 decoration: const BoxDecoration(
                                   color: Color(0xFF0F172A),
@@ -1948,7 +1962,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                                           final originalIdx = _operationalItems.indexOf(item);
 
                                           return Container(
-                                            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: 8),
+                                            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 5 : 8),
                                             decoration: BoxDecoration(
                                               color: idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02),
                                               border: const Border(bottom: BorderSide(color: Colors.white10)),
@@ -2028,7 +2042,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: isMobile ? 6 : 12),
 
                       // TABLE 2 SECTION HEADER (BIAYA OF COUNTRY)
                       Row(
@@ -2042,21 +2056,24 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                             ),
                           ),
                           if (!isKacab)
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1E293B),
-                                foregroundColor: Colors.amberAccent,
-                                side: const BorderSide(color: Colors.amberAccent),
-                                padding: EdgeInsets.symmetric(horizontal: isMobile ? 6 : 10, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            SizedBox(
+                              height: isMobile ? 28 : null,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1E293B),
+                                  foregroundColor: Colors.amberAccent,
+                                  side: const BorderSide(color: Colors.amberAccent),
+                                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 6 : 10, vertical: isMobile ? 0 : 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                                onPressed: () => _showItemDialog(isOfCountry: true),
+                                icon: const Icon(Icons.add_rounded, size: 13),
+                                label: Text(isMobile ? '+ Of Country' : 'Tambah Biaya Of Country', style: TextStyle(fontSize: isMobile ? 10 : 11)),
                               ),
-                              onPressed: () => _showItemDialog(isOfCountry: true),
-                              icon: const Icon(Icons.add_rounded, size: 14),
-                              label: Text(isMobile ? '+ Of Country' : 'Tambah Biaya Of Country', style: TextStyle(fontSize: isMobile ? 10 : 11)),
                             ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
 
                       // TABLE 2 CONTAINER
                       Expanded(
@@ -2071,7 +2088,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                             children: [
                               // Fixed Table Header
                               Container(
-                                height: 36,
+                                height: isMobile ? 30 : 36,
                                 padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14),
                                 decoration: const BoxDecoration(
                                   color: Color(0xFF0F172A),
@@ -2103,7 +2120,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                                           final originalIdx = _ofCountryItems.indexOf(item);
 
                                           return Container(
-                                            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: 8),
+                                            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 5 : 8),
                                             decoration: BoxDecoration(
                                               color: idx % 2 == 0 ? Colors.transparent : Colors.white.withOpacity(0.02),
                                               border: const Border(bottom: BorderSide(color: Colors.white10)),
@@ -2186,11 +2203,11 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                     ],
                   ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: isMobile ? 6 : 10),
 
           // GRAND TOTAL BANNER AT BOTTOM (FIT DI DASAR 1 LAYAR PENGGUNA)
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 8 : 10),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 6 : 10),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
@@ -2237,7 +2254,7 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
     bool isMobile = false,
   }) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 8 : 12),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(10),
@@ -2246,17 +2263,18 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(isMobile ? 7 : 10),
+            padding: EdgeInsets.all(isMobile ? 6 : 10),
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: isMobile ? 18 : 22),
+            child: Icon(icon, color: color, size: isMobile ? 16 : 22),
           ),
           SizedBox(width: isMobile ? 8 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   title,
@@ -2264,14 +2282,14 @@ class _MonthlyOperationalExpensesViewState extends State<MonthlyOperationalExpen
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   value,
-                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 14 : 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 12 : 16, fontWeight: FontWeight.bold),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   subtitle,
                   style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 9 : 10),

@@ -421,6 +421,7 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 700;
     final allAnalysis = _calculateAnalysis();
 
     // Hitung KPI ringkasan
@@ -468,151 +469,289 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
     return Dialog(
       backgroundColor: const Color(0xFF0F172A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 24, vertical: isMobile ? 12 : 24),
       child: Container(
-        width: 1100,
-        height: 750,
-        padding: const EdgeInsets.all(24),
+        width: isMobile ? double.infinity : 1100,
+        height: isMobile ? double.infinity : 750,
+        padding: EdgeInsets.all(isMobile ? 12 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // HEADER BAR
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
+            if (isMobile) ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.published_with_changes_rounded, color: Color(0xFFF59E0B), size: 18),
                   ),
-                  child: const Icon(Icons.published_with_changes_rounded, color: Color(0xFFF59E0B), size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Daftar RO',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF38BDF8).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _selectedMonth,
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Tombol Pilih Bulan Kalender
+                  InkWell(
+                    onTap: _showMonthYearPicker,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            'Daftar RO',
-                            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                          Text(
+                            _selectedMonth,
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11),
                           ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF38BDF8).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Periode: $_selectedMonth',
-                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 14),
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Monitoring Pelanggan Repeat Order & Deteksi Dini Customer Delay / Dorman',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                // Tombol Pilih Bulan Kalender (Dialog Gambar 2)
-                InkWell(
-                  onTap: _showMonthYearPicker,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Monitoring Pelanggan Repeat Order & Deteksi Dini Customer Delay / Dorman',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.published_with_changes_rounded, color: Color(0xFFF59E0B), size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Bulan $_selectedMonth',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                        Row(
+                          children: [
+                            const Text(
+                              'Daftar RO',
+                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF38BDF8).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Periode: $_selectedMonth',
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Monitoring Pelanggan Repeat Order & Deteksi Dini Customer Delay / Dorman',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
-                  tooltip: 'Tutup',
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
+                  // Tombol Pilih Bulan Kalender (Dialog Gambar 2)
+                  InkWell(
+                    onTap: _showMonthYearPicker,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Bulan $_selectedMonth',
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                    tooltip: 'Tutup',
+                  ),
+                ],
+              ),
+            ],
+            SizedBox(height: isMobile ? 10 : 18),
 
             // KPI CARDS ROW
-            Row(
-              children: [
-                _buildKpiCard('Total Pelanggan', '$totalCustomers Toko', Icons.storefront_rounded, const Color(0xFF38BDF8)),
-                const SizedBox(width: 12),
-                _buildKpiCard('Sudah RO ($roPercentage%)', '$sudahRoCount Toko', Icons.check_circle_rounded, const Color(0xFF10B981)),
-                const SizedBox(width: 12),
-                _buildKpiCard('Delay RO (14-30 Hari)', '$delayWarningCount Toko', Icons.warning_amber_rounded, const Color(0xFFF59E0B)),
-                const SizedBox(width: 12),
-                _buildKpiCard('Dorman (>30 Hari)', '$dormanCount Toko', Icons.cancel_rounded, const Color(0xFFEF4444)),
-                const SizedBox(width: 12),
-                _buildKpiCard('Omset Bulan Ini', 'Rp ${NumberFormat('#,###', 'id-ID').format(totalOmsetThisMonth)}', Icons.monetization_on_rounded, const Color(0xFFA855F7)),
-              ],
-            ),
-            const SizedBox(height: 16),
+            if (isMobile)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    SizedBox(width: 140, child: _buildKpiCard('Total Pelanggan', '$totalCustomers Toko', Icons.storefront_rounded, const Color(0xFF38BDF8), isMobile: true)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 140, child: _buildKpiCard('Sudah RO ($roPercentage%)', '$sudahRoCount Toko', Icons.check_circle_rounded, const Color(0xFF10B981), isMobile: true)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 145, child: _buildKpiCard('Delay (14-30 Hari)', '$delayWarningCount Toko', Icons.warning_amber_rounded, const Color(0xFFF59E0B), isMobile: true)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 140, child: _buildKpiCard('Dorman (>30 Hari)', '$dormanCount Toko', Icons.cancel_rounded, const Color(0xFFEF4444), isMobile: true)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 160, child: _buildKpiCard('Omset Bulan Ini', 'Rp ${NumberFormat('#,###', 'id-ID').format(totalOmsetThisMonth)}', Icons.monetization_on_rounded, const Color(0xFFA855F7), isMobile: true)),
+                  ],
+                ),
+              )
+            else
+              Row(
+                children: [
+                  _buildKpiCard('Total Pelanggan', '$totalCustomers Toko', Icons.storefront_rounded, const Color(0xFF38BDF8)),
+                  const SizedBox(width: 12),
+                  _buildKpiCard('Sudah RO ($roPercentage%)', '$sudahRoCount Toko', Icons.check_circle_rounded, const Color(0xFF10B981)),
+                  const SizedBox(width: 12),
+                  _buildKpiCard('Delay RO (14-30 Hari)', '$delayWarningCount Toko', Icons.warning_amber_rounded, const Color(0xFFF59E0B)),
+                  const SizedBox(width: 12),
+                  _buildKpiCard('Dorman (>30 Hari)', '$dormanCount Toko', Icons.cancel_rounded, const Color(0xFFEF4444)),
+                  const SizedBox(width: 12),
+                  _buildKpiCard('Omset Bulan Ini', 'Rp ${NumberFormat('#,###', 'id-ID').format(totalOmsetThisMonth)}', Icons.monetization_on_rounded, const Color(0xFFA855F7)),
+                ],
+              ),
+            SizedBox(height: isMobile ? 10 : 16),
 
             // FILTER TABS & SEARCH
-            Row(
-              children: [
-                _buildFilterChip('Semua ($totalCustomers)', RoStatusFilter.all),
-                const SizedBox(width: 8),
-                _buildFilterChip('Sudah RO ($sudahRoCount)', RoStatusFilter.sudahRo, badgeColor: const Color(0xFF10B981)),
-                const SizedBox(width: 8),
-                _buildFilterChip('Semua Delay ($totalDelayCount)', RoStatusFilter.allDelay, badgeColor: const Color(0xFFF97316)),
-                const SizedBox(width: 8),
-                _buildFilterChip('Delay 14-30 Hari ($delayWarningCount)', RoStatusFilter.delayWarning, badgeColor: const Color(0xFFF59E0B)),
-                const SizedBox(width: 8),
-                _buildFilterChip('Dorman >30 Hari ($dormanCount)', RoStatusFilter.dormanCritical, badgeColor: const Color(0xFFEF4444)),
-                const Spacer(),
-                SizedBox(
-                  width: 250,
-                  height: 38,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: 'Cari toko / kota...',
-                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 14),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 36,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Cari toko / kota...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 14),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      ),
+                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
                     ),
-                    onChanged: (val) => setState(() => _searchQuery = val.trim()),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip('Semua ($totalCustomers)', RoStatusFilter.all),
+                        const SizedBox(width: 6),
+                        _buildFilterChip('Sudah RO ($sudahRoCount)', RoStatusFilter.sudahRo, badgeColor: const Color(0xFF10B981)),
+                        const SizedBox(width: 6),
+                        _buildFilterChip('Semua Delay ($totalDelayCount)', RoStatusFilter.allDelay, badgeColor: const Color(0xFFF97316)),
+                        const SizedBox(width: 6),
+                        _buildFilterChip('Delay 14-30 Hari ($delayWarningCount)', RoStatusFilter.delayWarning, badgeColor: const Color(0xFFF59E0B)),
+                        const SizedBox(width: 6),
+                        _buildFilterChip('Dorman >30 Hari ($dormanCount)', RoStatusFilter.dormanCritical, badgeColor: const Color(0xFFEF4444)),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  _buildFilterChip('Semua ($totalCustomers)', RoStatusFilter.all),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Sudah RO ($sudahRoCount)', RoStatusFilter.sudahRo, badgeColor: const Color(0xFF10B981)),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Semua Delay ($totalDelayCount)', RoStatusFilter.allDelay, badgeColor: const Color(0xFFF97316)),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Delay 14-30 Hari ($delayWarningCount)', RoStatusFilter.delayWarning, badgeColor: const Color(0xFFF59E0B)),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Dorman >30 Hari ($dormanCount)', RoStatusFilter.dormanCritical, badgeColor: const Color(0xFFEF4444)),
+                  const Spacer(),
+                  SizedBox(
+                    width: 250,
+                    height: 38,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Cari toko / kota...',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 14),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      ),
+                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                    ),
+                  ),
+                ],
+              ),
+            SizedBox(height: isMobile ? 8 : 14),
 
             // MAIN TABLE
             Expanded(
@@ -639,6 +778,121 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
                             final cust = item.customer;
                             final lastDateStr = item.lastOrderDate != null ? DateFormat('dd-MM-yyyy').format(item.lastOrderDate!) : '-';
                             final daysStr = item.daysSinceLastOrder != null ? '${item.daysSinceLastOrder} hari lalu' : 'Belum pernah';
+
+                            if (isMobile) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                color: idx.isEven ? Colors.transparent : const Color(0xFF0F172A).withOpacity(0.3),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Row 1: No, Nama Toko, Status Badge
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '${idx + 1}. ',
+                                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold),
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            cust.displayName,
+                                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: item.statusBadgeColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: item.statusBadgeColor.withOpacity(0.4)),
+                                          ),
+                                          child: Text(
+                                            item.statusBadgeLabel,
+                                            style: TextStyle(
+                                              color: item.statusBadgeColor,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    // Row 2: Lokasi & Telepon
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.location_on_rounded, color: Color(0xFF94A3B8), size: 11),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          cust.city.isNotEmpty ? cust.city : 'Jawa Tengah',
+                                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                        ),
+                                        if (cust.phone.isNotEmpty) ...[
+                                          const SizedBox(width: 6),
+                                          const Text('•', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            cust.phone,
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    // Row 3: Order Terakhir, Bulan Ini, dan Tombol Chat WA
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Terakhir: $lastDateStr ($daysStr)',
+                                                style: TextStyle(
+                                                  color: item.isDormanCritical
+                                                      ? const Color(0xFFEF4444)
+                                                      : (item.isDelayWarning ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8)),
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                item.isSudahRo
+                                                    ? 'Bulan ini: Rp ${NumberFormat('#,###', 'id-ID').format(item.grandTotalThisMonth)} (${item.orderCountThisMonth}x)'
+                                                    : 'Bulan ini: Belum order',
+                                                style: TextStyle(
+                                                  color: item.isSudahRo ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          height: 32,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () => _openWhatsAppFollowUp(cust, item),
+                                            icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 13),
+                                            label: const Text('Chat WA', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF25D366),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                              elevation: 0,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
 
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -795,51 +1049,55 @@ class _RepeatOrderDialogState extends State<RepeatOrderDialog> {
     );
   }
 
-  Widget _buildKpiCard(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 18),
+  Widget _buildKpiCard(String label, String value, IconData icon, Color color, {bool isMobile = false}) {
+    final cardWidget = Container(
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 8 : 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: isMobile ? MainAxisSize.min : MainAxisSize.max,
+        children: [
+          Container(
+            padding: EdgeInsets.all(isMobile ? 6 : 8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+            child: Icon(icon, color: color, size: isMobile ? 16 : 18),
+          ),
+          SizedBox(width: isMobile ? 8 : 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(color: const Color(0xFF94A3B8), fontSize: isMobile ? 10 : 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(color: color, fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+
+    if (isMobile) {
+      return cardWidget;
+    }
+    return Expanded(child: cardWidget);
   }
 
   Widget _buildFilterChip(String label, RoStatusFilter filter, {Color? badgeColor}) {

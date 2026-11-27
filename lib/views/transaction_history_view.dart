@@ -6764,6 +6764,8 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
     }
 
     final isMobile = MediaQuery.of(context).size.width < 900;
+    final double ctrlHeight = isMobile ? 36.0 : 44.0;
+    final double ctrlFontSize = isMobile ? 11.0 : 12.0;
 
     final searchField = TextField(
       controller: _searchController,
@@ -6787,7 +6789,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
             : null,
         filled: true,
         fillColor: const Color(0xFF1E293B),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: isMobile ? 8 : 12),
         isDense: true,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.0),
@@ -6829,8 +6831,8 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            height: ctrlHeight,
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
@@ -6846,14 +6848,14 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                 Icon(
                   Icons.calendar_month_rounded,
                   color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                  size: 16,
+                  size: isMobile ? 14 : 16,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: isMobile ? 6 : 8),
                 Text(
                   _monthFilter == "SEMUA" ? "SEMUA BULAN" : _monthFilter,
                   style: TextStyle(
                     color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.white,
-                    fontSize: 12,
+                    fontSize: ctrlFontSize,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -6861,7 +6863,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                 Icon(
                   Icons.arrow_drop_down_rounded,
                   color: _monthFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                  size: 18,
+                  size: isMobile ? 16 : 18,
                 ),
               ],
             ),
@@ -6871,9 +6873,9 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
 
         // Status Filter Dropdown
         Container(
-          width: 175,
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          width: isMobile ? 150 : 175,
+          height: ctrlHeight,
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
@@ -6885,7 +6887,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
               value: _statusFilter,
               dropdownColor: const Color(0xFF1E293B),
               isExpanded: true,
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontSize: ctrlFontSize, fontWeight: FontWeight.bold),
               items: const [
                 DropdownMenuItem(value: "SEMUA", child: Text("SEMUA STATUS / TIPE", overflow: TextOverflow.ellipsis)),
                 DropdownMenuItem(value: "TYPE_PO", child: Text("TIPE: PENJUALAN (PO)", overflow: TextOverflow.ellipsis)),
@@ -6919,9 +6921,9 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           borderRadius: BorderRadius.circular(12),
           onTap: () => _showSearchableProductFilterDialog(allProductsList),
           child: Container(
-            width: 185,
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            width: isMobile ? 155 : 185,
+            height: ctrlHeight,
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(12),
@@ -6929,8 +6931,8 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
             ),
             child: Row(
               children: [
-                Icon(Icons.shopping_bag_outlined, color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: 16),
-                const SizedBox(width: 6),
+                Icon(Icons.shopping_bag_outlined, color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : const Color(0xFF64748B), size: isMobile ? 14 : 16),
+                SizedBox(width: isMobile ? 4 : 6),
                 Expanded(
                   child: Text(
                     _productFilter == "SEMUA" ? "SEMUA PRODUK" : _productFilter,
@@ -6938,7 +6940,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _productFilter != "SEMUA" ? const Color(0xFF38BDF8) : Colors.white,
-                      fontSize: 12,
+                      fontSize: ctrlFontSize,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -6963,8 +6965,8 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
 
         // Toggle Barang Keluar Summary Button
         SizedBox(
-          height: 44,
-          width: 44,
+          height: ctrlHeight,
+          width: ctrlHeight,
           child: IconButton(
             tooltip: _showRightSummaryPanel ? 'Sembunyikan Total Barang Keluar' : 'Tampilkan Total Barang Keluar',
             style: IconButton.styleFrom(
@@ -6983,7 +6985,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
               color: ((isMobile && _mobileActiveTab == 1) || (!isMobile && _showRightSummaryPanel))
                   ? const Color(0xFF38BDF8)
                   : const Color(0xFF94A3B8),
-              size: 20,
+              size: isMobile ? 17 : 20,
             ),
             onPressed: () {
               setState(() {
@@ -7010,22 +7012,22 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
             },
             borderRadius: BorderRadius.circular(12),
             child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              height: ctrlHeight,
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: const Color(0xFFEF4444).withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.filter_alt_off_rounded, color: Color(0xFFF87171), size: 16),
-                  SizedBox(width: 6),
+                  Icon(Icons.filter_alt_off_rounded, color: const Color(0xFFF87171), size: isMobile ? 14 : 16),
+                  const SizedBox(width: 6),
                   Text(
                     'Reset Filter',
-                    style: TextStyle(color: Color(0xFFF87171), fontSize: 12, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: const Color(0xFFF87171), fontSize: ctrlFontSize, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -7040,8 +7042,8 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
       children: [
         // Grafik Pengiriman Tahunan (Status DIKIRIM) Button - Icon Only
         SizedBox(
-          height: 44,
-          width: 44,
+          height: ctrlHeight,
+          width: ctrlHeight,
           child: Tooltip(
             message: 'Grafik Tahunan',
             child: ElevatedButton(
@@ -7061,7 +7063,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 20),
+              child: Icon(Icons.bar_chart_rounded, color: Colors.white, size: isMobile ? 17 : 20),
             ),
           ),
         ),
@@ -7069,8 +7071,8 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           const SizedBox(width: 8),
           // Kirim WA List ERP Button (Developer Only) - Icon Only
           SizedBox(
-            height: 44,
-            width: 44,
+            height: ctrlHeight,
+            width: ctrlHeight,
             child: Tooltip(
               message: 'Kirim WA List ERP',
               child: ElevatedButton(
@@ -7081,7 +7083,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: 20),
+                child: Icon(Icons.mark_chat_read_rounded, color: Colors.white, size: isMobile ? 17 : 20),
               ),
             ),
           ),
@@ -7090,14 +7092,14 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           const SizedBox(width: 8),
           // Scan Chat WA PO Button (Admin & Developer) - Label: Scan PO
           SizedBox(
-            height: 44,
+            height: ctrlHeight,
             child: ElevatedButton.icon(
               onPressed: () => showAiChatOrderDialog(context),
-              icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
-              label: const Text('Scan PO', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              icon: Icon(Icons.auto_awesome_rounded, color: Colors.white, size: isMobile ? 14 : 16),
+              label: Text('Scan PO', style: TextStyle(color: Colors.white, fontSize: ctrlFontSize, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0284C7),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -7106,7 +7108,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
         const SizedBox(width: 8),
         // Tombol Daftar RO (Repeat Order & Customer Delay Monitoring)
         SizedBox(
-          height: 44,
+          height: ctrlHeight,
           child: ElevatedButton.icon(
             onPressed: () {
               final customers = Provider.of<CustomerProvider>(context, listen: false).customers;
@@ -7117,11 +7119,11 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                 initialMonthFilter: _monthFilter,
               );
             },
-            icon: const Icon(Icons.published_with_changes_rounded, color: Colors.white, size: 16),
-            label: const Text('Daftar RO', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            icon: Icon(Icons.published_with_changes_rounded, color: Colors.white, size: isMobile ? 14 : 16),
+            label: Text('Daftar RO', style: TextStyle(color: Colors.white, fontSize: ctrlFontSize, fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF59E0B),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 0),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
@@ -7130,14 +7132,14 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           const SizedBox(width: 8),
           // Import Excel Button
           SizedBox(
-            height: 44,
+            height: ctrlHeight,
             child: ElevatedButton.icon(
               onPressed: () => _importTransactionsFromExcel(createdBy),
-              icon: const Icon(Icons.file_upload_rounded, color: Colors.white, size: 16),
-              label: const Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              icon: Icon(Icons.file_upload_rounded, color: Colors.white, size: isMobile ? 14 : 16),
+              label: Text('Import Excel', style: TextStyle(color: Colors.white, fontSize: ctrlFontSize, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal[700],
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -8067,7 +8069,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Padding(
-        padding: EdgeInsets.all(isMobile ? 10.0 : 20.0),
+        padding: EdgeInsets.all(isMobile ? 6.0 : 20.0),
         child: Column(
           children: [
             // Search Input, Filters & Action Buttons Header Area
@@ -8077,16 +8079,23 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      searchField,
-                      const SizedBox(height: 8),
+                      SizedBox(height: 36, child: searchField),
+                      const SizedBox(height: 6),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        child: filterChipsRow,
-                      ),
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: actionButtonsRow,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            filterChipsRow,
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 6),
+                              height: 20,
+                              width: 1,
+                              color: Colors.white24,
+                            ),
+                            actionButtonsRow,
+                          ],
+                        ),
                       ),
                     ],
                   );
@@ -8127,7 +8136,7 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
                 }
               },
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: isMobile ? 6 : 12),
             if (isMobile)
               _buildMobileSegmentedTab(filteredTransactions.length),
             Expanded(
@@ -8152,11 +8161,11 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
 
   Widget _buildMobileSegmentedTab(int transactionCount) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(3),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: Row(
@@ -8164,23 +8173,23 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           Expanded(
             child: InkWell(
               onTap: () => setState(() => _mobileActiveTab = 0),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
                   color: _mobileActiveTab == 0 ? const Color(0xFF0284C7) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.receipt_long_rounded, size: 15, color: _mobileActiveTab == 0 ? Colors.white : const Color(0xFF94A3B8)),
-                    const SizedBox(width: 6),
+                    Icon(Icons.receipt_long_rounded, size: 14, color: _mobileActiveTab == 0 ? Colors.white : const Color(0xFF94A3B8)),
+                    const SizedBox(width: 5),
                     Text(
                       'Daftar Transaksi ($transactionCount)',
                       style: TextStyle(
                         color: _mobileActiveTab == 0 ? Colors.white : const Color(0xFF94A3B8),
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -8193,23 +8202,23 @@ Future<void> _toggleTransactionLock(model_tr.Transaction tr) async {
           Expanded(
             child: InkWell(
               onTap: () => setState(() => _mobileActiveTab = 1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
                   color: _mobileActiveTab == 1 ? const Color(0xFF0284C7) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.inventory_2_rounded, size: 15, color: _mobileActiveTab == 1 ? Colors.white : const Color(0xFF94A3B8)),
-                    const SizedBox(width: 6),
+                    Icon(Icons.inventory_2_rounded, size: 14, color: _mobileActiveTab == 1 ? Colors.white : const Color(0xFF94A3B8)),
+                    const SizedBox(width: 5),
                     Text(
                       'Rincian & Target',
                       style: TextStyle(
                         color: _mobileActiveTab == 1 ? Colors.white : const Color(0xFF94A3B8),
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
