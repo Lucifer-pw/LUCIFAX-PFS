@@ -507,6 +507,62 @@ class FirebaseService {
     return downloadUrl;
   }
 
+  Future<String> uploadPaymentReceiptImage({
+    required String invoiceNo,
+    required Uint8List imageBytes,
+  }) async {
+    final cleanInv = invoiceNo.trim().replaceAll(RegExp(r'[^\w\-]'), '_');
+    final filename = 'receipt_${cleanInv}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final objectPath = 'receipts/$cleanInv/$filename';
+    const bucketName = 'aplikasi-transaksi-fiva-frozen.firebasestorage.app';
+
+    // 1. Direct Firebase Storage REST Upload (Fast & reliable)
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final idToken = await user?.getIdToken();
+      final uploadUrl = Uri.parse(
+        'https://firebasestorage.googleapis.com/v0/b/$bucketName/o?name=${Uri.encodeComponent(objectPath)}',
+      );
+
+      final response = await http.post(
+        uploadUrl,
+        headers: {
+          if (idToken != null && idToken.isNotEmpty) 'Authorization': 'Firebase $idToken',
+          'Content-Type': 'image/jpeg',
+        },
+        body: imageBytes,
+      ).timeout(const Duration(seconds: 25));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final bucket = data['bucket'] ?? bucketName;
+        final name = data['name'] ?? objectPath;
+        final token = data['downloadTokens'] ?? '';
+        return 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(name)}?alt=media&token=$token';
+      }
+    } catch (e) {
+      debugPrint('REST receipt upload notice: $e');
+    }
+
+    // 2. Fallback via Firebase Storage SDK
+    final ref = _storage.ref().child(objectPath);
+    final metadata = SettableMetadata(
+      contentType: 'image/jpeg',
+      cacheControl: 'public, max-age=31536000',
+      customMetadata: {
+        'invoiceNo': invoiceNo,
+        'uploadedAt': DateTime.now().toIso8601String(),
+      },
+    );
+
+    final uploadTask = await ref.putData(imageBytes, metadata).timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => throw TimeoutException('Waktu upload bukti transfer habis. Silakan coba lagi.'),
+    );
+    final downloadUrl = await uploadTask.ref.getDownloadURL();
+    return downloadUrl;
+  }
+
   Future<void> deleteCustomerKtpImage(String customerId) async {
     try {
       final cleanId = customerId.trim().replaceAll(RegExp(r'[^\w\-]'), '_');

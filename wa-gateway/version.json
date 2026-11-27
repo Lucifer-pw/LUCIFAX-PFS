@@ -1,18 +1,18 @@
 {
-  "gateway": "3.3.336",
+  "gateway": "3.3.337",
   "files": {
-    "server.js": "3.3.336",
+    "server.js": "3.3.337",
     "autonomous-po-processor.js": "3.3.326",
     "wavis-interactive-engine.js": "3.3.326",
     "wavis-pdf-generator.js": "3.3.301",
-    "firebase-adapter.js": "3.3.326",
+    "firebase-adapter.js": "3.3.337",
     "notification-dispatcher.js": "3.3.272",
     "ocr-engine.js": "3.3.270",
-    "bank-slip-parser.js": "3.3.336",
+    "bank-slip-parser.js": "3.3.337",
     "test-wavis-engine.js": "3.3.329",
     "update.sh": "3.3.312",
     "update.bat": "3.3.310"
   },
-  "updatedAt": "2026-11-26",
-  "changelog": "v3.3.336: Memperbaiki filter UNPAID agar tidak memunculkan faktur berstatus DIPINDAH, serta memastikan faktur DIPINDAH otomatis terhapus dan tidak masuk ke Kartu Piutang."
+  "updatedAt": "2026-11-27",
+  "changelog": "v3.3.337: Perbaikan akurasi parser struk BI-Fast QLola BRI (nominal 15 jt & berita titip 2), input manual foto bukti transfer di modal pembayaran piutang, dan perlindungan kamus AI dari istilah teknis perbankan."
 }

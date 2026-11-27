@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const FA_VERSION = '3.3.272'; // v3.3.272 - Integrasi Notifikasi Piutang Lunas & Pelanggan ke FCM
+const { isBankBlacklisted } = require('./bank-slip-parser');
+const FA_VERSION = '3.3.337'; // v3.3.337 - Filter strict blacklist perbankan dan dukungan profil bukti transfer bank
 
 class FirebaseAdapter {
   constructor() {
@@ -438,11 +439,18 @@ class FirebaseAdapter {
 
   async saveAiKnowledgeRule(rule) {
     if (!rule || !rule.keyword || !rule.mappedValue) return false;
+    if (isBankBlacklisted(String(rule.keyword))) {
+      console.log(`[ESL LEARN REJECTED] ❌ Keyword terblokir blacklist perbankan: "${rule.keyword}"`);
+      return false;
+    }
     try {
       const payload = {
         type: rule.type || 'customer_alias',
         keyword: String(rule.keyword).trim().toUpperCase(),
         mappedValue: String(rule.mappedValue).trim().toUpperCase(),
+        bankName: rule.bankName ? String(rule.bankName).trim().toUpperCase() : null,
+        accountNumber: rule.accountNumber ? String(rule.accountNumber).trim() : null,
+        status: rule.status || 'approved',
         source: rule.source || 'WA_GATEWAY_ESL',
         createdAt: new Date()
       };
@@ -615,11 +623,13 @@ class FirebaseAdapter {
       let learnedRules = [];
       try {
         if (this.mode === 'admin' && this.db) {
-          const rulesSnap = await this.db.collection('ai_knowledge_rules').where('type', '==', 'customer_alias').get();
+          const rulesSnap = await this.db.collection('ai_knowledge_rules')
+            .where('type', 'in', ['customer_alias', 'bank_transfer_profile'])
+            .get();
           learnedRules = rulesSnap.docs.map(d => d.data());
         } else if (this.mode === 'client' && this.clientDb) {
           const { collection, query, where, getDocs } = this.clientSdk;
-          const rulesSnap = await getDocs(query(collection(this.clientDb, 'ai_knowledge_rules'), where('type', '==', 'customer_alias')));
+          const rulesSnap = await getDocs(query(collection(this.clientDb, 'ai_knowledge_rules'), where('type', 'in', ['customer_alias', 'bank_transfer_profile'])));
           learnedRules = rulesSnap.docs.map(d => d.data());
         }
       } catch (_) {}
@@ -638,19 +648,35 @@ class FirebaseAdapter {
         if (!toko) return false;
         const cleanToko = toko.toUpperCase().trim();
 
-        // 0. Cek Engine Self-Learning (ESL) memory rules
+        // 0. Cek Engine Self-Learning (ESL) memory rules & Profil Bukti Transfer
         for (const rule of learnedRules) {
           const kw = (rule.keyword || '').toUpperCase().trim();
           const target = (rule.mappedValue || '').toUpperCase().trim();
-          if (kw.length >= 3 && target.length >= 3) {
-            const kwDigits = kw.replace(/[^0-9]/g, '');
+          if (isBankBlacklisted(kw)) continue; // BLOKIR TOTAL KATA SAMPAH PERBANKAN!
+
+          if (rule.type === 'bank_transfer_profile') {
+            const accNum = (rule.accountNumber || '').replace(/[^0-9]/g, '');
             const ocrDigits = upperOcr.replace(/[^0-9]/g, '');
-            const isNumericMatch = (kwDigits.length >= 6 && ocrDigits.includes(kwDigits));
-            const isOcrHit = upperOcr.includes(kw) || cleanHint.includes(kw) || isNumericMatch;
-            if (isOcrHit) {
+            const isAccHit = accNum.length >= 3 && ocrDigits.includes(accNum);
+            const isNameHit = kw.length >= 3 && upperOcr.includes(kw);
+            if (isAccHit || isNameHit) {
               if (cleanToko.includes(target) || target.includes(cleanToko)) {
-                console.log(`[ESL RULE HIT] 🧠 Pola terpelajar cocok: "${kw}" -> "${target}" pada Toko "${cleanToko}"`);
+                console.log(`[BANK PROFILE HIT] 🏛️ Profil transfer cocok: "${kw}" (${accNum}) -> "${target}" pada Toko "${cleanToko}"`);
                 return true;
+              }
+            }
+          } else {
+            // customer_alias standar
+            if (kw.length >= 3 && target.length >= 3) {
+              const kwDigits = kw.replace(/[^0-9]/g, '');
+              const ocrDigits = upperOcr.replace(/[^0-9]/g, '');
+              const isNumericMatch = (kwDigits.length >= 6 && ocrDigits.includes(kwDigits));
+              const isOcrHit = upperOcr.includes(kw) || cleanHint.includes(kw) || isNumericMatch;
+              if (isOcrHit) {
+                if (cleanToko.includes(target) || target.includes(cleanToko)) {
+                  console.log(`[ESL RULE HIT] 🧠 Pola terpelajar cocok: "${kw}" -> "${target}" pada Toko "${cleanToko}"`);
+                  return true;
+                }
               }
             }
           }

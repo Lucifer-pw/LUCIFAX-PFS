@@ -106,6 +106,7 @@ class ReceivableProvider with ChangeNotifier {
     required DateTime paymentDate,
     String note = '',
     String paymentMethod = 'Transfer',
+    String? receiptUrl,
     double overpaymentToDeposit = 0.0,
     String? customerId,
   }) async {
@@ -120,6 +121,7 @@ class ReceivableProvider with ChangeNotifier {
         date: paymentDate,
         note: note,
         paymentMethod: paymentMethod,
+        receiptUrl: receiptUrl,
         createdAt: DateTime.now(),
       );
 

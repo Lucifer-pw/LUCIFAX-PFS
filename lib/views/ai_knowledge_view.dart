@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/ai_knowledge_rule.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
@@ -25,6 +26,28 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
   bool _isLoadingInstructions = true;
   bool _isSavingInstructions = false;
   bool _isSyncingMemory = false;
+
+  static const _bankTermsBlacklist = [
+    'CREDIT BANK', 'DEBIT ACCOUNT', 'ADMIN FEE', 'TOTAL AMOUNT',
+    'TRANSFER AMOUNT', 'BI-FAST', 'BCA', 'BRI', 'MANDIRI', 'BNI',
+    'SEABANK', 'SWITCHING', 'SUCCESS', 'RECEIPT', 'TELLER', 'PENYETOR',
+    'SALDO', 'BIAYA', 'BUKTI', 'KLIKBCA', 'LIVIN', 'BRIMO', 'WONDR',
+    'TRANSACTION', 'FUND', 'TYPE', 'DATE', 'NOW', 'PLEASE', 'KEEP',
+    'THANK', 'INTERNET', 'BANKING', 'CONTACT', 'CREDIT', 'DEBIT',
+    'ACCOUNT', 'REKENING', 'CENTRAL', 'ASIA'
+  ];
+
+  bool _isBankBlacklistedTerm(String kw) {
+    final clean = kw.toUpperCase().trim();
+    if (clean.length < 3) return true;
+    for (final term in _bankTermsBlacklist) {
+      if (clean == term || clean.startsWith('$term ') || clean.endsWith(' $term') || clean.contains(' $term ')) {
+        return true;
+      }
+    }
+    if (RegExp(r'eree|anee|oops|[.\-_]{2,}').hasMatch(clean.toLowerCase())) return true;
+    return false;
+  }
 
   @override
   void initState() {
@@ -128,6 +151,8 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     final keywordController = TextEditingController(text: existingRule?.keyword ?? '');
     final mappedValueController = TextEditingController(text: existingRule?.mappedValue ?? '');
     String? selectedTargetId = existingRule?.targetId;
+    final bankController = TextEditingController(text: existingRule?.bankName ?? 'BRI');
+    final accController = TextEditingController(text: existingRule?.accountNumber ?? '');
 
     final productSearchController = TextEditingController(
       text: (existingRule != null && existingRule.type == 'product_alias') ? existingRule.mappedValue : '',
@@ -135,7 +160,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     final productFocusNode = FocusNode();
 
     final customerSearchController = TextEditingController(
-      text: (existingRule != null && existingRule.type == 'customer_alias') ? existingRule.mappedValue : '',
+      text: (existingRule != null && (existingRule.type == 'customer_alias' || existingRule.type == 'bank_transfer_profile')) ? existingRule.mappedValue : '',
     );
     final customerFocusNode = FocusNode();
 
@@ -181,8 +206,9 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                           isExpanded: true,
                           dropdownColor: const Color(0xFF0F172A),
                           items: const [
-                            DropdownMenuItem(value: 'product_alias', child: Text('Panggilan / Singkatan Barang', style: TextStyle(color: Colors.white))),
+                            DropdownMenuItem(value: 'bank_transfer_profile', child: Text('🏛️ Profil Bukti Transfer Bank', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                             DropdownMenuItem(value: 'customer_alias', child: Text('Panggilan / Singkatan Toko', style: TextStyle(color: Colors.white))),
+                            DropdownMenuItem(value: 'product_alias', child: Text('Panggilan / Singkatan Barang', style: TextStyle(color: Colors.white))),
                             DropdownMenuItem(value: 'unit', child: Text('Aturan Satuan Kuantiti (Karton/Pack/Roll)', style: TextStyle(color: Colors.white))),
                             DropdownMenuItem(value: 'bonus_rule', child: Text('Aturan Bonus / Promo Otomatis', style: TextStyle(color: Colors.white))),
                           ],
@@ -208,7 +234,9 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                           ? 'Syarat Bonus (Format: Toko|Nama Barang|Min Karton):'
                           : ruleType == 'unit'
                               ? 'Istilah Satuan di Chat (e.g. "k", "roll", ": 1"):'
-                              : 'Kata / Singkatan di Chat Pak BC:',
+                              : ruleType == 'bank_transfer_profile'
+                                  ? 'Nama Pemilik Rekening / Pengirim (di Struk):'
+                                  : 'Kata / Singkatan di Chat Pak BC:',
                       style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                     ),
                     const SizedBox(height: 6),
@@ -220,11 +248,13 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                         fillColor: const Color(0xFF0F172A),
                         hintText: ruleType == 'bonus_rule'
                             ? 'Contoh: LG FF|KORNET AYAM LOYANG 400 G|40'
-                            : ruleType == 'customer_alias'
-                                ? 'Contoh: MMM, LG FF'
-                                : ruleType == 'product_alias'
-                                    ? 'Contoh: Beres merah 24, Rolade polos 1 kg'
-                                    : 'Contoh: k, ktn, roll, : 1',
+                            : ruleType == 'bank_transfer_profile'
+                                ? 'Contoh: CV ALFA FROZEN MART, AHYAR'
+                                : ruleType == 'customer_alias'
+                                    ? 'Contoh: MMM, LG FF'
+                                    : ruleType == 'product_alias'
+                                        ? 'Contoh: Beres merah 24, Rolade polos 1 kg'
+                                        : 'Contoh: k, ktn, roll, : 1',
                         hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
@@ -337,7 +367,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                           );
                         },
                       ),
-                    ] else if (ruleType == 'customer_alias') ...[
+                    ] else if (ruleType == 'customer_alias' || ruleType == 'bank_transfer_profile') ...[
                       const Text('Pilih Toko Asli di Master Pelanggan (Bisa Diketik):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                       const SizedBox(height: 6),
                       RawAutocomplete<Customer>(
@@ -442,6 +472,60 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                           );
                         },
                       ),
+                      if (ruleType == 'bank_transfer_profile') ...[
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Bank Pengirim:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: bankController,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: const Color(0xFF0F172A),
+                                      hintText: 'Misal: BRI, BCA, MANDIRI',
+                                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('No. Rekening / Digit Akhir (Opsional):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: accController,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: const Color(0xFF0F172A),
+                                      hintText: 'Misal: 113302 atau 3302',
+                                      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ] else if (ruleType == 'bonus_rule') ...[
                       const Text('Hadiah Bonus (Format: Barang Bonus|Jumlah|Satuan):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                       const SizedBox(height: 6),
@@ -527,7 +611,7 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                   }
 
                   // Auto-resolve if user typed directly into customerSearchController
-                  if (ruleType == 'customer_alias' && (selectedTargetId == null || mappedValueController.text.isEmpty) && customerSearchController.text.isNotEmpty) {
+                  if ((ruleType == 'customer_alias' || ruleType == 'bank_transfer_profile') && (selectedTargetId == null || mappedValueController.text.isEmpty) && customerSearchController.text.isNotEmpty) {
                     final cText = customerSearchController.text.trim().toLowerCase();
                     final match = customerProvider.customers.firstWhere(
                       (c) => c.customerName.toLowerCase() == cText || (c.aliasName.isNotEmpty && c.aliasName.toLowerCase() == cText),
@@ -558,12 +642,26 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                     return;
                   }
 
+                  // Strict validation against bank terms blacklist
+                  if ((ruleType == 'customer_alias' || ruleType == 'bank_transfer_profile') && _isBankBlacklistedTerm(keyword)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('⛔ Kata "$keyword" adalah istilah teknis struk perbankan dan dilarang disimpan sebagai profil toko!'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                    return;
+                  }
+
                   final newRule = AiKnowledgeRule(
                     id: existingRule?.id ?? '',
                     type: ruleType,
                     keyword: keyword,
                     mappedValue: mappedVal,
                     targetId: selectedTargetId,
+                    bankName: ruleType == 'bank_transfer_profile' ? bankController.text.trim().toUpperCase() : existingRule?.bankName,
+                    accountNumber: ruleType == 'bank_transfer_profile' ? accController.text.trim() : existingRule?.accountNumber,
+                    status: existingRule?.status ?? 'active',
                     createdAt: existingRule?.createdAt ?? DateTime.now(),
                     updatedBy: 'developer',
                   );
@@ -614,6 +712,64 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
         ],
       ),
     );
+  }
+
+  Future<void> _cleanGarbageBankRules() async {
+    final snap = await FirebaseFirestore.instance.collection('ai_knowledge_rules').get();
+    final trashDocs = snap.docs.where((d) {
+      final kw = (d.data()['keyword'] ?? '').toString();
+      return _isBankBlacklistedTerm(kw);
+    }).toList();
+
+    if (!mounted) return;
+
+    if (trashDocs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kamus bersih! Tidak ada aturan sampah perbankan ditemukan.'), backgroundColor: Colors.teal),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.cleaning_services_rounded, color: Colors.redAccent, size: 22),
+            SizedBox(width: 8),
+            Text('Bersihkan Kata Sampah Bank?', style: TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Ditemukan ${trashDocs.length} aturan sampah perbankan (seperti CREDIT BANK, ADMIN FEE, DEBIT ACCOUNT, dll) yang meracuni pencocokan toko.\n\nYakin ingin menghapus ${trashDocs.length} aturan sampah ini?',
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Hapus Sekarang', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      for (final doc in trashDocs) {
+        await doc.reference.delete();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🧹 Berhasil membersihkan ${trashDocs.length} aturan sampah perbankan!'),
+            backgroundColor: Colors.teal,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -788,6 +944,18 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                         label: const Text('Muat Kamus Standar', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _cleanGarbageBankRules,
+                        icon: const Icon(Icons.cleaning_services_rounded, size: 16),
+                        label: const Text('🧹 Bersihkan Sampah Bank', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 10),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0284C7),
@@ -833,6 +1001,8 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                       children: [
                         _buildFilterChip('all', 'Semua'),
                         const SizedBox(width: 8),
+                        _buildFilterChip('bank_transfer_profile', 'Profil Bukti Transfer'),
+                        const SizedBox(width: 8),
                         _buildFilterChip('customer_alias', 'Singkatan Toko'),
                         const SizedBox(width: 8),
                         _buildFilterChip('product_alias', 'Singkatan Barang'),
@@ -849,6 +1019,8 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
               Row(
                 children: [
                   _buildFilterChip('all', 'Semua'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('bank_transfer_profile', 'Profil Bukti Transfer'),
                   const SizedBox(width: 8),
                   _buildFilterChip('customer_alias', 'Singkatan Toko'),
                   const SizedBox(width: 8),
@@ -1080,9 +1252,20 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
                         return DataRow(
                           cells: [
                             DataCell(
-                              Text(
-                                rule.keyword,
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    rule.keyword,
+                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  if (rule.accountNumber != null && rule.accountNumber!.isNotEmpty)
+                                    Text(
+                                      'Rek: ${rule.accountNumber}${rule.bankName != null ? " (${rule.bankName})" : ""}',
+                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                    ),
+                                ],
                               ),
                             ),
                             DataCell(_buildTypeBadge(rule.type)),
@@ -1301,6 +1484,11 @@ class _AiKnowledgeViewState extends State<AiKnowledgeView> {
     String text;
 
     switch (type) {
+      case 'bank_transfer_profile':
+        bg = Colors.cyanAccent.withOpacity(0.15);
+        fg = Colors.cyanAccent;
+        text = 'Bukti Transfer';
+        break;
       case 'customer_alias':
         bg = Colors.greenAccent.withOpacity(0.15);
         fg = Colors.greenAccent;

@@ -1,9 +1,12 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/receivable.dart';
 import '../providers/receivable_provider.dart';
 import '../providers/customer_provider.dart';
+import '../services/firebase_service.dart';
 
 Future<void> showReceivablePaymentDialog(
   BuildContext context, {
@@ -20,6 +23,9 @@ Future<void> showReceivablePaymentDialog(
   String selectedMethod = 'Transfer BCA';
   bool useDeposit = false;
   double depositAmountToUse = 0.0;
+  Uint8List? selectedReceiptBytes;
+  String? selectedReceiptFileName;
+  bool isUploadingReceipt = false;
 
   if (item.remainingAmount > 0) {
     amountController.text = item.remainingAmount.toStringAsFixed(0);
@@ -355,6 +361,131 @@ Future<void> showReceivablePaymentDialog(
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
                       ),
                     ),
+                    const SizedBox(height: 12),
+
+                    // Foto Bukti Transfer (Input Manual)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Foto Bukti Transfer (Opsional):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                        if (selectedReceiptBytes != null)
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(50, 20),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () {
+                              setDlgState(() {
+                                selectedReceiptBytes = null;
+                                selectedReceiptFileName = null;
+                              });
+                            },
+                            child: const Text('Hapus Foto', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (selectedReceiptBytes != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.tealAccent.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.memory(
+                                selectedReceiptBytes!,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedReceiptFileName ?? 'bukti_transfer.jpg',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, color: Colors.tealAccent, size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Foto siap diarsipkan',
+                                        style: TextStyle(color: Colors.tealAccent, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF38BDF8),
+                                side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                              label: const Text('Kamera', style: TextStyle(fontSize: 12)),
+                              onPressed: () async {
+                                final picker = ImagePicker();
+                                final photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+                                if (photo != null) {
+                                  final bytes = await photo.readAsBytes();
+                                  setDlgState(() {
+                                    selectedReceiptBytes = bytes;
+                                    selectedReceiptFileName = photo.name;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF38BDF8),
+                                side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              icon: const Icon(Icons.photo_library_rounded, size: 16),
+                              label: const Text('Pilih File / Galeri', style: TextStyle(fontSize: 12)),
+                              onPressed: () async {
+                                final picker = ImagePicker();
+                                final photo = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                                if (photo != null) {
+                                  final bytes = await photo.readAsBytes();
+                                  setDlgState(() {
+                                    selectedReceiptBytes = bytes;
+                                    selectedReceiptFileName = photo.name;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
 
                   // Riwayat Pembayaran (jika ada)
@@ -516,9 +647,16 @@ Future<void> showReceivablePaymentDialog(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
-                icon: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
-                label: const Text('Simpan Pembayaran', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                onPressed: () async {
+                icon: isUploadingReceipt
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                label: Text(
+                  isUploadingReceipt ? 'Mengunggah Foto...' : 'Simpan Pembayaran',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                onPressed: isUploadingReceipt
+                    ? null
+                    : () async {
                   if (totalPaymentEntered <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Nominal pembayaran belum diisi!'), backgroundColor: Colors.redAccent),
@@ -527,6 +665,22 @@ Future<void> showReceivablePaymentDialog(
                   }
 
                   final provider = Provider.of<ReceivableProvider>(context, listen: false);
+
+                  // Upload foto bukti transfer jika ada
+                  String? uploadedReceiptUrl;
+                  if (selectedReceiptBytes != null) {
+                    setDlgState(() => isUploadingReceipt = true);
+                    try {
+                      uploadedReceiptUrl = await FirebaseService().uploadPaymentReceiptImage(
+                        invoiceNo: item.noInvoice,
+                        imageBytes: selectedReceiptBytes!,
+                      );
+                    } catch (uploadErr) {
+                      debugPrint('Upload bukti transfer warning: $uploadErr');
+                    } finally {
+                      setDlgState(() => isUploadingReceipt = false);
+                    }
+                  }
 
                   // 1. Process deposit payment if selected
                   if (useDeposit && depositAmountToUse > 0 && customerId != null) {
@@ -538,6 +692,7 @@ Future<void> showReceivablePaymentDialog(
                       note: 'Potong Saldo Deposit: ${noteController.text.trim()}',
                       paymentMethod: 'Saldo Deposit',
                       customerId: customerId,
+                      receiptUrl: uploadedReceiptUrl,
                     );
                     final custProv = Provider.of<CustomerProvider>(context, listen: false);
                     await custProv.updateCustomerDeposit(customerId, depositBalance - depositAmountToUse);
@@ -556,6 +711,7 @@ Future<void> showReceivablePaymentDialog(
                       paymentDate: chosenDate,
                       note: noteController.text.trim(),
                       paymentMethod: selectedMethod,
+                      receiptUrl: uploadedReceiptUrl,
                       overpaymentToDeposit: overpaymentAmount,
                       customerId: customerId,
                     );

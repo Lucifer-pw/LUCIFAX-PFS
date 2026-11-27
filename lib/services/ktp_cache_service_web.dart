@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
-// ignore: avoid_web_libraries_in_flutter
+// ignore: avoid_web_libraries_in_flutter, uri_does_not_exist
 import 'dart:indexed_db' as idb;
 import 'package:http/http.dart' as http;
 import 'ktp_cache_service.dart';

@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.336'; // v3.3.336 - Perbaikan duplikasi download FlutterExcel pada export Stok Opname ERP
+const GATEWAY_VERSION = '3.3.337'; // v3.3.337 - QLola BRI BI-Fast receipt parser, manual receipt image upload, & robust bank transfer profile matching
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');

@@ -2915,6 +2915,28 @@ Kirim besok pagi ya pak bc''';
     return chat.receivedAt;
   }
 
+  static const List<String> _bankTermsBlacklist = [
+    'CREDIT', 'DEBIT', 'BANK', 'ACCOUNT', 'REKENING', 'CENTRAL', 'ASIA',
+    'ADMIN', 'FEE', 'TOTAL', 'AMOUNT', 'TRANSFER', 'TRSF', 'BI-FAST', 'BCA',
+    'BRI', 'MANDIRI', 'BNI', 'SEABANK', 'SWITCHING', 'SUCCESS', 'RECEIPT',
+    'TELLER', 'PENYETOR', 'SALDO', 'BIAYA', 'BUKTI', 'KLIKBCA', 'LIVIN',
+    'BRIMO', 'WONDR', 'TRANSACTION', 'FUND', 'TYPE', 'DATE', 'NOW', 'PLEASE',
+    'KEEP', 'THANK', 'INTERNET', 'BANKING', 'CONTACT', 'PUTRA', 'FIVA', 'SEJAHTERA',
+    '2306039099'
+  ];
+
+  static bool _isBankBlacklisted(String text) {
+    final clean = text.toUpperCase().trim();
+    if (clean.length < 3) return true;
+    for (final term in _bankTermsBlacklist) {
+      if (clean == term || clean.startsWith('$term ') || clean.endsWith(' $term') || clean.contains(' $term ')) {
+        return true;
+      }
+    }
+    if (RegExp(r'eree|anee|oops|[.\-_]{2,}').hasMatch(clean.toLowerCase())) return true;
+    return false;
+  }
+
   Future<void> _confirmTransferPayment(IncomingPoChat chat, String invoiceNo) async {
     final invClean = invoiceNo.replaceAll('#', '').trim();
     if (invClean.isEmpty) return;
@@ -3035,7 +3057,7 @@ Kirim besok pagi ya pak bc''';
         updatedTransferInfo['amount'] = excessBalance;
         updatedTransferInfo['originalAmount'] = totalPayFromSlip;
         updatedTransferInfo['allocatedInvoices'] = [
-          ...?((chat.transferInfo?['allocatedInvoices'] as List?) ?? []),
+          ...((chat.transferInfo?['allocatedInvoices'] as List?) ?? []),
           {
             'invoiceNo': invClean,
             'amount': effectivePay,
@@ -3055,114 +3077,53 @@ Kirim besok pagi ya pak bc''';
         'processedAt': FieldValue.serverTimestamp(),
       });
 
-      // 5. 🧠 ENGINE SELF-LEARNING (ESL): Pelajari pola penyetor / kata kunci baru ke ai_knowledge_rules
-      final learnedClues = <String>[];
+      // 5. 🧠 ENGINE SELF-LEARNING (ESL): Pelajari identitas perbankan pengirim secara terstruktur & aman
+      final List<String> learnedClues = [];
       try {
-        final clues = <String>{};
         final info = chat.transferInfo ?? {};
-        final rawOcr = '${chat.messageText} ${chat.caption ?? ''} ${chat.rawOcrText ?? ''} ${info['rawOcrText'] ?? ''}';
-
-        // A. Nama pengirim dari struk
         final senderSlip = (info['senderNameFromSlip'] ?? '').toString().trim();
-        if (senderSlip.isNotEmpty && senderSlip.length >= 3 && !RegExp(r'^\d+$').hasMatch(senderSlip)) {
-          clues.add(senderSlip);
-        }
-
-        // Ekstrak pola mutasi bank: TRF [NAMA] (misal: "TRF ZULIANA")
-        final trfMatches = RegExp(r'\bTRF\s+([A-Za-z]{3,30})\b', caseSensitive: false).allMatches(rawOcr);
-        for (final tm in trfMatches) {
-          final name = tm.group(1)!.trim();
-          final up = name.toUpperCase();
-          if (!up.contains('BRI') && !up.contains('BCA') && !up.contains('MANDIRI') && !up.contains('BNI') && !up.contains('CR') && !up.contains('DB')) {
-            clues.add(name);
-          }
-        }
-
-        // B. Customer Hint dari parser
-        final hint = (info['customerHint'] ?? '').toString().trim();
-        if (hint.isNotEmpty && hint.length >= 3 && !RegExp(r'^\d+$').hasMatch(hint)) {
-          clues.add(hint);
-        }
-
-        // C. Berita transfer (baik teks asli maupun setelah dibersihkan dari kata umum)
-        final berita = (info['berita'] ?? '').toString().trim();
-        if (berita.isNotEmpty && berita.length >= 3) {
-          clues.add(berita);
-          final cleanBerita = berita.replaceAll(RegExp(r'\b(dari|ke|transfer|pembayaran|byr|bi-fast|an)\b', caseSensitive: false), '').trim();
-          if (cleanBerita.length >= 3) clues.add(cleanBerita);
-        }
-
-        // D. Deteksi Nama Perusahaan (CV / PT / UD / TOKO) baik prefix maupun suffix
-        // Pola 1: Prefix (misal: "CV GRIYA MAKMUR")
-        final prefixMatches = RegExp(r"\b(CV|PT|UD|TOKO)[ \t]+([A-Za-z0-9 &.,'-]{3,35})\b", caseSensitive: false).allMatches(rawOcr);
-        for (final m in prefixMatches) {
-          final co = m.group(0)!.trim();
-          final up = co.toUpperCase();
-          if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA') && co.length >= 4) {
-            clues.add(co);
-            final baseName = (m.group(2) ?? '').trim();
-            if (baseName.length >= 4) clues.add(baseName);
-          }
-        }
-
-        // Pola 2: Suffix (misal: "GRIYA FROZEN FOOD CV")
-        final suffixMatches = RegExp(r"\b([A-Za-z0-9 &.,'-]{3,35})[ \t]+(CV|PT|UD|TOKO)\b", caseSensitive: false).allMatches(rawOcr);
-        for (final m in suffixMatches) {
-          final co = m.group(0)!.trim();
-          final up = co.toUpperCase();
-          if (!up.contains('FIVA') && !up.contains('SEJAHTERA') && !up.contains('PUTRA') && co.length >= 4) {
-            clues.add(co);
-            final baseName = (m.group(1) ?? '').trim();
-            if (baseName.length >= 4) clues.add(baseName);
-          }
-        }
-
-        // E. Deteksi Nomor Rekening Pengirim (misal: "238-2275757" atau "2382275757")
         final senderAcc = (info['senderAccount'] ?? info['penyetorId'] ?? '').toString().trim();
-        if (senderAcc.isNotEmpty && senderAcc.length >= 5) {
-          clues.add(senderAcc);
-          final cleanDigits = senderAcc.replaceAll(RegExp(r'[^0-9]'), '');
-          if (cleanDigits.length >= 5) clues.add(cleanDigits);
-        }
+        final bankNameFromSlip = (info['bank'] ?? 'TRANSFER').toString().trim();
 
-        // Ekstrak rekening dari teks OCR langsung (format "Dari Rekening : 238-2275757")
-        final accMatches = RegExp(r'(?:Dari\s*Rekening|Rekening\s*Asal|No\.?\s*ID|Rek(?:ening)?|Nyetor)\s*[:=.\s]+([0-9\s\-]{6,20})', caseSensitive: false).allMatches(rawOcr);
-        for (final am in accMatches) {
-          final rawAcc = am.group(1)!.trim();
-          final cleanAcc = rawAcc.replaceAll(RegExp(r'[^0-9]'), '');
-          if (cleanAcc.length >= 6 && !cleanAcc.contains('2306039099')) {
-            clues.add(rawAcc);
-            clues.add(cleanAcc);
-          }
-        }
+        // VALIDASI BLACKLIST KETAT: Tolak istilah perbankan umum
+        final bool isSenderValid = senderSlip.isNotEmpty &&
+            senderSlip.length >= 3 &&
+            !_isBankBlacklisted(senderSlip) &&
+            !RegExp(r'^\d+$').hasMatch(senderSlip) &&
+            senderSlip.toUpperCase() != custName.toUpperCase();
 
-        final rulesCol = FirebaseFirestore.instance.collection('ai_knowledge_rules');
-        for (final clue in clues) {
-          final cleanClue = clue.toUpperCase().trim();
-          if (cleanClue.isEmpty || cleanClue.length < 3 || cleanClue == custName.toUpperCase()) continue;
+        final String cleanAccDigits = senderAcc.replaceAll(RegExp(r'\D'), '');
+        final bool isAccValid = cleanAccDigits.length >= 3 && !cleanAccDigits.contains('2306039099');
+
+        if (isSenderValid || isAccValid) {
+          final rulesCol = FirebaseFirestore.instance.collection('ai_knowledge_rules');
+          final String ruleKeyword = isSenderValid ? senderSlip.toUpperCase() : cleanAccDigits;
 
           final existingSnap = await rulesCol
-              .where('type', isEqualTo: 'customer_alias')
-              .where('keyword', isEqualTo: cleanClue)
+              .where('mappedValue', isEqualTo: custName)
+              .where('keyword', isEqualTo: ruleKeyword)
               .limit(1)
               .get();
 
           if (existingSnap.docs.isEmpty) {
             await rulesCol.add({
-              'type': 'customer_alias',
-              'keyword': cleanClue,
+              'type': 'bank_transfer_profile',
+              'keyword': ruleKeyword,
               'mappedValue': custName,
               'targetId': trData['customerId'] ?? '',
+              'bankName': bankNameFromSlip,
+              'accountNumber': isAccValid ? cleanAccDigits : null,
+              'status': 'approved',
               'createdAt': FieldValue.serverTimestamp(),
-              'updatedBy': 'ESL_LEARNER',
+              'updatedBy': 'ESL_LEARNER_CONFIRMED',
               'metadata': {
-                'sourceSlip': info['bank'] ?? 'TRANSFER',
+                'sourceSlip': bankNameFromSlip,
                 'sourceInvoice': invClean,
                 'learnedAt': DateTime.now().toIso8601String(),
               }
             });
-            learnedClues.add(cleanClue);
-            debugPrint('[ESL LEARNER] 🧠 Pola baru dipelajari: "$cleanClue" -> "$custName"');
+            learnedClues.add(ruleKeyword);
+            debugPrint('[ESL BANK PROFILE] 🏛️ Profil transfer dipelajari: "$ruleKeyword" (${isAccValid ? cleanAccDigits : "-"}) -> "$custName"');
           }
         }
       } catch (eslErr) {

@@ -2,14 +2,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AiKnowledgeRule {
   final String id;
-  /// Types: 'unit', 'customer_alias', 'product_alias', 'general_instruction', 'bonus_rule'
+  /// Types: 'unit', 'customer_alias', 'product_alias', 'general_instruction', 'bonus_rule', 'bank_transfer_profile'
   final String type;
-  /// Keyword or abbreviation in chat (e.g. 'k', 'MMM', 'Beres merah 24', 'roll')
+  /// Keyword or abbreviation in chat (e.g. 'k', 'MMM', 'Beres merah 24', 'roll', 'CV ALFA FROZEN MART')
   final String keyword;
-  /// Target system mapping (e.g. '1 Karton', 'TOKO MAJU MAKMUR MANDIRI', 'BRS MERAH 24S 500 G')
+  /// Target system mapping (e.g. '1 Karton', 'TOKO MAJU MAKMUR MANDIRI', 'BRS MERAH 24S 500 G', 'AFM')
   final String mappedValue;
   /// Optional target product ID or customer ID
   final String? targetId;
+  /// Optional bank name for bank transfer profile (e.g. 'BRI', 'BCA')
+  final String? bankName;
+  /// Optional account number / digits for bank transfer profile (e.g. '3302')
+  final String? accountNumber;
+  /// Verification status: 'approved', 'pending_review'
+  final String status;
   final DateTime createdAt;
   final String updatedBy;
 
@@ -19,6 +25,9 @@ class AiKnowledgeRule {
     required this.keyword,
     required this.mappedValue,
     this.targetId,
+    this.bankName,
+    this.accountNumber,
+    this.status = 'approved',
     required this.createdAt,
     this.updatedBy = 'developer',
   });
@@ -44,6 +53,9 @@ class AiKnowledgeRule {
       keyword: map['keyword'] ?? '',
       mappedValue: map['mappedValue'] ?? '',
       targetId: map['targetId'],
+      bankName: map['bankName']?.toString(),
+      accountNumber: map['accountNumber']?.toString(),
+      status: map['status'] ?? 'approved',
       createdAt: parsedCreatedAt,
       updatedBy: map['updatedBy'] ?? 'developer',
     );
@@ -54,7 +66,10 @@ class AiKnowledgeRule {
       'type': type,
       'keyword': keyword,
       'mappedValue': mappedValue,
-      'targetId': targetId,
+      if (targetId != null) 'targetId': targetId,
+      if (bankName != null) 'bankName': bankName,
+      if (accountNumber != null) 'accountNumber': accountNumber,
+      'status': status,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedBy': updatedBy,
     };
@@ -66,6 +81,9 @@ class AiKnowledgeRule {
     String? keyword,
     String? mappedValue,
     String? targetId,
+    String? bankName,
+    String? accountNumber,
+    String? status,
     DateTime? createdAt,
     String? updatedBy,
   }) {
@@ -75,6 +93,9 @@ class AiKnowledgeRule {
       keyword: keyword ?? this.keyword,
       mappedValue: mappedValue ?? this.mappedValue,
       targetId: targetId ?? this.targetId,
+      bankName: bankName ?? this.bankName,
+      accountNumber: accountNumber ?? this.accountNumber,
+      status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedBy: updatedBy ?? this.updatedBy,
     );
