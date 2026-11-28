@@ -2,7 +2,7 @@
  * Bank Receipt / Transfer Slip Parser
  * Detects whether OCR text represents a bank transfer slip or bank mutation line, and extracts structured details
  */
-const BSP_VERSION = '3.3.337'; // v3.3.337 - Perbaikan parser nominal transfer QLola BI-Fast, berita transfer, dan profil perbankan ESL
+const BSP_VERSION = '3.3.338'; // v3.3.338 - Pola baru slip fisik teller BCA (Setoran Tunai), rekonstruksi nominal juta, pemisahan no HP dari berita, dan akurasi penyetor
 
 /**
  * Strict Banking & Transaction Terms Blacklist
@@ -217,26 +217,48 @@ function parseBankReceipt(rawText) {
   // Extract Amount (Nominal Uang)
   let amount = 0;
 
-  // Pola 1: Ekstraksi Terarah berdasar Label Eksplisit
-  // Prioritaskan nominal pokok transfer ("Transfer Amount" / "Jumlah Transfer"), lalu "Total Amount", dsb.
-  const explicitAmountPatterns = [
-    // 1. Transfer Amount / Nilai Pokok Transfer (Paling Utama)
-    /(?:Transfer\s+Amount|Jumlah\s+Transfer|Nominal\s+Transfer|Nilai\s+Transfer|Jumlah\s+Yang\s+Ditransfer)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]+(?:[.,][0-9]+)*)/i,
-    // 2. Total Amount / Total Transaksi / Total Pembayaran (Jika Transfer Amount tidak ditemukan)
-    /(?:Total\s+Amount|Total\s+Transaksi|Total\s+Pembayaran|Total\s+Bayar)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]+(?:[.,][0-9]+)*)/i,
-    // 3. Standar Jumlah / Total / Nominal
-    /(?:Jumlah|Total|Nominal)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]+(?:[.,][0-9]+)*)/i,
-    // 4. Mutasi accounting line e.g. "22,000,000.00 DB" or "22.000.000,00 DB" or "22,000,000.00 CR"
-    /([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?)\s*(?:DB|CR)\b/i,
-  ];
+  // Pola 0: Khusus Slip Cetakan Teller BCA / Bank (Format koma ribuan ganda e.g. "74,844,962.00" atau "74.844.962,00")
+  const fullTellerMatch = clean.match(/\b([0-9]{1,3}(?:[.,][0-9]{3}){2}(?:[.,][0-9]{2})?)\b/);
+  if (fullTellerMatch) {
+    const s = fullTellerMatch[1].replace(/,/g, '');
+    const p = parseFloat(s);
+    if (p > 0) amount = p;
+  }
 
-  for (const pat of explicitAmountPatterns) {
-    const match = clean.match(pat);
-    if (match && match[1]) {
-      const parsed = parseCurrencyString(match[1]);
-      if (parsed > 0) {
-        amount = parsed;
-        break;
+  // Pola 0b: Split OCR Lines Recovery (jika garis lipatan membelah nominal teller e.g. "Rp 74,844" dan "4.844, 962.00")
+  if (amount <= 0 && isTellerSlip) {
+    const splitHundredsMatch = clean.match(/([0-9]{1,3})[.,]\s*([0-9]{3})\.00/);
+    const splitThousandsMatch = clean.match(/Rp\.?\s*([0-9]{1,3})[.,]([0-9]{3})\b/i);
+    if (splitHundredsMatch && splitThousandsMatch) {
+      const millions = splitThousandsMatch[1];
+      const thousands = splitThousandsMatch[2];
+      const hundreds = splitHundredsMatch[2];
+      const rec = parseFloat(`${millions}${thousands}${hundreds}`);
+      if (rec > 0) amount = rec;
+    }
+  }
+
+  // Pola 1: Ekstraksi Terarah berdasar Label Eksplisit
+  if (amount <= 0) {
+    const explicitAmountPatterns = [
+      // 1. Transfer Amount / Nilai Pokok Transfer (Paling Utama)
+      /(?:Transfer\s+Amount|Jumlah\s+Transfer|Nominal\s+Transfer|Nilai\s+Transfer|Jumlah\s+Yang\s+Ditransfer)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]+(?:[.,][0-9]+)*)/i,
+      // 2. Total Amount / Total Transaksi / Total Pembayaran (Jika Transfer Amount tidak ditemukan)
+      /(?:Total\s+Amount|Total\s+Transaksi|Total\s+Pembayaran|Total\s+Bayar)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]+(?:[.,][0-9]+)*)/i,
+      // 3. Standar Jumlah / Total / Nominal
+      /(?:Jumlah|Total|Nominal)\s*[:=]?\s*(?:Rp\.?|IDR)?\s*([0-9]+(?:[.,][0-9]+)*)/i,
+      // 4. Mutasi accounting line e.g. "22,000,000.00 DB" or "22.000.000,00 DB" or "22,000,000.00 CR"
+      /([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?)\s*(?:DB|CR)\b/i,
+    ];
+
+    for (const pat of explicitAmountPatterns) {
+      const match = clean.match(pat);
+      if (match && match[1]) {
+        const parsed = parseCurrencyString(match[1]);
+        if (parsed > 0) {
+          amount = parsed;
+          break;
+        }
       }
     }
   }
@@ -268,7 +290,7 @@ function parseBankReceipt(rawText) {
 
   // Extract Reference Number
   let refNumber = '';
-  const refMatch = clean.match(/(?:Nomor Referensi|No\. Referensi|Ref\.? No\.?|No\. Transaksi|ID Transaksi|ID Transaction|Transaction ID)\s*[:=]?\s*([A-Za-z0-9]+)/i);
+  const refMatch = clean.match(/(?:Nomor\s*Referensi|No\.?\s*Referensi|Ref\.?\s*No\.?|Refara|FS\s*N\.?\s*Refara|No\.?\s*Transaksi|ID\s*Transaksi|ID\s*Transaction|Transaction\s*ID)\s*[:=.\s]*([A-Za-z0-9]+)/i);
   if (refMatch) {
     refNumber = refMatch[1].trim();
   } else {
@@ -278,9 +300,12 @@ function parseBankReceipt(rawText) {
 
   // Extract Berita / Keterangan / Detail Transaksi / Note
   let berita = '';
-  const beritaMatch = clean.match(/(?:Berita|Detail Transaksi|Catatan|Keterangan|Note|Remark|Description|Message)\s*[:=]?\s*([^\n\r]+)/i);
+  const beritaMatch = clean.match(/(?:Berita|Detail Transaksi|Catatan|Keterangan|Note|Remark|Description|Message)\s*[:=]\s*([^\n\r]+)/i);
   if (beritaMatch) {
-    berita = beritaMatch[1].trim();
+    const bCand = beritaMatch[1].trim();
+    if (bCand.length >= 2 && !/^(?:Nama|No|Cabang|Nomor|Penyetor)/i.test(bCand)) {
+      berita = bCand;
+    }
   } else {
     const titipMatch = clean.match(/(titip\s+inv[^\n\r]*|titip\s+[0-9]+[^\n\r]*)/i);
     if (titipMatch) {
@@ -296,15 +321,29 @@ function parseBankReceipt(rawText) {
         for (let j = amountIdx + 1; j < Math.min(lines.length, amountIdx + 4); j++) {
           const candidate = lines[j];
           const upCand = candidate.toUpperCase();
-          if (
-            !upCand.includes('BERHASIL') &&
-            !upCand.includes('M-TRANSFER') &&
-            !upCand.includes('ADMIN FEE') &&
-            !upCand.includes('BIAYA') &&
-            !upCand.includes('TOTAL AMOUNT') &&
-            !upCand.includes('PLEASE KEEP') &&
-            !upCand.includes('THANK')
-          ) {
+          const isExcluded =
+            upCand.includes('BERHASIL') ||
+            upCand.includes('M-TRANSFER') ||
+            upCand.includes('ADMIN FEE') ||
+            upCand.includes('BIAYA') ||
+            upCand.includes('TOTAL AMOUNT') ||
+            upCand.includes('PLEASE KEEP') ||
+            upCand.includes('THANK') ||
+            upCand.includes('HANDPHONE') ||
+            upCand.includes('4NDPHOPE') ||
+            upCand.includes('NONO') ||
+            upCand.includes('NO TELP') ||
+            upCand.includes('NO HP') ||
+            upCand.includes('PENYET') ||
+            upCand.includes('PENERIMA') ||
+            upCand.includes('REKENING') ||
+            upCand.includes('REFARA') ||
+            upCand.includes('REFERENSI') ||
+            upCand.includes('TELLER') ||
+            upCand.includes('ERITA') ||
+            /\b08[0-9]{8,12}\b/.test(candidate) ||
+            /\b[0-9]{8,16}\b/.test(candidate);
+          if (!isExcluded) {
             berita = candidate;
             break;
           }
@@ -346,33 +385,64 @@ function parseBankReceipt(rawText) {
   let senderNameFromSlip = '';
   let senderAccount = '';
 
-  // 1a. Ekstraksi spesifik Debit Account (QLola / BI-Fast / Internet Banking)
-  // Format: "Debit Account [NO_REK/SENSOR] - [NAMA_PENGIRIM]" atau "Debit Account ereeeree113302.- CV ALFA FROZEN MART"
-  const debitAccLineMatch = clean.match(/Debit\s*Account\s*[:=»\s]*([^\r\n]+)/i);
-  if (debitAccLineMatch) {
-    const content = debitAccLineMatch[1].trim();
-    // Digit rekening
-    const digitsMatch = content.match(/(\d{4,16})/);
-    if (digitsMatch) {
-      senderAccount = digitsMatch[1];
-    }
-    // Nama pengirim
-    if (/[-–—]/.test(content)) {
-      const parts = content.split(/[-–—]+/);
-      const afterDash = parts[parts.length - 1].trim().replace(/^[.\s]+/, '');
-      if (afterDash.length >= 3 && !/^\d+$/.test(afterDash) && !isBankBlacklisted(afterDash)) {
-        senderNameFromSlip = afterDash;
-        if (!customerHint) customerHint = afterDash;
-      }
-    }
-    const coMatch = content.match(/\b(CV|PT|UD|TOKO)\s+([A-Za-z0-9 &.,'-]{3,40})\b/i);
-    if (coMatch && !isBankBlacklisted(coMatch[0])) {
-      senderNameFromSlip = coMatch[0].trim();
-      if (!customerHint) customerHint = senderNameFromSlip;
+  const isCompanyRecipient = (str) => {
+    if (!str) return true;
+    const u = str.toUpperCase();
+    return u.includes('PUTRA') || u.includes('FIVA') || u.includes('SEJAHTERA') || u.includes('VA SEJA') || u.includes('PENERIMA') || u.includes('PENGERING');
+  };
+
+  // 1a. Ekstraksi spesifik Slip Setoran Teller BCA / Bank (Nama Penyetor)
+  const penyetorRegex = /(?:Nama\s*Penyetor|Nawa\s*Penyet[a-z]*|Penyetor|Penyeto)\s*[:=»\-–—\s]*([^\r\n/]+)/i;
+  const penyetorMatch = clean.match(penyetorRegex);
+  if (penyetorMatch) {
+    let p = penyetorMatch[1].trim();
+    p = p.replace(/^[&@#*]+\s*/, '');
+    p = p.replace(/^V\s+/i, 'CV ');
+    if (p.length >= 3 && !isBankBlacklisted(p) && !isCompanyRecipient(p)) {
+      senderNameFromSlip = p;
+      if (!customerHint) customerHint = p;
     }
   }
 
-  // 1b. Ekstraksi spesifik format BCA / Bank: "Dari Rekening : [REK] / [NAMA] (Rp)"
+  // 1b. Ekstraksi spesifik ID / No Rek Penyetor Teller
+  const penyetorIdRegex = /(?:No\.?\s*Rek(?:\/Ng)?\s*ID\s*Penyeto[a-z]*|ID\s*Penyetor|No\.?\s*ID\s*Penyetor)\s*[:=.\s]*([0-9\s\-]{6,20})/i;
+  const pIdMatch = clean.match(penyetorIdRegex);
+  if (pIdMatch) {
+    const rawAcc = pIdMatch[1].replace(/[^0-9]/g, '').trim();
+    if (rawAcc.length >= 5) {
+      senderAccount = rawAcc;
+    }
+  }
+
+  // 1c. Ekstraksi spesifik Debit Account (QLola / BI-Fast / Internet Banking)
+  // Format: "Debit Account [NO_REK/SENSOR] - [NAMA_PENGIRIM]" atau "Debit Account ereeeree113302.- CV ALFA FROZEN MART"
+  if (!senderNameFromSlip) {
+    const debitAccLineMatch = clean.match(/Debit\s*Account\s*[:=»\s]*([^\r\n]+)/i);
+    if (debitAccLineMatch) {
+      const content = debitAccLineMatch[1].trim();
+      // Digit rekening
+      const digitsMatch = content.match(/(\d{4,16})/);
+      if (digitsMatch) {
+        senderAccount = digitsMatch[1];
+      }
+      // Nama pengirim
+      if (/[-–—]/.test(content)) {
+        const parts = content.split(/[-–—]+/);
+        const afterDash = parts[parts.length - 1].trim().replace(/^[.\s]+/, '');
+        if (afterDash.length >= 3 && !/^\d+$/.test(afterDash) && !isBankBlacklisted(afterDash) && !isCompanyRecipient(afterDash)) {
+          senderNameFromSlip = afterDash;
+          if (!customerHint) customerHint = afterDash;
+        }
+      }
+      const coMatch = content.match(/\b(CV|PT|UD|TOKO)\s+([A-Za-z0-9 &.,'-]{3,40})\b/i);
+      if (coMatch && !isBankBlacklisted(coMatch[0]) && !isCompanyRecipient(coMatch[0])) {
+        senderNameFromSlip = coMatch[0].trim();
+        if (!customerHint) customerHint = senderNameFromSlip;
+      }
+    }
+  }
+
+  // 1d. Ekstraksi spesifik format BCA / Bank: "Dari Rekening : [REK] / [NAMA] (Rp)"
   if (!senderNameFromSlip) {
     const dariRekBcaMatch = clean.match(/(?:Dari\s*Rekening|Rekening\s*Asal)\s*[:=»\-–—\s]+([0-9\s\-]{5,20})(?:\s*[\/|\\]\s*([^\r\n()@]+))?/i);
     if (dariRekBcaMatch) {
@@ -384,7 +454,7 @@ function parseBankReceipt(rawText) {
       }
       if (dariRekBcaMatch[2]) {
         const rawName = dariRekBcaMatch[2].replace(/\(Rp\)/gi, '').trim();
-        if (rawName.length >= 3 && !isBankBlacklisted(rawName) && !rawName.toUpperCase().includes('FIVA')) {
+        if (rawName.length >= 3 && !isBankBlacklisted(rawName) && !isCompanyRecipient(rawName)) {
           senderNameFromSlip = rawName;
           if (!customerHint) customerHint = rawName;
         }
@@ -392,12 +462,12 @@ function parseBankReceipt(rawText) {
     }
   }
 
-  // 1c. Ekstraksi format mutasi rekening koran: "TRF [NAMA PENGIRIM]" (misal: "TRF ZULIANA 0998" atau "TRF ZULIANA")
+  // 1e. Ekstraksi format mutasi rekening koran: "TRF [NAMA PENGIRIM]" (misal: "TRF ZULIANA 0998" atau "TRF ZULIANA")
   if (!senderNameFromSlip) {
     const trfMutasiMatch = clean.match(/\bTRF\s+([A-Za-z0-9\s&.,'-]{3,30}?)(?:\s+\d{4,8}|\s*,\s*\d|\s+CR|\s+DB|\r?\n|$)/i);
     if (trfMutasiMatch) {
       const rawSender = trfMutasiMatch[1].trim();
-      if (rawSender.length >= 3 && !isBankBlacklisted(rawSender) && !rawSender.toUpperCase().includes('FIVA')) {
+      if (rawSender.length >= 3 && !isBankBlacklisted(rawSender) && !isCompanyRecipient(rawSender)) {
         senderNameFromSlip = rawSender;
         if (!customerHint) customerHint = rawSender;
       }
@@ -406,7 +476,7 @@ function parseBankReceipt(rawText) {
 
   // 2. Ekstraksi umum nama pengirim (jika belum terisi)
   if (!senderNameFromSlip) {
-    const senderMatch = clean.match(/(?:Nama\s*Pengirim|Dari\s*Rekening|Rekening\s*Asal|Pengirim|Dari|Nama)\s*[:=»\-–—\s]+([^\r\n@]+)/i);
+    const senderMatch = clean.match(/(?:Nama\s*Pengirim|Nama\s*Penyetor|Dari\s*Rekening|Rekening\s*Asal|Pengirim|Dari)\s*[:=»\-–—\s]+([^\r\n@]+)/i);
     if (senderMatch) {
       let rawSender = senderMatch[1].trim();
       if (rawSender.includes('/') || rawSender.includes('\\')) {
@@ -415,12 +485,12 @@ function parseBankReceipt(rawText) {
           const part0 = parts[0].replace(/[^0-9\-]/g, '').trim();
           const part1 = parts[1].replace(/\(Rp\)/gi, '').trim();
           if (part0.length >= 4 && !senderAccount) senderAccount = part0;
-          if (part1.length >= 3 && !isBankBlacklisted(part1) && !part1.toUpperCase().includes('FIVA')) {
+          if (part1.length >= 3 && !isBankBlacklisted(part1) && !isCompanyRecipient(part1)) {
             rawSender = part1;
           }
         }
       }
-      if (!isBankBlacklisted(rawSender) && !rawSender.toUpperCase().includes('FIVA') && rawSender.length >= 3) {
+      if (!isBankBlacklisted(rawSender) && !isCompanyRecipient(rawSender) && rawSender.length >= 3) {
         senderNameFromSlip = rawSender;
         if (!customerHint) {
           customerHint = rawSender;

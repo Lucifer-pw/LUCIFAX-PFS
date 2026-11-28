@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { isBankBlacklisted } = require('./bank-slip-parser');
-const FA_VERSION = '3.3.337'; // v3.3.337 - Filter strict blacklist perbankan dan dukungan profil bukti transfer bank
+const FA_VERSION = '3.3.338'; // v3.3.338 - Toleransi pembulatan setoran tunai teller kasir, waktu transaksi presisi, dan pencocokan struk teller fisik
 
 class FirebaseAdapter {
   constructor() {
@@ -743,7 +743,7 @@ class FirebaseAdapter {
           const total = Number(d.grandTotal || 0) - Number(d.returnAmount || 0);
 
           const amountDiff = Math.abs(total - amount);
-          const isAmountMatch = amountDiff <= 100;
+          const isAmountMatch = amountDiff <= 150 || (total > 1000000 && amount > 10000 && Math.abs(Math.floor(total / 1000) - amount) <= 1);
 
           if (isAmountMatch) {
             const item = { noInvoice, toko, nominal: total, isLunas: false, docId: id, fromTransaction: true };
@@ -808,7 +808,7 @@ class FirebaseAdapter {
         const isLunas = !!d.isLunas;
 
         const amountDiff = Math.abs(nominal - amount);
-        const isAmountMatch = amountDiff <= 100;
+        const isAmountMatch = amountDiff <= 150 || (nominal > 1000000 && amount > 10000 && Math.abs(Math.floor(nominal / 1000) - amount) <= 1);
 
         if (!isAmountMatch) return;
 
@@ -847,7 +847,11 @@ class FirebaseAdapter {
     };
 
     let hr = 12, min = 0, sec = 0;
-    const timeMatch = text.match(/(?:Jam|Pukul|Waktu|Time)?\s*[:=]?\s*([0-2]?[0-9])[:.]([0-5][0-9])(?:[:.]([0-5][0-9]))?/i);
+    // Prioritaskan format jam eksplisit e.g. "14:15:59" atau dengan label "Waktu / Jam / Pukul: 14:15"
+    // Cegah angka desimal float e.g. "962.00" dikira sebagai jam 2:00
+    const explicitTimeMatch = text.match(/(?:Jam|Pukul|Waktu|Time)\s*[:=]?\s*([0-2]?[0-9])[:.]([0-5][0-9])(?:[:.]([0-5][0-9]))?/i);
+    const standardTimeMatch = text.match(/\b([0-2][0-9]):([0-5][0-9])(?::([0-5][0-9]))?\b/);
+    const timeMatch = explicitTimeMatch || standardTimeMatch;
     if (timeMatch) {
       hr = parseInt(timeMatch[1], 10);
       min = parseInt(timeMatch[2], 10);

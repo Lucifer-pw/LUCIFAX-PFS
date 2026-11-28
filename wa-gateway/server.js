@@ -24,7 +24,7 @@ console.error = function (...args) {
   _originalConsoleError.apply(console, args);
 };
 
-const GATEWAY_VERSION = '3.3.337'; // v3.3.337 - QLola BRI BI-Fast receipt parser, manual receipt image upload, & robust bank transfer profile matching
+const GATEWAY_VERSION = '3.3.338'; // v3.3.338 - Pola baru slip fisik teller BCA (Setoran Tunai), rekonstruksi nominal juta, pemisahan no HP dari berita, dan toleransi setoran kasir
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
