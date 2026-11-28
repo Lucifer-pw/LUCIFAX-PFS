@@ -29,6 +29,65 @@ jobs:
           flutter-version: '3.19.2'
           channel: stable
 
+      - name: Configure Gradle Maven Mirrors (Fix 429 Too Many Requests)
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat << 'EOF' > ~/.gradle/init.d/mirror.init.gradle
+          gradle.settingsEvaluated { settings ->
+              try {
+                  settings.pluginManagement.repositories {
+                      all { ArtifactRepository repo ->
+                          if (repo instanceof MavenArtifactRepository) {
+                              if (repo.url.toString().contains("repo.maven.apache.org") || repo.url.toString().contains("repo1.maven.org")) {
+                                  repo.url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                              }
+                          }
+                      }
+                  }
+              } catch (Throwable ignored) {}
+              try {
+                  settings.dependencyResolutionManagement.repositories {
+                      all { ArtifactRepository repo ->
+                          if (repo instanceof MavenArtifactRepository) {
+                              if (repo.url.toString().contains("repo.maven.apache.org") || repo.url.toString().contains("repo1.maven.org")) {
+                                  repo.url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                              }
+                          }
+                      }
+                  }
+              } catch (Throwable ignored) {}
+          }
+          allprojects {
+              buildscript {
+                  repositories {
+                      all { ArtifactRepository repo ->
+                          if (repo instanceof MavenArtifactRepository) {
+                              if (repo.url.toString().contains("repo.maven.apache.org") || repo.url.toString().contains("repo1.maven.org")) {
+                                  repo.url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                              }
+                          }
+                      }
+                  }
+              }
+              repositories {
+                  all { ArtifactRepository repo ->
+                      if (repo instanceof MavenArtifactRepository) {
+                          if (repo.url.toString().contains("repo.maven.apache.org") || repo.url.toString().contains("repo1.maven.org")) {
+                              repo.url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          echo "Created ~/.gradle/init.d/mirror.init.gradle successfully"
+
+          FLUTTER_SETTINGS=$(find "$FLUTTER_ROOT" -name "settings.gradle.kts" 2>/dev/null | grep "flutter_tools/gradle" | head -n 1)
+          if [ -n "$FLUTTER_SETTINGS" ] && [ -f "$FLUTTER_SETTINGS" ]; then
+              sed -i 's|mavenCentral()|maven(url = "https://maven-central.storage-download.googleapis.com/maven2/")\n    mavenCentral()|g' "$FLUTTER_SETTINGS"
+              echo "Patched Flutter tools internal settings.gradle.kts at $FLUTTER_SETTINGS"
+          fi
+
       - name: Install dependencies
         run: flutter pub get
 
